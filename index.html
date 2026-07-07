@@ -188,6 +188,7 @@
     <div id="navBudget"></div>
     <div class="side-foot">
       <div class="acct"><span class="av" id="acctAv">?</span><span id="acctEmail">—</span></div>
+      <div id="poDiag" style="font-size:10px;color:#7e828e;padding:0 10px 4px"></div>
       <button onclick="signOut()">Sign out</button>
     </div>
   </aside>
@@ -294,6 +295,7 @@ async function doLogin(){
   const email=($('#liEmail').value||'').trim().toLowerCase(),senha=$('#liSenha').value||'';
   if(!email||!senha){showGate('Enter email and password.');return;}
   _senha=senha;showGate('Signing in…');
+  try{sessionStorage.setItem('__pw',senha);}catch(e){}
   const {error}=await SB.auth.signInWithPassword({email,password:senha});
   if(error){_senha='';showGate('Invalid email or password.');}
 }
@@ -310,10 +312,10 @@ async function setPassword(){
   const email=($('#caEmail').value||'').trim().toLowerCase(),codigo=($('#caCode').value||'').trim(),senha=$('#caSenha').value||'';
   if(!codigo||senha.length<6){showGate('Enter the code and a password of at least 6 characters.');return;}
   const j=await fnCall('definir',{email,codigo,senha});
-  if(j&&j.ok){_senha=senha;showGate('Senha definida! Signing in…');const {error}=await SB.auth.signInWithPassword({email,password:senha});if(error){_senha='';showGate('Password created, but sign-in failed — try signing in manually.');}}
+  if(j&&j.ok){_senha=senha;try{sessionStorage.setItem('__pw',senha);}catch(e){}showGate('Senha definida! Signing in…');const {error}=await SB.auth.signInWithPassword({email,password:senha});if(error){_senha='';showGate('Password created, but sign-in failed — try signing in manually.');}}
   else showGate((j&&j.error)||'Invalid or expired code.');
 }
-async function signOut(){try{await SB.auth.signOut();}catch(e){}try{await SBPO.auth.signOut();}catch(e){}_senha='';booted=false;location.reload();}
+async function signOut(){try{sessionStorage.removeItem('__pw');}catch(e){}try{await SB.auth.signOut();}catch(e){}try{await SBPO.auth.signOut();}catch(e){}_senha='';booted=false;location.reload();}
 
 async function boot(){
   try{
@@ -333,27 +335,30 @@ async function onSignedIn(user){
   $('#acctEmail').textContent=user.email||'';
   $('#acctAv').textContent=(user.email||'?')[0].toUpperCase();
   $('#acctAv').style.background=avColor(user.email);
-  try{ await ssoPO(user.email); }catch(e){ console.warn('PO SSO:',e); }
+  try{ await ssoPO(user.email); }catch(e){ console.warn('PO SSO:',e); window.__poErr=(e&&e.message)||String(e); }
   try{ await loadAll(); }catch(e){ console.error('load:',e); }
+  // diagnostic line in sidebar footer
+  try{ const d=$('#poDiag'); if(d){ d.textContent = PO_ACCESS ? ('Budget: '+PAPEL) : ('Budget off — '+(window.__poErr||'no PO role')); d.style.color = PO_ACCESS ? '#7e828e' : '#ef7f88'; } }catch(e){}
   buildNav(); const nav=currentNav(); go((nav.work.concat(nav.budget))[0]||'dash');
 }
 
 /* SSO silencioso com o PO (mesma senha) — acesso derivado do papel real */
 async function ssoPO(email){
   const em=(email||'').toLowerCase();
-  // 1) garante sessão no PO usando a mesma senha do login
+  // 1) garante sessão no PO usando a mesma senha do login (persistida na sessão do navegador para recargas)
+  let pw=_senha; if(!pw){ try{ pw=sessionStorage.getItem('__pw')||''; }catch(e){} }
   const {data:sPO}=await SBPO.auth.getSession();
-  if(!(sPO&&sPO.session)&&_senha){
-    const {error}=await SBPO.auth.signInWithPassword({email:em,password:_senha});
-    if(error){ console.warn('PO login:',error.message); }
+  if(!(sPO&&sPO.session)&&pw){
+    const {error}=await SBPO.auth.signInWithPassword({email:em,password:pw});
+    if(error){ window.__poErr=error.message; console.warn('PO login:',error.message); }
   }
   _senha='';
-  // 2) papel real (security definer, não bloqueado por RLS). Sem papel válido = sem acesso ao PO
+  // 2) papel real (security definer). Sem papel válido = sem acesso ao PO
   try{
     const {data:p}=await SBPO.rpc('papel_atual');
     PAPEL=p||'';
     PO_ACCESS=!!PAPEL && PAPEL!=='pendente';
-  }catch(e){ PAPEL=''; PO_ACCESS=false; }
+  }catch(e){ PAPEL=''; PO_ACCESS=false; window.__poErr=(e&&e.message)||'papel_atual failed'; }
   if(PAPEL==='agencia'){ try{ const {data:a}=await SBPO.rpc('agencia_atual'); MINHA_AGENCIA=a||''; }catch(e){} }
 }
 
