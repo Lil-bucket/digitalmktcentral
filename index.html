@@ -708,8 +708,50 @@ function openCampDetail(pid){
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:640px">
     <div class="modal-h"><h3>${esc(p.nome)}</h3><button class="x" onclick="closeModal()">✕</button></div>
     <div class="modal-b"><div style="font-size:12.5px;color:var(--txt-3);margin-bottom:14px">${esc(p.agencia||'')} · ${esc(p.product_category||'')}${p.rateio?' · rateio':''} — month-by-month consumption</div>${blocks}</div>
-    <div class="modal-f"><span></span><button class="btn-ghost" onclick="closeModal()">Close</button></div>
+    <div class="modal-f"><span></span><div style="display:flex;gap:10px">${(['admin','marketing'].includes(PAPEL)||isManager)?`<button class="btn-acc" style="background:var(--po)" onclick="openCampEdit('${esc(p.id)}')">Edit category / budget</button>`:''}<button class="btn-ghost" onclick="closeModal()">Close</button></div></div>
   </div></div>`;
+}
+
+/* Edit an existing campaign — reassign it to the correct PRODUCT CATEGORY
+   (TV/AC/MOB/REF/WG/LABG) so the budget the value belongs to is unambiguous.
+   Values/months are untouched; only classification + name/agency change. */
+let CAMPEDIT=null;
+function guessCat(str){ const s=String(str||'').toUpperCase(); for(const c of PRODUCT_CATS){ if(new RegExp('(^|[^A-Z])'+c+'([^A-Z]|$)').test(s)) return c; } return ''; }
+function openCampEdit(pid){
+  const p=DATA.poProjetos.find(x=>x.id===pid); if(!p)return;
+  CAMPEDIT={id:pid,nome:p.nome||'',agencia:p.agencia||'',activity:p.activity||'Campaign',cat:guessCat(p.product_category||p.nome)};
+  renderCampEditForm();
+}
+function campEditSet(k,v){ if(CAMPEDIT)CAMPEDIT[k]=v; }
+function renderCampEditForm(){
+  if(!CAMPEDIT)return; const ce=CAMPEDIT; const ags=agencyOpts();
+  const catOpts=`<option value="" ${ce.cat===''?'selected':''}>— pick category —</option>`+PRODUCT_CATS.map(c=>`<option value="${c}" ${ce.cat===c?'selected':''}>${c}</option>`).join('');
+  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:520px">
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--po);flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Edit campaign</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Set which product-category budget this value belongs to</div></div><button class="x" onclick="closeModal()">✕</button></div>
+    <div class="modal-b">
+      <div class="field full"><label>Campaign name</label><input value="${esc(ce.nome)}" onchange="campEditSet('nome',this.value)" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
+      <div class="fgrid" style="margin-top:14px">
+        <div class="field"><label>Activity</label><select onchange="campEditSet('activity',this.value)">${ACT_OPTS.map(a=>`<option ${ce.activity===a?'selected':''}>${a}</option>`).join('')}</select></div>
+        <div class="field"><label>Agency</label><select onchange="campEditSet('agencia',this.value)">${ags.map(a=>`<option ${ce.agencia===a?'selected':''}>${esc(a)}</option>`).join('')}${ags.length?'':'<option value="">—</option>'}</select></div>
+      </div>
+      <div class="field full" style="margin-top:6px"><label>Product category <span style="font-weight:600;color:var(--txt-3)">(the budget this campaign consumes)</span></label><select onchange="campEditSet('cat',this.value)">${catOpts}</select></div>
+      <div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">Was: <b>${esc(CAMPEDIT&&(DATA.poProjetos.find(x=>x.id===ce.id)||{}).product_category||'—')}</b>. Months and values stay the same.</div>
+    </div>
+    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitCampEdit()">Save</button></div></div>
+  </div></div>`;
+}
+async function submitCampEdit(){
+  if(!CAMPEDIT)return; const ce=CAMPEDIT;
+  if(!ce.nome.trim()){ toast('Give the campaign a name.'); return; }
+  if(!PRODUCT_CATS.includes(ce.cat)){ toast('Pick a product category (TV/AC/MOB/REF/WG/LABG).'); return; }
+  try{
+    let cc='',account='',account_desc='';
+    try{ const {data:cls}=await SBPO.rpc('classificar',{p_d:ce.cat,p_e:ce.activity||'',p_f:''}); const c=(cls&&cls[0])||{}; cc=c.cc||''; account=c.account||''; account_desc=c.descricao||''; }catch(e){}
+    const campos={nome:ce.nome.trim(),agencia:ce.agencia||null,activity:ce.activity||null,product_category:ce.cat,cc,account,account_desc};
+    const {error}=await SBPO.from('projetos').update(campos).eq('id',ce.id);
+    if(error)throw error;
+    CAMPEDIT=null; toast('Campaign updated ✓'); closeModal(); await reloadPOAll(); go('campaigns');
+  }catch(e){ toast('Error: '+(e.message||e)); }
 }
 
 function renderPOs(){
@@ -1313,28 +1355,36 @@ async function submitCamp(){
 }
 
 let ORC=null;
-function openOrcNew(){ const nowM=new Date().toISOString().slice(0,7); ORC={nome:'',valor:'',ini:nowM,fim:nowM}; renderOrcForm(); }
+/* Budgets are strictly one per product category — fixed list, no duplicates. */
+const PRODUCT_CATS=['TV','AC','MOB','REF','WG','LABG'];
+function usedCats(){ return new Set((DATA.orcamentos||[]).map(o=>String(o.product_category||o.nome||'').trim().toUpperCase()).filter(Boolean)); }
+function openOrcNew(){ const nowM=new Date().toISOString().slice(0,7); const free=PRODUCT_CATS.filter(c=>!usedCats().has(c)); ORC={cat:free[0]||'',valor:'',ini:nowM,fim:nowM}; renderOrcForm(); }
 function renderOrcForm(){
   if(!ORC)return;
-  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:480px">
-    <div class="modal-h"><h3>New budget</h3><button class="x" onclick="closeModal()">✕</button></div>
-    <div class="modal-b">
-      <div class="field"><label>Name / category</label><input value="${esc(ORC.nome)}" onchange="ORC.nome=this.value" placeholder="e.g. Trade FY26"></div>
+  const used=usedCats(); const free=PRODUCT_CATS.filter(c=>!used.has(c));
+  const opts=free.length?free.map(c=>`<option value="${esc(c)}" ${ORC.cat===c?'selected':''}>${esc(c)}</option>`).join(''):'';
+  const body=free.length
+    ? `<div class="field"><label>Product category <span style="font-weight:600;color:var(--txt-3)">(one budget per category)</span></label><select onchange="ORC.cat=this.value">${opts}</select></div>
       <div class="field"><label>Total value (R$)</label><input type="number" min="0" step="1000" value="${esc(ORC.valor)}" onchange="ORC.valor=this.value" class="mono" placeholder="0,00"></div>
       <div class="fgrid">
         <div class="field"><label>Start</label><input type="month" value="${esc(ORC.ini)}" onchange="ORC.ini=this.value"></div>
         <div class="field"><label>End</label><input type="month" value="${esc(ORC.fim)}" onchange="ORC.fim=this.value"></div>
-      </div>
-    </div>
-    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitOrc()">Create budget</button></div></div>
+      </div>`
+    : `<div class="banner">All product categories (${PRODUCT_CATS.join(', ')}) already have a budget. Edit the existing one instead of creating a duplicate.</div>`;
+  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:480px">
+    <div class="modal-h"><h3>New budget</h3><button class="x" onclick="closeModal()">✕</button></div>
+    <div class="modal-b">${body}</div>
+    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button>${free.length?`<button class="btn-acc" style="background:var(--po)" onclick="submitOrc()">Create budget</button>`:''}</div></div>
   </div></div>`;
 }
 async function submitOrc(){
   if(!ORC)return;
-  if(!ORC.nome.trim()){ toast('Enter the name/category.'); return; }
+  const cat=String(ORC.cat||'').trim().toUpperCase();
+  if(!PRODUCT_CATS.includes(cat)){ toast('Pick a product category.'); return; }
+  if(usedCats().has(cat)){ toast('A budget for '+cat+' already exists.'); return; }
   const val=+ORC.valor||0; if(val<=0){ toast('Enter the total value.'); return; }
   try{
-    const {error}=await SBPO.rpc('criar_orcamento',{p_nome:ORC.nome.trim(),p_valor:val,p_inicio:ORC.ini?ORC.ini+'-01':null,p_fim:ORC.fim?ORC.fim+'-01':null});
+    const {error}=await SBPO.rpc('criar_orcamento',{p_nome:cat,p_valor:val,p_inicio:ORC.ini?ORC.ini+'-01':null,p_fim:ORC.fim?ORC.fim+'-01':null});
     if(error)throw error;
     toast('Budget created ✓'); closeModal(); await reloadPOAll(); go('budgets');
   }catch(e){ toast('Error: '+(e.message||e)); }
