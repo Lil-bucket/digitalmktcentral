@@ -250,6 +250,7 @@ const BRAND_CHIPS=['TCL','SEMP','TCL + SEMP'];
 const uid=()=>'x'+Math.random().toString(36).slice(2,9);
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
 function canEdit(p){return isManager||!p||!p.owner||p.owner===(currentUser&&currentUser.email);}
+function visProjs(){ if(PAPEL==='agencia'&&MINHA_AGENCIA) return DATA.projetos.filter(p=>p.partner===MINHA_AGENCIA||p.agencia===MINHA_AGENCIA||(p.agencies||[]).includes(MINHA_AGENCIA)); return DATA.projetos; }
 
 /* ============================================================
    HELPERS
@@ -367,7 +368,7 @@ async function loadAll(){
       SB.from('config').select('data').eq('id','app').maybeSingle()
     ]);
     DATA.projetos=(pr.data||[]).map(r=>r.data).filter(Boolean);
-    DATA.projetos.forEach(p=>{p.etapa=autoEtapa(p);p.status=autoStatus(p);});
+    DATA.projetos.forEach(p=>{ p.tasks=(p.tasks||p.atividades||p.activities||p.checklist||[]).map(t=>({...t, n:t.n||t.nome||t.titulo||t.title||'', done:!!t.done, fim:t.fim||t.due||'', status:t.status||(t.done?'concluido':'no_prazo'), pct:t.pct!=null?t.pct:(t.done?100:0), obs:t.obs||t.nota||'', subs:t.subs||t.subitens||[]})); p.logs=(p.logs||p.updates||[]).map(l=>({...l, txt:l.txt||l.texto||l.mensagem||l.msg||'', autor:l.autor||l.author||l.by||'', t:l.t||l.data||l.date||''})); p.etapa=autoEtapa(p);p.status=autoStatus(p);});
     const s=(cf&&cf.data&&cf.data.data)?cf.data.data:{};
     TEAM=(s.team||[]).map(p=>typeof p==='string'?{nome:p,empresa:''}:p);
   }catch(e){console.error('projetos painel:',e);}
@@ -403,9 +404,9 @@ const W_LABELS={dash:'Dashboard',board:'Board',list:'List',timeline:'Timeline',t
 const B_LABELS={bo:'Overview',budgets:'Budgets',campaigns:'Campaigns',pos:'Purchase Orders',approvals:'Approvals',podesk:'PO Desk',people:'People & Roles',reqpo:'Request PO',mypos:'My POs',balance:'Balance'};
 const ROLE_NAV={
   admin:      {work:['dash','board','list','timeline','team','weekly','mytasks','notif'], budget:['bo','budgets','campaigns','pos','approvals','people']},
-  marketing:  {work:['dash','board','list','timeline','weekly','mytasks','notif'],        budget:['bo','campaigns','pos','approvals']},
-  financeiro: {work:['dash','notif'],                                                      budget:['bo','campaigns','pos','podesk']},
-  agencia:    {work:['agencywork','mytasks','notif'],                                      budget:['reqpo','mypos','balance']}
+  marketing:  {work:['dash','board','list','timeline','weekly','mytasks','notif'],        budget:['campaigns','pos','approvals']},
+  financeiro: {work:['notif'],                                                            budget:['campaigns','pos','approvals']},
+  agencia:    {work:['board','list','timeline','notif'],                                  budget:['pos','approvals']}
 };
 const PANEL_ONLY_WORK=['dash','board','list','timeline','weekly','mytasks','notif'];
 function currentNav(){
@@ -512,7 +513,7 @@ function buildCampanhaChart(){
    RENDER — WORK
    ============================================================ */
 function renderDash(){
-  const list=DATA.projetos, active=list.filter(p=>p.status!=='concluido');
+  const list=visProjs(), active=list.filter(p=>p.status!=='concluido');
   const c={total:active.length,
     no_prazo:list.filter(p=>p.status==='no_prazo').length,
     atencao:list.filter(p=>p.status==='atencao').length,
@@ -556,7 +557,7 @@ function renderDash(){
 }
 
 function renderProjetos(){
-  const list=DATA.projetos.slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+  const list=visProjs().slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
   if(!list.length)return '<div class="empty">No projects found.</div>';
   return `<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
     <div style="display:grid;grid-template-columns:1.7fr 1fr 1.1fr 1fr 1.2fr .7fr;gap:10px;padding:11px 17px;background:#fbfaf7;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">
@@ -584,7 +585,7 @@ function openProjNew(){
 /* Quadro (kanban) por etapa */
 function healthPill(sid){const M={no_prazo:{name:'On track',bg:'#e4f5ec',fg:'#0c7048',dot:'#16a06a'},atencao:{name:'At risk',bg:'#fbf0d8',fg:'#9c6404',dot:'#d68a04'},atrasado:{name:'Late',bg:'#fbe4e1',fg:'#b32418',dot:'#e0392b'},bloqueado:{name:'Blocked',bg:'#ece6fa',fg:'#5535ad',dot:'#6d4bd1'},concluido:{name:'Completed',bg:'#e3edfb',fg:'#1f53a8',dot:'#2f6fd8'}};return M[sid]||M.no_prazo;}
 function renderKanban(){
-  const list=DATA.projetos;
+  const list=visProjs();
   return `<div style="display:flex;gap:14px;overflow-x:auto;padding-bottom:14px;align-items:flex-start">${STAGES.map(stg=>{
     const items=list.filter(p=>p.etapa===stg.id);
     return `<div style="background:var(--paper-2);border:1px solid var(--line);border-radius:13px;width:250px;flex-shrink:0">
@@ -976,7 +977,7 @@ async function realocarPO(poId){
    TELAS ADICIONAIS (espelham o protótipo aprovado)
    ============================================================ */
 function renderTimeline(){
-  const list=DATA.projetos.filter(p=>p.prazo).slice();
+  const list=visProjs().filter(p=>p.prazo).slice();
   if(!list.length)return '<div class="empty">No projects with a due date.</div>';
   // range de semanas
   const dates=[]; list.forEach(p=>{if(p.inicio)dates.push(new Date(p.inicio+'T00:00:00'));if(p.prazo)dates.push(new Date(p.prazo+'T00:00:00'));});
@@ -1007,7 +1008,7 @@ function renderTimeline(){
   </div>`;
 }
 function renderTeam(){
-  const active=DATA.projetos.filter(p=>p.status!=='concluido');
+  const active=visProjs().filter(p=>p.status!=='concluido');
   const load={};
   active.forEach(p=>{const r=p.resp||'—';(load[r]=load[r]||[]).push(p);});
   const names=Object.keys(load).sort((a,b)=>load[b].length-load[a].length);
@@ -1032,7 +1033,7 @@ function renderTeam(){
   return workload+`<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">${cards}</div>`;
 }
 function renderWeekly(){
-  const list=DATA.projetos;
+  const list=visProjs();
   const delivered=list.filter(p=>p.status==='concluido');
   const risk=list.filter(p=>p.status==='atrasado'||p.status==='bloqueado');
   const progress=list.filter(p=>p.status==='no_prazo'||p.status==='atencao');
@@ -1138,12 +1139,13 @@ function renderBudgets(){
     ${orcs.map(o=>`<div style="display:grid;grid-template-columns:1.3fr 1fr .9fr .9fr;gap:10px;padding:12px 17px;border-bottom:1px solid #f0eee8;align-items:center;font-size:13px"><span style="font-weight:600">${esc(o.nome||o.product_category||'—')}</span><span class="mono" style="font-size:11.5px;color:var(--txt-2)">${o.periodo_inicio?fmtMes(o.periodo_inicio):'—'}${o.periodo_fim?' → '+fmtMes(o.periodo_fim):''}</span><span class="mono" style="text-align:right;font-size:12px">${BRL(o.valor_total)}</span><span class="mono" style="text-align:right;font-size:12px">${BRL(o.valor_liberado)}</span></div>`).join('')}
   </div>`:'<div class="banner">No budgets registered.</div>';
   const fee=DATA.fee||[];
-  const feeTable=fee.length?`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-    <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line)"><b style="font-family:Sora,sans-serif;font-size:14px">Fee split configuration</b></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr .6fr 1fr 1fr 1.3fr;gap:10px;padding:10px 17px;background:#fbfaf7;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em"><span>Agency</span><span>Type</span><span style="text-align:right">%</span><span>Cost center</span><span>Account</span><span>Description</span></div>
-    ${fee.map(f=>`<div style="display:grid;grid-template-columns:1fr 1fr .6fr 1fr 1fr 1.3fr;gap:10px;padding:11px 17px;border-bottom:1px solid #f0eee8;align-items:center;font-size:12.5px"><span style="font-weight:600">${esc(f.agencia||'—')}</span><span style="color:var(--txt-2)">${esc(f.tipo||f.categoria||'—')}</span><span class="mono" style="text-align:right">${f.percentual!=null?(Math.round(f.percentual*1000)/10)+'%':'—'}</span><span class="mono" style="font-size:11.5px;color:var(--txt-2)">${esc(f.cc||'—')}</span><span class="mono" style="font-size:11.5px;color:var(--txt-2)">${esc(f.account||'—')}</span><span style="color:var(--txt-2)">${esc(f.descricao||'—')}</span></div>`).join('')}
-    <div style="padding:11px 17px;font-size:11.5px;color:var(--txt-3)">Splits are applied automatically to every monthly cap on campaign creation (rateio) — logic unchanged.</div>
-  </div>`:'';
+  const canFee=isManager||PAPEL==='admin';
+  const feeTable=`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
+    <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between"><b style="font-family:Sora,sans-serif;font-size:14px">Fee split configuration</b>${canFee?'<button class="chip-btn" onclick="openFeeEditor()">Define / edit rateios</button>':''}</div>
+    ${fee.length?`<div style="display:grid;grid-template-columns:1fr 1fr .6fr 1fr 1fr 1.3fr;gap:10px;padding:10px 17px;background:#fbfaf7;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em"><span>Agency</span><span>Type</span><span style="text-align:right">%</span><span>Cost center</span><span>Account</span><span>Description</span></div>
+    ${fee.map(f=>`<div style="display:grid;grid-template-columns:1fr 1fr .6fr 1fr 1fr 1.3fr;gap:10px;padding:11px 17px;border-bottom:1px solid #f0eee8;align-items:center;font-size:12.5px"><span style="font-weight:600">${esc(f.agencia||'—')}</span><span style="color:var(--txt-2)">${esc(f.tipo||f.categoria||'—')}</span><span class="mono" style="text-align:right">${f.percentual!=null?(Math.round(f.percentual*1000)/10)+'%':'—'}</span><span class="mono" style="font-size:11.5px;color:var(--txt-2)">${esc(f.cc||'—')}</span><span class="mono" style="font-size:11.5px;color:var(--txt-2)">${esc(f.account||'—')}</span><span style="color:var(--txt-2)">${esc(f.descricao||'—')}</span></div>`).join('')}`:'<div style="padding:16px 17px;font-size:12.5px;color:var(--txt-3)">No fee splits configured yet.</div>'}
+    <div style="padding:11px 17px;font-size:11.5px;color:var(--txt-3)">Splits are applied automatically to every monthly cap on campaign creation (rateio).</div>
+  </div>`;
   return catTable+feeTable;
 }
 function renderPeople(){
@@ -1156,7 +1158,7 @@ function renderPeople(){
       <span class="mono" style="font-size:11.5px;color:var(--txt-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(pe.email||'')}</span>
       <span><span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:${r.bg};color:${r.fg}">${r.t}</span></span>
       <span style="color:var(--txt-2);font-size:12.5px">${esc(pe.agencia||'—')}</span>
-      <span style="display:flex;justify-content:flex-end">${isManager||PAPEL==='admin'?`<button class="chip-btn" onclick="changeRole('${esc(pe.user_id)}','${esc(nome)}','${esc(pe.papel||'')}','${esc(pe.agencia||'')}')">Change role</button>`:'<span style="font-size:11px;color:var(--txt-3)">—</span>'}</span>
+      <span style="display:flex;justify-content:flex-end">${isManager||PAPEL==='admin'?`<button class="chip-btn" onclick="editPerson('${esc(pe.user_id)}')">Edit</button>`:'<span style="font-size:11px;color:var(--txt-3)">—</span>'}</span>
     </div>`;
   }).join('')||'<div class="empty">No users registered.</div>';
   return `<div style="background:#fbf0d8;border:1px solid #ecd9a4;border-radius:11px;padding:11px 15px;font-size:12.5px;color:#7a5200;font-weight:600;margin-bottom:16px">Single identity screen for the whole platform — one account for Work and Budget.</div>
@@ -1164,17 +1166,42 @@ function renderPeople(){
       <div style="display:grid;grid-template-columns:1.3fr 1.6fr 1.1fr 1fr .8fr;gap:10px;padding:11px 17px;background:#fbfaf7;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">
         <span>Name</span><span>Email</span><span>Role</span><span>Agency</span><span></span></div>${rows}</div>`;
 }
-async function changeRole(userId,nome,papel,agencia){
-  const roles=['admin','marketing','financeiro','agencia'];
-  const novo=prompt('Change role for '+nome+'\\n\\nType one of: admin, marketing, financeiro, agencia',papel||'');
-  if(!novo||!roles.includes(novo))return;
-  let ag=agencia;
-  if(novo==='agencia'){ ag=prompt('Agency for this user:',agencia||'')||agencia; }
+let PERSON=null;
+function editPerson(userId){
+  const pe=(DATA.pessoas||[]).find(x=>x.user_id===userId); if(!pe)return;
+  PERSON={user_id:userId,nome:pe.nome||'',sobrenome:pe.sobrenome||'',email:pe.email||'',papel:pe.papel||'',agencia:pe.agencia||''};
+  renderPersonModal();
+}
+function personSet(k,v){ if(!PERSON)return; PERSON[k]=v; if(k==='papel')renderPersonModal(); }
+function renderPersonModal(){
+  if(!PERSON)return;
+  const roles=[['admin','Admin'],['marketing','Marketing'],['financeiro','Finance'],['agencia','Agency'],['pendente','Pending']];
+  const ags=agencyOpts();
+  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:480px">
+    <div class="modal-h"><h3>Edit person</h3><button class="x" onclick="closeModal()">✕</button></div>
+    <div class="modal-b">
+      <div class="fgrid">
+        <div class="field"><label>First name</label><input value="${esc(PERSON.nome)}" onchange="personSet('nome',this.value)"></div>
+        <div class="field"><label>Last name</label><input value="${esc(PERSON.sobrenome)}" onchange="personSet('sobrenome',this.value)"></div>
+      </div>
+      <div class="field"><label>Email</label><input value="${esc(PERSON.email)}" onchange="personSet('email',this.value)" placeholder="name@company.com"></div>
+      <div class="fgrid">
+        <div class="field"><label>Role</label><select onchange="personSet('papel',this.value)">${roles.map(r=>`<option value="${r[0]}" ${PERSON.papel===r[0]?'selected':''}>${r[1]}</option>`).join('')}</select></div>
+        ${PERSON.papel==='agencia'?`<div class="field"><label>Agency</label><input list="agList" value="${esc(PERSON.agencia)}" onchange="personSet('agencia',this.value)"><datalist id="agList">${ags.map(a=>`<option>${esc(a)}</option>`).join('')}</datalist></div>`:'<div class="field"></div>'}
+      </div>
+      <div style="font-size:11px;color:var(--txt-3);margin-top:2px">Password is managed by the user (first-access flow) and can’t be edited here.</div>
+    </div>
+    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" onclick="savePerson()">Save</button></div></div>
+  </div></div>`;
+}
+async function savePerson(){
+  if(!PERSON)return;
   try{
-    const {error}=await SBPO.rpc('definir_papel',{p_user:userId,p_papel:novo,p_agencia:novo==='agencia'?(ag||null):null});
+    const {error}=await SBPO.rpc('definir_papel',{p_user:PERSON.user_id,p_papel:PERSON.papel,p_agencia:PERSON.papel==='agencia'?(PERSON.agencia||null):null});
     if(error)throw error;
+    try{ await SBPO.from('perfis').update({nome:PERSON.nome,sobrenome:PERSON.sobrenome,email:PERSON.email}).eq('user_id',PERSON.user_id); }catch(e){ console.warn('name update:',e); }
     const {data:pes}=await SBPO.rpc('listar_pessoas'); DATA.pessoas=pes||[];
-    toast('Role updated ✓'); go(SCREEN);
+    toast('Person updated ✓'); closeModal(); go(SCREEN);
   }catch(e){ toast('Error: '+(e.message||e)); }
 }
 
@@ -1199,7 +1226,7 @@ function agencyOpts(){
   return [...s].sort();
 }
 let CAMP=null;
-const ACT_OPTS=['Campaign','Fee','KOL','Trade','Content','Event','Media'];
+const ACT_OPTS=['Campaign','FEE','KOL','AON','Communication'];
 function rateioTipos(){ const s=new Set((DATA.fee||[]).map(f=>f.tipo).filter(Boolean)); return [...s]; }
 function openCampNew(){
   const o0=(DATA.orcamentos||[])[0];
@@ -1294,6 +1321,39 @@ async function submitOrc(){
     const {error}=await SBPO.rpc('criar_orcamento',{p_nome:ORC.nome.trim(),p_valor:val,p_inicio:ORC.ini?ORC.ini+'-01':null,p_fim:ORC.fim?ORC.fim+'-01':null});
     if(error)throw error;
     toast('Budget created ✓'); closeModal(); await reloadPOAll(); go('budgets');
+  }catch(e){ toast('Error: '+(e.message||e)); }
+}
+
+let FEE=null;
+function openFeeEditor(){ FEE=(DATA.fee||[]).map(f=>({agencia:f.agencia||'',tipo:f.tipo||'',categoria:f.categoria||'',percentual:f.percentual!=null?Math.round(f.percentual*1000)/10:'',cc:f.cc||'',account:f.account||'',descricao:f.descricao||''})); if(!FEE.length)FEE=[{agencia:'',tipo:'',categoria:'',percentual:'',cc:'',account:'',descricao:''}]; renderFeeEditor(); }
+function feeRowSet(i,k,v){ if(FEE&&FEE[i])FEE[i][k]=v; }
+function feeAddRow(){ FEE.push({agencia:'',tipo:'',categoria:'',percentual:'',cc:'',account:'',descricao:''}); renderFeeEditor(); }
+function feeDelRow(i){ FEE.splice(i,1); renderFeeEditor(); }
+function renderFeeEditor(){
+  if(!FEE)return;
+  const inp=(i,k,ph,w)=>`<input value="${esc(FEE[i][k])}" onchange="feeRowSet(${i},'${k}',this.value)" placeholder="${ph}" style="width:${w||'100%'};padding:6px 8px;border:1px solid var(--line-2);border-radius:7px;background:#fff;font:inherit;font-size:12px">`;
+  const rows=FEE.map((f,i)=>`<div style="display:grid;grid-template-columns:1fr 1fr .8fr .6fr 1fr 1fr 1.4fr 24px;gap:7px;align-items:center;margin-bottom:7px">
+    ${inp(i,'agencia','Agency')}${inp(i,'tipo','Type (FEE/KOL…)')}${inp(i,'categoria','Category')}<input type="number" value="${esc(f.percentual)}" onchange="feeRowSet(${i},'percentual',this.value)" placeholder="%" style="padding:6px 8px;border:1px solid var(--line-2);border-radius:7px;background:#fff;font:inherit;font-size:12px;text-align:right" class="mono">${inp(i,'cc','Cost center')}${inp(i,'account','Account')}${inp(i,'descricao','Description')}<button onclick="feeDelRow(${i})" style="width:24px;height:24px;border-radius:6px;border:none;background:transparent;color:var(--txt-3);font-size:11px;cursor:pointer">✕</button>
+  </div>`).join('');
+  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:920px">
+    <div class="modal-h"><h3>Fee split configuration (rateio)</h3><button class="x" onclick="closeModal()">✕</button></div>
+    <div class="modal-b">
+      <div style="font-size:11.5px;color:var(--txt-3);margin-bottom:10px">Define how a shared invoice is split across categories by fixed percentages. % is per row; each row carries its cost center and account for the payment process.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr .8fr .6fr 1fr 1fr 1.4fr 24px;gap:7px;font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px"><span>Agency</span><span>Type</span><span>Category</span><span style="text-align:right">%</span><span>Cost center</span><span>Account</span><span>Description</span><span></span></div>
+      ${rows}
+      <button class="btn-ghost" onclick="feeAddRow()" style="margin-top:4px">+ Add split row</button>
+    </div>
+    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="saveFee()">Save splits</button></div></div>
+  </div></div>`;
+}
+async function saveFee(){
+  if(!FEE)return;
+  const rows=FEE.filter(f=>(f.agencia||'').trim()&&(f.tipo||'').trim()).map(f=>({agencia:f.agencia.trim(),tipo:f.tipo.trim(),categoria:(f.categoria||'').trim(),percentual:(+f.percentual||0)/100,cc:(f.cc||'').trim(),account:(f.account||'').trim(),descricao:(f.descricao||'').trim()}));
+  try{
+    await SBPO.from('fee_rateio').delete().not('agencia','is',null);
+    if(rows.length){ const {error}=await SBPO.from('fee_rateio').insert(rows); if(error)throw error; }
+    const {data:fee}=await SBPO.from('fee_rateio').select('agencia,tipo,categoria,percentual,cc,account,descricao'); DATA.fee=fee||[];
+    toast('Fee splits saved ✓'); closeModal(); go('budgets');
   }catch(e){ toast('Error: '+(e.message||e)); }
 }
 
