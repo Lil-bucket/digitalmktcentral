@@ -717,39 +717,64 @@ function openCampDetail(pid){
    Values/months are untouched; only classification + name/agency change. */
 let CAMPEDIT=null;
 function guessCat(str){ const s=String(str||'').toUpperCase(); for(const c of PRODUCT_CATS){ if(new RegExp('(^|[^A-Z])'+c+'([^A-Z]|$)').test(s)) return c; } return ''; }
+function campMonthlyTotals(pid){
+  const m={};
+  DATA.tetos.filter(t=>t.projeto_id===pid).forEach(t=>{const k=String(t.competencia).slice(0,7);m[k]=(m[k]||0)+(+t.teto||0);});
+  DATA.rateio.filter(r=>r.projeto_id===pid).forEach(r=>{const k=String(r.competencia).slice(0,7);m[k]=(m[k]||0)+(+r.valor||0);});
+  return m; // {'2026-07': 148000, ...}
+}
 function openCampEdit(pid){
   const p=DATA.poProjetos.find(x=>x.id===pid); if(!p)return;
-  CAMPEDIT={id:pid,nome:p.nome||'',agencia:p.agencia||'',activity:p.activity||'Campaign',cat:guessCat(p.product_category||p.nome)};
+  CAMPEDIT={id:pid,nome:p.nome||'',agencia:p.agencia||'',activity:p.activity||'Campaign',cat:guessCat(p.product_category||p.nome),rateio:!!p.rateio,qual:''};
   renderCampEditForm();
 }
 function campEditSet(k,v){ if(CAMPEDIT)CAMPEDIT[k]=v; }
+function campEditActivity(v){ if(!CAMPEDIT)return; CAMPEDIT.activity=v; CAMPEDIT.rateio=(v==='FEE'); renderCampEditForm(); }
 function renderCampEditForm(){
-  if(!CAMPEDIT)return; const ce=CAMPEDIT; const ags=agencyOpts();
+  if(!CAMPEDIT)return; const ce=CAMPEDIT; const ags=agencyOpts(); const isFee=ce.activity==='FEE'; const tipos=rateioTipos();
   const catOpts=`<option value="" ${ce.cat===''?'selected':''}>— pick category —</option>`+PRODUCT_CATS.map(c=>`<option value="${c}" ${ce.cat===c?'selected':''}>${c}</option>`).join('');
+  const classField = isFee
+    ? `<div class="field full" style="margin-top:6px"><label>Which rateio? <span style="font-weight:600;color:var(--txt-3)">(splits this fee across the category budgets)</span></label><select onchange="campEditSet('qual',this.value)">${tipos.length?('<option value="">— pick a rateio —</option>'+tipos.map(t=>`<option value="${esc(t)}" ${ce.qual===t?'selected':''}>${esc(t)}</option>`).join('')):'<option value="">— no fee split configured (define it in Budgets) —</option>'}</select><div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">On save, each month's value is re-distributed across the categories of this rateio (see "Define / edit rateios" in Budgets).</div></div>`
+    : `<div class="field full" style="margin-top:6px"><label>Product category <span style="font-weight:600;color:var(--txt-3)">(the budget this campaign consumes)</span></label><select onchange="campEditSet('cat',this.value)">${catOpts}</select></div>`;
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:520px">
-    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--po);flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Edit campaign</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Set which product-category budget this value belongs to</div></div><button class="x" onclick="closeModal()">✕</button></div>
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--po);flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Edit campaign</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Set which budget(s) this value belongs to</div></div><button class="x" onclick="closeModal()">✕</button></div>
     <div class="modal-b">
       <div class="field full"><label>Campaign name</label><input value="${esc(ce.nome)}" onchange="campEditSet('nome',this.value)" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
       <div class="fgrid" style="margin-top:14px">
-        <div class="field"><label>Activity</label><select onchange="campEditSet('activity',this.value)">${ACT_OPTS.map(a=>`<option ${ce.activity===a?'selected':''}>${a}</option>`).join('')}</select></div>
+        <div class="field"><label>Activity</label><select onchange="campEditActivity(this.value)">${ACT_OPTS.map(a=>`<option ${ce.activity===a?'selected':''}>${a}</option>`).join('')}</select></div>
         <div class="field"><label>Agency</label><select onchange="campEditSet('agencia',this.value)">${ags.map(a=>`<option ${ce.agencia===a?'selected':''}>${esc(a)}</option>`).join('')}${ags.length?'':'<option value="">—</option>'}</select></div>
       </div>
-      <div class="field full" style="margin-top:6px"><label>Product category <span style="font-weight:600;color:var(--txt-3)">(the budget this campaign consumes)</span></label><select onchange="campEditSet('cat',this.value)">${catOpts}</select></div>
-      <div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">Was: <b>${esc(CAMPEDIT&&(DATA.poProjetos.find(x=>x.id===ce.id)||{}).product_category||'—')}</b>. Months and values stay the same.</div>
+      ${classField}
+      <div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">Was: <b>${esc((DATA.poProjetos.find(x=>x.id===ce.id)||{}).product_category||'—')}</b>. Months and total value stay the same.</div>
     </div>
     <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitCampEdit()">Save</button></div></div>
   </div></div>`;
 }
 async function submitCampEdit(){
-  if(!CAMPEDIT)return; const ce=CAMPEDIT;
+  if(!CAMPEDIT)return; const ce=CAMPEDIT; const isFee=ce.activity==='FEE';
   if(!ce.nome.trim()){ toast('Give the campaign a name.'); return; }
-  if(!PRODUCT_CATS.includes(ce.cat)){ toast('Pick a product category (TV/AC/MOB/REF/WG/LABG).'); return; }
+  if(isFee && !ce.qual){ toast('Pick which rateio splits this fee.'); return; }
+  if(!isFee && !PRODUCT_CATS.includes(ce.cat)){ toast('Pick a product category (TV/AC/MOB/REF/WG/LABG).'); return; }
   try{
-    let cc='',account='',account_desc='';
-    try{ const {data:cls}=await SBPO.rpc('classificar',{p_d:ce.cat,p_e:ce.activity||'',p_f:''}); const c=(cls&&cls[0])||{}; cc=c.cc||''; account=c.account||''; account_desc=c.descricao||''; }catch(e){}
-    const campos={nome:ce.nome.trim(),agencia:ce.agencia||null,activity:ce.activity||null,product_category:ce.cat,cc,account,account_desc};
-    const {error}=await SBPO.from('projetos').update(campos).eq('id',ce.id);
-    if(error)throw error;
+    if(isFee){
+      // split each month across the chosen fee split's categories → rateio_alocacao
+      let splits=(DATA.fee||[]).filter(f=>f.tipo===ce.qual&&(!ce.agencia||!f.agencia||f.agencia===ce.agencia));
+      if(!splits.length){ toast('That rateio has no categories configured. Set it in Budgets → Define / edit rateios.'); return; }
+      const totals=campMonthlyTotals(ce.id);
+      const alloc=[];
+      Object.keys(totals).forEach(m=>{ const v=+totals[m]||0; if(v<=0)return; splits.forEach(s=>{ alloc.push({projeto_id:ce.id,categoria:s.categoria||null,competencia:m+'-01',valor:Math.round(v*(+s.percentual||0))}); }); });
+      // replace this campaign's caps: drop old single-category caps + old splits, insert fresh split
+      await SBPO.from('tetos').delete().eq('projeto_id',ce.id);
+      await SBPO.from('rateio_alocacao').delete().eq('projeto_id',ce.id);
+      if(alloc.length){ const {error:ea}=await SBPO.from('rateio_alocacao').insert(alloc); if(ea)throw ea; }
+      const {error}=await SBPO.from('projetos').update({nome:ce.nome.trim(),agencia:ce.agencia||null,activity:'FEE',rateio:true,product_category:null}).eq('id',ce.id);
+      if(error)throw error;
+    }else{
+      let cc='',account='',account_desc='';
+      try{ const {data:cls}=await SBPO.rpc('classificar',{p_d:ce.cat,p_e:ce.activity||'',p_f:''}); const c=(cls&&cls[0])||{}; cc=c.cc||''; account=c.account||''; account_desc=c.descricao||''; }catch(e){}
+      const {error}=await SBPO.from('projetos').update({nome:ce.nome.trim(),agencia:ce.agencia||null,activity:ce.activity||null,rateio:false,product_category:ce.cat,cc,account,account_desc}).eq('id',ce.id);
+      if(error)throw error;
+    }
     CAMPEDIT=null; toast('Campaign updated ✓'); closeModal(); await reloadPOAll(); go('campaigns');
   }catch(e){ toast('Error: '+(e.message||e)); }
 }
