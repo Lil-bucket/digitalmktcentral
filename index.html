@@ -345,19 +345,22 @@ async function onSignedIn(user){
 /* SSO silencioso com o PO (mesma senha) — acesso derivado do papel real */
 async function ssoPO(email){
   const em=(email||'').toLowerCase();
-  // 1) garante sessão no PO usando a mesma senha do login (persistida na sessão do navegador para recargas)
+  window.__poErr='';
   let pw=_senha; if(!pw){ try{ pw=sessionStorage.getItem('__pw')||''; }catch(e){} }
-  const {data:sPO}=await SBPO.auth.getSession();
-  if(!(sPO&&sPO.session)&&pw){
+  let {data:sPO}=await SBPO.auth.getSession();
+  if(!(sPO&&sPO.session)){
+    if(!pw){ window.__poErr='sign out and sign in typing your password'; PAPEL=''; PO_ACCESS=false; return; }
     const {error}=await SBPO.auth.signInWithPassword({email:em,password:pw});
-    if(error){ window.__poErr=error.message; console.warn('PO login:',error.message); }
+    if(error){ window.__poErr=error.message; PAPEL=''; PO_ACCESS=false; _senha=''; return; }
+    ({data:sPO}=await SBPO.auth.getSession());
   }
   _senha='';
-  // 2) papel real (security definer). Sem papel válido = sem acesso ao PO
   try{
-    const {data:p}=await SBPO.rpc('papel_atual');
+    const {data:p,error}=await SBPO.rpc('papel_atual');
+    if(error){ window.__poErr='papel_atual: '+error.message; }
     PAPEL=p||'';
     PO_ACCESS=!!PAPEL && PAPEL!=='pendente';
+    if(!PAPEL && !window.__poErr) window.__poErr='no role for '+em+' in PO';
   }catch(e){ PAPEL=''; PO_ACCESS=false; window.__poErr=(e&&e.message)||'papel_atual failed'; }
   if(PAPEL==='agencia'){ try{ const {data:a}=await SBPO.rpc('agencia_atual'); MINHA_AGENCIA=a||''; }catch(e){} }
 }
