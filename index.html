@@ -250,7 +250,8 @@ const CAT_CHIPS=['Trade','Digital','Media','Content','Events','PR','Retail'];
 const BRAND_CHIPS=['TCL','SEMP','TCL + SEMP'];
 const uid=()=>'x'+Math.random().toString(36).slice(2,9);
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
-function canEdit(p){return isManager||!p||!p.owner||p.owner===(currentUser&&currentUser.email);}
+function fullAccess(){return isManager||PAPEL==='admin';}
+function canEdit(p){return fullAccess()||!p||!p.owner||p.owner===(currentUser&&currentUser.email);}
 function visProjs(){ if(PAPEL==='agencia'&&MINHA_AGENCIA) return DATA.projetos.filter(p=>p.partner===MINHA_AGENCIA||p.agencia===MINHA_AGENCIA||(p.agencies||[]).includes(MINHA_AGENCIA)); return DATA.projetos; }
 
 /* ============================================================
@@ -725,17 +726,23 @@ function campMonthlyTotals(pid){
 }
 function openCampEdit(pid){
   const p=DATA.poProjetos.find(x=>x.id===pid); if(!p)return;
-  CAMPEDIT={id:pid,nome:p.nome||'',agencia:p.agencia||'',activity:p.activity||'Campaign',cat:guessCat(p.product_category||p.nome),rateio:!!p.rateio,qual:''};
+  CAMPEDIT={id:pid,nome:p.nome||'',agencia:p.agencia||'',activity:p.activity||'Campaign',cat:guessCat(p.product_category||p.nome),rateio:!!p.rateio,qual:'',feeMode:(p.activity==='FEE'&&!p.rateio)?'mob':'shared'};
   renderCampEditForm();
 }
 function campEditSet(k,v){ if(CAMPEDIT)CAMPEDIT[k]=v; }
-function campEditActivity(v){ if(!CAMPEDIT)return; CAMPEDIT.activity=v; CAMPEDIT.rateio=(v==='FEE'); renderCampEditForm(); }
+function campEditActivity(v){ if(!CAMPEDIT)return; CAMPEDIT.activity=v; CAMPEDIT.rateio=(v==='FEE'&&CAMPEDIT.feeMode!=='whole'); renderCampEditForm(); }
+function campEditFeeMode(m){ if(!CAMPEDIT)return; CAMPEDIT.feeMode=m; CAMPEDIT.rateio=(m==='split'); renderCampEditForm(); }
 function renderCampEditForm(){
   if(!CAMPEDIT)return; const ce=CAMPEDIT; const ags=agencyOpts(); const isFee=ce.activity==='FEE'; const tipos=rateioTipos();
+  if(isFee && ce.feeMode!=='whole' && ce.feeMode!=='split') ce.feeMode='whole';
   const catOpts=`<option value="" ${ce.cat===''?'selected':''}>— pick category —</option>`+PRODUCT_CATS.map(c=>`<option value="${c}" ${ce.cat===c?'selected':''}>${c}</option>`).join('');
-  const classField = isFee
-    ? `<div class="field full" style="margin-top:6px"><label>Which rateio? <span style="font-weight:600;color:var(--txt-3)">(splits this fee across the category budgets)</span></label><select onchange="campEditSet('qual',this.value)">${tipos.length?('<option value="">— pick a rateio —</option>'+tipos.map(t=>`<option value="${esc(t)}" ${ce.qual===t?'selected':''}>${esc(t)}</option>`).join('')):'<option value="">— no fee split configured (define it in Budgets) —</option>'}</select><div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">On save, each month's value is re-distributed across the categories of this rateio (see "Define / edit rateios" in Budgets).</div></div>`
-    : `<div class="field full" style="margin-top:6px"><label>Product category <span style="font-weight:600;color:var(--txt-3)">(the budget this campaign consumes)</span></label><select onchange="campEditSet('cat',this.value)">${catOpts}</select></div>`;
+  const seg=(v,lbl)=>`<button type="button" onclick="campEditFeeMode('${v}')" style="flex:1;padding:8px 10px;border:1px solid ${ce.feeMode===v?'var(--po)':'var(--line-2)'};background:${ce.feeMode===v?'var(--po)':'var(--paper-2)'};color:${ce.feeMode===v?'#fff':'var(--txt-2)'};font:inherit;font-size:12px;font-weight:600;cursor:pointer;border-radius:8px">${lbl}</button>`;
+  const feeToggle=`<div class="field full" style="margin-top:6px"><label>Fee allocation</label><div style="display:flex;gap:8px">${seg('whole','Integral — one category')}${seg('split','Rateio — split')}</div></div>`;
+  const classField = !isFee
+    ? `<div class="field full" style="margin-top:6px"><label>Product category <span style="font-weight:600;color:var(--txt-3)">(the budget this campaign consumes)</span></label><select onchange="campEditSet('cat',this.value)">${catOpts}</select></div>`
+    : feeToggle + (ce.feeMode==='whole'
+        ? `<div class="field full" style="margin-top:6px"><label>Product category <span style="font-weight:600;color:var(--txt-3)">(100% of this fee goes here — e.g. MOB)</span></label><select onchange="campEditSet('cat',this.value)">${catOpts}</select></div>`
+        : `<div class="field full" style="margin-top:6px"><label>Which rateio? <span style="font-weight:600;color:var(--txt-3)">(splits this fee across the category budgets)</span></label><select onchange="campEditSet('qual',this.value)">${tipos.length?('<option value="">— pick a rateio —</option>'+tipos.map(t=>`<option value="${esc(t)}" ${ce.qual===t?'selected':''}>${esc(t)}</option>`).join('')):'<option value="">— no fee split configured (define it in Budgets) —</option>'}</select><div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">On save, each month's value is re-distributed across the categories of this rateio.</div></div>`);
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:520px">
     <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--po);flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Edit campaign</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Set which budget(s) this value belongs to</div></div><button class="x" onclick="closeModal()">✕</button></div>
     <div class="modal-b">
@@ -753,10 +760,12 @@ function renderCampEditForm(){
 async function submitCampEdit(){
   if(!CAMPEDIT)return; const ce=CAMPEDIT; const isFee=ce.activity==='FEE';
   if(!ce.nome.trim()){ toast('Give the campaign a name.'); return; }
-  if(isFee && !ce.qual){ toast('Pick which rateio splits this fee.'); return; }
-  if(!isFee && !PRODUCT_CATS.includes(ce.cat)){ toast('Pick a product category (TV/AC/MOB/REF/WG/LABG).'); return; }
+  const isSplit = isFee && ce.feeMode==='split';
+  const wholeCat = (!isFee) || (isFee && ce.feeMode==='whole');
+  if(isSplit && !ce.qual){ toast('Pick which rateio splits this fee.'); return; }
+  if(wholeCat && !PRODUCT_CATS.includes(ce.cat)){ toast('Pick a product category (TV/AC/MOB/REF/WG/LABG).'); return; }
   try{
-    if(isFee){
+    if(isSplit){
       // split each month across the chosen fee split's categories → rateio_alocacao
       let splits=(DATA.fee||[]).filter(f=>f.tipo===ce.qual&&(!ce.agencia||!f.agencia||f.agencia===ce.agencia));
       if(!splits.length){ toast('That rateio has no categories configured. Set it in Budgets → Define / edit rateios.'); return; }
@@ -770,6 +779,8 @@ async function submitCampEdit(){
       const {error}=await SBPO.from('projetos').update({nome:ce.nome.trim(),agencia:ce.agencia||null,activity:'FEE',rateio:true,product_category:null}).eq('id',ce.id);
       if(error)throw error;
     }else{
+      // normal campaign OR integral fee (100% to a single category, e.g. Fee MOB)
+      await SBPO.from('rateio_alocacao').delete().eq('projeto_id',ce.id); // in case it was split before
       let cc='',account='',account_desc='';
       try{ const {data:cls}=await SBPO.rpc('classificar',{p_d:ce.cat,p_e:ce.activity||'',p_f:''}); const c=(cls&&cls[0])||{}; cc=c.cc||''; account=c.account||''; account_desc=c.descricao||''; }catch(e){}
       const {error}=await SBPO.from('projetos').update({nome:ce.nome.trim(),agencia:ce.agencia||null,activity:ce.activity||null,rateio:false,product_category:ce.cat,cc,account,account_desc}).eq('id',ce.id);
@@ -801,7 +812,7 @@ function renderPOs(){
       <span class="mono" style="text-align:right;font-size:12.5px">${BRL(po.valor)}</span>
       <span class="mono" style="font-size:12px;color:var(--txt-3)">${esc(po.numero_po||'—')}</span>
       <span><span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap" class="badge ${s.c}"><span class="d"></span>${s.icon} ${s.t}</span></span>
-      <span style="display:flex;gap:6px;flex-wrap:wrap">${(canAprova&&pend)?`<button onclick="aprovarPO('${esc(po.id)}')" style="padding:6px 12px;border-radius:8px;border:none;background:var(--po);color:#fff;font-weight:700;font-size:11.5px;cursor:pointer">Approve</button><button onclick="rejeitarPO('${esc(po.id)}')" style="padding:6px 12px;border-radius:8px;border:1px solid var(--line-2);background:#fff;color:var(--txt-2);font-weight:700;font-size:11.5px;cursor:pointer">Reject</button>`:(((isManager||PAPEL==='admin'))?`<button class="chip-btn" onclick="realocarPO('${esc(po.id)}')">Reallocate month</button>`:'<span style="font-size:11.5px;color:var(--txt-3)">—</span>')}</span>
+      <span style="display:flex;gap:6px;flex-wrap:wrap">${(canAprova&&pend)?`<button onclick="aprovarPO('${esc(po.id)}')" style="padding:6px 12px;border-radius:8px;border:none;background:var(--po);color:#fff;font-weight:700;font-size:11.5px;cursor:pointer">Approve</button><button onclick="rejeitarPO('${esc(po.id)}')" style="padding:6px 12px;border-radius:8px;border:1px solid var(--line-2);background:#fff;color:var(--txt-2);font-weight:700;font-size:11.5px;cursor:pointer">Reject</button>`:''}${fullAccess()?`<button class="chip-btn" onclick="editarPO('${esc(po.id)}')">Edit</button>`:((canAprova&&pend)?'':'<span style="font-size:11.5px;color:var(--txt-3)">—</span>')}</span>
     </div>`;
   }).join('')||'<div class="empty">No POs found for your access.</div>';
   return filt+`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">${head}<div id="poBody">${body}</div></div>
@@ -1054,6 +1065,49 @@ async function realocarPO(poId){
     if(error)throw error;
     po.competencia=comp; toast('PO reallocated to '+fmtMes(comp)+' ✓'); go('pos');
   }catch(e){ toast('Error reallocating: '+(e.message||e)); }
+}
+
+/* admin edita uma PO por completo (valor, descrição, nº, mês, status) */
+let POEDIT=null;
+function editarPO(poId){
+  if(!fullAccess()){ toast('Only admin can edit POs.'); return; }
+  const po=DATA.pos.find(p=>p.id===poId); if(!po)return;
+  POEDIT={id:poId,projeto_id:po.projeto_id,valor:po.valor!=null?po.valor:'',descricao:po.descricao||'',numero_po:po.numero_po||'',mes:String(po.competencia||'').slice(0,7),status:po.status};
+  renderPOEdit();
+}
+function poeSet(k,v){ if(POEDIT)POEDIT[k]=v; }
+async function renderPOEdit(){
+  if(!POEDIT)return; const pe=POEDIT;
+  let monthOpts=[pe.mes];
+  try{ const meses=await mesesDoProjeto(pe.projeto_id); monthOpts=[...new Set(meses.map(m=>String(m.competencia).slice(0,7)).concat(pe.mes))].filter(Boolean).sort(); }catch(e){}
+  const stOpts=Object.keys(PO_STATUS).map(k=>`<option value="${k}" ${pe.status===k?'selected':''}>${PO_STATUS[k].t}</option>`).join('');
+  const moOpts=monthOpts.map(m=>`<option value="${m}" ${pe.mes===m?'selected':''}>${fmtMes(m+'-01')}</option>`).join('');
+  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:500px">
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--po);flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Edit PO ${esc(pe.numero_po||'')}</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">${esc(poNome(pe.projeto_id))} — admin can edit any field</div></div><button class="x" onclick="closeModal()">✕</button></div>
+    <div class="modal-b">
+      <div class="fgrid">
+        <div class="field"><label>Value (R$)</label><input type="number" min="0" step="100" value="${esc(pe.valor)}" onchange="poeSet('valor',this.value)" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px" class="mono"></div>
+        <div class="field"><label>PO nº</label><input value="${esc(pe.numero_po)}" onchange="poeSet('numero_po',this.value)" placeholder="—" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
+      </div>
+      <div class="fgrid" style="margin-top:14px">
+        <div class="field"><label>Month</label><select onchange="poeSet('mes',this.value)">${moOpts}</select></div>
+        <div class="field"><label>Status</label><select onchange="poeSet('status',this.value)">${stOpts}</select></div>
+      </div>
+      <div class="field full" style="margin-top:14px"><label>Description</label><input value="${esc(pe.descricao)}" onchange="poeSet('descricao',this.value)" placeholder="—" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
+      <div style="font-size:11.5px;color:var(--txt-3);margin-top:10px">Changing status here is a direct override — use Approve/Reject on the row for the normal lifecycle.</div>
+    </div>
+    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitPOEdit()">Save</button></div></div>
+  </div></div>`;
+}
+async function submitPOEdit(){
+  if(!POEDIT)return; const pe=POEDIT;
+  const val=+pe.valor||0; if(val<=0){ toast('Enter a value greater than 0.'); return; }
+  const comp=/^\d{4}-\d{2}$/.test(pe.mes)?pe.mes+'-01':pe.mes;
+  try{
+    const {error}=await SBPO.from('pos').update({valor:Math.round(val),descricao:pe.descricao||null,numero_po:pe.numero_po||null,competencia:comp,status:pe.status}).eq('id',pe.id);
+    if(error)throw error;
+    POEDIT=null; toast('PO updated ✓'); closeModal(); await reloadPO(); go('pos');
+  }catch(e){ toast('Error: '+(e.message||e)); }
 }
 
 /* ============================================================
