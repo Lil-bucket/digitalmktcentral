@@ -401,10 +401,10 @@ async function loadAll(){
     const [orc,prj,pos,tet,rat,nt,pes,fee]=await Promise.all([
       SBPO.from('orcamentos').select('id,nome,valor_total,valor_liberado,product_category,periodo_inicio,periodo_fim'),
       SBPO.from('projetos').select('id,nome,agencia,orcamento_id,product_category,activity,projeto_tag,rateio,aprovacao_status'),
-      SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em'),
+      SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao'),
       SBPO.from('tetos').select('projeto_id,competencia,teto'),
       SBPO.from('rateio_alocacao').select('projeto_id,competencia,valor,categoria'),
-      SBPO.from('notificacoes').select('id,lida,criada_em').eq('lida',false).limit(50),
+      SBPO.from('notificacoes').select('id,mensagem,tipo,po_id,lida,criada_em').eq('lida',false).order('criada_em',{ascending:false}).limit(50),
       SBPO.rpc('listar_pessoas'),
       SBPO.from('fee_rateio').select('agencia,tipo,categoria,percentual,cc,account,descricao')
     ]);
@@ -869,13 +869,13 @@ function renderPOs(){
     <span>Campaign</span><span>Agency</span><span>Month</span><span style="text-align:right">Value</span><span>PO nº</span><span>Status</span><span>Action</span></div>`;
   const body=pos.map(po=>{const s=PO_STATUS[po.status]||{t:po.status,c:'s-slate',icon:''};const pend=['SOLICITADA','EM_APROVACAO'].includes(po.status);
     return `<div class="po-row" data-camp="${esc(po.projeto_id)}" data-ag="${esc(po.agencia||'')}" data-st="${esc(po.status)}" style="display:grid;grid-template-columns:1.5fr 1fr .8fr .9fr .8fr 1.1fr 1.1fr;gap:10px;padding:12px 17px;border-bottom:1px solid #f0eee8;align-items:center;font-size:13px">
-      <span style="min-width:0"><span style="font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(nomeBy[po.projeto_id]||'—')}</span><span style="font-size:11px;color:var(--txt-3)">${esc(po.descricao||'')}</span></span>
+      <span style="min-width:0"><span style="font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(nomeBy[po.projeto_id]||'—')}</span><span style="font-size:11px;color:var(--txt-3)">${esc(po.descricao||'')}</span>${poMetaHTML(po)}</span>
       <span style="color:var(--txt-2)">${esc(po.agencia||'—')}</span>
       <span style="font-size:12px;color:var(--txt-2)">${fmtMes(po.competencia)}</span>
       <span class="mono" style="text-align:right;font-size:12.5px">${BRL(po.valor)}</span>
       <span class="mono" style="font-size:12px;color:var(--txt-3)">${esc(po.numero_po||'—')}</span>
       <span><span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap" class="badge ${s.c}"><span class="d"></span>${s.icon} ${s.t}</span></span>
-      <span style="display:flex;gap:6px;flex-wrap:wrap">${(canAprova&&pend)?`<button onclick="aprovarPO('${esc(po.id)}')" style="padding:6px 12px;border-radius:8px;border:none;background:var(--po);color:#fff;font-weight:700;font-size:11.5px;cursor:pointer">Approve</button><button onclick="rejeitarPO('${esc(po.id)}')" style="padding:6px 12px;border-radius:8px;border:1px solid var(--line-2);background:#fff;color:var(--txt-2);font-weight:700;font-size:11.5px;cursor:pointer">Reject</button>`:''}${fullAccess()?`<button class="chip-btn" onclick="editarPO('${esc(po.id)}')">Edit</button>`:((canAprova&&pend)?'':'<span style="font-size:11.5px;color:var(--txt-3)">—</span>')}</span>
+      <span style="display:flex;gap:6px;flex-wrap:wrap">${poActionsHTML(po)}</span>
     </div>`;
   }).join('')||'<div class="empty">No POs found for your access.</div>';
   return filt+`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">${head}<div id="poBody">${body}</div></div>
@@ -904,6 +904,164 @@ async function rejeitarCamp(id){
   const motivo=prompt('Reason for rejecting the campaign:'); if(motivo===null)return;
   try{ const {error}=await SBPO.rpc('rejeitar_projeto',{p_projeto:id,p_motivo:motivo}); if(error)throw error; toast('Campaign rejected'); await reloadPOAll(); go(SCREEN); }
   catch(e){ toast('Error: '+(e.message||e)); }
+}
+
+/* ============================================================
+   PO LIFECYCLE — issue nº, invoice (NF), validate (chama RPCs do PO)
+   ============================================================ */
+function fmtDataBR(s){ if(!s)return'—'; const p=String(s).slice(0,10).split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:s; }
+function poScreen(){ const b=currentNav().budget||[]; return ['pos','mypos'].find(id=>b.includes(id))||'pos'; }
+function canGerarPO(){ return ['admin','financeiro'].includes(PAPEL); }
+function canFaturarPO(po){ return fullAccess() || (PAPEL==='agencia' && MINHA_AGENCIA && MINHA_AGENCIA===po.agencia); }
+function canValidarPO(){ return ['admin','financeiro'].includes(PAPEL); }
+const _poBtn=(bg)=>'padding:6px 12px;border-radius:8px;border:none;color:#fff;font-weight:700;font-size:11.5px;cursor:pointer;background:'+bg;
+
+async function reloadNotif(){
+  try{ const {data}=await SBPO.from('notificacoes').select('id,mensagem,tipo,po_id,lida,criada_em').eq('lida',false).order('criada_em',{ascending:false}).limit(50); DATA.notif=data||[]; }catch(e){}
+}
+async function uploadEvid(poId,file,tag){
+  const safe=(file.name||'arquivo').replace(/[^\w.\-]/g,'_');
+  const path='po/'+poId+'/'+tag+'_'+Date.now()+'_'+safe;
+  const {error}=await SBPO.storage.from('evidencias').upload(path,file,{upsert:false,contentType:file.type||undefined});
+  if(error) throw error; return path;
+}
+async function abrirAnexo(path){
+  if(!path){ toast('No file attached.'); return; }
+  try{ const {data,error}=await SBPO.storage.from('evidencias').createSignedUrl(path,3600); if(error)throw error; window.open(data.signedUrl,'_blank'); }
+  catch(e){ toast('Could not open the file: '+(e.message||e)); }
+}
+function poMetaHTML(po){
+  const b=[];
+  if(po.numero_po) b.push('nº '+esc(po.numero_po));
+  if(po.po_arquivo) b.push(`<a onclick="abrirAnexo('${esc(po.po_arquivo)}')" style="color:#3c7a63;cursor:pointer;text-decoration:underline">📎 PO</a>`);
+  if(po.nf_numero) b.push('NF '+esc(po.nf_numero));
+  if(po.fatura_url) b.push(`<a onclick="abrirAnexo('${esc(po.fatura_url)}')" style="color:#b5550c;cursor:pointer;text-decoration:underline">🧾 NF</a>`);
+  if(po.evidencia_url) b.push(`<a onclick="abrirAnexo('${esc(po.evidencia_url)}')" style="color:#b5550c;cursor:pointer;text-decoration:underline">📎 evidence</a>`);
+  if(po.vencimento && ['FATURADA','VALIDADA','CONCLUIDA'].includes(po.status)) b.push('<span style="color:#1f8a4c;font-weight:700">💰 payment '+fmtDataBR(po.vencimento)+'</span>');
+  if(po.status==='ATUALIZAR_INFO' && po.motivo_rejeicao) b.push('<span style="color:#bf0008">⚠ '+esc(po.motivo_rejeicao)+'</span>');
+  return b.length?`<span style="font-size:11px;color:var(--txt-3);display:block;margin-top:3px;line-height:1.6">${b.join(' · ')}</span>`:'';
+}
+function poActionsHTML(po){
+  const pend=['SOLICITADA','EM_APROVACAO'].includes(po.status);
+  const canAprova=['admin','marketing'].includes(PAPEL)||isManager;
+  const b=[];
+  if(canAprova&&pend){
+    b.push(`<button onclick="aprovarPO('${esc(po.id)}')" style="${_poBtn('var(--po)')}">Approve</button>`);
+    b.push(`<button onclick="rejeitarPO('${esc(po.id)}')" style="padding:6px 12px;border-radius:8px;border:1px solid var(--line-2);background:#fff;color:var(--txt-2);font-weight:700;font-size:11.5px;cursor:pointer">Reject</button>`);
+  }
+  if(po.status==='APROVADA'&&canGerarPO()) b.push(`<button onclick="openGerarPO('${esc(po.id)}')" style="${_poBtn('#3c7a63')}">Issue PO nº</button>`);
+  if(['PO_GERADA','ATUALIZAR_INFO'].includes(po.status)&&canFaturarPO(po)) b.push(`<button onclick="openFaturarPO('${esc(po.id)}')" style="${_poBtn('#b5550c')}">Post NF</button>`);
+  if(po.status==='FATURADA'&&canValidarPO()) b.push(`<button onclick="openValidarPO('${esc(po.id)}')" style="${_poBtn('#1f8a4c')}">Validate</button>`);
+  if(fullAccess()) b.push(`<button class="chip-btn" onclick="editarPO('${esc(po.id)}')">Edit</button>`);
+  return b.length?b.join(''):'<span style="font-size:11.5px;color:var(--txt-3)">—</span>';
+}
+function notifGoPO(poId,tipo){
+  go(poScreen());
+  setTimeout(()=>{ const po=DATA.pos.find(p=>p.id===poId); if(!po)return;
+    if(tipo==='aprovada'&&canGerarPO()) openGerarPO(poId);
+    else if((tipo==='po_gerada'||tipo==='atualizar')&&canFaturarPO(po)) openFaturarPO(poId);
+    else if(tipo==='faturada'&&canValidarPO()) openValidarPO(poId);
+  },80);
+}
+
+/* ---- Issue PO number (finance/admin) ---- */
+let GERAR=null;
+function openGerarPO(id){ const po=DATA.pos.find(p=>p.id===id); if(!po)return; if(!canGerarPO()){toast('Only finance/admin can issue the PO number.');return;} GERAR={id,num:po.numero_po||'',file:null,fileName:''}; renderGerarPO(); }
+function gerarSet(k,v){ if(GERAR)GERAR[k]=v; }
+function gerarFile(inp){ const f=inp.files&&inp.files[0]; if(f){GERAR.file=f;GERAR.fileName=f.name; renderGerarPO();} }
+function renderGerarPO(){
+  if(!GERAR)return; const po=DATA.pos.find(p=>p.id===GERAR.id)||{};
+  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:480px">
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:#3c7a63;flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Issue PO number</h3><div style="font-size:12px;color:var(--txt-3)">${esc(poNome(po.projeto_id))} · ${esc(po.agencia||'')} · ${BRL(po.valor)}</div></div><button class="x" onclick="closeModal()">✕</button></div>
+    <div class="modal-b">
+      <div class="field"><label>PO number</label><input value="${esc(GERAR.num)}" onchange="gerarSet('num',this.value)" placeholder="e.g. PO-1183"></div>
+      <div class="field"><label>Attach PO document (optional, PDF)</label><input type="file" accept="application/pdf,image/*" onchange="gerarFile(this)"></div>
+      ${GERAR.fileName?`<div style="font-size:12px;color:var(--txt-2)">📎 ${esc(GERAR.fileName)}</div>`:''}
+    </div>
+    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" onclick="submitGerarPO()">Issue PO</button></div></div>
+  </div></div>`;
+}
+async function submitGerarPO(){
+  if(!GERAR)return; const num=(GERAR.num||'').trim(); if(!num){toast('Enter the PO number.');return;}
+  try{
+    let path=null; if(GERAR.file){ toast('Uploading…'); path=await uploadEvid(GERAR.id,GERAR.file,'po'); }
+    const {error}=await SBPO.rpc('gerar_po',{p_po:GERAR.id,p_numero:num,p_arquivo:path});
+    if(error)throw error;
+    GERAR=null; closeModal(); await reloadPO(); await reloadNotif(); go(SCREEN); toast('PO '+num+' issued ✓ — agency can now post the NF.');
+  }catch(e){ toast('Error: '+(e.message||e)); }
+}
+
+/* ---- Invoice / NF (agency, admin) ---- */
+let FAT=null;
+function openFaturarPO(id){ const po=DATA.pos.find(p=>p.id===id); if(!po)return; if(!canFaturarPO(po)){toast('Only the responsible agency can post the NF.');return;} FAT={id,nf:po.nf_numero||'',nfFile:null,nfName:'',evFile:null,evName:''}; renderFaturarPO(); }
+function fatSet(k,v){ if(FAT)FAT[k]=v; }
+function fatFile(inp,which){ const f=inp.files&&inp.files[0]; if(f){ if(which==='nf'){FAT.nfFile=f;FAT.nfName=f.name;} else {FAT.evFile=f;FAT.evName=f.name;} renderFaturarPO(); } }
+function renderFaturarPO(){
+  if(!FAT)return; const po=DATA.pos.find(p=>p.id===FAT.id)||{};
+  const redo=po.status==='ATUALIZAR_INFO';
+  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:500px">
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:#b5550c;flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Post invoice (NF)</h3><div style="font-size:12px;color:var(--txt-3)">${esc(poNome(po.projeto_id))} · PO ${esc(po.numero_po||'—')} · ${BRL(po.valor)}</div></div><button class="x" onclick="closeModal()">✕</button></div>
+    <div class="modal-b">
+      ${redo&&po.motivo_rejeicao?`<div class="banner" style="background:var(--red-bg);border-color:#f0b8b2;color:#b32418">↩ Sent back by finance: ${esc(po.motivo_rejeicao)}</div>`:''}
+      <div class="field"><label>NF number</label><input value="${esc(FAT.nf)}" onchange="fatSet('nf',this.value)" placeholder="e.g. NF 8842"></div>
+      <div class="field"><label>Invoice file (NF — PDF)</label><input type="file" accept="application/pdf,image/*" onchange="fatFile(this,'nf')">${FAT.nfName?`<div style="font-size:12px;color:var(--txt-2);margin-top:4px">🧾 ${esc(FAT.nfName)}</div>`:''}</div>
+      <div class="field"><label>Evidence file (delivery proof)</label><input type="file" accept="application/pdf,image/*" onchange="fatFile(this,'ev')">${FAT.evName?`<div style="font-size:12px;color:var(--txt-2);margin-top:4px">📎 ${esc(FAT.evName)}</div>`:''}</div>
+      <div style="font-size:11.5px;color:var(--txt-3);background:var(--paper-2);border:1px solid var(--line);border-radius:9px;padding:9px 12px">💡 The payment forecast is calculated automatically from today's posting date and shown once the NF is posted.</div>
+    </div>
+    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" onclick="submitFaturarPO()">Post NF</button></div></div>
+  </div></div>`;
+}
+async function submitFaturarPO(){
+  if(!FAT)return; const nf=(FAT.nf||'').trim(); if(!nf){toast('Enter the NF number.');return;}
+  const po=DATA.pos.find(p=>p.id===FAT.id)||{};
+  try{
+    toast('Uploading…');
+    const fatPath = FAT.nfFile ? await uploadEvid(FAT.id,FAT.nfFile,'nf') : po.fatura_url;
+    const evPath  = FAT.evFile ? await uploadEvid(FAT.id,FAT.evFile,'ev') : po.evidencia_url;
+    if(!fatPath||!evPath){ toast('Attach both the NF and the evidence.'); return; }
+    const {data,error}=await SBPO.rpc('faturar_po',{p_po:FAT.id,p_fatura:fatPath,p_evidencia:evPath,p_nf_numero:nf});
+    if(error)throw error;
+    const venc=(data&&data.vencimento)?fmtDataBR(data.vencimento):'—';
+    FAT=null; closeModal(); await reloadPO(); await reloadNotif(); go(SCREEN); toast('NF posted ✓ — payment forecast '+venc+'.');
+  }catch(e){ toast('Error: '+(e.message||e)); }
+}
+
+/* ---- Validate NF (finance/admin) ---- */
+let VALID=null;
+function openValidarPO(id){ const po=DATA.pos.find(p=>p.id===id); if(!po)return; if(!canValidarPO()){toast('Only finance/admin can validate.');return;} VALID={id}; renderValidarPO(); }
+function renderValidarPO(){
+  if(!VALID)return; const po=DATA.pos.find(p=>p.id===VALID.id)||{};
+  const cell=(l,v,c)=>`<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--paper-2)"><div style="font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em">${l}</div><div class="mono" style="font-size:13.5px;font-weight:700;margin-top:3px;color:${c||'var(--txt-1)'}">${v}</div></div>`;
+  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:480px">
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:#1f8a4c;flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Validate invoice (NF)</h3><div style="font-size:12px;color:var(--txt-3)">${esc(poNome(po.projeto_id))} · ${esc(po.agencia||'')}</div></div><button class="x" onclick="closeModal()">✕</button></div>
+    <div class="modal-b">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        ${cell('PO number', esc(po.numero_po||'—'))}
+        ${cell('Value', BRL(po.valor))}
+        ${cell('NF number', esc(po.nf_numero||'—'))}
+        ${cell('Payment forecast', fmtDataBR(po.vencimento), '#b5550c')}
+      </div>
+      <div style="font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Attachments to review</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button onclick="abrirAnexo('${esc(po.fatura_url||'')}')" style="display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;font-size:12.5px;font-weight:600;color:var(--txt-1);cursor:pointer;text-align:left"><span>🧾</span><span style="flex:1">Open Nota Fiscal (NF)</span><span style="font-size:11px;color:var(--txt-3)">↗</span></button>
+        <button onclick="abrirAnexo('${esc(po.evidencia_url||'')}')" style="display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;font-size:12.5px;font-weight:600;color:var(--txt-1);cursor:pointer;text-align:left"><span>📎</span><span style="flex:1">Open evidence</span><span style="font-size:11px;color:var(--txt-3)">↗</span></button>
+      </div>
+    </div>
+    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="rejeitarFatPO()">Request update</button><button class="btn-acc" style="background:#1f8a4c" onclick="submitValidarPO()">Validate &amp; schedule payment</button></div></div>
+  </div></div>`;
+}
+async function submitValidarPO(){
+  if(!VALID)return;
+  try{ const {error}=await SBPO.rpc('validar_po',{p_po:VALID.id}); if(error)throw error;
+    const po=DATA.pos.find(p=>p.id===VALID.id)||{}; const venc=fmtDataBR(po.vencimento);
+    VALID=null; closeModal(); await reloadPO(); await reloadNotif(); go(SCREEN); toast('Invoice validated ✓ — payment scheduled for '+venc+'.');
+  }catch(e){ toast('Error: '+(e.message||e)); }
+}
+async function rejeitarFatPO(){
+  if(!VALID)return; const motivo=prompt('Reason to send the NF back to the agency:'); if(motivo===null)return; if(!motivo.trim()){toast('Describe the reason.');return;}
+  try{ const {error}=await SBPO.rpc('rejeitar_faturamento',{p_po:VALID.id,p_motivo:motivo}); if(error)throw error;
+    VALID=null; closeModal(); await reloadPO(); await reloadNotif(); go(SCREEN); toast('Sent back to the agency for update.');
+  }catch(e){ toast('Error: '+(e.message||e)); }
 }
 
 /* ============================================================
@@ -1035,10 +1193,10 @@ function myMentions(){
 function renderNotif(){
   const ms=myMentions().map(m=>({...m,origin:'work'}));
   const tbl=(DATA.mencoes||[]).map(m=>({proj:m.projeto_nome,pid:'',txt:m.mensagem,autor:m.autor,t:String(m.criado_em||'').slice(0,10),origin:'work'}));
-  const budget=(DATA.notif||[]).map(n=>({proj:'Budget module',pid:'',txt:'PO update requiring your attention',autor:'PO',t:String(n.criada_em||'').slice(0,10),origin:'budget'}));
+  const budget=(DATA.notif||[]).map(n=>({proj:'Budget · PO',pid:'',poId:n.po_id||'',tipo:n.tipo||'',txt:n.mensagem||'PO update requiring your attention',autor:'PO',t:String(n.criada_em||'').slice(0,10),origin:'budget'}));
   const seen=new Set(), all=[...tbl,...ms,...budget].filter(x=>{const k=x.proj+'|'+x.txt+'|'+x.t;if(seen.has(k))return false;seen.add(k);return true;}).sort((a,b)=>String(b.t).localeCompare(String(a.t)));
   return `<div class="panel"><div class="panel-h"><h3>Notifications</h3><span class="tag">${all.length}</span></div>
-    <div class="panel-b">${all.length?all.map(m=>`<div class="row-item" ${m.pid?`onclick="openProj('${esc(m.pid)}')"`:'style="cursor:default"'}><span class="pin" style="background:${m.origin==='budget'?'var(--po)':'var(--accent)'}"></span><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13.5px">${esc(m.proj)}</div><div style="font-size:12.5px;color:var(--txt-2);margin-top:1px">${fmtLogTxt(m.txt)}</div><span class="who">${esc(m.autor)} · ${fmtDate(m.t)}</span></div></div>`).join(''):'<div class="empty">No notifications.</div>'}</div>
+    <div class="panel-b">${all.length?all.map(m=>`<div class="row-item" ${(m.origin==='budget'&&m.poId)?`onclick="notifGoPO('${esc(m.poId)}','${esc(m.tipo)}')" style="cursor:pointer"`:(m.pid?`onclick="openProj('${esc(m.pid)}')"`:'style="cursor:default"')}><span class="pin" style="background:${m.origin==='budget'?'var(--po)':'var(--accent)'}"></span><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13.5px">${esc(m.proj)}${(m.origin==='budget'&&m.poId)?' <span style=\'color:var(--po);font-weight:700\'>· open →</span>':''}</div><div style="font-size:12.5px;color:var(--txt-2);margin-top:1px">${fmtLogTxt(m.txt)}</div><span class="who">${esc(m.autor)} · ${fmtDate(m.t)}</span></div></div>`).join(''):'<div class="empty">No notifications.</div>'}</div>
     <div style="padding:12px 20px;border-top:1px solid var(--line);font-size:11px;color:var(--txt-3)">One bell for both modules — dots show origin (orange = Work, red = Budget).</div></div>`;
 }
 
@@ -1110,7 +1268,7 @@ async function submitReqPO(){
 }
 async function reloadPO(){
   try{
-    const {data}=await SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em');
+    const {data}=await SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao');
     DATA.pos=data||[];
   }catch(e){}
 }
@@ -1417,7 +1575,7 @@ async function reloadPOAll(){
     const [orc,prj,pos,tet,rat]=await Promise.all([
       SBPO.from('orcamentos').select('id,nome,valor_total,valor_liberado,product_category,periodo_inicio,periodo_fim'),
       SBPO.from('projetos').select('id,nome,agencia,orcamento_id,product_category,activity,projeto_tag,rateio,aprovacao_status'),
-      SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em'),
+      SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao'),
       SBPO.from('tetos').select('projeto_id,competencia,teto'),
       SBPO.from('rateio_alocacao').select('projeto_id,competencia,valor,categoria')
     ]);
