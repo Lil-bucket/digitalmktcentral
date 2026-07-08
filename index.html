@@ -136,6 +136,8 @@
   .btn-acc:hover{background:var(--accent-deep)}
   .btn-ghost{padding:10px 16px;border-radius:9px;font-weight:600;font-size:13.5px;color:var(--txt-2);border:1px solid var(--line-2)}
   .btn-ghost:hover{background:var(--paper)}
+  .btn-del{padding:10px 16px;border-radius:9px;font-weight:600;font-size:13.5px;color:var(--red);border:1px solid #f0b8b2;background:#fff}
+  .btn-del:hover{background:var(--red);color:#fff;border-color:var(--red)}
   .btn-del{padding:10px 14px;border-radius:9px;font-weight:600;font-size:13px;color:var(--red)}
   .btn-del:hover{background:var(--red-bg)}
   .atv{border:1px solid var(--line-2);border-radius:11px;padding:12px;margin-bottom:9px;background:#fff}
@@ -399,7 +401,7 @@ async function loadAll(){
   // PO / orçamento
   try{
     const [orc,prj,pos,tet,rat,nt,pes,fee]=await Promise.all([
-      SBPO.from('orcamentos').select('id,nome,valor_total,valor_liberado,product_category,periodo_inicio,periodo_fim'),
+      SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
       SBPO.from('projetos').select('id,nome,agencia,orcamento_id,product_category,activity,projeto_tag,rateio,aprovacao_status'),
       SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao'),
       SBPO.from('tetos').select('projeto_id,competencia,teto'),
@@ -817,7 +819,7 @@ function renderCampEditForm(){
       ${classField}
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">Was: <b>${esc((DATA.poProjetos.find(x=>x.id===ce.id)||{}).product_category||'—')}</b>. Months and total value stay the same.</div>
     </div>
-    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitCampEdit()">Save</button></div></div>
+    <div class="modal-f"><span>${(PAPEL==='admin')?`<button class="btn-del" onclick="deletarCampanha('${esc(ce.id)}')">Delete campaign</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitCampEdit()">Save</button></div></div>
   </div></div>`;
 }
 async function submitCampEdit(){
@@ -1317,7 +1319,7 @@ async function renderPOEdit(){
       <div class="field full" style="margin-top:14px"><label>Description</label><input value="${esc(pe.descricao)}" onchange="poeSet('descricao',this.value)" placeholder="—" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:10px">Changing status here is a direct override — use Approve/Reject on the row for the normal lifecycle.</div>
     </div>
-    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitPOEdit()">Save</button></div></div>
+    <div class="modal-f"><span>${(PAPEL==='admin')?`<button class="btn-del" onclick="deletarPO('${esc(pe.id)}')">Delete PO</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitPOEdit()">Save</button></div></div>
   </div></div>`;
 }
 async function submitPOEdit(){
@@ -1328,6 +1330,33 @@ async function submitPOEdit(){
     const {error}=await SBPO.from('pos').update({valor:Math.round(val),descricao:pe.descricao||null,numero_po:pe.numero_po||null,competencia:comp,status:pe.status}).eq('id',pe.id);
     if(error)throw error;
     POEDIT=null; toast('PO updated ✓'); closeModal(); await reloadPO(); go('pos');
+  }catch(e){ toast('Error: '+(e.message||e)); }
+}
+
+/* ===== DELETE (admin only) — POs, campaigns, budgets ===== */
+async function deletarPO(id){
+  if(PAPEL!=='admin'){ toast('Only admin can delete.'); return; }
+  const po=DATA.pos.find(p=>p.id===id)||{};
+  if(!confirm('Delete this PO permanently?\n\n'+(poNome(po.projeto_id)||'')+' · '+BRL(po.valor)+(po.numero_po?' · PO '+po.numero_po:'')+'\n\nThis cannot be undone.'))return;
+  try{ const {error}=await SBPO.rpc('excluir_po',{p_po:id}); if(error)throw error;
+    POEDIT=null; closeModal(); await reloadPO(); await reloadNotif(); go(SCREEN); toast('PO deleted.');
+  }catch(e){ toast('Error: '+(e.message||e)); }
+}
+async function deletarCampanha(id){
+  if(PAPEL!=='admin'){ toast('Only admin can delete.'); return; }
+  const p=DATA.poProjetos.find(x=>x.id===id)||{};
+  const nPos=DATA.pos.filter(x=>x.projeto_id===id).length;
+  if(!confirm('Delete campaign "'+(p.nome||'')+'"?\n\nThis also deletes its '+nPos+' PO(s) and all monthly caps/rateio.\n\nThis cannot be undone.'))return;
+  try{ const {error}=await SBPO.rpc('excluir_projeto',{p_projeto:id}); if(error)throw error;
+    CAMPEDIT=null; closeModal(); await reloadPOAll(); go('campaigns'); toast('Campaign deleted.');
+  }catch(e){ toast('Error: '+(e.message||e)); }
+}
+async function deletarOrcamento(id){
+  if(PAPEL!=='admin'){ toast('Only admin can delete.'); return; }
+  const o=(DATA.orcamentos||[]).find(x=>x.id===id)||{};
+  if(!confirm('Delete budget "'+(o.nome||o.product_category||'')+'"?\n\nOnly possible if no campaign is linked to it.\n\nThis cannot be undone.'))return;
+  try{ const {error}=await SBPO.rpc('excluir_orcamento',{p_orc:id}); if(error)throw error;
+    ORC=null; closeModal(); await reloadPOAll(); go('budgets'); toast('Budget deleted.');
   }catch(e){ toast('Error: '+(e.message||e)); }
 }
 
@@ -1497,8 +1526,8 @@ function renderBudgets(){
   const canBudget=isManager||PAPEL==='admin';
   const catTable=orcs.length?`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05);margin-bottom:18px">
     <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between"><b style="font-family:Sora,sans-serif;font-size:14px">Budget categories</b>${canBudget?'<button class="chip-btn" onclick="openOrcNew()">+ New budget</button>':''}</div>
-    <div style="display:grid;grid-template-columns:1.3fr 1fr .9fr .9fr ${canBudget?'70px':''};gap:10px;padding:10px 17px;background:#fbfaf7;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em"><span>Category</span><span>Period</span><span style="text-align:right">Total</span><span style="text-align:right">Released</span>${canBudget?'<span></span>':''}</div>
-    ${orcs.map(o=>`<div style="display:grid;grid-template-columns:1.3fr 1fr .9fr .9fr ${canBudget?'70px':''};gap:10px;padding:12px 17px;border-bottom:1px solid #f0eee8;align-items:center;font-size:13px"><span style="font-weight:600">${esc(o.nome||o.product_category||'—')}</span><span class="mono" style="font-size:11.5px;color:var(--txt-2)">${o.periodo_inicio?fmtMes(o.periodo_inicio):'—'}${o.periodo_fim?' → '+fmtMes(o.periodo_fim):''}</span><span class="mono" style="text-align:right;font-size:12px">${BRL(o.valor_total)}</span><span class="mono" style="text-align:right;font-size:12px">${BRL(o.valor_liberado)}</span>${canBudget?`<span style="text-align:right"><button class="chip-btn" onclick="openOrcEdit('${esc(o.id)}')">Edit</button></span>`:''}</div>`).join('')}
+    <div style="display:grid;grid-template-columns:1.3fr 1fr .9fr ${canBudget?'70px':''};gap:10px;padding:10px 17px;background:#fbfaf7;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em"><span>Category</span><span>Period</span><span style="text-align:right">Total</span>${canBudget?'<span></span>':''}</div>
+    ${orcs.map(o=>`<div style="display:grid;grid-template-columns:1.3fr 1fr .9fr ${canBudget?'70px':''};gap:10px;padding:12px 17px;border-bottom:1px solid #f0eee8;align-items:center;font-size:13px"><span style="font-weight:600">${esc(o.nome||o.product_category||'—')}</span><span class="mono" style="font-size:11.5px;color:var(--txt-2)">${o.periodo_inicio?fmtMes(o.periodo_inicio):'—'}${o.periodo_fim?' → '+fmtMes(o.periodo_fim):''}</span><span class="mono" style="text-align:right;font-size:12px">${BRL(o.valor_total)}</span>${canBudget?`<span style="text-align:right"><button class="chip-btn" onclick="openOrcEdit('${esc(o.id)}')">Edit</button></span>`:''}</div>`).join('')}
   </div>`:'<div class="banner">No budgets registered.</div>';
   const fee=DATA.fee||[];
   const canFee=isManager||PAPEL==='admin';
@@ -1573,7 +1602,7 @@ async function savePerson(){
 async function reloadPOAll(){
   try{
     const [orc,prj,pos,tet,rat]=await Promise.all([
-      SBPO.from('orcamentos').select('id,nome,valor_total,valor_liberado,product_category,periodo_inicio,periodo_fim'),
+      SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
       SBPO.from('projetos').select('id,nome,agencia,orcamento_id,product_category,activity,projeto_tag,rateio,aprovacao_status'),
       SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao'),
       SBPO.from('tetos').select('projeto_id,competencia,teto'),
@@ -1659,6 +1688,7 @@ async function submitCamp(){
 }
 
 let ORC=null;
+window.deletarOrcamento=deletarOrcamento;window.deletarCampanha=deletarCampanha;window.deletarPO=deletarPO;
 /* Budgets are strictly one per product category — fixed list, no duplicates. */
 const PRODUCT_CATS=['TV','AC','MOB','REF','WG','LABG'];
 function usedCats(){ return new Set((DATA.orcamentos||[]).map(o=>String(o.product_category||o.nome||'').trim().toUpperCase()).filter(Boolean)); }
@@ -1683,7 +1713,7 @@ function renderOrcForm(){
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:480px">
     <div class="modal-h"><h3>${editing?'Edit budget — '+esc(ORC.cat):'New budget'}</h3><button class="x" onclick="closeModal()">✕</button></div>
     <div class="modal-b">${body}</div>
-    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button>${(editing||free.length)?`<button class="btn-acc" style="background:var(--po)" onclick="submitOrc()">${editing?'Save':'Create budget'}</button>`:''}</div></div>
+    <div class="modal-f"><span>${(editing&&PAPEL==='admin')?`<button class="btn-del" onclick="deletarOrcamento('${esc(ORC.id)}')">Delete budget</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button>${(editing||free.length)?`<button class="btn-acc" style="background:var(--po)" onclick="submitOrc()">${editing?'Save':'Create budget'}</button>`:''}</div></div>
   </div></div>`;
 }
 async function submitOrc(){
