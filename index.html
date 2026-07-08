@@ -403,12 +403,12 @@ async function loadAll(){
       SBPO.from('projetos').select('id,nome,agencia,orcamento_id,product_category,activity,projeto_tag,rateio,aprovacao_status'),
       SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em'),
       SBPO.from('tetos').select('projeto_id,competencia,teto'),
-      SBPO.from('rateio_alocacao').select('projeto_id,competencia,valor'),
+      SBPO.from('rateio_alocacao').select('projeto_id,competencia,valor,categoria'),
       SBPO.from('notificacoes').select('id,lida,criada_em').eq('lida',false).limit(50),
       SBPO.rpc('listar_pessoas'),
       SBPO.from('fee_rateio').select('agencia,tipo,categoria,percentual,cc,account,descricao')
     ]);
-    DATA.orcamentos=orc.data||[]; DATA.poProjetos=prj.data||[]; DATA.pos=pos.data||[];
+    DATA.orcamentos=orc.data||[]; DATA.poProjetos=(prj.data||[]).filter(p=>p.aprovacao_status!=='REJEITADO'); DATA.pos=pos.data||[];
     DATA.tetos=tet.data||[]; DATA.rateio=rat.data||[]; DATA.notif=nt.data||[];
     DATA.pessoas=pes.data||[]; DATA.fee=fee.data||[];
   }catch(e){console.error('PO load:',e);}
@@ -724,9 +724,17 @@ function campMonthlyTotals(pid){
   DATA.rateio.filter(r=>r.projeto_id===pid).forEach(r=>{const k=String(r.competencia).slice(0,7);m[k]=(m[k]||0)+(+r.valor||0);});
   return m; // {'2026-07': 148000, ...}
 }
+function recoverQual(pid){
+  const cs=new Set((DATA.rateio||[]).filter(r=>r.projeto_id===pid&&r.categoria).map(r=>r.categoria));
+  if(!cs.size) return '';
+  let found='';
+  rateioTipos().forEach(tp=>{ const tset=new Set((DATA.fee||[]).filter(f=>f.tipo===tp).map(f=>f.categoria)); if(tset.size===cs.size && [...cs].every(c=>tset.has(c))) found=tp; });
+  return found;
+}
 function openCampEdit(pid){
   const p=DATA.poProjetos.find(x=>x.id===pid); if(!p)return;
-  CAMPEDIT={id:pid,nome:p.nome||'',agencia:p.agencia||'',activity:p.activity||'Campaign',cat:guessCat(p.product_category||p.nome),rateio:!!p.rateio,qual:'',feeMode:(p.activity==='FEE'&&!p.rateio)?'mob':'shared'};
+  const feeMode = p.activity==='FEE' ? (p.rateio ? 'split' : 'whole') : 'shared';
+  CAMPEDIT={id:pid,nome:p.nome||'',agencia:p.agencia||'',activity:p.activity||'Campaign',cat:guessCat(p.product_category||p.nome),rateio:!!p.rateio,qual:(feeMode==='split'?recoverQual(pid):''),feeMode:feeMode};
   renderCampEditForm();
 }
 function campEditSet(k,v){ if(CAMPEDIT)CAMPEDIT[k]=v; }
@@ -1249,8 +1257,11 @@ function renderBudgetOverview(isBalance){
   const balMes=capMes-comMes-penMes;
   const comPct=capMes?Math.min(100,comMes/capMes*100):0, penPct=capMes?Math.min(100-comPct,penMes/capMes*100):0;
   const stat=(l,v,col)=>`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;padding:14px 16px;box-shadow:0 1px 2px rgba(20,22,28,.05)"><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-2);font-weight:700">${l}</div><div class="mono" style="font-size:19px;font-weight:700;margin-top:7px;color:${col}">${v}</div></div>`;
-  // cards por categoria (orçamentos)
-  const cats=(DATA.orcamentos||[]).map(o=>{const tot=+o.valor_total||0,rel=+o.valor_liberado||0;return {name:o.nome||o.product_category||'—',n:o.product_category||'',used:rel,total:tot,pct:tot?Math.min(100,rel/tot*100):0};});
+  // consumo alocado por categoria: tetos (campanha de categoria única) + rateio_alocacao (fees rateados)
+  const catUsed={}, catOf={}; DATA.poProjetos.forEach(p=>catOf[p.id]=p.product_category);
+  DATA.tetos.forEach(t=>{ if(!campIds.has(t.projeto_id))return; const c=catOf[t.projeto_id]; if(c) catUsed[c]=(catUsed[c]||0)+(+t.teto||0); });
+  DATA.rateio.forEach(r=>{ if(!campIds.has(r.projeto_id))return; const c=r.categoria; if(c) catUsed[c]=(catUsed[c]||0)+(+r.valor||0); });
+  const cats=(DATA.orcamentos||[]).map(o=>{const tot=+o.valor_total||0,cat=o.product_category||'',rel=catUsed[cat]||0;return {name:o.nome||cat||'—',n:cat,used:rel,total:tot,pct:tot?Math.min(100,rel/tot*100):0};});
   return `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px">
       ${stat(isBalance?'Allocated':'Budgeted',BRL(orcado),'#14161c')}
       ${stat('Consumed',BRL(consumido),'var(--po)')}
@@ -1352,9 +1363,9 @@ async function reloadPOAll(){
       SBPO.from('projetos').select('id,nome,agencia,orcamento_id,product_category,activity,projeto_tag,rateio,aprovacao_status'),
       SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em'),
       SBPO.from('tetos').select('projeto_id,competencia,teto'),
-      SBPO.from('rateio_alocacao').select('projeto_id,competencia,valor')
+      SBPO.from('rateio_alocacao').select('projeto_id,competencia,valor,categoria')
     ]);
-    DATA.orcamentos=orc.data||[]; DATA.poProjetos=prj.data||[]; DATA.pos=pos.data||[]; DATA.tetos=tet.data||[]; DATA.rateio=rat.data||[];
+    DATA.orcamentos=orc.data||[]; DATA.poProjetos=(prj.data||[]).filter(p=>p.aprovacao_status!=='REJEITADO'); DATA.pos=pos.data||[]; DATA.tetos=tet.data||[]; DATA.rateio=rat.data||[];
   }catch(e){ console.error('reloadPOAll:',e); }
 }
 function agencyOpts(){
