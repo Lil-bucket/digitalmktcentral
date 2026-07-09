@@ -402,7 +402,7 @@ async function loadAll(){
   try{
     const [orc,prj,pos,tet,rat,nt,pes,fee]=await Promise.all([
       SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
-      SBPO.from('projetos').select('id,nome,agencia,orcamento_id,product_category,activity,projeto_tag,rateio,aprovacao_status'),
+      SBPO.from('projetos').select('id,nome,agencia,orcamento_id,product_category,activity,projeto_tag,rateio,rateio_tipo,aprovacao_status'),
       SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao'),
       SBPO.from('tetos').select('projeto_id,competencia,teto'),
       SBPO.from('rateio_alocacao').select('projeto_id,competencia,valor,categoria'),
@@ -419,7 +419,7 @@ async function loadAll(){
 /* ============================================================
    NAV + ROUTING — espelha o protótipo aprovado (menu por papel)
    ============================================================ */
-const W_LABELS={dash:'Dashboard',board:'Board',list:'List',timeline:'Timeline',team:'Team',weekly:'Weekly Status',mytasks:'My Tasks',agencywork:'Assigned Work',notif:'Notifications'};
+const W_LABELS={dash:'Dashboard',board:'Board',list:'List',timeline:'Timeline',team:'Team',weekly:'Weekly Status',mytasks:'Notes',agencywork:'Assigned Work',notif:'Notifications'};
 const B_LABELS={bo:'Overview',budgets:'Budgets',campaigns:'Campaigns',pos:'Purchase Orders',approvals:'Approvals',podesk:'PO Desk',people:'People & Roles',reqpo:'Request PO',mypos:'My POs',balance:'Balance'};
 const ROLE_NAV={
   admin:      {work:['dash','board','list','timeline','team','weekly','mytasks','notif'], budget:['bo','budgets','campaigns','pos','approvals','people']},
@@ -453,7 +453,7 @@ const SCREEN_META={
   timeline:{t:'Timeline',s:'Work · Gantt view',mod:'work'},
   team:{t:'Team Workload',s:'Work · Capacity',mod:'work'},
   weekly:{t:'Weekly Status',s:'Work · Weekly summary',mod:'work'},
-  mytasks:{t:'My Tasks & Requests',s:'Work · My projects and mentions',mod:'work'},
+  mytasks:{t:'Notes',s:'Work · Private scratchpad',mod:'work'},
   agencywork:{t:'Assigned Work',s:'Work · Shared with your agency',mod:'work'},
   notif:{t:'Notifications',s:'Work · Mentions and updates',mod:'work'},
   bo:{t:'Budget Overview',s:'Budget · Overview',mod:'budget'},
@@ -477,8 +477,6 @@ function go(screen){
   // CTA per screen (mirrors the prototype)
   if(['dash','board','list','timeline'].includes(screen)){
     $('#ctaBox').innerHTML='<button class="btn-acc" onclick="openProjNew()">+ New project</button>';
-  } else if(screen==='mytasks'){
-    $('#ctaBox').innerHTML='<button class="btn-acc" onclick="openProjNew()">+ New task</button>';
   } else if(screen==='campaigns'&&['admin','marketing'].includes(PAPEL)){
     $('#ctaBox').innerHTML='<button class="btn-acc" style="background:var(--po)" onclick="openCampNew()">+ New campaign</button>';
   } else if(screen==='budgets'&&PAPEL==='admin'){
@@ -494,7 +492,7 @@ function go(screen){
   else if(screen==='timeline') v.innerHTML=renderTimeline();
   else if(screen==='team') v.innerHTML=renderTeam();
   else if(screen==='weekly') v.innerHTML=renderWeekly();
-  else if(screen==='mytasks') v.innerHTML=renderMyTasks();
+  else if(screen==='mytasks') v.innerHTML=renderNotes();
   else if(screen==='agencywork') v.innerHTML=renderAgencyWork();
   else if(screen==='notif') v.innerHTML=renderNotif();
   else if(screen==='bo'||screen==='balance'){ v.innerHTML=renderBudgetOverview(screen==='balance'); buildCampanhaChart(); }
@@ -708,9 +706,31 @@ function openCampDetail(pid){
       ${list.length?list.map(po=>{const s=PO_STATUS[po.status]||{t:po.status,c:'s-slate'};return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px dashed var(--line)"><span class="badge s-blue" style="flex-shrink:0"><span class="d"></span>${fmtMes(po.competencia)}</span><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:12.5px">${esc(po.descricao||'—')}</div><div style="font-size:11px;color:var(--txt-3)">${esc(po.agencia||'')} · ${esc(po.numero_po||'no number')}</div></div><span class="mono" style="font-weight:700;font-size:12.5px">${BRL(po.valor)}</span><span class="badge ${s.c}"><span class="d"></span>${s.t}</span></div>`;}).join(''):'<div style="font-size:12px;color:var(--txt-3)">No PO this month.</div>'}
     </div>`;
   }).join('')||'<div class="empty">No months registered.</div>';
+  // ---- summary (KPIs, consumption bar, rateio split) ----
+  const allPos=DATA.pos.filter(po=>po.projeto_id===pid);
+  const livePos=allPos.filter(po=>!['REJEITADA','CANCELADA'].includes(po.status));
+  const totCap=Object.values(capByM).reduce((a,b)=>a+(+b||0),0);
+  const totCons=livePos.reduce((s,po)=>s+(+po.valor||0),0);
+  const saldoTot=totCap-totCons; const pctTot=totCap?Math.min(100,totCons/totCap*100):0;
+  const catAlloc={}; DATA.rateio.filter(r=>r.projeto_id===pid).forEach(r=>{catAlloc[r.categoria]=(catAlloc[r.categoria]||0)+(+r.valor||0);});
+  const catKeys=Object.keys(catAlloc).sort((a,b)=>catAlloc[b]-catAlloc[a]);
+  const palette=['#e20613','#2a6fdb','#1f8a4c','#b5550c','#7a5cc4','#0e7c86'];
+  const kpi=(lbl,val,c)=>`<div style="flex:1;min-width:118px;border:1px solid var(--line);border-radius:11px;padding:11px 13px;background:var(--paper-2)"><div style="font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">${lbl}</div><div class="mono" style="font-size:16px;font-weight:800;margin-top:3px;color:${c||'var(--txt-1)'}">${val}</div></div>`;
+  const summary=`
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+      ${kpi('Total cap',BRL(totCap))}${kpi('Consumed',BRL(totCons),'#1f8a4c')}${kpi('Balance',BRL(saldoTot),saldoTot<0?'var(--po)':'var(--txt-1)')}${kpi('POs issued',String(allPos.length))}
+    </div>
+    <div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px"><span>Consumption</span><span>${Math.round(pctTot)}%</span></div>
+      <div style="height:12px;border-radius:6px;background:#f0eee8;overflow:hidden"><span style="display:block;height:100%;width:${pctTot}%;background:${pctTot>=100?'var(--po)':'#1f8a4c'}"></span></div>
+    </div>
+    ${(p.rateio&&catKeys.length)?`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:9px">Rateio — allocation per budget</div>
+      ${(function(){const tot=catKeys.reduce((s,k)=>s+catAlloc[k],0);return catKeys.map((k,i)=>{const pc=tot?catAlloc[k]/tot*100:0;return `<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><b>${esc(k)}</b><span class="mono">${BRL(catAlloc[k])} · ${Math.round(pc)}%</span></div><div style="height:8px;border-radius:5px;background:#f0eee8;overflow:hidden"><span style="display:block;height:100%;width:${pc}%;background:${palette[i%palette.length]}"></span></div></div>`;}).join('');})()}
+    </div>`:''}`;
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:640px">
     <div class="modal-h"><h3>${esc(p.nome)}</h3><button class="x" onclick="closeModal()">✕</button></div>
-    <div class="modal-b"><div style="font-size:12.5px;color:var(--txt-3);margin-bottom:14px">${esc(p.agencia||'')} · ${esc(p.product_category||'')}${p.rateio?' · rateio':''} — month-by-month consumption</div>${blocks}</div>
+    <div class="modal-b"><div style="font-size:12.5px;color:var(--txt-3);margin-bottom:14px">${esc(p.agencia||'')} · ${esc(p.product_category||'')}${p.rateio?' · rateio':''}</div>${summary}<div style="font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin:2px 0 10px">Month by month</div>${blocks}</div>
     <div class="modal-f"><span></span><div style="display:flex;gap:10px">${(['admin','marketing'].includes(PAPEL)||isManager)?`<button class="btn-ghost" onclick="openCampValues('${esc(p.id)}')">Edit monthly values</button><button class="btn-acc" style="background:var(--po)" onclick="openCampEdit('${esc(p.id)}')">Edit category / budget</button>`:''}<button class="btn-ghost" onclick="closeModal()">Close</button></div></div>
   </div></div>`;
 }
@@ -756,6 +776,7 @@ async function submitCampValues(){
   try{
     if(cv.rateio){
       let splits=(DATA.fee||[]).filter(f=>f.tipo===cv.qual);
+      if(!splits.length && cv.qual){ splits=(DATA.fee||[]).filter(f=>String(f.tipo||'').toUpperCase()===String(cv.qual||'').toUpperCase()); }
       if(!splits.length){ toast('Cannot resolve the rateio categories. Re-pick the rateio in "Edit category / budget".'); return; }
       const alloc=[];
       rows.forEach(r=>{ const v=+r.valor||0; splits.forEach(s=>{ alloc.push({projeto_id:cv.id,categoria:s.categoria||null,competencia:r.mes+'-01',valor:Math.round(v*(+s.percentual||0))}); }); });
@@ -782,6 +803,10 @@ function campMonthlyTotals(pid){
   return m; // {'2026-07': 148000, ...}
 }
 function recoverQual(pid){
+  // Prefer the persisted rateio type (deterministic). Fall back to the old
+  // heuristic only for legacy campaigns saved before rateio_tipo existed.
+  const p=(DATA.poProjetos||[]).find(x=>x.id===pid);
+  if(p&&p.rateio_tipo) return p.rateio_tipo;
   const cs=new Set((DATA.rateio||[]).filter(r=>r.projeto_id===pid&&r.categoria).map(r=>r.categoria));
   if(!cs.size) return '';
   let found='';
@@ -833,6 +858,7 @@ async function submitCampEdit(){
     if(isSplit){
       // split each month across the chosen fee split's categories → rateio_alocacao
       let splits=(DATA.fee||[]).filter(f=>f.tipo===ce.qual&&(!ce.agencia||!f.agencia||f.agencia===ce.agencia));
+      if(!splits.length) splits=(DATA.fee||[]).filter(f=>f.tipo===ce.qual); // fallback: agency-agnostic
       if(!splits.length){ toast('That rateio has no categories configured. Set it in Budgets → Define / edit rateios.'); return; }
       const totals=campMonthlyTotals(ce.id);
       const alloc=[];
@@ -841,14 +867,14 @@ async function submitCampEdit(){
       await SBPO.from('tetos').delete().eq('projeto_id',ce.id);
       await SBPO.from('rateio_alocacao').delete().eq('projeto_id',ce.id);
       if(alloc.length){ const {error:ea}=await SBPO.from('rateio_alocacao').insert(alloc); if(ea)throw ea; }
-      const {error}=await SBPO.from('projetos').update({nome:ce.nome.trim(),agencia:ce.agencia||null,activity:'FEE',rateio:true,product_category:null}).eq('id',ce.id);
+      const {error}=await SBPO.from('projetos').update({nome:ce.nome.trim(),agencia:ce.agencia||null,activity:'FEE',rateio:true,rateio_tipo:ce.qual||null,product_category:null}).eq('id',ce.id);
       if(error)throw error;
     }else{
       // normal campaign OR integral fee (100% to a single category, e.g. Fee MOB)
       await SBPO.from('rateio_alocacao').delete().eq('projeto_id',ce.id); // in case it was split before
       let cc='',account='',account_desc='';
       try{ const {data:cls}=await SBPO.rpc('classificar',{p_d:ce.cat,p_e:ce.activity||'',p_f:''}); const c=(cls&&cls[0])||{}; cc=c.cc||''; account=c.account||''; account_desc=c.descricao||''; }catch(e){}
-      const {error}=await SBPO.from('projetos').update({nome:ce.nome.trim(),agencia:ce.agencia||null,activity:ce.activity||null,rateio:false,product_category:ce.cat,cc,account,account_desc}).eq('id',ce.id);
+      const {error}=await SBPO.from('projetos').update({nome:ce.nome.trim(),agencia:ce.agencia||null,activity:ce.activity||null,rateio:false,rateio_tipo:null,product_category:ce.cat,cc,account,account_desc}).eq('id',ce.id);
       if(error)throw error;
     }
     CAMPEDIT=null; toast('Campaign updated ✓'); closeModal(); await reloadPOAll(); go('campaigns');
@@ -1071,6 +1097,18 @@ async function rejeitarFatPO(){
    ============================================================ */
 let EDIT=null;
 function closeModal(){ $('#modalMount').innerHTML=''; EDIT=null; }
+function notesKey(){ return 'po_notes_'+((currentUser&&currentUser.email)||'anon'); }
+function saveNotes(v){ try{ localStorage.setItem(notesKey(), v); }catch(e){} const el=$('#notesSaved'); if(el){ el.textContent='Saved'; el.style.opacity='1'; clearTimeout(window.__nt); window.__nt=setTimeout(function(){el.style.opacity='.4';},1200); } }
+function renderNotes(){
+  let v=''; try{ v=localStorage.getItem(notesKey())||''; }catch(e){}
+  return `<div style="max-width:820px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div><div style="font-family:Sora,sans-serif;font-weight:700;font-size:16px">Notes</div><div style="font-size:12px;color:var(--txt-3)">A private scratchpad — saved automatically on this device.</div></div>
+      <span id="notesSaved" style="font-size:11.5px;color:#1f8a4c;font-weight:700;opacity:.4;transition:opacity .2s">Saved</span>
+    </div>
+    <textarea oninput="saveNotes(this.value)" placeholder="Type your notes here…" style="width:100%;min-height:58vh;padding:18px 20px;border:1px solid var(--line-2);border-radius:14px;background:#fff;font:inherit;font-size:14px;line-height:1.7;color:var(--txt-1);resize:vertical;box-shadow:0 1px 2px rgba(20,22,28,.04)">${esc(v)}</textarea>
+  </div>`;
+}
 function pmSet(k,v){ if(EDIT)EDIT[k]=v; }
 function pmType(v){ if(!EDIT)return; EDIT.tipo=v; if(EDIT._new){ const t=typeOf(v); EDIT.tasks=t.tasks.map(n=>({id:uid(),n,done:false,fim:'',status:'no_prazo',pct:0,obs:'',subs:[]})); } renderProjModal(); }
 function pmToggleCat(c){ if(!EDIT)return; EDIT.categorias=EDIT.categorias||[]; const i=EDIT.categorias.indexOf(c); if(i<0)EDIT.categorias.push(c); else EDIT.categorias.splice(i,1); renderProjModal(); }
@@ -1603,7 +1641,7 @@ async function reloadPOAll(){
   try{
     const [orc,prj,pos,tet,rat]=await Promise.all([
       SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
-      SBPO.from('projetos').select('id,nome,agencia,orcamento_id,product_category,activity,projeto_tag,rateio,aprovacao_status'),
+      SBPO.from('projetos').select('id,nome,agencia,orcamento_id,product_category,activity,projeto_tag,rateio,rateio_tipo,aprovacao_status'),
       SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao'),
       SBPO.from('tetos').select('projeto_id,competencia,teto'),
       SBPO.from('rateio_alocacao').select('projeto_id,competencia,valor,categoria')
@@ -1668,13 +1706,14 @@ async function submitCamp(){
   try{
     let cc='',account='',account_desc='';
     try{ const {data:cls}=await SBPO.rpc('classificar',{p_d:cat,p_e:CAMP.activity||'',p_f:''}); const c=(cls&&cls[0])||{}; cc=c.cc||''; account=c.account||''; account_desc=c.descricao||''; }catch(e){}
-    const campos={nome:CAMP.nome.trim(),agencia:CAMP.agencia||null,orcamento_id:CAMP.orcamento_id,product_category:cat,activity:CAMP.activity||null,cc,account,account_desc,rateio:!!CAMP.rateio,criado_por:'portal'};
+    const campos={nome:CAMP.nome.trim(),agencia:CAMP.agencia||null,orcamento_id:CAMP.orcamento_id,product_category:cat,activity:CAMP.activity||null,cc,account,account_desc,rateio:!!CAMP.rateio,rateio_tipo:(CAMP.rateio?(CAMP.qual||null):null),criado_por:'portal'};
     const {data:proj,error}=await SBPO.from('projetos').insert(campos).select().single();
     if(error)throw error;
     const pid=proj.id;
     if(CAMP.rateio){
       // split each month across the fee-split categories by fixed percentages (rateio)
       let splits=(DATA.fee||[]).filter(f=>f.tipo===CAMP.qual&&(!CAMP.agencia||!f.agencia||f.agencia===CAMP.agencia));
+      if(!splits.length && CAMP.qual) splits=(DATA.fee||[]).filter(f=>f.tipo===CAMP.qual);
       if(!splits.length) splits=[{categoria:cat,percentual:1}];
       const alloc=[];
       rows.forEach(r=>{ const v=+r.valor||0; splits.forEach(s=>{ alloc.push({projeto_id:pid,categoria:s.categoria||cat,competencia:r.mes+'-01',valor:Math.round(v*(+s.percentual||0))}); }); });
