@@ -419,7 +419,7 @@ async function loadAll(){
 /* ============================================================
    NAV + ROUTING — espelha o protótipo aprovado (menu por papel)
    ============================================================ */
-const W_LABELS={dash:'Dashboard',board:'Board',list:'List',timeline:'Timeline',team:'Team',weekly:'Weekly Status',mytasks:'Notes',agencywork:'Assigned Work',notif:'Notifications'};
+const W_LABELS={dash:'Dashboard',board:'Board',list:'List',timeline:'Timeline',team:'Team',weekly:'Weekly Status',mytasks:'Tasks',agencywork:'Assigned Work',notif:'Notifications'};
 const B_LABELS={bo:'Overview',budgets:'Budgets',campaigns:'Campaigns',pos:'Purchase Orders',approvals:'Approvals',podesk:'PO Desk',people:'People & Roles',reqpo:'Request PO',mypos:'My POs',balance:'Balance'};
 const ROLE_NAV={
   admin:      {work:['dash','board','list','timeline','team','weekly','mytasks','notif'], budget:['bo','budgets','campaigns','pos','approvals','people']},
@@ -453,7 +453,7 @@ const SCREEN_META={
   timeline:{t:'Timeline',s:'Work · Gantt view',mod:'work'},
   team:{t:'Team Workload',s:'Work · Capacity',mod:'work'},
   weekly:{t:'Weekly Status',s:'Work · Weekly summary',mod:'work'},
-  mytasks:{t:'Notes',s:'Work · Private scratchpad',mod:'work'},
+  mytasks:{t:'Tasks & Notes',s:'Work · Personal to-dos and meeting notes',mod:'work'},
   agencywork:{t:'Assigned Work',s:'Work · Shared with your agency',mod:'work'},
   notif:{t:'Notifications',s:'Work · Mentions and updates',mod:'work'},
   bo:{t:'Budget Overview',s:'Budget · Overview',mod:'budget'},
@@ -1099,14 +1099,34 @@ let EDIT=null;
 function closeModal(){ $('#modalMount').innerHTML=''; EDIT=null; }
 function notesKey(){ return 'po_notes_'+((currentUser&&currentUser.email)||'anon'); }
 function saveNotes(v){ try{ localStorage.setItem(notesKey(), v); }catch(e){} const el=$('#notesSaved'); if(el){ el.textContent='Saved'; el.style.opacity='1'; clearTimeout(window.__nt); window.__nt=setTimeout(function(){el.style.opacity='.4';},1200); } }
-function renderNotes(){
-  let v=''; try{ v=localStorage.getItem(notesKey())||''; }catch(e){}
-  return `<div style="max-width:820px">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <div><div style="font-family:Sora,sans-serif;font-weight:700;font-size:16px">Notes</div><div style="font-size:12px;color:var(--txt-3)">A private scratchpad — saved automatically on this device.</div></div>
-      <span id="notesSaved" style="font-size:11.5px;color:#1f8a4c;font-weight:700;opacity:.4;transition:opacity .2s">Saved</span>
+function tasksKey(){ return 'po_ptasks_'+((currentUser&&currentUser.email)||'anon'); }
+function loadPTasks(){ try{ return JSON.parse(localStorage.getItem(tasksKey())||'[]')||[]; }catch(e){ return []; } }
+function savePTasks(list){ try{ localStorage.setItem(tasksKey(), JSON.stringify(list)); }catch(e){} }
+function ptAdd(){ const inp=$('#ptNew'); if(!inp)return; const v=(inp.value||'').trim(); if(!v)return; const l=loadPTasks(); l.unshift({id:uid(),n:v,done:false,t:Date.now()}); savePTasks(l); const v2=$('#notesArea'); renderTasksInto(); const ni=$('#ptNew'); if(ni)ni.focus(); }
+function ptToggle(id){ const l=loadPTasks(); const t=l.find(x=>x.id===id); if(t)t.done=!t.done; savePTasks(l); renderTasksInto(); }
+function ptDel(id){ savePTasks(loadPTasks().filter(x=>x.id!==id)); renderTasksInto(); }
+function ptKey(e){ if(e&&e.key==='Enter'){ e.preventDefault(); ptAdd(); } }
+function renderTasksInto(){ const host=$('#tasksHost'); if(host) host.innerHTML=tasksInner(); }
+function tasksInner(){
+  const l=loadPTasks(); const open=l.filter(t=>!t.done), done=l.filter(t=>t.done);
+  let notes=''; try{ notes=localStorage.getItem(notesKey())||''; }catch(e){}
+  const row=t=>`<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 4px;border-bottom:1px solid #f0eee8"><input type="checkbox" ${t.done?'checked':''} onchange="ptToggle('${t.id}')" style="width:17px;height:17px;accent-color:var(--po);margin-top:1px;cursor:pointer"><span style="flex:1;font-size:13.5px;line-height:1.45;${t.done?'text-decoration:line-through;color:var(--txt-3)':''}">${esc(t.n)}</span><button onclick="ptDel('${t.id}')" style="border:none;background:none;color:var(--txt-3);cursor:pointer;font-size:14px;line-height:1;padding:2px 4px">✕</button></div>`;
+  return `<div style="display:grid;grid-template-columns:1.1fr 1fr;gap:18px;align-items:start">
+    <div>
+      <div style="font-family:Sora,sans-serif;font-weight:700;font-size:13px;margin-bottom:9px">To-do · <span style="color:var(--txt-3);font-weight:600">${open.length} open</span></div>
+      <div style="display:flex;gap:8px;margin-bottom:12px"><input id="ptNew" onkeydown="ptKey(event)" placeholder="Add a personal task…" style="flex:1;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:#fff;font:inherit;font-size:13px"><button class="btn-acc" style="background:var(--po)" onclick="ptAdd()">Add</button></div>
+      <div style="border:1px solid var(--line);border-radius:12px;padding:4px 12px;background:#fff">${open.length?open.map(row).join(''):'<div style="padding:14px 4px;font-size:12.5px;color:var(--txt-3)">No open tasks.</div>'}${done.length?`<div style="padding:10px 4px 4px;font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">Done (${done.length})</div>`+done.map(row).join(''):''}</div>
     </div>
-    <textarea oninput="saveNotes(this.value)" placeholder="Type your notes here…" style="width:100%;min-height:58vh;padding:18px 20px;border:1px solid var(--line-2);border-radius:14px;background:#fff;font:inherit;font-size:14px;line-height:1.7;color:var(--txt-1);resize:vertical;box-shadow:0 1px 2px rgba(20,22,28,.04)">${esc(v)}</textarea>
+    <div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px"><span style="font-family:Sora,sans-serif;font-weight:700;font-size:13px">Meeting notes</span><span id="notesSaved" style="font-size:11px;color:#1f8a4c;font-weight:700;opacity:.4;transition:opacity .2s">Saved</span></div>
+      <textarea id="notesArea" oninput="saveNotes(this.value)" placeholder="Meeting notes, reminders, anything not tied to a project…" style="width:100%;min-height:52vh;padding:16px 18px;border:1px solid var(--line-2);border-radius:12px;background:#fff;font:inherit;font-size:13.5px;line-height:1.7;color:var(--txt-1);resize:vertical">${esc(notes)}</textarea>
+    </div>
+  </div>`;
+}
+function renderNotes(){
+  return `<div style="max-width:1000px">
+    <div style="margin-bottom:14px"><div style="font-family:Sora,sans-serif;font-weight:700;font-size:16px">Tasks &amp; notes</div><div style="font-size:12px;color:var(--txt-3)">Personal to-dos and meeting notes — not tied to any project. Saved on this device.</div></div>
+    <div id="tasksHost">${tasksInner()}</div>
   </div>`;
 }
 function pmSet(k,v){ if(EDIT)EDIT[k]=v; }
