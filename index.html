@@ -117,6 +117,8 @@
   .stage-tag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px}
   .banner{background:#fff7e6;border:1px solid #f0dca8;color:#8a6300;padding:11px 14px;border-radius:10px;font-size:12.5px;margin-bottom:18px}
   .loading{display:grid;place-items:center;height:60vh;color:var(--txt-3);font-size:14px}
+  [contenteditable][data-placeholder]:empty:before{content:attr(data-placeholder);color:var(--txt-3)}
+  [contenteditable] ul{margin:4px 0 4px 18px}
 
   /* ===== MODAL ===== */
   .overlay{position:fixed;inset:0;background:rgba(20,22,28,.45);z-index:100;display:flex;align-items:flex-start;justify-content:center;padding:36px 20px;overflow-y:auto}
@@ -1100,21 +1102,99 @@ function closeModal(){ $('#modalMount').innerHTML=''; EDIT=null; }
 function notesKey(){ return 'po_notes_'+((currentUser&&currentUser.email)||'anon'); }
 function saveNotes(v){ try{ localStorage.setItem(notesKey(), v); }catch(e){} const el=$('#notesSaved'); if(el){ el.textContent='Saved'; el.style.opacity='1'; clearTimeout(window.__nt); window.__nt=setTimeout(function(){el.style.opacity='.4';},1200); } }
 function tasksKey(){ return 'po_ptasks_'+((currentUser&&currentUser.email)||'anon'); }
-function loadPTasks(){ try{ return JSON.parse(localStorage.getItem(tasksKey())||'[]')||[]; }catch(e){ return []; } }
+function loadPTasks(){ try{ const l=JSON.parse(localStorage.getItem(tasksKey())||'[]')||[]; return l.map(t=>typeof t==='string'?({id:uid(),title:t,desc:'',due:'',done:false,t:Date.now()}):{id:t.id||uid(),title:t.title!=null?t.title:(t.n||''),desc:t.desc||'',due:t.due||'',done:!!t.done,t:t.t||Date.now()}); }catch(e){ return []; } }
 function savePTasks(list){ try{ localStorage.setItem(tasksKey(), JSON.stringify(list)); }catch(e){} }
-function ptAdd(){ const inp=$('#ptNew'); if(!inp)return; const v=(inp.value||'').trim(); if(!v)return; const l=loadPTasks(); l.unshift({id:uid(),n:v,done:false,t:Date.now()}); savePTasks(l); const v2=$('#notesArea'); renderTasksInto(); const ni=$('#ptNew'); if(ni)ni.focus(); }
+function sanitizeRich(html){
+  const tmp=document.createElement('div'); tmp.innerHTML=html||'';
+  const allowed=new Set(['B','STRONG','UL','LI','BR','DIV']);
+  function process(node){
+    Array.from(node.childNodes).forEach(process);
+    if(node.nodeType===1){
+      if(!allowed.has(node.tagName)){
+        while(node.firstChild) node.parentNode.insertBefore(node.firstChild, node);
+        node.parentNode.removeChild(node);
+      } else {
+        Array.from(node.attributes).forEach(a=>node.removeAttribute(a.name));
+      }
+    } else if(node.nodeType!==3){
+      node.parentNode && node.parentNode.removeChild(node);
+    }
+  }
+  Array.from(tmp.childNodes).forEach(process);
+  return tmp.innerHTML;
+}
+let PT_EXPANDED={}; let PT_DRAFT={title:'',desc:'',due:''};
+function ptRtFmt(id,cmd){ const el=document.getElementById(id); if(!el)return; el.focus(); document.execCommand(cmd); }
+function ptAdd(){
+  const ti=$('#ptNewTitle'); const de=$('#ptNewDesc'); const du=$('#ptNewDue');
+  const title=(ti&&ti.value||'').trim(); if(!title)return;
+  const desc=sanitizeRich(de?de.innerHTML:''); const due=du?du.value:'';
+  const l=loadPTasks(); l.unshift({id:uid(),title,desc,due,done:false,t:Date.now()}); savePTasks(l);
+  PT_DRAFT={title:'',desc:'',due:''};
+  renderTasksInto();
+  const ni=$('#ptNewTitle'); if(ni)ni.focus();
+}
 function ptToggle(id){ const l=loadPTasks(); const t=l.find(x=>x.id===id); if(t)t.done=!t.done; savePTasks(l); renderTasksInto(); }
-function ptDel(id){ savePTasks(loadPTasks().filter(x=>x.id!==id)); renderTasksInto(); }
+function ptDel(id){ savePTasks(loadPTasks().filter(x=>x.id!==id)); delete PT_EXPANDED[id]; renderTasksInto(); }
 function ptKey(e){ if(e&&e.key==='Enter'){ e.preventDefault(); ptAdd(); } }
+function ptExpand(id){ PT_EXPANDED[id]=!PT_EXPANDED[id]; renderTasksInto(); }
+function ptField(id,field,val){ const l=loadPTasks(); const t=l.find(x=>x.id===id); if(!t)return; t[field]=val; savePTasks(l); if(field==='due'||field==='title') renderTasksInto(); }
+function ptSaveDesc(id){ const el=document.getElementById('ptDesc_'+id); if(!el)return; ptField(id,'desc',sanitizeRich(el.innerHTML)); }
 function renderTasksInto(){ const host=$('#tasksHost'); if(host) host.innerHTML=tasksInner(); }
+function dueBadge(due,done){
+  if(!due) return '';
+  if(done) return `<span style="font-size:10.5px;font-weight:700;color:var(--txt-3);background:var(--paper);border-radius:20px;padding:2px 8px">${fmtDate(due)}</span>`;
+  const dd=daysTo(due);
+  let bg='var(--paper)',col='var(--txt-3)';
+  if(dd<0){bg='var(--red-bg)';col='var(--red)';} else if(dd<=2){bg='var(--amber-bg)';col='var(--amber)';}
+  return `<span style="font-size:10.5px;font-weight:700;color:${col};background:${bg};border-radius:20px;padding:2px 8px;white-space:nowrap">${dd<0?'Overdue · ':''}${fmtDate(due)}</span>`;
+}
 function tasksInner(){
   const l=loadPTasks(); const open=l.filter(t=>!t.done), done=l.filter(t=>t.done);
   let notes=''; try{ notes=localStorage.getItem(notesKey())||''; }catch(e){}
-  const row=t=>`<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 4px;border-bottom:1px solid #f0eee8"><input type="checkbox" ${t.done?'checked':''} onchange="ptToggle('${t.id}')" style="width:17px;height:17px;accent-color:var(--po);margin-top:1px;cursor:pointer"><span style="flex:1;font-size:13.5px;line-height:1.45;${t.done?'text-decoration:line-through;color:var(--txt-3)':''}">${esc(t.n)}</span><button onclick="ptDel('${t.id}')" style="border:none;background:none;color:var(--txt-3);cursor:pointer;font-size:14px;line-height:1;padding:2px 4px">✕</button></div>`;
+  const row=t=>{
+    const exp=!!PT_EXPANDED[t.id];
+    return `<div style="border-bottom:1px solid #f0eee8">
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 4px">
+        <input type="checkbox" ${t.done?'checked':''} onchange="ptToggle('${t.id}')" style="width:17px;height:17px;accent-color:var(--po);margin-top:2px;cursor:pointer;flex-shrink:0">
+        <div style="flex:1;min-width:0;cursor:pointer" onclick="ptExpand('${t.id}')">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:13.5px;font-weight:600;line-height:1.4;${t.done?'text-decoration:line-through;color:var(--txt-3)':''}">${esc(t.title)}</span>
+            ${dueBadge(t.due,t.done)}
+          </div>
+          ${(!exp && t.desc)?`<div style="font-size:12px;color:var(--txt-3);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.desc.replace(/<[^>]+>/g,' ').trim()}</div>`:''}
+        </div>
+        <button onclick="ptExpand('${t.id}')" title="Details" style="border:none;background:none;color:var(--txt-3);cursor:pointer;font-size:12px;line-height:1;padding:4px;flex-shrink:0">${exp?'▲':'▼'}</button>
+        <button onclick="ptDel('${t.id}')" style="border:none;background:none;color:var(--txt-3);cursor:pointer;font-size:14px;line-height:1;padding:2px 4px;flex-shrink:0">✕</button>
+      </div>
+      ${exp?`<div style="padding:2px 4px 14px 35px;display:flex;flex-direction:column;gap:8px">
+        <div>
+          <label style="display:block;font-size:11px;font-weight:600;color:var(--txt-2);margin-bottom:4px">Due date</label>
+          <input type="date" value="${esc(t.due||'')}" onchange="ptField('${t.id}','due',this.value)" style="padding:7px 9px;border:1px solid var(--line-2);border-radius:7px;background:var(--paper-2);font:inherit;font-size:12.5px">
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:600;color:var(--txt-2);margin-bottom:4px">Description</label>
+          <div style="display:flex;gap:5px;margin-bottom:5px">
+            <button class="chip-btn" onclick="ptRtFmt('ptDesc_${t.id}','bold')" style="font-weight:800;width:26px;padding:5px 0">B</button>
+            <button class="chip-btn" onclick="ptRtFmt('ptDesc_${t.id}','insertUnorderedList')" style="width:26px;padding:5px 0">•</button>
+          </div>
+          <div id="ptDesc_${t.id}" contenteditable="true" oninput="ptSaveDesc('${t.id}')" style="min-height:70px;padding:9px 11px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font-size:12.5px;line-height:1.6;outline:none" data-placeholder="Add details…">${t.desc||''}</div>
+        </div>
+      </div>`:''}
+    </div>`;
+  };
   return `<div style="display:grid;grid-template-columns:1.1fr 1fr;gap:18px;align-items:start">
     <div>
       <div style="font-family:Sora,sans-serif;font-weight:700;font-size:13px;margin-bottom:9px">To-do · <span style="color:var(--txt-3);font-weight:600">${open.length} open</span></div>
-      <div style="display:flex;gap:8px;margin-bottom:12px"><input id="ptNew" onkeydown="ptKey(event)" placeholder="Add a personal task…" style="flex:1;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:#fff;font:inherit;font-size:13px"><button class="btn-acc" style="background:var(--po)" onclick="ptAdd()">Add</button></div>
+      <div style="border:1px solid var(--line-2);border-radius:12px;padding:12px;background:#fff;margin-bottom:12px;display:flex;flex-direction:column;gap:8px">
+        <input id="ptNewTitle" onkeydown="ptKey(event)" placeholder="Task title…" style="padding:9px 11px;border:1px solid var(--line-2);border-radius:8px;background:var(--paper-2);font:inherit;font-size:13px">
+        <div style="display:flex;gap:5px"><button class="chip-btn" onclick="ptRtFmt('ptNewDesc','bold')" style="font-weight:800;width:26px;padding:5px 0">B</button><button class="chip-btn" onclick="ptRtFmt('ptNewDesc','insertUnorderedList')" style="width:26px;padding:5px 0">•</button></div>
+        <div id="ptNewDesc" contenteditable="true" placeholder="Details (optional)…" style="min-height:44px;padding:8px 11px;border:1px solid var(--line-2);border-radius:8px;background:var(--paper-2);font-size:12.5px;line-height:1.6;outline:none"></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="ptNewDue" type="date" style="flex:1;padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:var(--paper-2);font:inherit;font-size:12.5px">
+          <button class="btn-acc" style="background:var(--po)" onclick="ptAdd()">Add</button>
+        </div>
+      </div>
       <div style="border:1px solid var(--line);border-radius:12px;padding:4px 12px;background:#fff">${open.length?open.map(row).join(''):'<div style="padding:14px 4px;font-size:12.5px;color:var(--txt-3)">No open tasks.</div>'}${done.length?`<div style="padding:10px 4px 4px;font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">Done (${done.length})</div>`+done.map(row).join(''):''}</div>
     </div>
     <div>
