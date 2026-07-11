@@ -388,15 +388,21 @@ async function generateAISummary(){
   }catch(e){ AI_SUMMARY='Could not generate summary: '+(e.message||e); }
   AI_LOADING=false; go(SCREEN);
 }
+let RECS_OPEN=false;
+function toggleRecs(){ RECS_OPEN=!RECS_OPEN; go(SCREEN); }
 function renderRecommendations(){
   if(!(PAPEL==='admin'||isManager))return '';
   const recs=computeRecommendations();
   const sevMeta={high:{c:'var(--red)',bg:'var(--red-bg)',fg:'#b32418',t:'High'},medium:{c:'var(--amber)',bg:'var(--amber-bg)',fg:'#9c6404',t:'Medium'},low:{c:'var(--txt-3)',bg:'var(--slate-bg)',fg:'#494c54',t:'Low'}};
   const hasAI=!!(window.claude&&window.claude.complete);
   const byS={high:recs.filter(r=>r.sev==='high').length,medium:recs.filter(r=>r.sev==='medium').length};
-  return `<div class="panel" style="margin-bottom:18px"><div class="panel-h"><h3>💡 Recommendations</h3><span style="display:flex;align-items:center;gap:10px">
+  return `<div class="panel" style="margin-top:18px"><div class="panel-h" style="cursor:pointer" onclick="toggleRecs()"><h3>💡 Recommendations</h3><span style="display:flex;align-items:center;gap:10px">
+      <span class="tag">${recs.length} item${recs.length===1?'':'s'}</span>
       ${byS.high?`<span class="badge s-red"><span class="d"></span>${byS.high} high</span>`:''}${byS.medium?`<span class="badge s-amber"><span class="d"></span>${byS.medium} medium</span>`:''}
-      ${hasAI?`<button class="chip-btn" onclick="generateAISummary()" ${AI_LOADING?'disabled':''}>${AI_LOADING?'Summarizing…':'✨ Summarize with Claude'}</button>`:''}</span></div>
+      ${hasAI?`<button class="chip-btn" onclick="event.stopPropagation();generateAISummary()" ${AI_LOADING?'disabled':''}>${AI_LOADING?'Summarizing…':'✨ Summarize with Claude'}</button>`:''}
+      <span style="display:inline-block;transition:.15s;transform:rotate(${RECS_OPEN?'180deg':'0deg'});color:var(--txt-3);font-size:12px">▾</span></span></div>
+    ${RECS_OPEN?`
+    <div style="padding:10px 17px 0;font-size:11.5px;color:var(--txt-3)">Based on project activity, budget risk and recent user behavior.</div>
     ${AI_SUMMARY?`<div style="margin:12px 17px 0;padding:12px 14px;background:#f3f0fb;border:1px solid #ded4f5;border-radius:10px;font-size:12.5px;color:#4a3c80;white-space:pre-wrap;line-height:1.6">${esc(AI_SUMMARY)}</div>`:''}
     <div class="panel-b">${recs.length?recs.map(r=>{const s=sevMeta[r.sev]||sevMeta.low;return `<div style="display:flex;align-items:center;gap:11px;padding:11px 11px;border-radius:10px;border-left:3px solid ${s.c}">
       <span style="font-size:11px;font-weight:800;color:${s.fg};background:${s.bg};border-radius:20px;padding:2px 9px;flex-shrink:0">${s.t}</span>
@@ -405,7 +411,7 @@ function renderRecommendations(){
         <button class="chip-btn" onclick="${r.onclick}">Open →</button>
         <button class="chip-btn" title="Dismiss for 14 days" onclick="dismissRec('${r.hash}')">✕</button>
       </div>
-    </div>`;}).join(''):'<div class="empty">No issues detected 🎉</div>'}</div></div>`;
+    </div>`;}).join(''):'<div class="empty">No issues detected 🎉</div>'}</div>`:''}</div>`;
 }
 function deadlineInfo(p){if(autoStatus(p)==='concluido')return{cls:'ok',txt:fmtDate(p.prazo),sub:'completed',color:'var(--slate)'};const dd=daysTo(p.prazo);if(dd===null)return{cls:'ok',txt:'—',sub:'',color:'var(--txt-3)'};if(dd<0)return{cls:'late',txt:fmtDate(p.prazo),sub:Math.abs(dd)+'d late',color:'var(--red)'};if(dd<=5)return{cls:'soon',txt:fmtDate(p.prazo),sub:'in '+dd+'d',color:'var(--amber)'};return{cls:'ok',txt:fmtDate(p.prazo),sub:'in '+dd+'d',color:'var(--txt-2)'};}
 
@@ -539,7 +545,7 @@ async function loadAll(){
       SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao'),
       SBPO.from('tetos').select('projeto_id,competencia,teto'),
       SBPO.from('rateio_alocacao').select('projeto_id,competencia,valor,categoria'),
-      SBPO.from('notificacoes').select('id,mensagem,tipo,po_id,lida,criada_em').order('criada_em',{ascending:false}).limit(200),
+      SBPO.from('notificacoes').select('id,mensagem,tipo,po_id,projeto_id,lida,criada_em').order('criada_em',{ascending:false}).limit(200),
       SBPO.rpc('listar_pessoas'),
       SBPO.from('fee_rateio').select('agencia,tipo,categoria,percentual,cc,account,descricao')
     ]);
@@ -566,22 +572,28 @@ function currentNav(){
   if(PO_ACCESS && ROLE_NAV[PAPEL]) return Object.assign({global:GLOBAL_NAV},ROLE_NAV[PAPEL]);
   return {global:GLOBAL_NAV, work:PANEL_ONLY_WORK, budget:[]};
 }
+function navBadge(id){
+  if(id==='notif') return notifUnreadCount();
+  if(id==='approvals') return approvalsPendingCount();
+  return 0;
+}
 function buildNav(){
   const nav=currentNav();
   let gh='';
-  (nav.global||[]).forEach(id=>gh+=navBtn({id,label:W_LABELS[id]||id},'#8b8d95'));
+  (nav.global||[]).forEach(id=>gh+=navBtn({id,label:W_LABELS[id]||id,badge:navBadge(id)},'#8b8d95'));
   $('#navGlobal').innerHTML=gh;
   let html='<div class="nav-sec work">WORK</div>';
-  nav.work.forEach(id=>html+=navBtn({id,label:W_LABELS[id]||id},'#ff5436'));
+  nav.work.forEach(id=>html+=navBtn({id,label:W_LABELS[id]||id,badge:navBadge(id)},'#ff5436'));
   $('#navWork').innerHTML=html;
   if(PO_ACCESS && nav.budget.length){
     let bh='<div class="nav-sec budget">BUDGET</div>';
-    nav.budget.forEach(id=>bh+=navBtn({id,label:B_LABELS[id]||id},'#e20613'));
+    nav.budget.forEach(id=>bh+=navBtn({id,label:B_LABELS[id]||id,badge:navBadge(id)},'#e20613'));
     $('#navBudget').innerHTML=bh;
   } else { $('#navBudget').innerHTML=''; }
 }
 function navBtn(it,col){
-  return `<button class="nav-btn${SCREEN===it.id?' on':''}" onclick="go('${it.id}')"><span class="dot2" style="background:${col}"></span>${esc(it.label)}</button>`;
+  const badge=it.badge?`<span class="badge">${it.badge>99?'99+':it.badge}</span>`:'';
+  return `<button class="nav-btn${SCREEN===it.id?' on':''}" onclick="go('${it.id}')"><span class="dot2" style="background:${col}"></span>${esc(it.label)}${badge}</button>`;
 }
 const SCREEN_META={
   dash:{t:'Dashboard',s:'Work · Executive overview',mod:'work'},
@@ -680,7 +692,6 @@ function renderDash(){
   const up=list.filter(p=>p.status!=='concluido'&&p.prazo).sort((a,b)=>(daysTo(a.prazo)??999)-(daysTo(b.prazo)??999)).slice(0,6);
   const pc={atrasado:'var(--red)',bloqueado:'var(--violet)',atencao:'var(--amber)',no_prazo:'var(--green)',concluido:'var(--slate)'};
   return `
-  ${renderRecommendations()}
   <div class="kpis">
     ${kpi('Active',c.total,'#14161c','in progress')}
     ${kpi('On track',c.no_prazo,'var(--green)','on track')}
@@ -713,7 +724,8 @@ function renderDash(){
       <div style="display:flex;flex-direction:column;gap:6px">${[['no_prazo','On track','var(--green)'],['atencao','At risk','var(--amber)'],['atrasado','Late','var(--red)'],['bloqueado','Blocked','var(--violet)'],['concluido','Completed','var(--slate)']].map(([id,name,col])=>{const n=list.filter(p=>p.status===id).length;const pct=list.length?Math.round(n/list.length*100):0;return `<button onclick="setStatusFilter('${id}')" style="display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:9px;border:1px solid var(--line);background:#fff;text-align:left;cursor:pointer">
         <span style="width:10px;height:10px;border-radius:50%;background:${col};flex-shrink:0"></span><span style="flex:1;font-size:13px;font-weight:600">${name}</span><span class="mono" style="font-size:12.5px;color:var(--txt-2)">${n} · ${pct}%</span></button>`;}).join('')}</div>
     </div>
-  </div>`;
+  </div>
+  ${renderRecommendations()}`;
 }
 
 function renderProjetos(){
@@ -879,16 +891,24 @@ function renderCampanhas(){
       <span><span style="font-size:11px;font-weight:600;border:1.5px solid ${ap.c};color:${ap.c};border-radius:20px;padding:2px 10px;white-space:nowrap">${ap.t}</span></span>
     </div>`;
   };
-  const campMonthsOf=p=>{const s=new Set(); DATA.tetos.forEach(t=>{if(t.projeto_id===p.id)s.add(String(t.competencia).slice(0,7));}); DATA.rateio.forEach(r=>{if(r.projeto_id===p.id)s.add(String(r.competencia).slice(0,7));}); return s;};
-  const byMonth={};
-  list.forEach(p=>{ const months=Array.from(campMonthsOf(p)); if(!months.length){(byMonth['No period']=byMonth['No period']||[]).push(p);return;} months.forEach(m=>{(byMonth[m]=byMonth[m]||[]).push(p);}); });
-  const monthKeys=Object.keys(byMonth).filter(k=>k!=='No period').sort().reverse();
-  if(byMonth['No period']) monthKeys.push('No period');
-  const rows=monthKeys.length?monthKeys.map(mk=>{
-    const camps=byMonth[mk].slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
-    const label=mk==='No period'?'No period assigned':fmtMes(mk+'-01');
+  const catOf=p=>(String(p.product_category||'').trim())||'Uncategorized';
+  const byCat={};
+  list.forEach(p=>{ (byCat[catOf(p)]=byCat[catOf(p)]||[]).push(p); });
+  const catTotal={};
+  Object.keys(byCat).forEach(k=>{ catTotal[k]=byCat[k].reduce((s,p)=>s+(tetoBy[p.id]||0),0); });
+  const grandTotal=Object.values(catTotal).reduce((s,v)=>s+v,0)||0;
+  const catKeys=Object.keys(byCat).sort((a,b)=>catTotal[b]-catTotal[a]);
+  const rows=catKeys.length?catKeys.map(ck=>{
+    const camps=byCat[ck].slice().sort((a,b)=>(tetoBy[b.id]||0)-(tetoBy[a.id]||0));
+    const tot=catTotal[ck], pct=grandTotal?(tot/grandTotal*100):0;
     return `<div>
-      <div style="padding:10px 17px;background:#fbfaf7;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:9px"><b style="font-family:Sora,sans-serif;font-size:12.5px">${esc(label)}</b><span style="font-size:11px;color:var(--txt-3);font-weight:600">${camps.length} campaign(s)</span></div>
+      <div style="padding:10px 17px;background:#fbfaf7;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:11px">
+        <b style="font-family:Sora,sans-serif;font-size:12.5px">${esc(ck)}</b>
+        <span style="font-size:11px;color:var(--txt-3);font-weight:600">${camps.length} campaign${camps.length===1?'':'s'}</span>
+        <span style="flex:1"></span>
+        <span class="mono" style="font-size:12px;font-weight:700;color:var(--ink)">${BRL(tot)}</span>
+        <span style="font-size:11px;font-weight:700;color:var(--po);background:#fff;border:1px solid var(--line);border-radius:20px;padding:2px 9px;min-width:44px;text-align:center">${pct.toFixed(1)}%</span>
+      </div>
       ${camps.map(campRowHTML).join('')}
     </div>`;
   }).join(''):'<div class="empty">No campaigns for your access.</div>';
@@ -902,7 +922,7 @@ function renderCampanhas(){
       <div style="display:grid;grid-template-columns:1.6fr .9fr .9fr .9fr 1.3fr .9fr .9fr;gap:10px;padding:11px 17px;background:#fbfaf7;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">
         <span>Campaign</span><span>Agency</span><span>Category</span><span style="text-align:right">Caps</span><span>Consumption</span><span style="text-align:right">Balance</span><span>Approval</span>
       </div>${rows}</div>
-    <div style="font-size:11.5px;color:var(--txt-3);margin-top:10px">Grouped by month — click a campaign to see the month-by-month detail (cap × POs).</div>`;
+    <div style="font-size:11.5px;color:var(--txt-3);margin-top:10px">Grouped by product category — click a campaign to see the month-by-month detail (cap × POs).</div>`;
 }
 
 /* Detalhe da campanha — cap × PO por mês (mostra de qual mês cada PO consome) */
@@ -1678,11 +1698,27 @@ async function notifClearAll(){
   try{ await SBPO.from('notificacoes').delete().in('id',ids); DATA.notif=[]; go(SCREEN); toast('Notifications cleared'); }
   catch(e){ toast('Error: '+(e.message||e)); }
 }
-function renderNotif(){
+function buildNotifList(){
   const ms=myMentions().map(m=>({...m,origin:'work'}));
   const tbl=(DATA.mencoes||[]).map(m=>({proj:m.projeto_nome,pid:'',txt:m.mensagem,autor:m.autor,t:String(m.criado_em||'').slice(0,10),origin:'work'}));
-  const budget=(DATA.notif||[]).map(n=>({proj:'Budget · PO',pid:'',poId:n.po_id||'',tipo:n.tipo||'',txt:n.mensagem||'PO update requiring your attention',autor:'PO',t:String(n.criada_em||'').slice(0,10),origin:'budget',id:n.id,lida:!!n.lida}));
-  const seen=new Set(), all=[...tbl,...ms,...budget].filter(x=>{const k=x.proj+'|'+x.txt+'|'+x.t;if(seen.has(k))return false;seen.add(k);return true;}).sort((a,b)=>String(b.t).localeCompare(String(a.t)));
+  const budget=(DATA.notif||[]).map(n=>({proj:'Budget · PO',pid:'',poId:n.po_id||'',projId:n.projeto_id||'',tipo:n.tipo||'',txt:n.mensagem||'PO update requiring your attention',autor:'PO',t:String(n.criada_em||'').slice(0,10),origin:'budget',id:n.id,lida:!!n.lida}));
+  const seen=new Set();
+  return [...tbl,...ms,...budget].filter(x=>{const k=x.proj+'|'+x.txt+'|'+x.t;if(seen.has(k))return false;seen.add(k);return true;}).sort((a,b)=>String(b.t).localeCompare(String(a.t)));
+}
+function notifUnreadCount(){ return buildNotifList().filter(x=>x.origin==='budget'?!x.lida:true).length; }
+function approvalsPendingCount(){
+  const projPend=DATA.poProjetos.filter(p=>p.aprovacao_status==='PENDENTE').length;
+  let posPend=DATA.pos.filter(po=>['SOLICITADA','EM_APROVACAO'].includes(po.status));
+  if(PAPEL==='agencia'&&MINHA_AGENCIA) posPend=posPend.filter(po=>po.agencia===MINHA_AGENCIA);
+  return projPend+posPend.length;
+}
+function notifGoProjeto(projId,tipo){
+  const screen=(tipo==='projeto_pendente')?'approvals':'campaigns';
+  go(screen);
+  if(screen==='campaigns') setTimeout(()=>openCampDetail(projId),80);
+}
+function renderNotif(){
+  const all=buildNotifList();
   const unreadCount=all.filter(x=>x.origin==='budget'?!x.lida:true).length;
   return `<div class="panel"><div class="panel-h"><h3>Notifications</h3>
       <div style="display:flex;align-items:center;gap:10px">
@@ -1693,11 +1729,11 @@ function renderNotif(){
     </div>
     <div class="panel-b">${all.length?all.map(m=>{
       const unread=m.origin==='budget'?!m.lida:true;
-      const clickable=(m.origin==='budget'&&m.poId)||m.pid;
-      const onclick=(m.origin==='budget'&&m.poId)?`notifGoPO('${esc(m.poId)}','${esc(m.tipo)}')`:(m.pid?`openProj('${esc(m.pid)}')`:'');
+      const clickable=(m.origin==='budget'&&(m.poId||m.projId))||m.pid;
+      const onclick=(m.origin==='budget'&&m.poId)?`notifGoPO('${esc(m.poId)}','${esc(m.tipo)}')`:(m.origin==='budget'&&m.projId)?`notifGoProjeto('${esc(m.projId)}','${esc(m.tipo)}')`:(m.pid?`openProj('${esc(m.pid)}')`:'');
       return `<div class="row-item" style="${unread?'':'opacity:.62'};${clickable?'cursor:pointer':'cursor:default'}" ${clickable?`onclick="${onclick}"`:''}>
         <span class="pin" style="background:${unread?(m.origin==='budget'?'var(--po)':'var(--accent)'):'var(--line-2)'}"></span>
-        <div style="flex:1;min-width:0"><div style="font-weight:${unread?700:600};font-size:13.5px">${esc(m.proj)}${(m.origin==='budget'&&m.poId)?' <span style=\'color:var(--po);font-weight:700\'>· open →</span>':''}</div><div style="font-size:12.5px;color:var(--txt-2);margin-top:1px">${fmtLogTxt(m.txt)}</div><span class="who">${esc(m.autor)} · ${fmtDate(m.t)}</span></div>
+        <div style="flex:1;min-width:0"><div style="font-weight:${unread?700:600};font-size:13.5px">${esc(m.proj)}${(m.origin==='budget'&&(m.poId||m.projId))?' <span style=\'color:var(--po);font-weight:700\'>· open →</span>':''}</div><div style="font-size:12.5px;color:var(--txt-2);margin-top:1px">${fmtLogTxt(m.txt)}</div><span class="who">${esc(m.autor)} · ${fmtDate(m.t)}</span></div>
         ${m.origin==='budget'?`<div style="display:flex;gap:4px;flex-shrink:0" onclick="event.stopPropagation()">
           <button title="${unread?'Mark as read':'Mark as unread'}" onclick="notifMarkRead(${m.id},${!unread})" style="border:none;background:none;color:var(--txt-3);cursor:pointer;font-size:13px;padding:4px">${unread?'●':'○'}</button>
           <button title="Delete" onclick="notifDelete(${m.id})" style="border:none;background:none;color:var(--txt-3);cursor:pointer;font-size:13px;padding:4px">✕</button>
@@ -2265,7 +2301,7 @@ function renderPersonModal(){
       </div>
       <div style="font-size:11px;color:var(--txt-3);margin-top:2px">Password is managed by the user (first-access flow) and can’t be edited here.</div>
     </div>
-    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" onclick="savePerson()">Save</button></div></div>
+    <div class="modal-f"><span>${PAPEL==='admin'?`<button class="btn-del" onclick="deletarPessoa('${esc(PERSON.user_id)}')">Delete user</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" onclick="savePerson()">Save</button></div></div>
   </div></div>`;
 }
 async function savePerson(){
@@ -2276,6 +2312,22 @@ async function savePerson(){
     try{ await SBPO.from('perfis').update({nome:PERSON.nome,sobrenome:PERSON.sobrenome,email:PERSON.email}).eq('user_id',PERSON.user_id); }catch(e){ console.warn('name update:',e); }
     const {data:pes}=await SBPO.rpc('listar_pessoas'); DATA.pessoas=pes||[];
     toast('Person updated ✓'); closeModal(); go(SCREEN);
+  }catch(e){ toast('Error: '+(e.message||e)); }
+}
+async function deletarPessoa(userId){
+  if(PAPEL!=='admin'){ toast('Only admin can delete.'); return; }
+  const pe=(DATA.pessoas||[]).find(x=>x.user_id===userId)||{};
+  const nome=[pe.nome,pe.sobrenome].filter(Boolean).join(' ')||pe.email||'this user';
+  if(!confirm('Delete user "'+nome+'" ('+(pe.email||'')+')?\n\nThis removes their login and profile entirely.\n\nThis cannot be undone.'))return;
+  try{
+    const {data:sPO}=await SBPO.auth.getSession();
+    const token=sPO&&sPO.session&&sPO.session.access_token;
+    if(!token) throw new Error('no active PO session');
+    const r=await fetch(PO_URL+'/functions/v1/admin-usuarios',{method:'POST',headers:{'Content-Type':'application/json','apikey':PO_KEY,'Authorization':'Bearer '+token},body:JSON.stringify({action:'deletar',user_id:userId})});
+    const j=await r.json();
+    if(!j||j.error) throw new Error((j&&j.error)||'delete failed');
+    const {data:pes}=await SBPO.rpc('listar_pessoas'); DATA.pessoas=pes||[];
+    PERSON=null; closeModal(); go(SCREEN); toast('User deleted.');
   }catch(e){ toast('Error: '+(e.message||e)); }
 }
 
