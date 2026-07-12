@@ -129,6 +129,11 @@
   .modal-h .x:hover{background:var(--paper);color:var(--txt)}
   .modal-b{padding:20px 22px;max-height:74vh;overflow-y:auto}
   .modal-f{padding:14px 22px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px}
+  /* ===== DRAWER (painel lateral) ===== */
+  .overlay.right{align-items:stretch;justify-content:flex-end;padding:0}
+  .drawer{width:600px;max-width:94vw;height:100vh;border-radius:0;display:flex;flex-direction:column;box-shadow:-18px 0 50px rgba(20,22,28,.28);animation:drawerIn .22s ease}
+  @keyframes drawerIn{from{transform:translateX(40px);opacity:.4}to{transform:translateX(0);opacity:1}}
+  .drawer .modal-b{flex:1;max-height:none;position:relative}
   .fgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   .field{margin-bottom:14px}.field.full{grid-column:1/-1}
   .field label{display:block;font-size:12px;font-weight:600;color:var(--txt-2);margin-bottom:5px}
@@ -167,7 +172,7 @@
     <p id="gateMsg">Sign in with your corporate email.</p>
     <div id="gateLogin">
       <input id="liEmail" class="gate-inp" type="email" placeholder="seu.email@tclsemp.com.br" autocomplete="username">
-      <input id="liSenha" class="gate-inp" type="password" placeholder="Senha" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+      <input id="liSenha" class="gate-inp" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
       <button class="gate-btn" onclick="doLogin()">Sign in</button>
       <div class="gate-links"><a onclick="gateTo('primeiro')">First access</a><a onclick="gateTo('esqueci')">Forgot password</a></div>
     </div>
@@ -243,13 +248,30 @@ const STAGE_DESCS_DEFAULT={
 let STAGE_DESCS=Object.assign({},STAGE_DESCS_DEFAULT);
 const STATUS=[{id:'no_prazo',name:'On track',cls:'s-green'},{id:'atencao',name:'At risk',cls:'s-amber'},{id:'atrasado',name:'Late',cls:'s-red'},{id:'bloqueado',name:'Blocked',cls:'s-violet'},{id:'concluido',name:'Completed',cls:'s-blue'}];
 const PO_STATUS={
-  SOLICITADA:{t:'Solicitada',c:'s-slate',icon:'🕓'}, EM_APROVACAO:{t:'Em aprovação',c:'s-amber',icon:'🕓'},
-  APROVADA:{t:'Aprovada',c:'s-blue',icon:'✓'}, REJEITADA:{t:'Rejeitada',c:'s-red',icon:'✕'},
-  PO_GERADA:{t:'PO gerada',c:'s-green',icon:'📄'}, ATUALIZAR_INFO:{t:'Atualizar info',c:'s-amber',icon:'✎'},
-  FATURADA:{t:'Faturada',c:'s-amber',icon:'💰'}, VALIDADA:{t:'Validada',c:'s-green',icon:'✓'},
-  CONCLUIDA:{t:'Concluída',c:'s-green',icon:'✔'}, CANCELADA:{t:'Cancelada',c:'s-slate',icon:'✕'}
+  SOLICITADA:{t:'Requested',c:'s-slate',icon:'🕓'}, EM_APROVACAO:{t:'In approval',c:'s-amber',icon:'🕓'},
+  APROVADA:{t:'Approved',c:'s-blue',icon:'✓'}, REJEITADA:{t:'Rejected',c:'s-red',icon:'✕'},
+  PO_GERADA:{t:'PO issued',c:'s-green',icon:'📄'}, ATUALIZAR_INFO:{t:'Update info',c:'s-amber',icon:'✎'},
+  FATURADA:{t:'Invoiced',c:'s-amber',icon:'💰'}, VALIDADA:{t:'Validated',c:'s-green',icon:'✓'},
+  CONCLUIDA:{t:'Completed',c:'s-green',icon:'✔'}, CANCELADA:{t:'Cancelled',c:'s-slate',icon:'✕'}
 };
 const AV_COLORS=['#ff5436','#2f6fd8','#6d4bd1','#16a06a','#e20613','#d68a04','#0ea5a5','#bd9f68'];
+
+/* Ciclo de vida da PO em 4 fases (substitui 9 badges crus) */
+const PO_PHASES=['Requested','Approved','Invoicing','Completed'];
+function poPhaseDone(st){ if(['SOLICITADA','EM_APROVACAO'].includes(st))return 1; if(['APROVADA','PO_GERADA','ATUALIZAR_INFO'].includes(st))return 2; if(['FATURADA','VALIDADA'].includes(st))return 3; if(st==='CONCLUIDA')return 4; return -1; }
+function poStepperHTML(st){
+  const done=poPhaseDone(st);
+  if(done<0){ const s=PO_STATUS[st]||{t:st,c:'s-slate'}; return `<div style="margin-top:8px"><span class="badge ${s.c}"><span class="d"></span>${s.t}</span></div>`; }
+  const cur=done<4?done+1:0;
+  let dots='';
+  for(let i=1;i<=4;i++){
+    const dst=i<=done?'background:#16a06a;color:#fff':(i===cur?'background:#fff;border:2.5px solid #cf8a16;color:#cf8a16':'background:#f0eee8;color:#8b8d95');
+    dots+=`<span style="width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:800;flex-shrink:0;${dst}">${i<=done?'✓':i}</span>`;
+    if(i<4)dots+=`<span style="flex:1;height:3px;background:${i<=done?'#16a06a':'#f0eee8'}"></span>`;
+  }
+  const labs=PO_PHASES.map((l,ix)=>{const i=ix+1;const c=i<=done?'#16a06a':(i===cur?'#cf8a16':'#8b8d95');return `<span style="color:${c}">${l}</span>`;}).join('');
+  return `<div style="display:flex;align-items:center;margin-top:10px">${dots}</div><div style="display:flex;justify-content:space-between;font-size:10px;font-weight:700;margin-top:5px">${labs}</div>`;
+}
 
 /* tipos de projeto → padrão de atividades (editável na criação) */
 const TYPES=[
@@ -262,11 +284,11 @@ const TYPES=[
 function typeOf(i){return TYPES.find(t=>t.id===i)||TYPES[TYPES.length-1];}
 /* Tipo de Projeto (classificação de negócio, usada em filtros/relatórios) */
 const BUSINESS_TYPES=[
-  {id:'campanha',name:'Campanha',color:'#ff5436'},
-  {id:'midia',name:'Mídia',color:'#2f6fd8'},
+  {id:'campanha',name:'Campaign',color:'#ff5436'},
+  {id:'midia',name:'Media',color:'#2f6fd8'},
   {id:'social',name:'Social',color:'#6d4bd1'},
   {id:'kol',name:'KOL',color:'#d68a04'},
-  {id:'evento',name:'Evento',color:'#16a06a'},
+  {id:'evento',name:'Event',color:'#16a06a'},
   {id:'pr',name:'PR',color:'#8b8d95'}
 ];
 function businessTypeOf(id){return BUSINESS_TYPES.find(b=>b.id===id)||null;}
@@ -295,7 +317,7 @@ function visProjs(){ if(PAPEL==='agencia'&&MINHA_AGENCIA) return DATA.projetos.f
    ============================================================ */
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const BRL=n=>'R$ '+Math.round(+n||0).toLocaleString('pt-BR');
+const BRL=n=>'R$ '+Math.round(+n||0).toLocaleString('en-US');
 function avColor(n){let h=0;for(const c of(n||'?'))h=c.charCodeAt(0)+((h<<5)-h);return AV_COLORS[Math.abs(h)%AV_COLORS.length];}
 function initials(n){if(!n)return'?';const p=String(n).trim().split(/\s+/);return((p[0]||'')[0]||'').toUpperCase()+((p[1]||'')[0]||'').toUpperCase();}
 function today0(){const d=new Date();d.setHours(0,0,0,0);return d;}
@@ -396,7 +418,7 @@ function renderRecommendations(){
   const sevMeta={high:{c:'var(--red)',bg:'var(--red-bg)',fg:'#b32418',t:'High'},medium:{c:'var(--amber)',bg:'var(--amber-bg)',fg:'#9c6404',t:'Medium'},low:{c:'var(--txt-3)',bg:'var(--slate-bg)',fg:'#494c54',t:'Low'}};
   const hasAI=!!(window.claude&&window.claude.complete);
   const byS={high:recs.filter(r=>r.sev==='high').length,medium:recs.filter(r=>r.sev==='medium').length};
-  return `<div class="panel" style="margin-top:18px"><div class="panel-h" style="cursor:pointer" onclick="toggleRecs()"><h3>💡 Recommendations</h3><span style="display:flex;align-items:center;gap:10px">
+  return `<div class="panel" style="margin-top:18px"><div class="panel-h" style="cursor:pointer" onclick="toggleRecs()"><h3>Recommendations</h3><span style="display:flex;align-items:center;gap:10px">
       <span class="tag">${recs.length} item${recs.length===1?'':'s'}</span>
       ${byS.high?`<span class="badge s-red"><span class="d"></span>${byS.high} high</span>`:''}${byS.medium?`<span class="badge s-amber"><span class="d"></span>${byS.medium} medium</span>`:''}
       ${hasAI?`<button class="chip-btn" onclick="event.stopPropagation();generateAISummary()" ${AI_LOADING?'disabled':''}>${AI_LOADING?'Summarizing…':'✨ Summarize with Claude'}</button>`:''}
@@ -411,7 +433,7 @@ function renderRecommendations(){
         <button class="chip-btn" onclick="${r.onclick}">Open →</button>
         <button class="chip-btn" title="Dismiss for 14 days" onclick="dismissRec('${r.hash}')">✕</button>
       </div>
-    </div>`;}).join(''):'<div class="empty">No issues detected 🎉</div>'}</div>`:''}</div>`;
+    </div>`;}).join(''):'<div class="empty">No issues detected.</div>'}</div>`:''}</div>`;
 }
 function deadlineInfo(p){if(autoStatus(p)==='concluido')return{cls:'ok',txt:fmtDate(p.prazo),sub:'completed',color:'var(--slate)'};const dd=daysTo(p.prazo);if(dd===null)return{cls:'ok',txt:'—',sub:'',color:'var(--txt-3)'};if(dd<0)return{cls:'late',txt:fmtDate(p.prazo),sub:Math.abs(dd)+'d late',color:'var(--red)'};if(dd<=5)return{cls:'soon',txt:fmtDate(p.prazo),sub:'in '+dd+'d',color:'var(--amber)'};return{cls:'ok',txt:fmtDate(p.prazo),sub:'in '+dd+'d',color:'var(--txt-2)'};}
 
@@ -430,7 +452,7 @@ async function fnCall(action,payload){
   try{
     const r=await fetch(PANEL_URL+'/functions/v1/acesso',{method:'POST',headers:{'Content-Type':'application/json','apikey':PANEL_KEY,'Authorization':'Bearer '+PANEL_KEY},body:JSON.stringify({action,...payload})});
     return await r.json();
-  }catch(e){return {ok:false,error:'Falha de conexão.'};}
+  }catch(e){return {ok:false,error:'Connection failed.'};}
 }
 async function doLogin(){
   const email=($('#liEmail').value||'').trim().toLowerCase(),senha=$('#liSenha').value||'';
@@ -453,7 +475,7 @@ async function setPassword(){
   const email=($('#caEmail').value||'').trim().toLowerCase(),codigo=($('#caCode').value||'').trim(),senha=$('#caSenha').value||'';
   if(!codigo||senha.length<6){showGate('Enter the code and a password of at least 6 characters.');return;}
   const j=await fnCall('definir',{email,codigo,senha});
-  if(j&&j.ok){_senha=senha;try{sessionStorage.setItem('__pw',senha);}catch(e){}showGate('Senha definida! Signing in…');const {error}=await SB.auth.signInWithPassword({email,password:senha});if(error){_senha='';showGate('Password created, but sign-in failed — try signing in manually.');}}
+  if(j&&j.ok){_senha=senha;try{sessionStorage.setItem('__pw',senha);}catch(e){}showGate('Password set! Signing in…');const {error}=await SB.auth.signInWithPassword({email,password:senha});if(error){_senha='';showGate('Password created, but sign-in failed — try signing in manually.');}}
   else showGate((j&&j.error)||'Invalid or expired code.');
 }
 async function signOut(){try{sessionStorage.removeItem('__pw');}catch(e){}try{await SB.auth.signOut();}catch(e){}try{await SBPO.auth.signOut();}catch(e){}_senha='';booted=false;location.reload();}
@@ -559,12 +581,12 @@ async function loadAll(){
    NAV + ROUTING — espelha o protótipo aprovado (menu por papel)
    ============================================================ */
 const W_LABELS={dash:'Dashboard',board:'Board',list:'List',timeline:'Timeline',team:'Team',weekly:'Weekly Status',mytasks:'Tasks',agencywork:'Assigned Work',notif:'Notifications'};
-const B_LABELS={bo:'Overview',budgets:'Budgets',campaigns:'Campaigns',pos:'Purchase Orders',approvals:'Approvals',podesk:'PO Desk',people:'People & Roles',reqpo:'Request PO',mypos:'My POs',balance:'Balance'};
+const B_LABELS={bo:'Overview',budgets:'Budgets & Fees',campaigns:'Campaigns',pos:'POs & Approvals',approvals:'Approvals',podesk:'PO Desk',people:'People & Roles',reqpo:'Request PO',mypos:'My POs',balance:'Balance'};
 const ROLE_NAV={
-  admin:      {work:['dash','board','list','timeline','team','weekly','mytasks'], budget:['bo','budgets','campaigns','pos','approvals','people']},
-  marketing:  {work:['dash','board','list','timeline','weekly','mytasks'],        budget:['bo','campaigns','pos','approvals']},
-  financeiro: {work:[],                                                          budget:['bo','budgets','campaigns','pos','approvals']},
-  agencia:    {work:['board','list','timeline'],                                 budget:['pos','approvals']}
+  admin:      {work:['dash','board','list','timeline','team','weekly','mytasks'], budget:['bo','budgets','campaigns','pos','people']},
+  marketing:  {work:['dash','board','list','timeline','weekly','mytasks'],        budget:['bo','campaigns','pos']},
+  financeiro: {work:[],                                                          budget:['bo','budgets','campaigns','pos']},
+  agencia:    {work:['board','list','timeline'],                                 budget:['pos']}
 };
 const PANEL_ONLY_WORK=['dash','board','list','timeline','weekly','mytasks'];
 const GLOBAL_NAV=['notif'];
@@ -574,7 +596,7 @@ function currentNav(){
 }
 function navBadge(id){
   if(id==='notif') return notifUnreadCount();
-  if(id==='approvals') return approvalsPendingCount();
+  if(id==='pos'||id==='approvals') return approvalsPendingCount();
   return 0;
 }
 function buildNav(){
@@ -605,18 +627,20 @@ const SCREEN_META={
   mytasks:{t:'Tasks',s:'Work · Personal to-dos',mod:'work'},
   agencywork:{t:'Assigned Work',s:'Work · Shared with your agency',mod:'work'},
   notif:{t:'Notifications',s:'All updates — Work and Budget',mod:'work'},
-  bo:{t:'Budget Overview',s:'Budget · Overview',mod:'budget'},
+  bo:{t:'Budget overview',s:'Budget · Spend health, categories and alerts',mod:'budget'},
   budgets:{t:'Budgets & Fee Splits',s:'Budget · Categories',mod:'budget'},
-  campaigns:{t:'Campaigns',s:'Budget · Consumption by campaign',mod:'budget'},
-  pos:{t:'Purchase Orders',s:'Budget · Requests and status',mod:'budget'},
-  mypos:{t:'My POs',s:'Budget · Your agency POs',mod:'budget'},
-  approvals:{t:'Approvals',s:'Budget · Campaigns and POs pending',mod:'budget'},
+  campaigns:{t:'Campaigns',s:'Budget · Consumption per campaign',mod:'budget'},
+  pos:{t:'POs & Approvals',s:'Budget · Single queue by lifecycle phase',mod:'budget'},
+  mypos:{t:'My POs',s:'Budget · Your agency\'s POs',mod:'budget'},
+  approvals:{t:'Approvals',s:'Budget · Pending campaigns and POs',mod:'budget'},
   podesk:{t:'PO Desk',s:'Budget · Issue & validate',mod:'budget'},
   people:{t:'People & Roles',s:'Budget · Access',mod:'budget'},
   reqpo:{t:'Request PO',s:'Budget · New request',mod:'budget'},
-  balance:{t:'Balance',s:'Budget · Balance by campaign',mod:'budget'}
+  balance:{t:'Balance',s:'Budget · Balance per campaign',mod:'budget'}
 };
 function go(screen){
+  if(screen==='balance')screen='bo';
+  if(screen==='approvals')screen='pos';
   const nav=currentNav(); const valid=nav.work.concat(nav.budget).concat(nav.global||[]);
   if(!valid.includes(screen)) screen=valid[0]||'dash';
   SCREEN=screen; buildNav();
@@ -645,11 +669,11 @@ function go(screen){
   else if(screen==='mytasks') v.innerHTML=renderNotes();
   else if(screen==='agencywork') v.innerHTML=renderAgencyWork();
   else if(screen==='notif') v.innerHTML=renderNotif();
-  else if(screen==='bo'||screen==='balance'){ v.innerHTML=renderBudgetOverview(screen==='balance'); buildCampanhaChart(); buildOverviewMonthlyChart(screen==='balance'); }
+  else if(screen==='bo'){ v.innerHTML=renderBudgetOverview(false); buildCampanhaChart(); buildOverviewMonthlyChart(false); }
   else if(screen==='budgets') v.innerHTML=renderBudgets();
   else if(screen==='campaigns'){ v.innerHTML=renderCampanhas(); buildCampanhaChart(); }
   else if(screen==='pos'||screen==='mypos') v.innerHTML=renderPOs();
-  else if(screen==='approvals'||screen==='podesk') v.innerHTML=renderAprovacoes();
+  else if(screen==='podesk') v.innerHTML=renderAprovacoes();
   else if(screen==='people') v.innerHTML=renderPeople();
   else if(screen==='reqpo'){ v.innerHTML=renderPOs(); openReqPO(); }
 }
@@ -701,16 +725,16 @@ function renderDash(){
     ${kpi('Completed',c.concl,'var(--slate)','this period')}
   </div>
   <div style="display:grid;grid-template-columns:1.3fr 1fr;gap:18px;margin-bottom:18px">
-    <div class="panel"><div class="panel-h"><h3>⚡ Next actions</h3><span class="tag">${need.length} item(s)</span></div>
+    <div class="panel"><div class="panel-h"><h3>Next actions</h3><span class="tag">${need.length} item(s)</span></div>
       <div class="panel-b">${need.length?need.map(p=>{const st=statusOf(p.status);const di=deadlineInfo(p);const lu=latestLog(p);
         return `<div class="row-item" onclick="openProj('${esc(p.id)}')"><span class="pin" style="background:${pc[p.status]}"></span>
           <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13.5px">${esc(p.nome)}</div>
           <div style="font-size:12.5px;color:var(--txt-2);margin-top:1px">${lu?esc(lu.txt):'No status yet'}</div>
           ${lu&&lu.autor?`<span class="who">${esc(lu.autor)} · ${fmtDate(lu.t)}</span>`:''}</div>
           <div class="rt"><span class="badge ${st.cls}"><span class="d"></span>${st.name}</span><div style="font-weight:600;font-size:12px;color:${di.color};margin-top:6px">${di.txt}</div><div style="font-size:11px;color:var(--txt-3)">${di.sub}</div></div></div>`;
-      }).join(''):'<div class="empty">Nothing pending 🎉</div>'}</div>
+      }).join(''):'<div class="empty">Nothing pending.</div>'}</div>
     </div>
-    <div class="panel"><div class="panel-h"><h3>📅 Upcoming deadlines</h3><span class="tag">by urgency</span></div>
+    <div class="panel"><div class="panel-h"><h3>Upcoming deadlines</h3><span class="tag">by urgency</span></div>
       <div class="panel-b">${up.length?up.map(p=>{const di=deadlineInfo(p);
         return `<div class="row-item" onclick="openProj('${esc(p.id)}')"><div class="avatar" style="background:${avColor(p.resp)};margin-top:1px">${initials(p.resp)}</div>
           <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">${esc(p.nome)}</div><div style="font-size:11px;color:var(--txt-3);margin-top:1px">${esc(stageOf(p.etapa).name)}</div></div>
@@ -718,7 +742,7 @@ function renderDash(){
       }).join(''):'<div class="empty">No upcoming deadlines.</div>'}</div>
     </div>
   </div>
-  <div class="panel"><div class="panel-h"><h3>📊 Status distribution</h3><span class="tag">${list.length} project(s)</span></div>
+  <div class="panel"><div class="panel-h"><h3>Status distribution</h3><span class="tag">${list.length} project(s)</span></div>
     <div style="display:grid;grid-template-columns:1.1fr 1fr;gap:6px;padding:18px;align-items:center">
       <div style="height:220px"><canvas id="chartStatus"></canvas></div>
       <div style="display:flex;flex-direction:column;gap:6px">${[['no_prazo','On track','var(--green)'],['atencao','At risk','var(--amber)'],['atrasado','Late','var(--red)'],['bloqueado','Blocked','var(--violet)'],['concluido','Completed','var(--slate)']].map(([id,name,col])=>{const n=list.filter(p=>p.status===id).length;const pct=list.length?Math.round(n/list.length*100):0;return `<button onclick="setStatusFilter('${id}')" style="display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:9px;border:1px solid var(--line);background:#fff;text-align:left;cursor:pointer">
@@ -794,7 +818,7 @@ async function dropOnStage(ev,stageId){
   if(!pid)return;
   const p=DATA.projetos.find(x=>x.id===pid); if(!p)return;
   if(p.etapa===stageId)return;
-  if(!canEdit(p)){ toast("You can't move this project."); return; }
+  if(!canEdit(p)){ toast('You can\'t move this project.'); return; }
   const prevEtapa=p.etapa, prevOverride=p.etapa_override, prevStatus=p.status, prevLogs=(p.logs||[]).slice();
   const stg=STAGES.find(s=>s.id===stageId);
   p.etapa_override=stageId; p.etapa=stageId; p.status=autoStatus(p);
@@ -829,7 +853,7 @@ function renderKanban(){
           ${cats.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${cats.slice(0,3).map(c=>`<span style="font-size:9.5px;font-weight:700;color:var(--txt-2);background:var(--paper);border:1px solid var(--line-2);border-radius:20px;padding:2px 7px">${esc(c)}</span>`).join('')}${cats.length>3?`<span style="font-size:9.5px;font-weight:700;color:var(--txt-3);padding:2px 4px">+${cats.length-3}</span>`:''}</div>`:''}
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px"><span style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:20px;background:${hp.bg};color:${hp.fg}"><span style="width:6px;height:6px;border-radius:50%;background:${hp.dot}"></span>${hp.name}</span><span class="avatar" style="width:22px;height:22px;background:${avColor(p.resp)};font-size:9.5px" title="${esc(p.resp||'')}">${initials(p.resp)}</span></div>
           <div style="height:5px;background:#f0eee8;border-radius:6px;overflow:hidden;margin-top:9px"><span style="display:block;height:100%;width:${pr}%;background:${hp.dot};border-radius:6px"></span></div>
-          <div style="font-size:10.5px;color:var(--txt-3);font-weight:600;margin-top:6px">${tt} tasks · due ${di.txt}</div></div>`;
+          <div style="font-size:10.5px;color:var(--txt-3);font-weight:600;margin-top:6px">${tt} task(s) · due ${di.txt}</div></div>`;
       }).join('')||'<div style="padding:16px 8px;font-size:12px;color:var(--txt-3);text-align:center">Empty</div>'}</div></div>`;
   }).join('')}</div>`;
 }
@@ -879,16 +903,18 @@ function renderCampanhas(){
     const teto=tetoBy[p.id]||0, cons=consBy[p.id]||0, comp=compBy[p.id]||0, pend=pendBy[p.id]||0;
     const saldo=teto-cons-comp-pend;
     const pC=teto?Math.min(100,cons/teto*100):0, pP=teto?Math.min(100-pC,(comp+pend)/teto*100):0;
+    const pctTot=teto?((cons+comp+pend)/teto*100):0;
+    const danger=teto&&pctTot>=90;
     const ap=AP[p.aprovacao_status]||AP.PENDENTE;
     const nMes=new Set([...DATA.tetos.filter(t=>t.projeto_id===p.id).map(t=>String(t.competencia).slice(0,7)),...DATA.rateio.filter(r=>r.projeto_id===p.id).map(r=>String(r.competencia).slice(0,7))]).size;
-    return `<div onclick="openCampDetail('${esc(p.id)}')" style="display:grid;grid-template-columns:1.6fr .9fr .9fr .9fr 1.3fr .9fr .9fr;gap:10px;padding:13px 17px;border-bottom:1px solid #f0eee8;align-items:center;font-size:13px;cursor:pointer" onmouseover="this.style.background='#faf9f5'" onmouseout="this.style.background=''">
-      <span style="min-width:0"><span style="font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span><span style="font-size:11px;color:var(--txt-3)">${nMes?nMes+' month(s)':''}${p.rateio?' · rateio':''}</span></span>
+    return `<div onclick="openCampDetail('${esc(p.id)}')" style="display:grid;grid-template-columns:1.6fr .9fr .9fr .9fr 1.3fr .9fr .9fr;gap:10px;padding:13px 17px;border-bottom:1px solid #f0eee8;align-items:center;font-size:13px;cursor:pointer;${danger?'background:#fff8f7;box-shadow:inset 3px 0 0 var(--po)':''}" onmouseover="this.style.filter='brightness(.985)'" onmouseout="this.style.filter=''">
+      <span style="min-width:0"><span style="font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span><span style="font-size:11px;color:var(--txt-3)">${nMes?nMes+(nMes===1?' month':' months'):''}${p.rateio?' · rateio':''}</span></span>
       <span style="color:var(--txt-2)">${esc(p.agencia||'—')}</span>
       <span style="color:var(--txt-2);font-size:12px">${esc(p.product_category||'—')}</span>
       <span class="mono" style="text-align:right;font-size:12.5px">${BRL(teto)}</span>
-      <span style="display:flex;align-items:center;gap:9px;min-width:0"><span style="flex:1;height:9px;background:#f0eee8;border-radius:5px;overflow:hidden;display:flex;min-width:40px"><span style="width:${pC}%;background:#1f8a4c"></span><span style="width:${pP}%;background:#cf8a16"></span></span><span class="mono" style="font-size:11px;color:var(--txt-2);flex-shrink:0">${BRL(cons)}</span></span>
+      <span style="display:flex;align-items:center;gap:9px;min-width:0"><span style="flex:1;height:9px;background:#f0eee8;border-radius:5px;overflow:hidden;display:flex;min-width:40px"><span style="width:${pC}%;background:${danger?'var(--po)':'#1f8a4c'}"></span><span style="width:${pP}%;background:#cf8a16"></span></span><span class="mono" style="font-size:11px;font-weight:${danger?'800':'600'};color:${danger?'#bf0008':'var(--txt-2)'};flex-shrink:0">${teto?Math.round(pctTot)+'%':'—'}</span></span>
       <span class="mono" style="text-align:right;font-size:12.5px;color:${saldo<0?'var(--po)':'var(--txt)'}">${BRL(saldo)}</span>
-      <span><span style="font-size:11px;font-weight:600;border:1.5px solid ${ap.c};color:${ap.c};border-radius:20px;padding:2px 10px;white-space:nowrap">${ap.t}</span></span>
+      <span>${danger?`<span style="font-size:11px;font-weight:700;color:#bf0008;background:#fbe4e1;border-radius:20px;padding:3px 10px;white-space:nowrap">⚠ ${Math.round(pctTot)}%</span>`:`<span style="font-size:11px;font-weight:600;border:1.5px solid ${ap.c};color:${ap.c};border-radius:20px;padding:2px 10px;white-space:nowrap">${ap.t}</span>`}</span>
     </div>`;
   };
   const catOf=p=>(String(p.product_category||'').trim())||'Uncategorized';
@@ -914,15 +940,15 @@ function renderCampanhas(){
   }).join(''):'<div class="empty">No campaigns for your access.</div>';
   return `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px">
       ${stat('Campaigns',String(list.length),'#14161c')}
-      ${stat('Budgeted (appr.)',BRL(orcado),'#14161c')}
+      ${stat('Budgeted (approved)',BRL(orcado),'#14161c')}
       ${stat('Consumed',BRL(consumido),'var(--po)')}
-      ${stat('Pending',String(pendCount),'#cf8a16')}
+      ${stat('Pending approval',String(pendCount),'#cf8a16')}
     </div>
     <div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
       <div style="display:grid;grid-template-columns:1.6fr .9fr .9fr .9fr 1.3fr .9fr .9fr;gap:10px;padding:11px 17px;background:#fbfaf7;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">
-        <span>Campaign</span><span>Agency</span><span>Category</span><span style="text-align:right">Caps</span><span>Consumption</span><span style="text-align:right">Balance</span><span>Approval</span>
+        <span>Campaign</span><span>Agency</span><span>Category</span><span style="text-align:right">Cap</span><span>Budget health</span><span style="text-align:right">Balance</span><span>Status</span>
       </div>${rows}</div>
-    <div style="font-size:11.5px;color:var(--txt-3);margin-top:10px">Grouped by product category — click a campaign to see the month-by-month detail (cap × POs).</div>`;
+    <div style="font-size:11.5px;color:var(--txt-3);margin-top:10px">Grouped by product category — click a campaign to open the month-by-month detail (cap × POs).</div>`;
 }
 
 /* Detalhe da campanha — cap × PO por mês (mostra de qual mês cada PO consome) */
@@ -937,10 +963,10 @@ function openCampDetail(pid){
     const cap=capByM[m]||0; const list=posByM[m]||[];
     const cons=list.filter(po=>!['REJEITADA','CANCELADA'].includes(po.status)).reduce((s,po)=>s+(+po.valor||0),0);
     const saldo=cap-cons; const pct=cap?Math.min(100,cons/cap*100):0;
-    return `<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;margin-bottom:10px">
+    return `<div id="cd-${m}" style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;margin-bottom:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><b style="font-family:Sora,sans-serif;font-size:13.5px">${fmtMes(m+'-01')}</b><span class="mono" style="font-size:12px;color:${saldo<0?'var(--po)':'var(--txt-2)'}">balance ${BRL(saldo)} · cap ${BRL(cap)}</span></div>
-      <div style="height:8px;border-radius:5px;background:#f0eee8;overflow:hidden;margin-bottom:10px"><span style="display:block;height:100%;width:${pct}%;background:#1f8a4c"></span></div>
-      ${list.length?list.map(po=>{const s=PO_STATUS[po.status]||{t:po.status,c:'s-slate'};return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px dashed var(--line)"><span class="badge s-blue" style="flex-shrink:0"><span class="d"></span>${fmtMes(po.competencia)}</span><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:12.5px">${esc(po.descricao||'—')}</div><div style="font-size:11px;color:var(--txt-3)">${esc(po.agencia||'')} · ${esc(po.numero_po||'no number')}</div></div><span class="mono" style="font-weight:700;font-size:12.5px">${BRL(po.valor)}</span><span class="badge ${s.c}"><span class="d"></span>${s.t}</span></div>`;}).join(''):'<div style="font-size:12px;color:var(--txt-3)">No PO this month.</div>'}
+      <div style="height:8px;border-radius:5px;background:#f0eee8;overflow:hidden;margin-bottom:10px"><span style="display:block;height:100%;width:${pct}%;background:${pct>=90?'var(--po)':'#1f8a4c'}"></span></div>
+      ${list.length?list.map(po=>`<div style="padding:9px 0;border-top:1px dashed var(--line)"><div style="display:flex;align-items:center;gap:10px"><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.descricao||'—')}</div><div style="font-size:11px;color:var(--txt-3)">${esc(po.agencia||'')} · ${esc(po.numero_po||'no number')}</div></div><span class="mono" style="font-weight:700;font-size:12.5px;flex-shrink:0">${BRL(po.valor)}</span></div>${poStepperHTML(po.status)}</div>`).join(''):'<div style="font-size:12px;color:var(--txt-3)">No POs this month.</div>'}
     </div>`;
   }).join('')||'<div class="empty">No months registered.</div>';
   // ---- summary (KPIs, consumption bar, rateio split) ----
@@ -957,19 +983,42 @@ function openCampDetail(pid){
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
       ${kpi('Total cap',BRL(totCap))}${kpi('Consumed',BRL(totCons),'#1f8a4c')}${kpi('Balance',BRL(saldoTot),saldoTot<0?'var(--po)':'var(--txt-1)')}${kpi('POs issued',String(allPos.length))}
     </div>
-    <div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;margin-bottom:14px">
-      <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px"><span>Consumption</span><span>${Math.round(pctTot)}%</span></div>
-      <div style="height:12px;border-radius:6px;background:#f0eee8;overflow:hidden"><span style="display:block;height:100%;width:${pctTot}%;background:${pctTot>=100?'var(--po)':'#1f8a4c'}"></span></div>
-    </div>
     ${(p.rateio&&catKeys.length)?`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;margin-bottom:14px">
-      <div style="font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:9px">Rateio — allocation per budget</div>
+      <div style="font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:9px">Rateio — allocation by budget</div>
       ${(function(){const tot=catKeys.reduce((s,k)=>s+catAlloc[k],0);return catKeys.map((k,i)=>{const pc=tot?catAlloc[k]/tot*100:0;return `<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><b>${esc(k)}</b><span class="mono">${BRL(catAlloc[k])} · ${Math.round(pc)}%</span></div><div style="height:8px;border-radius:5px;background:#f0eee8;overflow:hidden"><span style="display:block;height:100%;width:${pc}%;background:${palette[i%palette.length]}"></span></div></div>`;}).join('');})()}
     </div>`:''}`;
-  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:640px">
-    <div class="modal-h"><h3>${esc(p.nome)}</h3><button class="x" onclick="closeModal()">✕</button></div>
-    <div class="modal-b"><div style="font-size:12.5px;color:var(--txt-3);margin-bottom:14px">${esc(p.agencia||'')} · ${esc(p.product_category||'')}${p.rateio?' · rateio':''}</div>${summary}<div style="font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin:2px 0 10px">Month by month</div>${blocks}</div>
-    <div class="modal-f"><span></span><div style="display:flex;gap:10px">${PO_ACCESS?`<button class="btn-acc" style="background:var(--po)" onclick="openReqPO('${esc(p.id)}')">+ Request PO</button>`:''}${(['admin','marketing'].includes(PAPEL)||isManager)?`<button class="btn-ghost" onclick="openCampValues('${esc(p.id)}')">Edit monthly values</button><button class="btn-ghost" onclick="openCampEdit('${esc(p.id)}')">Edit category / budget</button>`:''}<button class="btn-ghost" onclick="closeModal()">Close</button></div></div>
+  const mNowD=new Date().toISOString().slice(0,7);
+  const chips=months.map(m=>{
+    const cap=capByM[m]||0; const lst=posByM[m]||[];
+    const consM=lst.filter(po=>!['REJEITADA','CANCELADA'].includes(po.status)).reduce((s,po)=>s+(+po.valor||0),0);
+    const over=cap&&consM>cap; const cur=m===mNowD;
+    const st=cur?'background:var(--ink);color:#fff;border:1px solid var(--ink)':(over?'background:#fbe4e1;border:1px solid #f2c4bf;color:#bf0008':'background:var(--paper-2);border:1px solid var(--line);color:var(--txt-2)');
+    return `<button class="mono" style="font-size:11.5px;font-weight:700;border-radius:8px;padding:5px 11px;cursor:pointer;${st}" onclick="campDrawerJump('${m}')">${fmtMes(m+'-01')}${over?' '+Math.round(consM/cap*100)+'%':''}</button>`;
+  }).join('');
+  const alertHTML=(pctTot>=90&&!allPos.some(po=>po.status==='CONCLUIDA'))?`<div style="display:flex;align-items:center;gap:10px;background:#fbe4e1;border:1px solid #f2c4bf;border-radius:9px;padding:8px 12px;margin-top:12px;font-size:12px;color:#7d1a14"><span style="width:7px;height:7px;border-radius:50%;background:#bf0008;flex-shrink:0"></span>No PO completed yet — check with the agency before approving new ones.</div>`:'';
+  $('#modalMount').innerHTML=`<div class="overlay right" onclick="if(event.target===this)closeModal()"><div class="modal drawer">
+    <div style="padding:18px 22px 16px;border-bottom:1px solid var(--line)">
+      <div style="display:flex;align-items:flex-start;gap:10px">
+        <div style="flex:1;min-width:0"><h3 style="font-size:16px">${esc(p.nome)}</h3><div style="font-size:11.5px;color:var(--txt-3);margin-top:2px">${esc(p.agencia||'')} · ${esc(p.product_category||'')}${p.rateio?' · rateio':''}</div></div>
+        <button class="x" onclick="closeModal()">✕</button>
+      </div>
+      <div style="display:flex;height:12px;border-radius:6px;overflow:hidden;background:#f0eee8;margin-top:13px"><span style="width:${pctTot}%;background:${pctTot>=90?'var(--po)':'#1f8a4c'}"></span></div>
+      <div style="display:flex;justify-content:space-between;margin-top:7px;font-size:12px" class="mono">
+        <span style="font-weight:700;color:${pctTot>=90?'#bf0008':'#1f8a4c'}">${Math.round(pctTot)}% committed</span>
+        <span style="color:var(--txt-2)">balance <b>${BRL(saldoTot)}</b> of ${BRL(totCap)}</span>
+      </div>
+      ${alertHTML}
+      ${months.length>1?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">${chips}</div>`:''}
+    </div>
+    <div class="modal-b">${summary}<div style="font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin:2px 0 10px">Month by month</div>${blocks}</div>
+    <div class="modal-f"><span></span><div style="display:flex;gap:10px">${PO_ACCESS?`<button class="btn-acc" style="background:var(--po)" onclick="openReqPO('${esc(p.id)}')">+ Request PO</button>`:''}${(['admin','marketing'].includes(PAPEL)||isManager)?`<button class="btn-ghost" onclick="openCampValues('${esc(p.id)}')">Edit monthly values</button><button class="btn-ghost" onclick="openCampEdit('${esc(p.id)}')">Edit category</button>`:''}<button class="btn-ghost" onclick="closeModal()">Close</button></div></div>
   </div></div>`;
+}
+
+function campDrawerJump(m){
+  const el=document.getElementById('cd-'+m); if(!el)return;
+  const box=el.closest('.modal-b'); if(!box)return;
+  box.scrollTop+=el.getBoundingClientRect().top-box.getBoundingClientRect().top-8;
 }
 
 /* Edit the campaign's month-by-month values. For a normal / integral campaign
@@ -1108,7 +1157,7 @@ function renderPOs(){
   </div>`;
   const head=`<div style="display:grid;grid-template-columns:1.4fr 1fr .8fr .9fr 1fr .8fr 1.1fr 1.1fr;gap:10px;padding:11px 17px;background:#fbfaf7;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">
     <span>Campaign</span><span>Agency</span><span>Month</span><span style="text-align:right">Value</span><span>Payment</span><span>PO nº</span><span>Status</span><span>Action</span></div>`;
-  const body=pos.map(po=>{const s=PO_STATUS[po.status]||{t:po.status,c:'s-slate',icon:''};const pend=['SOLICITADA','EM_APROVACAO'].includes(po.status);const est=poEstimativaPagamento(po);
+  const rowHTML=po=>{const s=PO_STATUS[po.status]||{t:po.status,c:'s-slate',icon:''};const pend=['SOLICITADA','EM_APROVACAO'].includes(po.status);const est=poEstimativaPagamento(po);
     return `<div class="po-row" data-camp="${esc(po.projeto_id)}" data-ag="${esc(po.agencia||'')}" data-st="${esc(po.status)}" onclick="openPODetail('${esc(po.id)}')" style="display:grid;grid-template-columns:1.4fr 1fr .8fr .9fr 1fr .8fr 1.1fr 1.1fr;gap:10px;padding:12px 17px;border-bottom:1px solid #f0eee8;align-items:center;font-size:13px;cursor:pointer">
       <span style="min-width:0"><span style="font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(nomeBy[po.projeto_id]||'—')}</span><span style="font-size:11px;color:var(--txt-3)">${esc(po.descricao||'')}</span>${poMetaHTML(po)}</span>
       <span style="color:var(--txt-2)">${esc(po.agencia||'—')}</span>
@@ -1119,15 +1168,50 @@ function renderPOs(){
       <span><span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap" class="badge ${s.c}"><span class="d"></span>${s.icon} ${s.t}</span></span>
       <span style="display:flex;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">${poActionsHTML(po)}</span>
     </div>`;
-  }).join('')||'<div class="empty">No POs found for your access.</div>';
-  return filt+`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">${head}<div id="poBody">${body}</div></div>
-    <div style="font-size:11.5px;color:var(--txt-3);margin-top:10px">Lifecycle: request → approve → issue nº → invoice (NF+evidence) → validate. Approve/Reject is live for admin and marketing.</div>`;
+  };
+  const PHASES=[
+    {id:'aprovacao',t:'1 · Awaiting approval',st:['SOLICITADA','EM_APROVACAO']},
+    {id:'emissao',t:'2 · Awaiting PO number',st:['APROVADA']},
+    {id:'faturamento',t:'3 · Invoicing (NF)',st:['PO_GERADA','ATUALIZAR_INFO']},
+    {id:'validacao',t:'4 · Validation',st:['FATURADA']},
+    {id:'concluida',t:'Completed',st:['VALIDADA','CONCLUIDA']},
+    {id:'encerrada',t:'Rejected / cancelled',st:['REJEITADA','CANCELADA']}
+  ];
+  const knownSt=new Set(); PHASES.forEach(f=>f.st.forEach(x=>knownSt.add(x)));
+  const restPos=pos.filter(po=>!knownSt.has(po.status));
+  const phaseGroup=(t,list,id)=>list.length?`<div class="po-phase" data-phase="${id}">
+    <div style="padding:9px 17px;background:#fbfaf7;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px">
+      <b style="font-family:Sora,sans-serif;font-size:12px;letter-spacing:.02em">${t}</b>
+      <span class="mono" style="font-size:10.5px;font-weight:800;background:#fff;border:1px solid var(--line);border-radius:20px;padding:1px 8px;color:var(--txt-2)">${list.length}</span>
+      <span style="flex:1"></span>
+      <span class="mono" style="font-size:11.5px;font-weight:700;color:var(--txt-2)">${BRL(list.reduce((sum,po)=>sum+(+po.valor||0),0))}</span>
+    </div>
+    ${list.map(rowHTML).join('')}
+  </div>`:'';
+  const body=(PHASES.map(f=>phaseGroup(f.t,pos.filter(po=>f.st.includes(po.status)),f.id)).join('')+phaseGroup('Other',restPos,'outros'))||'<div class="empty">No POs found for your access.</div>';
+  const projPend=DATA.poProjetos.filter(p=>p.aprovacao_status==='PENDENTE');
+  const canAprovaCamp=['admin','marketing','financeiro'].includes(PAPEL)||isManager;
+  const tetoPend={};
+  if(projPend.length){ DATA.tetos.forEach(t=>tetoPend[t.projeto_id]=(tetoPend[t.projeto_id]||0)+(+t.teto||0)); DATA.rateio.forEach(r=>tetoPend[r.projeto_id]=(tetoPend[r.projeto_id]||0)+(+r.valor||0)); }
+  const campPend=projPend.length?`<div style="background:#fff;border:1px solid #f2c4bf;border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05);margin-bottom:16px">
+    <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px"><b style="font-family:Sora,sans-serif;font-size:14px">Campaigns awaiting approval</b><span style="background:var(--po);color:#fff;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800">${projPend.length}</span></div>
+    <div style="padding:12px 16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">${projPend.map(p=>`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;background:#fbfaf7">
+      <div style="display:flex;justify-content:space-between;gap:10px"><b style="font-size:13px">${esc(p.nome)}</b><span class="mono" style="font-size:12px">${BRL(tetoPend[p.id]||0)}</span></div>
+      <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">${esc(p.agencia||'')} · ${esc(p.product_category||'')} · ${esc(p.activity||'')}</div>
+      ${canAprovaCamp?`<div style="display:flex;gap:7px;margin-top:10px"><button onclick="aprovarCamp('${esc(p.id)}')" style="padding:7px 14px;border-radius:8px;border:none;background:var(--po);color:#fff;font-weight:700;font-size:12px;cursor:pointer">Approve</button><button onclick="rejeitarCamp('${esc(p.id)}')" style="padding:7px 14px;border-radius:8px;border:1px solid var(--line-2);background:#fff;color:var(--txt-2);font-weight:700;font-size:12px;cursor:pointer">Reject</button></div>`:''}
+    </div>`).join('')}</div></div>`:'';
+  return campPend+filt+`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">${head}<div id="poBody">${body}</div></div>
+    <div style="font-size:11.5px;color:var(--txt-3);margin-top:10px">Lifecycle: request → approve → issue nº → invoice (NF + evidence) → validate. Approve/Reject is live for admin and marketing.</div>`;
 }
 function renderPOsFilter(){
   const c=($('#poFcamp')||{}).value||'', a=($('#poFag')||{}).value||'', s=($('#poFst')||{}).value||'';
   document.querySelectorAll('.po-row').forEach(r=>{
     const ok=(!c||r.dataset.camp===c)&&(!a||r.dataset.ag===a)&&(!s||r.dataset.st===s);
     r.style.display=ok?'grid':'none';
+  });
+  document.querySelectorAll('.po-phase').forEach(g=>{
+    const vis=Array.from(g.querySelectorAll('.po-row')).some(r=>r.style.display!=='none');
+    g.style.display=vis?'':'none';
   });
 }
 async function aprovarPO(id){
@@ -1510,7 +1594,7 @@ function renderTLModal(){
     const totalDays=Math.max(7,Math.round((max-min)/864e5)+7);
     const weeks=Math.ceil(totalDays/7); const dayPct=100/(weeks*7);
     const tdy=today0();
-    const MM=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+    const MM=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     let wkHead=''; for(let w=0;w<weeks;w++){const dd=new Date(min);dd.setDate(dd.getDate()+w*7);const now=tdy>=dd&&tdy<new Date(dd.getFullYear(),dd.getMonth(),dd.getDate()+7);wkHead+=`<div style="flex:1;min-width:0;padding:7px 2px;text-align:center;font-size:9.5px;font-weight:600;color:${now?'#fff':'#8b8d95'};background:${now?'#14161c':'transparent'};border-right:1px solid #f0eee8">${dd.getDate()}/${MM[dd.getMonth()]}</div>`;}
     const rowsHtml=rows.map(r=>{
       const s=new Date(r.inicio+'T00:00:00'), e=new Date(r.fim+'T00:00:00');
@@ -1542,14 +1626,14 @@ function pmAddLog(){
   const ta=$('#pmLog'); if(!ta)return; const txt=(ta.value||'').trim(); if(!txt)return;
   const men=pmMentionScan(txt);
   EDIT.logs=EDIT.logs||[];
-  EDIT.logs.push({id:uid(),txt,autor:(currentUser&&currentUser.email)||'você',t:new Date().toISOString().slice(0,10),mencoes:men.map(m=>({nome:m.nome,email:m.email||''}))});
+  EDIT.logs.push({id:uid(),txt,autor:(currentUser&&currentUser.email)||'you',t:new Date().toISOString().slice(0,10),mencoes:men.map(m=>({nome:m.nome,email:m.email||''}))});
   ta.value=''; renderProjModal();
   // grava menções na tabela real do painel (notifica os destinatários)
-  const autor=(currentUser&&currentUser.email)||'Alguém';
+  const autor=(currentUser&&currentUser.email)||'Someone';
   men.forEach(async m=>{ if(m.email){ try{ await SB.from('mencoes').insert({projeto_nome:EDIT.nome||'Projeto',autor,destinatario_email:m.email,destinatario_nome:m.nome,mensagem:txt,criado_em:new Date().toISOString()}); }catch(e){console.warn('mencao:',e);} } });
   if(men.length) toast('Log saved · @mention to '+men.map(m=>m.nome.split(/\s+/)[0]).join(', '));
 }
-function respOpts(sel){ const g={}; (TEAM||[]).forEach(p=>{const k=p.empresa||'Equipe';(g[k]=g[k]||[]).push(p);}); let h='<option value="">—</option>'; Object.keys(g).sort().forEach(k=>{h+=`<optgroup label="${esc(k)}">`+g[k].map(p=>`<option ${p.nome===sel?'selected':''}>${esc(p.nome)}</option>`).join('')+'</optgroup>';}); return h; }
+function respOpts(sel){ const g={}; (TEAM||[]).forEach(p=>{const k=p.empresa||'Team';(g[k]=g[k]||[]).push(p);}); let h='<option value="">—</option>'; Object.keys(g).sort().forEach(k=>{h+=`<optgroup label="${esc(k)}">`+g[k].map(p=>`<option ${p.nome===sel?'selected':''}>${esc(p.nome)}</option>`).join('')+'</optgroup>';}); return h; }
 function fmtLogTxt(t){ return esc(t).replace(/@([\wÀ-ÿ]+)/g,'<span class="ment">@$1</span>'); }
 
 const PTIPO_TEMPLATE={campanha:'campanha',midia:'campanha',social:'conteudo',kol:'conteudo',evento:'evento',pr:'livre'};
@@ -1840,7 +1924,7 @@ function renderReqPO(){
           </div>`).join('')}
         </div>
       </div>
-      <div class="field"><label>Description</label><input value="${esc(REQ.descricao)}" onchange="reqSet('descricao',this.value)" placeholder="e.g. Fee de agência — julho"></div>
+      <div class="field"><label>Description</label><input value="${esc(REQ.descricao)}" onchange="reqSet('descricao',this.value)" placeholder="e.g. Agency fee — July"></div>
       <div style="font-size:11.5px;color:var(--txt-3);background:var(--paper-2);border:1px solid var(--line);border-radius:9px;padding:9px 12px;margin-bottom:14px">🗓 Estimated payment if requested today: <b style="color:var(--txt-2)">~${fmtDateObjBR(calcVencimento(new Date().toISOString().slice(0,10)))}</b> <span style="color:var(--txt-3)">(final date is confirmed once the invoice is posted)</span></div>
       ${estoura?'<div class="banner" style="background:var(--red-bg);border-color:#f0b8b2;color:#b32418">One or more categories exceed the balance of the selected month.</div>':''}
     `;
@@ -1856,7 +1940,7 @@ function renderReqPO(){
       <div class="field"><label>Value (R$)</label><input type="number" min="0" step="100" value="${esc(REQ.valor)}" onchange="reqSet('valor',this.value)" placeholder="0,00"></div>
       <div class="field"><label>Description</label><input value="${esc(REQ.descricao)}" onchange="reqSet('descricao',this.value)" placeholder="e.g. Video production, paid media…"></div>
       <div style="font-size:11.5px;color:var(--txt-3);background:var(--paper-2);border:1px solid var(--line);border-radius:9px;padding:9px 12px;margin-bottom:14px">🗓 Estimated payment if requested today: <b style="color:var(--txt-2)">~${fmtDateObjBR(calcVencimento(new Date().toISOString().slice(0,10)))}</b> <span style="color:var(--txt-3)">(final date is confirmed once the invoice is posted)</span></div>
-      ${estoura?'<div class="banner" style="background:var(--red-bg);border-color:#f0b8b2;color:#b32418">O valor excede o balance do mês selecionado. Escolha outro mês ou reduza o valor.</div>':''}
+      ${estoura?'<div class="banner" style="background:var(--red-bg);border-color:#f0b8b2;color:#b32418">The value exceeds the balance of the selected month. Pick another month or reduce the value.</div>':''}
     `;
   }
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:560px">
@@ -1999,7 +2083,7 @@ function renderTimeline(){
   const totalDays=Math.max(7,Math.round((max-min)/864e5)+7);
   const weeks=Math.ceil(totalDays/7); const dayPct=100/(weeks*7);
   const tdy=today0();
-  const MM=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  const MM=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   let wkHead=''; for(let w=0;w<weeks;w++){const dd=new Date(min);dd.setDate(dd.getDate()+w*7);const now=tdy>=dd&&tdy<new Date(dd.getFullYear(),dd.getMonth(),dd.getDate()+7);wkHead+=`<div style="flex:1;min-width:0;padding:9px 2px;text-align:center;font-size:10px;font-weight:600;color:${now?'#fff':'#8b8d95'};background:${now?'#14161c':'transparent'};border-right:1px solid #f0eee8">${dd.getDate()}/${MM[dd.getMonth()]}</div>`;}
   const rows=list.sort((a,b)=>new Date((a.inicio||a.prazo)+'T00:00:00')-new Date((b.inicio||b.prazo)+'T00:00:00')).map(p=>{
     const stg=stageOf(p.etapa); const pr=computeProg(p);
@@ -2186,6 +2270,44 @@ function feeSplitBlock(){
   </div>`;
   return rateioBlock+accountsBlock;
 }
+/* ---- Overview period filter (all / year / quarter / month) ---- */
+let BO_PER={mode:'all',val:''};
+function boMonthIn(m){
+  if(BO_PER.mode==='all'||!BO_PER.val)return true;
+  if(BO_PER.mode==='year')return m.slice(0,4)===BO_PER.val;
+  if(BO_PER.mode==='quarter'){const i=BO_PER.val.indexOf('-Q');const y=BO_PER.val.slice(0,i),q=+BO_PER.val.slice(i+2);return m.slice(0,4)===y&&Math.ceil(+m.slice(5,7)/3)===q;}
+  if(BO_PER.mode==='month')return m===BO_PER.val;
+  return true;
+}
+function boInPeriod(comp){ if(!comp)return BO_PER.mode==='all'; return boMonthIn(String(comp).slice(0,7)); }
+function boSetMode(mode){
+  const now=new Date(),y=String(now.getFullYear()),m=now.toISOString().slice(0,7),q=y+'-Q'+Math.ceil((now.getMonth()+1)/3);
+  BO_PER={mode,val:mode==='year'?y:mode==='quarter'?q:mode==='month'?m:''};
+  go(SCREEN);
+}
+function boSetVal(v){ BO_PER.val=v; go(SCREEN); }
+function boDataMonths(){
+  const s=new Set();
+  (DATA.tetos||[]).forEach(t=>t.competencia&&s.add(String(t.competencia).slice(0,7)));
+  (DATA.rateio||[]).forEach(r=>r.competencia&&s.add(String(r.competencia).slice(0,7)));
+  (DATA.pos||[]).forEach(po=>po.competencia&&s.add(String(po.competencia).slice(0,7)));
+  return Array.from(s).sort();
+}
+function boPeriodBar(){
+  const months=boDataMonths();
+  const years=Array.from(new Set(months.map(m=>m.slice(0,4)))).sort();
+  const quarters=Array.from(new Set(months.map(m=>m.slice(0,4)+'-Q'+Math.ceil(+m.slice(5,7)/3)))).sort();
+  const seg=(id,l)=>`<button onclick="boSetMode('${id}')" style="padding:7px 14px;border-radius:8px;border:1px solid ${BO_PER.mode===id?'var(--po)':'var(--line-2)'};background:${BO_PER.mode===id?'#fbe4e1':'#fff'};color:${BO_PER.mode===id?'#bf0008':'var(--txt-2)'};font-size:12px;font-weight:700;cursor:pointer">${l}</button>`;
+  const opts=BO_PER.mode==='year'?years:BO_PER.mode==='quarter'?quarters:BO_PER.mode==='month'?months:[];
+  const lbl=v=>BO_PER.mode==='month'?fmtMes(v+'-01'):BO_PER.mode==='quarter'?v.replace('-Q',' · Q'):v;
+  const sel=opts.length?`<select onchange="boSetVal(this.value)" style="padding:7px 12px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font-size:12.5px;font-weight:600;color:var(--txt-2)">${opts.map(o=>`<option value="${o}" ${BO_PER.val===o?'selected':''}>${lbl(o)}</option>`).join('')}</select>`:'';
+  return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+    <span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--txt-3)">Period</span>
+    <div style="display:flex;gap:6px">${seg('all','All')}${seg('year','Year')}${seg('quarter','Quarter')}${seg('month','Month')}</div>
+    ${sel}
+    ${BO_PER.mode!=='all'?'<span style="font-size:11.5px;color:var(--txt-3)">caps, rateios and POs filtered by month</span>':''}
+  </div>`;
+}
 let CAMP_ACC_OPEN={}, CAT_ACC_OPEN={};
 function toggleCampAcc(id){ CAMP_ACC_OPEN[id]=!CAMP_ACC_OPEN[id]; go(SCREEN); }
 function toggleCatAcc(key){ CAT_ACC_OPEN[key]=!CAT_ACC_OPEN[key]; go(SCREEN); }
@@ -2193,14 +2315,14 @@ function renderBudgetOverview(isBalance){
   let camps=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO');
   if(PAPEL==='agencia'&&MINHA_AGENCIA) camps=camps.filter(p=>p.agencia===MINHA_AGENCIA);
   const tetoBy={},consBy={},pendBy={};
-  DATA.tetos.forEach(t=>tetoBy[t.projeto_id]=(tetoBy[t.projeto_id]||0)+(+t.teto||0));
-  DATA.rateio.forEach(r=>tetoBy[r.projeto_id]=(tetoBy[r.projeto_id]||0)+(+r.valor||0));
-  DATA.pos.forEach(po=>{const v=+po.valor||0;if(['FATURADA','VALIDADA','CONCLUIDA','APROVADA','PO_GERADA','ATUALIZAR_INFO'].includes(po.status))consBy[po.projeto_id]=(consBy[po.projeto_id]||0)+v;else if(['SOLICITADA','EM_APROVACAO'].includes(po.status))pendBy[po.projeto_id]=(pendBy[po.projeto_id]||0)+v;});
+  DATA.tetos.forEach(t=>{if(!boInPeriod(t.competencia))return;tetoBy[t.projeto_id]=(tetoBy[t.projeto_id]||0)+(+t.teto||0);});
+  DATA.rateio.forEach(r=>{if(!boInPeriod(r.competencia))return;tetoBy[r.projeto_id]=(tetoBy[r.projeto_id]||0)+(+r.valor||0);});
+  DATA.pos.forEach(po=>{if(!boInPeriod(po.competencia))return;const v=+po.valor||0;if(['FATURADA','VALIDADA','CONCLUIDA','APROVADA','PO_GERADA','ATUALIZAR_INFO'].includes(po.status))consBy[po.projeto_id]=(consBy[po.projeto_id]||0)+v;else if(['SOLICITADA','EM_APROVACAO'].includes(po.status))pendBy[po.projeto_id]=(pendBy[po.projeto_id]||0)+v;});
   const campIds=new Set(camps.map(c=>c.id));
   let orcado=0,consumido=0,pend=0; camps.forEach(p=>{orcado+=tetoBy[p.id]||0;consumido+=consBy[p.id]||0;pend+=pendBy[p.id]||0;});
   const saldo=orcado-consumido-pend;
   // barra do mês corrente
-  const mNow=new Date().toISOString().slice(0,7);
+  const mNow=(BO_PER.mode==='month'&&BO_PER.val)?BO_PER.val:new Date().toISOString().slice(0,7);
   let capMes=0; DATA.tetos.forEach(t=>{if(campIds.has(t.projeto_id)&&String(t.competencia).slice(0,7)===mNow)capMes+=(+t.teto||0);});
   DATA.rateio.forEach(r=>{if(campIds.has(r.projeto_id)&&String(r.competencia).slice(0,7)===mNow)capMes+=(+r.valor||0);});
   let comMes=0,penMes=0; DATA.pos.forEach(po=>{if(!campIds.has(po.projeto_id)||String(po.competencia).slice(0,7)!==mNow)return;const v=+po.valor||0;if(['FATURADA','VALIDADA','CONCLUIDA','APROVADA','PO_GERADA','ATUALIZAR_INFO'].includes(po.status))comMes+=v;else if(['SOLICITADA','EM_APROVACAO'].includes(po.status))penMes+=v;});
@@ -2209,8 +2331,8 @@ function renderBudgetOverview(isBalance){
   const stat=(l,v,col)=>`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;padding:14px 16px;box-shadow:0 1px 2px rgba(20,22,28,.05)"><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-2);font-weight:700">${l}</div><div class="mono" style="font-size:19px;font-weight:700;margin-top:7px;color:${col}">${v}</div></div>`;
   // consumo alocado por categoria: tetos (campanha de categoria única) + rateio_alocacao (fees rateados)
   const catUsed={}, catOf={}; DATA.poProjetos.forEach(p=>catOf[p.id]=p.product_category);
-  DATA.tetos.forEach(t=>{ if(!campIds.has(t.projeto_id))return; const c=catOf[t.projeto_id]; if(c) catUsed[c]=(catUsed[c]||0)+(+t.teto||0); });
-  DATA.rateio.forEach(r=>{ if(!campIds.has(r.projeto_id))return; const c=r.categoria; if(c) catUsed[c]=(catUsed[c]||0)+(+r.valor||0); });
+  DATA.tetos.forEach(t=>{ if(!campIds.has(t.projeto_id)||!boInPeriod(t.competencia))return; const c=catOf[t.projeto_id]; if(c) catUsed[c]=(catUsed[c]||0)+(+t.teto||0); });
+  DATA.rateio.forEach(r=>{ if(!campIds.has(r.projeto_id)||!boInPeriod(r.competencia))return; const c=r.categoria; if(c) catUsed[c]=(catUsed[c]||0)+(+r.valor||0); });
   const cats=(DATA.orcamentos||[]).map(o=>{const tot=+o.valor_total||0,cat=o.product_category||'',rel=catUsed[cat]||0;return {name:o.nome||cat||'—',n:cat,used:rel,total:tot,pct:tot?Math.min(100,rel/tot*100):0};});
   const canSensitive=isManager||['admin','financeiro'].includes(PAPEL);
   const isMkt=PAPEL==='marketing'&&!isManager;
@@ -2221,6 +2343,8 @@ function renderBudgetOverview(isBalance){
     return `<div style="border-bottom:1px solid #f0eee8">
       <div style="display:flex;align-items:center;gap:10px;padding:11px 4px;cursor:pointer" onclick="toggleCampAcc('${esc(p.id)}')">
         <span style="flex:1;min-width:0;font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span>
+        <span style="width:90px;height:7px;background:#f0eee8;border-radius:5px;overflow:hidden;flex-shrink:0"><span style="display:block;height:100%;width:${pctc}%;background:${pctc>=90?'var(--po)':'#1f8a4c'}"></span></span>
+        <span class="mono" style="font-size:10.5px;font-weight:700;color:${pctc>=90?'#bf0008':'var(--txt-3)'};width:34px;text-align:right;flex-shrink:0">${Math.round(pctc)}%</span>
         <span class="mono" style="font-size:12px;color:var(--txt-2)">${BRL(cons)} <span style="color:var(--txt-3)">/ ${BRL(tot)}</span></span>
         <span style="font-size:11px;color:var(--txt-3)">${open?'▲':'▼'}</span>
       </div>
@@ -2230,9 +2354,9 @@ function renderBudgetOverview(isBalance){
       </div>`:''}
     </div>`;
   };
-  const campanhasAccordion=`<div class="panel" style="margin-top:18px"><div class="panel-h"><h3>📋 Campaigns</h3><span class="tag">${camps.length} campaign(s)</span></div>
+  const campanhasAccordion=`<div class="panel" style="margin-top:18px"><div class="panel-h"><h3>Campaigns</h3><span class="tag">${camps.length} campaign(s)</span></div>
     <div class="panel-b" style="padding:2px 12px">${camps.length?camps.map(campRow).join(''):'<div class="empty">No campaigns.</div>'}</div></div>`;
-  const byCat={}; camps.forEach(p=>{ const k=p.product_category||'Sem categoria'; (byCat[k]=byCat[k]||[]).push(p); });
+  const byCat={}; camps.forEach(p=>{ const k=p.product_category||'Uncategorized'; (byCat[k]=byCat[k]||[]).push(p); });
   const catKeys=Object.keys(byCat).sort();
   const catRow=key=>{
     const list=byCat[key]; const tot=list.reduce((s,p)=>s+(tetoBy[p.id]||0),0); const cons=list.reduce((s,p)=>s+(consBy[p.id]||0),0); const pctc=tot?Math.min(100,cons/tot*100):0;
@@ -2241,6 +2365,8 @@ function renderBudgetOverview(isBalance){
       <div style="display:flex;align-items:center;gap:10px;padding:11px 4px;cursor:pointer" onclick="toggleCatAcc('${esc(key)}')">
         <span style="flex:1;min-width:0;font-weight:700;font-size:13.5px">${esc(key)}</span>
         <span style="font-size:11px;color:var(--txt-3);font-weight:600">${list.length} campaign(s)</span>
+        <span style="width:90px;height:7px;background:#f0eee8;border-radius:5px;overflow:hidden;flex-shrink:0"><span style="display:block;height:100%;width:${pctc}%;background:${pctc>=90?'var(--po)':'#1f8a4c'}"></span></span>
+        <span class="mono" style="font-size:10.5px;font-weight:700;color:${pctc>=90?'#bf0008':'var(--txt-3)'};width:34px;text-align:right;flex-shrink:0">${Math.round(pctc)}%</span>
         <span class="mono" style="font-size:12px;color:var(--txt-2)">${BRL(cons)} <span style="color:var(--txt-3)">/ ${BRL(tot)}</span></span>
         <span style="font-size:11px;color:var(--txt-3)">${open?'▲':'▼'}</span>
       </div>
@@ -2250,24 +2376,42 @@ function renderBudgetOverview(isBalance){
       </div>`:''}
     </div>`;
   };
-  const categoriaAccordion=`<div class="panel" style="margin-top:18px"><div class="panel-h"><h3>📋 Campaigns by category</h3><span class="tag">${catKeys.length} categor${catKeys.length===1?'y':'ies'}</span></div>
+  const categoriaAccordion=`<div class="panel" style="margin-top:18px"><div class="panel-h"><h3>Campaigns by category</h3><span class="tag">${catKeys.length} categor${catKeys.length===1?'y':'ies'}</span></div>
     <div class="panel-b" style="padding:2px 12px">${catKeys.length?catKeys.map(catRow).join(''):'<div class="empty">No campaigns.</div>'}</div></div>`;
+  const pctCons=orcado?Math.min(100,consumido/orcado*100):0;
+  const pctPend=orcado?Math.min(100-pctCons,pend/orcado*100):0;
+  const hasConclBy={}; DATA.pos.forEach(po=>{ if(po.status==='CONCLUIDA') hasConclBy[po.projeto_id]=true; });
+  const alerts=[];
+  camps.forEach(p=>{ const tot=tetoBy[p.id]||0; if(!tot)return; const comprometido=(consBy[p.id]||0)+(pendBy[p.id]||0); const pct=comprometido/tot*100;
+    if(comprometido>tot) alerts.push({html:`<b>${esc(p.nome)}</b> went over its cap — ${BRL(comprometido)} committed of ${BRL(tot)}.`,id:p.id});
+    else if(pct>=90&&!hasConclBy[p.id]) alerts.push({html:`<b>${esc(p.nome)}</b> has committed ${Math.round(pct)}% of its budget and no PO has been completed yet.`,id:p.id});
+  });
+  const alertsHTML=alerts.length?`<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px">${alerts.slice(0,4).map(a=>`<div style="display:flex;align-items:center;gap:12px;background:#fbe4e1;border:1px solid #f2c4bf;border-radius:12px;padding:11px 16px"><span style="width:8px;height:8px;border-radius:50%;background:#bf0008;flex-shrink:0"></span><span style="flex:1;font-size:13px;color:#7d1a14">${a.html}</span><button style="font-size:12px;font-weight:700;color:#bf0008;white-space:nowrap" onclick="openCampDetail('${esc(a.id)}')">View campaign →</button></div>`).join('')}</div>`:'';
+  const heroStat=(l,v,c)=>`<div><div style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3)">${l}</div><div class="mono" style="font-size:17px;font-weight:700;margin-top:2px;color:${c||'var(--txt)'}">${v}</div></div>`;
+  const hero=`<div style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px 24px;box-shadow:0 1px 2px rgba(20,22,28,.05);margin-bottom:18px">
+      <div style="display:flex;align-items:flex-end;gap:36px;flex-wrap:wrap">
+        <div><div style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3)">Available</div><div class="mono" style="font-size:32px;font-weight:700;letter-spacing:-.02em;margin-top:2px;color:${saldo<0?'var(--po)':'#16a06a'}">${BRL(saldo)}</div></div>
+        <div style="display:flex;gap:28px;padding-bottom:5px;flex-wrap:wrap">
+          ${heroStat(isBalance?'Allocated':'Budgeted',BRL(orcado))}
+          ${heroStat('Consumed',BRL(consumido)+` <span style="font-size:12px;color:var(--txt-3);font-weight:500">· ${Math.round(pctCons)}%</span>`)}
+          ${isMkt?'':heroStat('In progress',BRL(pend),'#cf8a16')}
+        </div>
+      </div>
+      <div style="display:flex;height:20px;border-radius:8px;overflow:hidden;margin-top:16px;background:#dcf2e7">
+        <span style="width:${pctCons}%;background:#14161c"></span><span style="width:${isMkt?0:pctPend}%;background:#cf8a16"></span>
+      </div>
+      <div style="display:flex;gap:20px;margin-top:10px;font-size:12px;font-weight:600;color:var(--txt-2);flex-wrap:wrap">
+        <span style="display:flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:3px;background:#14161c"></span>Consumed</span>
+        ${isMkt?'':'<span style="display:flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:3px;background:#cf8a16"></span>In progress (pending POs)</span>'}
+        <span style="display:flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:3px;background:#dcf2e7;border:1px solid #b9e2cc"></span>Available</span>
+      </div>
+    </div>`;
   if(isMkt){
-    return `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px">
-      ${stat('Budgeted',BRL(orcado),'#14161c')}
-      ${stat('Consumed',BRL(consumido),'var(--po)')}
-      ${stat('Balance',BRL(saldo),saldo<0?'var(--po)':'#1f8a4c')}
-    </div>
-    ${categoriaAccordion}`;
+    return boPeriodBar()+hero+alertsHTML+categoriaAccordion;
   }
-  return `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px">
-      ${stat(isBalance?'Allocated':'Budgeted',BRL(orcado),'#14161c')}
-      ${stat('Consumed',BRL(consumido),'var(--po)')}
-      ${stat('In progress',BRL(pend),'#cf8a16')}
-      ${stat('Balance',BRL(saldo),saldo<0?'var(--po)':'#1f8a4c')}
-    </div>
+  return boPeriodBar()+`${hero}${alertsHTML}
     <div style="background:#fff;border:1px solid var(--line);border-radius:13px;padding:17px 18px;margin-bottom:18px;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><b style="font-family:Sora,sans-serif;font-size:14px">${fmtMes(mNow+'-01')} — monthly balance</b><span class="mono" style="font-size:12px;color:var(--txt-2)">cap ${BRL(capMes)}</span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><b style="font-family:Sora,sans-serif;font-size:14px">${fmtMes(mNow+'-01')} — month balance</b><span class="mono" style="font-size:12px;color:var(--txt-2)">cap ${BRL(capMes)}</span></div>
       <div style="display:flex;height:24px;border-radius:7px;overflow:hidden;border:1px solid var(--line);background:#f3f4f6"><span style="width:${comPct}%;background:#1f8a4c"></span><span style="width:${penPct}%;background:#cf8a16"></span></div>
       <div style="display:flex;gap:18px;font-size:12px;color:var(--txt-2);margin-top:9px;font-weight:600;flex-wrap:wrap">
         <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#1f8a4c;margin-right:5px"></span>Consumed ${BRL(comMes)}</span>
@@ -2275,8 +2419,8 @@ function renderBudgetOverview(isBalance){
         <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#d9d6cc;margin-right:5px"></span>Balance ${BRL(balMes)}</span>
       </div>
     </div>
-    ${cats.length?`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">${cats.map(c=>`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;padding:15px 16px;box-shadow:0 1px 2px rgba(20,22,28,.05)"><div style="display:flex;align-items:center;justify-content:space-between"><b style="font-family:Sora,sans-serif;font-size:14px">${esc(c.name)}</b><span style="font-size:10.5px;font-weight:700;color:var(--txt-3)">${esc(c.n)}</span></div><div style="display:flex;height:9px;border-radius:5px;overflow:hidden;background:#f0eee8;margin-top:12px"><span style="width:${c.pct}%;background:#1f8a4c"></span></div><div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt-2);margin-top:8px" class="mono"><span>${BRL(c.used)}</span><span style="color:var(--txt-3)">de ${BRL(c.total)}</span></div></div>`).join('')}</div>`:''}
-    <div class="panel" style="margin-top:18px"><div class="panel-h"><h3>📊 Monthly evolution</h3><span class="tag">launched · requested · consumed</span></div>
+    ${cats.length?`<div style="display:flex;align-items:baseline;gap:10px;margin:0 0 10px"><h3 style="font-family:Sora,sans-serif;font-size:14px">By product category</h3><span style="font-size:11.5px;color:var(--txt-3)">allocated consumption vs. budget — click to open the campaigns</span></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">${cats.map(c=>{const nC=camps.filter(p=>(p.product_category||'')===c.n).length;const hot=c.pct>=90;return `<div style="background:#fff;border:1px solid ${hot?'#f2c4bf':'var(--line)'};border-radius:13px;padding:15px 16px;box-shadow:0 1px 2px rgba(20,22,28,.05);cursor:pointer" onclick="toggleCatAcc('${esc(c.n)}')"><div style="display:flex;align-items:center;justify-content:space-between"><b style="font-family:Sora,sans-serif;font-size:14px">${esc(c.name)}</b><span class="mono" style="font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:${hot?'#fbe4e1':'#e4f5ec'};color:${hot?'#bf0008':'#16a06a'}">${Math.round(c.pct)}%</span></div><div style="display:flex;height:8px;border-radius:5px;overflow:hidden;background:#f0eee8;margin-top:12px"><span style="width:${c.pct}%;background:${hot?'var(--po)':'#16a06a'}"></span></div><div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt-2);margin-top:8px" class="mono"><span>${BRL(c.used)}</span><span style="color:var(--txt-3)">of ${BRL(c.total)}</span></div><div style="font-size:11px;color:var(--txt-3);margin-top:6px">${nC} campaign${nC===1?'':'s'}</div></div>`;}).join('')}</div>`:''}
+    <div class="panel" style="margin-top:18px"><div class="panel-h"><h3>Monthly evolution</h3><span class="tag">cap · requested · consumed</span></div>
       <div style="padding:18px;height:280px"><canvas id="chartMonthly"></canvas></div>
     </div>
     ${categoriaAccordion}
@@ -2291,12 +2435,12 @@ function buildOverviewMonthlyChart(isBalance){
   DATA.tetos.forEach(t=>{if(campIds.has(t.projeto_id))months.add(String(t.competencia).slice(0,7));});
   DATA.rateio.forEach(r=>{if(campIds.has(r.projeto_id))months.add(String(r.competencia).slice(0,7));});
   DATA.pos.forEach(po=>{if(campIds.has(po.projeto_id)&&po.competencia)months.add(String(po.competencia).slice(0,7));});
-  const ml=Array.from(months).sort();
+  const ml=Array.from(months).sort().filter(boMonthIn);
   const lanc=ml.map(m=>{let v=0; DATA.tetos.forEach(t=>{if(campIds.has(t.projeto_id)&&String(t.competencia).slice(0,7)===m)v+=(+t.teto||0);}); DATA.rateio.forEach(r=>{if(campIds.has(r.projeto_id)&&String(r.competencia).slice(0,7)===m)v+=(+r.valor||0);}); return v;});
   const reqd=ml.map(m=>{let v=0; DATA.pos.forEach(po=>{if(campIds.has(po.projeto_id)&&String(po.competencia).slice(0,7)===m&&['SOLICITADA','EM_APROVACAO'].includes(po.status))v+=(+po.valor||0);}); return v;});
   const cons=ml.map(m=>{let v=0; DATA.pos.forEach(po=>{if(campIds.has(po.projeto_id)&&String(po.competencia).slice(0,7)===m&&['FATURADA','VALIDADA','CONCLUIDA','APROVADA','PO_GERADA','ATUALIZAR_INFO'].includes(po.status))v+=(+po.valor||0);}); return v;});
   _charts.push(new Chart(el,{type:'bar',data:{labels:ml.map(m=>fmtMes(m+'-01')),datasets:[
-    {label:isBalance?'Allocated':'Launched',data:lanc,backgroundColor:'#d9d6cc',borderRadius:5},
+    {label:isBalance?'Allocated':'Month cap',data:lanc,backgroundColor:'#d9d6cc',borderRadius:5},
     {label:'Requested',data:reqd,backgroundColor:'#cf8a16',borderRadius:5},
     {label:'Consumed',data:cons,backgroundColor:'#1f8a4c',borderRadius:5}
   ]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,ticks:{callback:v=>BRL(v)}}},plugins:{legend:{position:'bottom'}}}}));
