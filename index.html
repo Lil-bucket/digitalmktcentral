@@ -968,7 +968,7 @@ function openCampDetail(pid){
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:640px">
     <div class="modal-h"><h3>${esc(p.nome)}</h3><button class="x" onclick="closeModal()">✕</button></div>
     <div class="modal-b"><div style="font-size:12.5px;color:var(--txt-3);margin-bottom:14px">${esc(p.agencia||'')} · ${esc(p.product_category||'')}${p.rateio?' · rateio':''}</div>${summary}<div style="font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin:2px 0 10px">Month by month</div>${blocks}</div>
-    <div class="modal-f"><span></span><div style="display:flex;gap:10px">${(['admin','marketing'].includes(PAPEL)||isManager)?`<button class="btn-ghost" onclick="openCampValues('${esc(p.id)}')">Edit monthly values</button><button class="btn-acc" style="background:var(--po)" onclick="openCampEdit('${esc(p.id)}')">Edit category / budget</button>`:''}<button class="btn-ghost" onclick="closeModal()">Close</button></div></div>
+    <div class="modal-f"><span></span><div style="display:flex;gap:10px">${PO_ACCESS?`<button class="btn-acc" style="background:var(--po)" onclick="openReqPO('${esc(p.id)}')">+ Request PO</button>`:''}${(['admin','marketing'].includes(PAPEL)||isManager)?`<button class="btn-ghost" onclick="openCampValues('${esc(p.id)}')">Edit monthly values</button><button class="btn-ghost" onclick="openCampEdit('${esc(p.id)}')">Edit category / budget</button>`:''}<button class="btn-ghost" onclick="closeModal()">Close</button></div></div>
   </div></div>`;
 }
 
@@ -1057,19 +1057,11 @@ function openCampEdit(pid){
   renderCampEditForm();
 }
 function campEditSet(k,v){ if(CAMPEDIT)CAMPEDIT[k]=v; }
-function campEditActivity(v){ if(!CAMPEDIT)return; CAMPEDIT.activity=v; CAMPEDIT.rateio=(v==='FEE'&&CAMPEDIT.feeMode!=='whole'); renderCampEditForm(); }
-function campEditFeeMode(m){ if(!CAMPEDIT)return; CAMPEDIT.feeMode=m; CAMPEDIT.rateio=(m==='split'); renderCampEditForm(); }
+function campEditActivity(v){ if(!CAMPEDIT)return; CAMPEDIT.activity=v; renderCampEditForm(); }
 function renderCampEditForm(){
-  if(!CAMPEDIT)return; const ce=CAMPEDIT; const ags=agencyOpts(); const isFee=ce.activity==='FEE'; const tipos=rateioTipos();
-  if(isFee && ce.feeMode!=='whole' && ce.feeMode!=='split') ce.feeMode='whole';
+  if(!CAMPEDIT)return; const ce=CAMPEDIT; const ags=agencyOpts(); const isFee=ce.activity==='FEE';
   const catOpts=`<option value="" ${ce.cat===''?'selected':''}>— pick category —</option>`+PRODUCT_CATS.map(c=>`<option value="${c}" ${ce.cat===c?'selected':''}>${c}</option>`).join('');
-  const seg=(v,lbl)=>`<button type="button" onclick="campEditFeeMode('${v}')" style="flex:1;padding:8px 10px;border:1px solid ${ce.feeMode===v?'var(--po)':'var(--line-2)'};background:${ce.feeMode===v?'var(--po)':'var(--paper-2)'};color:${ce.feeMode===v?'#fff':'var(--txt-2)'};font:inherit;font-size:12px;font-weight:600;cursor:pointer;border-radius:8px">${lbl}</button>`;
-  const feeToggle=`<div class="field full" style="margin-top:6px"><label>Fee allocation</label><div style="display:flex;gap:8px">${seg('whole','Integral — one category')}${seg('split','Rateio — split')}</div></div>`;
-  const classField = !isFee
-    ? `<div class="field full" style="margin-top:6px"><label>Product category <span style="font-weight:600;color:var(--txt-3)">(the budget this campaign consumes)</span></label><select onchange="campEditSet('cat',this.value)">${catOpts}</select></div>`
-    : feeToggle + (ce.feeMode==='whole'
-        ? `<div class="field full" style="margin-top:6px"><label>Product category <span style="font-weight:600;color:var(--txt-3)">(100% of this fee goes here — e.g. MOB)</span></label><select onchange="campEditSet('cat',this.value)">${catOpts}</select></div>`
-        : `<div class="field full" style="margin-top:6px"><label>Which rateio? <span style="font-weight:600;color:var(--txt-3)">(splits this fee across the category budgets)</span></label><select onchange="campEditSet('qual',this.value)">${tipos.length?('<option value="">— pick a rateio —</option>'+tipos.map(t=>`<option value="${esc(t)}" ${ce.qual===t?'selected':''}>${esc(t)}</option>`).join('')):'<option value="">— no fee split configured (define it in Budgets) —</option>'}</select><div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">On save, each month's value is re-distributed across the categories of this rateio.</div></div>`);
+  const classField = `<div class="field full" style="margin-top:6px"><label>Product category <span style="font-weight:600;color:var(--txt-3)">${isFee?'(100% of this fee goes here — e.g. TV, AC…)':'(the budget this campaign consumes)'}</span></label><select onchange="campEditSet('cat',this.value)">${catOpts}</select>${isFee?'<div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">Splitting a fee across categories (e.g. TV/AC/LABG) is now done automatically when requesting the PO, using the agency\'s configured percentages — no separate rateio campaign needed.</div>':''}</div>`;
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:520px">
     <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--po);flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Edit campaign</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Set which budget(s) this value belongs to</div></div><button class="x" onclick="closeModal()">✕</button></div>
     <div class="modal-b">
@@ -1087,25 +1079,9 @@ function renderCampEditForm(){
 async function submitCampEdit(){
   if(!CAMPEDIT)return; const ce=CAMPEDIT; const isFee=ce.activity==='FEE';
   if(!ce.nome.trim()){ toast('Give the campaign a name.'); return; }
-  const isSplit = isFee && ce.feeMode==='split';
-  const wholeCat = (!isFee) || (isFee && ce.feeMode==='whole');
-  if(isSplit && !ce.qual){ toast('Pick which rateio splits this fee.'); return; }
-  if(wholeCat && !PRODUCT_CATS.includes(ce.cat)){ toast('Pick a product category (TV/AC/MOB/REF/WG/LABG).'); return; }
+  if(!PRODUCT_CATS.includes(ce.cat)){ toast('Pick a product category (TV/AC/MOB/REF/WG/LABG).'); return; }
   try{
-    if(isSplit){
-      // split each month across the chosen fee split's categories → rateio_alocacao
-      let splits=(DATA.fee||[]).filter(f=>f.tipo===ce.qual&&(!ce.agencia||!f.agencia||f.agencia===ce.agencia));
-      if(!splits.length) splits=(DATA.fee||[]).filter(f=>f.tipo===ce.qual); // fallback: agency-agnostic
-      if(!splits.length){ toast('That rateio has no categories configured. Set it in Budgets → Define / edit rateios.'); return; }
-      const totals=campMonthlyTotals(ce.id);
-      const alloc=[];
-      Object.keys(totals).forEach(m=>{ const v=+totals[m]||0; if(v<=0)return; splits.forEach(s=>{ alloc.push({projeto_id:ce.id,categoria:s.categoria||null,competencia:m+'-01',valor:Math.round(v*(+s.percentual||0))}); }); });
-      // replace this campaign's caps: drop old single-category caps + old splits, insert fresh split
-      await SBPO.from('tetos').delete().eq('projeto_id',ce.id);
-      await SBPO.from('rateio_alocacao').delete().eq('projeto_id',ce.id);
-      if(alloc.length){ const {error:ea}=await SBPO.from('rateio_alocacao').insert(alloc); if(ea)throw ea; }
-      const {error}=await SBPO.from('projetos').update({nome:ce.nome.trim(),agencia:ce.agencia||null,activity:'FEE',rateio:true,rateio_tipo:ce.qual||null,product_category:null}).eq('id',ce.id);
-      if(error)throw error;
+    if(false){
     }else{
       // normal campaign OR integral fee (100% to a single category, e.g. Fee MOB)
       await SBPO.from('rateio_alocacao').delete().eq('projeto_id',ce.id); // in case it was split before
@@ -1746,8 +1722,25 @@ function renderNotif(){
 /* ============================================================
    ESTÁGIO 3 — PO: solicitar com escolha de mês + realocação admin
    ============================================================ */
-let REQ=null; // {projeto_id, meses:[{competencia,teto}], competencia, valor, descricao}
+let REQ=null; // {mode:'single'|'split', projeto_id, splitAg, meses:[{competencia,teto}], competencia, valor, descricao}
 function poNome(id){ const p=DATA.poProjetos.find(x=>x.id===id); return p?p.nome:'—'; }
+/* Fee rateio (percentuais fixos por agência) — cada categoria já aponta para
+   a campanha real que consome aquele budget (Fee - <agência> TV/AC/LABG…).
+   Ao solicitar uma PO de Fee, o valor total é dividido pelos percentuais
+   configurados e uma PO é criada em cada campanha correspondente. */
+function feeSplitGroups(){
+  const byAg={};
+  (DATA.fee||[]).forEach(f=>{ if(!f.agencia||!f.categoria)return; (byAg[f.agencia]=byAg[f.agencia]||[]).push(f); });
+  const out=[];
+  Object.keys(byAg).forEach(ag=>{
+    const splits=byAg[ag].map(f=>{
+      const proj=DATA.poProjetos.find(p=>p.activity==='FEE'&&p.agencia===ag&&p.product_category===f.categoria&&p.aprovacao_status==='APROVADO');
+      return {categoria:f.categoria, percentual:+f.percentual||0, projeto_id:proj?proj.id:null, nome:proj?proj.nome:null};
+    });
+    if(splits.length && splits.every(s=>s.projeto_id)) out.push({agencia:ag, splits});
+  });
+  return out;
+}
 async function mesesDoProjeto(pid){
   const p=DATA.poProjetos.find(x=>x.id===pid);
   try{
@@ -1764,28 +1757,99 @@ async function mesesDoProjeto(pid){
 function consumoMes(pid,comp){
   return DATA.pos.filter(po=>po.projeto_id===pid&&String(po.competencia).slice(0,7)===String(comp).slice(0,7)&&!['REJEITADA','CANCELADA'].includes(po.status)).reduce((s,po)=>s+(+po.valor||0),0);
 }
-function openReqPO(){
+function projMonths(pid){ return DATA.tetos.filter(t=>t.projeto_id===pid).map(t=>({competencia:String(t.competencia).slice(0,10),teto:+t.teto})).sort((a,b)=>a.competencia.localeCompare(b.competencia)); }
+function reqOptions(){
   let projs=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO');
   if(PAPEL==='agencia'&&MINHA_AGENCIA) projs=projs.filter(p=>p.agencia===MINHA_AGENCIA);
-  REQ={projeto_id:projs[0]?projs[0].id:'',meses:[],competencia:'',valor:'',descricao:''};
-  renderReqPO(projs); if(REQ.projeto_id) reqLoadMeses();
+  const groups=feeSplitGroups().filter(g=>!(PAPEL==='agencia'&&MINHA_AGENCIA)||g.agencia===MINHA_AGENCIA);
+  const splitIds=new Set(groups.flatMap(g=>g.splits.map(s=>s.projeto_id)));
+  // the individual TV/AC/LABG fee campaigns are requested through their agency's split group, not directly
+  const single=projs.filter(p=>!splitIds.has(p.id));
+  return {single,groups};
+}
+function openReqPO(pid){
+  const {single,groups}=reqOptions();
+  if(pid){
+    const group=groups.find(g=>g.splits.some(s=>s.projeto_id===pid));
+    if(group){ REQ={mode:'split',projeto_id:'FEE::'+group.agencia,splitAg:group.agencia,meses:[],competencia:'',valor:'',descricao:''}; reqLoadMesesSplit(); return; }
+    if(single.some(p=>p.id===pid)){ REQ={mode:'single',projeto_id:pid,meses:[],competencia:'',valor:'',descricao:''}; renderReqPO(); reqLoadMeses(); return; }
+  }
+  REQ={mode:'single',projeto_id:single[0]?single[0].id:'',meses:[],competencia:'',valor:'',descricao:''};
+  renderReqPO(); if(REQ.projeto_id) reqLoadMeses();
 }
 async function reqLoadMeses(){
   REQ.meses=await mesesDoProjeto(REQ.projeto_id);
   REQ.competencia=REQ.meses[0]?REQ.meses[0].competencia:'';
-  let projs=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO'); if(PAPEL==='agencia'&&MINHA_AGENCIA)projs=projs.filter(p=>p.agencia===MINHA_AGENCIA);
-  renderReqPO(projs);
+  renderReqPO();
 }
-function reqSet(k,v){ if(!REQ)return; REQ[k]=v; if(k==='projeto_id'){ reqLoadMeses(); } else { let projs=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO'); if(PAPEL==='agencia'&&MINHA_AGENCIA)projs=projs.filter(p=>p.agencia===MINHA_AGENCIA); renderReqPO(projs); } }
-function renderReqPO(projs){
+function reqLoadMesesSplit(){
+  const group=feeSplitGroups().find(g=>g.agencia===REQ.splitAg); if(!group)return;
+  let comps=null;
+  group.splits.forEach(s=>{ const set=new Set(projMonths(s.projeto_id).map(m=>m.competencia)); comps=comps?new Set([...comps].filter(c=>set.has(c))):set; });
+  REQ.meses=[...(comps||[])].sort().map(competencia=>({competencia}));
+  REQ.competencia=REQ.meses[0]?REQ.meses[0].competencia:'';
+  renderReqPO();
+}
+function reqSet(k,v){
   if(!REQ)return;
-  const mSel=REQ.meses.find(m=>m.competencia===REQ.competencia);
-  const teto=mSel?mSel.teto:0, cons=REQ.competencia?consumoMes(REQ.projeto_id,REQ.competencia):0, saldo=teto-cons;
-  const val=+REQ.valor||0, estoura=val>saldo+0.001;
-  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:560px">
-    <div class="modal-h"><h3>Request PO</h3><button class="x" onclick="closeModal()">✕</button></div>
-    <div class="modal-b">
-      <div class="field"><label>Campaign</label><select onchange="reqSet('projeto_id',this.value)">${projs.map(p=>`<option value="${p.id}" ${REQ.projeto_id===p.id?'selected':''}>${esc(p.nome)}${p.agencia?' · '+esc(p.agencia):''}</option>`).join('')||'<option value="">—</option>'}</select></div>
+  if(k==='projeto_id'){
+    if(String(v).startsWith('FEE::')){ REQ.mode='split'; REQ.splitAg=v.slice(5); REQ.projeto_id=v; reqLoadMesesSplit(); }
+    else { REQ.mode='single'; REQ.projeto_id=v; reqLoadMeses(); }
+    return;
+  }
+  REQ[k]=v;
+  if(k==='competencia'&&REQ.mode==='split'){ renderReqPO(); return; }
+  renderReqPO();
+}
+function reqSplitBreakdown(){
+  const group=feeSplitGroups().find(g=>g.agencia===REQ.splitAg); if(!group)return [];
+  const total=+REQ.valor||0; const comp=REQ.competencia;
+  let running=0;
+  return group.splits.map((s,i)=>{
+    let valor=Math.round(total*s.percentual);
+    if(i===group.splits.length-1) valor=Math.round(total)-running; else running+=valor;
+    const teto=comp?(projMonths(s.projeto_id).find(m=>m.competencia===comp)||{}).teto||0:0;
+    const cons=comp?consumoMes(s.projeto_id,comp):0;
+    const saldo=teto-cons-valor;
+    return {...s,valor,teto,cons,saldo};
+  });
+}
+function renderReqPO(){
+  if(!REQ)return;
+  const {single,groups}=reqOptions();
+  const isSplit=REQ.mode==='split'&&groups.length;
+  const campOpts=`${single.map(p=>`<option value="${p.id}" ${REQ.projeto_id===p.id?'selected':''}>${esc(p.nome)}${p.agencia?' · '+esc(p.agencia):''}</option>`).join('')}${groups.map(g=>`<option value="FEE::${esc(g.agencia)}" ${REQ.projeto_id==='FEE::'+g.agencia?'selected':''}>Fee — ${esc(g.agencia)} (split ${g.splits.map(s=>s.categoria).join('/')})</option>`).join('')}`;
+  const campField=`<div class="field"><label>Campaign</label><select onchange="reqSet('projeto_id',this.value)">${campOpts||'<option value="">—</option>'}</select></div>`;
+  let body;
+  if(isSplit){
+    const rows=reqSplitBreakdown();
+    const val=+REQ.valor||0;
+    const estoura=rows.some(r=>r.saldo<-0.001);
+    body=`
+      ${campField}
+      <div class="field"><label>Month to allocate</label><select onchange="reqSet('competencia',this.value)">${REQ.meses.length?REQ.meses.map(m=>`<option value="${m.competencia}" ${REQ.competencia===m.competencia?'selected':''}>${fmtMes(m.competencia)}</option>`).join(''):'<option value="">No common month across TV/AC/LABG</option>'}</select></div>
+      <div class="field"><label>Total value (R$)</label><input type="number" min="0" step="100" value="${esc(REQ.valor)}" onchange="reqSet('valor',this.value)" placeholder="0,00"></div>
+      <div style="border:1px solid var(--line);border-radius:11px;overflow:hidden;margin-bottom:14px">
+        <div style="padding:9px 13px;background:#fbfaf7;border-bottom:1px solid var(--line);font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">Split by fixed percentage — same fee percentuals, one PO per campaign</div>
+        <div style="padding:10px 13px;display:flex;flex-direction:column;gap:8px">
+          ${rows.map(r=>`<div style="display:flex;align-items:center;gap:10px;font-size:12.5px">
+            <span style="width:52px;font-weight:700;color:var(--txt-2)">${esc(r.categoria)}</span>
+            <span style="width:44px;color:var(--txt-3)">${(r.percentual*100).toFixed(1)}%</span>
+            <span class="mono" style="flex:1;text-align:right;font-weight:700">${BRL(r.valor)}</span>
+            <span class="mono" style="width:130px;text-align:right;font-size:11px;color:${r.saldo<0?'var(--red)':'var(--txt-3)'}">saldo ${BRL(r.saldo)}</span>
+          </div>`).join('')}
+        </div>
+      </div>
+      <div class="field"><label>Description</label><input value="${esc(REQ.descricao)}" onchange="reqSet('descricao',this.value)" placeholder="e.g. Fee de agência — julho"></div>
+      <div style="font-size:11.5px;color:var(--txt-3);background:var(--paper-2);border:1px solid var(--line);border-radius:9px;padding:9px 12px;margin-bottom:14px">🗓 Estimated payment if requested today: <b style="color:var(--txt-2)">~${fmtDateObjBR(calcVencimento(new Date().toISOString().slice(0,10)))}</b> <span style="color:var(--txt-3)">(final date is confirmed once the invoice is posted)</span></div>
+      ${estoura?'<div class="banner" style="background:var(--red-bg);border-color:#f0b8b2;color:#b32418">One or more categories exceed the balance of the selected month.</div>':''}
+    `;
+  }else{
+    const mSel=REQ.meses.find(m=>m.competencia===REQ.competencia);
+    const teto=mSel?mSel.teto:0, cons=REQ.competencia?consumoMes(REQ.projeto_id,REQ.competencia):0, saldo=teto-cons;
+    const val=+REQ.valor||0, estoura=val>saldo+0.001;
+    body=`
+      ${campField}
       <div class="field"><label>Month to allocate (as opened in the project)</label>
         <select onchange="reqSet('competencia',this.value)">${REQ.meses.length?REQ.meses.map(m=>`<option value="${m.competencia}" ${REQ.competencia===m.competencia?'selected':''}>${fmtMes(m.competencia)} — cap ${BRL(m.teto)}</option>`).join(''):'<option value="">Project has no months registered</option>'}</select>
         ${REQ.competencia?`<div style="font-size:11.5px;color:${estoura?'var(--red)':'var(--txt-3)'};margin-top:5px">Month balance: <b class="mono">${BRL(saldo)}</b> (cap ${BRL(teto)} − consumed ${BRL(cons)})</div>`:''}</div>
@@ -1793,12 +1857,32 @@ function renderReqPO(projs){
       <div class="field"><label>Description</label><input value="${esc(REQ.descricao)}" onchange="reqSet('descricao',this.value)" placeholder="e.g. Video production, paid media…"></div>
       <div style="font-size:11.5px;color:var(--txt-3);background:var(--paper-2);border:1px solid var(--line);border-radius:9px;padding:9px 12px;margin-bottom:14px">🗓 Estimated payment if requested today: <b style="color:var(--txt-2)">~${fmtDateObjBR(calcVencimento(new Date().toISOString().slice(0,10)))}</b> <span style="color:var(--txt-3)">(final date is confirmed once the invoice is posted)</span></div>
       ${estoura?'<div class="banner" style="background:var(--red-bg);border-color:#f0b8b2;color:#b32418">O valor excede o balance do mês selecionado. Escolha outro mês ou reduza o valor.</div>':''}
-    </div>
+    `;
+  }
+  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:560px">
+    <div class="modal-h"><h3>Request PO</h3><button class="x" onclick="closeModal()">✕</button></div>
+    <div class="modal-b">${body}</div>
     <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" onclick="submitReqPO()">Submit request</button></div></div>
   </div></div>`;
 }
 async function submitReqPO(){
   if(!REQ)return;
+  if(REQ.mode==='split'){
+    if(!REQ.splitAg){ toast('Choose the agency.'); return; }
+    if(!REQ.competencia){ toast('Choose the allocation month.'); return; }
+    const val=+REQ.valor||0; if(val<=0){ toast('Enter a value.'); return; }
+    const rows=reqSplitBreakdown();
+    try{
+      for(const r of rows){
+        if(r.valor<=0)continue;
+        const {error}=await SBPO.rpc('solicitar_po',{p_projeto:r.projeto_id,p_competencia:REQ.competencia,p_agencia:REQ.splitAg,p_valor:r.valor,p_descricao:(REQ.descricao||'')+' — '+r.categoria});
+        if(error)throw error;
+      }
+      toast('PO split across '+rows.length+' categories for '+fmtMes(REQ.competencia)+' ✓'); closeModal();
+      await reloadPO(); go('pos');
+    }catch(e){ toast('Error: '+(e.message||e)); }
+    return;
+  }
   if(!REQ.projeto_id){ toast('Choose the campaign.'); return; }
   if(!REQ.competencia){ toast('Choose the allocation month.'); return; }
   const val=+REQ.valor||0; if(val<=0){ toast('Enter a value.'); return; }
@@ -2358,10 +2442,10 @@ function rateioTipos(){ const s=new Set((DATA.fee||[]).map(f=>f.tipo).filter(Boo
 function openCampNew(){
   const o0=(DATA.orcamentos||[])[0];
   const nowM=new Date().toISOString().slice(0,7);
-  CAMP={nome:'',orcamento_id:o0?o0.id:'',agencia:(agencyOpts()[0]||''),activity:'Campaign',rateio:false,qual:'',rows:[{id:uid(),mes:nowM,valor:''}]};
+  CAMP={nome:'',orcamento_id:o0?o0.id:'',agencia:(agencyOpts()[0]||''),activity:'Campaign',rows:[{id:uid(),mes:nowM,valor:''}]};
   renderCampForm();
 }
-function campSet(k,v){ if(!CAMP)return; CAMP[k]=(k==='rateio')?!!v:v; if(k==='activity'&&/fee/i.test(v)) CAMP.rateio=true; if(k==='rateio'&&!v)CAMP.qual=''; if(k==='rateio'&&v&&!CAMP.qual)CAMP.qual=rateioTipos()[0]||''; renderCampForm(); }
+function campSet(k,v){ if(!CAMP)return; CAMP[k]=v; renderCampForm(); }
 function campRowSet(id,k,v){ const r=CAMP.rows.find(x=>x.id===id); if(r)r[k]=v; }
 function campAddRow(){ const last=CAMP.rows[CAMP.rows.length-1]; const nm=last?last.mes:new Date().toISOString().slice(0,7); CAMP.rows.push({id:uid(),mes:nm,valor:''}); renderCampForm(); }
 function campDelRow(id){ CAMP.rows=CAMP.rows.filter(x=>x.id!==id); renderCampForm(); }
@@ -2379,8 +2463,7 @@ function renderCampForm(){
         <div class="field"><label>Activity</label><select onchange="campSet('activity',this.value)">${ACT_OPTS.map(a=>`<option ${CAMP.activity===a?'selected':''}>${a}</option>`).join('')}</select></div>
         <div class="field"><label>Agency</label><select onchange="CAMP.agencia=this.value">${ags.map(a=>`<option ${CAMP.agencia===a?'selected':''}>${esc(a)}</option>`).join('')}${ags.length?'':'<option value="">—</option>'}</select></div>
       </div>
-      <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper-2);cursor:pointer;margin-bottom:14px"><input type="checkbox" ${CAMP.rateio?'checked':''} onchange="campSet('rateio',this.checked)" style="width:16px;height:16px;accent-color:var(--po);margin-top:1px"><span style="font-size:12.5px">This is a <b>shared rateio</b> — single invoice, admin splits it across categories by fixed percentages</span></label>
-      ${CAMP.rateio?`<div class="field full"><label>Which rateio?</label><select onchange="campSet('qual',this.value)">${tipos.length?tipos.map(t=>`<option ${CAMP.qual===t?'selected':''}>${esc(t)}</option>`).join(''):'<option value="">— no fee split configured —</option>'}</select><div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">The rateio distributes each month's value across the category budgets — no single source budget is picked.</div></div>`:`<div class="field full"><label>Category <span style="font-weight:600;color:var(--txt-3)">(defines which budget funds it)</span></label><select onchange="campSet('orcamento_id',this.value)">${orcs.map(o=>`<option value="${o.id}" ${CAMP.orcamento_id===o.id?'selected':''}>${esc(o.nome||o.product_category)}</option>`).join('')||'<option value="">— no budget —</option>'}</select></div>`}
+      <div class="field full"><label>Category <span style="font-weight:600;color:var(--txt-3)">(defines which budget funds it)</span></label><select onchange="campSet('orcamento_id',this.value)">${orcs.map(o=>`<option value="${o.id}" ${CAMP.orcamento_id===o.id?'selected':''}>${esc(o.nome||o.product_category)}</option>`).join('')||'<option value="">— no budget —</option>'}</select>${/fee/i.test(CAMP.activity||'')?'<div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">Splitting a fee across categories (TV/AC/LABG…) is now done automatically when requesting the PO — create one campaign per category instead of a shared rateio.</div>':''}</div>
       <div style="border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:6px">
         <div style="padding:10px 14px;background:#fbfaf7;border-bottom:1px solid var(--line);font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">Budget distribution by month — manual</div>
         <div style="padding:10px 14px;display:flex;flex-direction:column;gap:8px">
@@ -2396,26 +2479,18 @@ function renderCampForm(){
 async function submitCamp(){
   if(!CAMP)return;
   if(!CAMP.nome.trim()){ toast('Give the campaign a name.'); return; }
-  if(!CAMP.orcamento_id && !CAMP.rateio){ toast('Choose a budget.'); return; }
+  if(!CAMP.orcamento_id){ toast('Choose a budget.'); return; }
   const rows=CAMP.rows.filter(r=>r.mes&&(+r.valor||0)>0);
   if(!rows.length){ toast('Add at least one month with a value.'); return; }
   const orc=(DATA.orcamentos||[]).find(o=>o.id===CAMP.orcamento_id); const cat=orc?(orc.product_category||orc.nome||''):'';
   try{
     let cc='',account='',account_desc='';
     try{ const {data:cls}=await SBPO.rpc('classificar',{p_d:cat,p_e:CAMP.activity||'',p_f:''}); const c=(cls&&cls[0])||{}; cc=c.cc||''; account=c.account||''; account_desc=c.descricao||''; }catch(e){}
-    const campos={nome:CAMP.nome.trim(),agencia:CAMP.agencia||null,orcamento_id:CAMP.orcamento_id,product_category:cat,activity:CAMP.activity||null,cc,account,account_desc,rateio:!!CAMP.rateio,rateio_tipo:(CAMP.rateio?(CAMP.qual||null):null),criado_por:'portal'};
+    const campos={nome:CAMP.nome.trim(),agencia:CAMP.agencia||null,orcamento_id:CAMP.orcamento_id,product_category:cat,activity:CAMP.activity||null,cc,account,account_desc,rateio:false,rateio_tipo:null,criado_por:'portal'};
     const {data:proj,error}=await SBPO.from('projetos').insert(campos).select().single();
     if(error)throw error;
     const pid=proj.id;
-    if(CAMP.rateio){
-      // split each month across the fee-split categories by fixed percentages (rateio)
-      let splits=(DATA.fee||[]).filter(f=>f.tipo===CAMP.qual&&(!CAMP.agencia||!f.agencia||f.agencia===CAMP.agencia));
-      if(!splits.length && CAMP.qual) splits=(DATA.fee||[]).filter(f=>f.tipo===CAMP.qual);
-      if(!splits.length) splits=[{categoria:cat,percentual:1}];
-      const alloc=[];
-      rows.forEach(r=>{ const v=+r.valor||0; splits.forEach(s=>{ alloc.push({projeto_id:pid,categoria:s.categoria||cat,competencia:r.mes+'-01',valor:Math.round(v*(+s.percentual||0))}); }); });
-      const {error:e2}=await SBPO.from('rateio_alocacao').insert(alloc); if(e2)throw e2;
-    }else{
+    {
       const tetos=rows.map(r=>({projeto_id:pid,competencia:r.mes+'-01',teto:Math.round(+r.valor),definido_por:'portal'}));
       const {error:e2}=await SBPO.from('tetos').upsert(tetos,{onConflict:'projeto_id,competencia'}); if(e2)throw e2;
     }
