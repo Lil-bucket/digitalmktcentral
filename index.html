@@ -312,6 +312,54 @@
     .top::before{opacity:.85}
     ::-webkit-scrollbar-thumb{background:#3a4150;border-color:var(--paper)}
   }
+
+  /* ============================================================
+     IMPECCABLE UPGRADE LAYER — tables, states, motion
+     ============================================================ */
+
+  /* — TABLES: visual column distinction — */
+  :root{--line-soft:rgba(16,19,25,.045)}
+  th+th,td+td{border-left:1px solid var(--line-soft)}          /* inner column hairlines */
+  tbody tr:nth-child(even) td{background:var(--paper-2)}       /* subtle zebra for scanning */
+  tbody tr:hover td{background:var(--paper)}
+  td:first-child{font-weight:600;color:var(--txt)}             /* key column carries the row */
+  td.td-num,th.th-num{text-align:right;font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  th.th-num{font-family:'DM Sans',sans-serif}
+  td.td-num{color:var(--txt)}
+  thead th{position:relative}
+  table{border-collapse:separate;border-spacing:0}
+
+  /* — SKELETON LOADING — */
+  .loading{display:block;height:auto;padding:28px 0;color:transparent;position:relative;overflow:hidden}
+  .loading::before{content:"";display:block;height:96px;border-radius:14px;margin-bottom:14px;
+    background:linear-gradient(90deg,var(--line) 25%,var(--paper-2) 45%,var(--line) 65%);
+    background-size:400% 100%;animation:shimmer 1.4s ease infinite}
+  .loading::after{content:"";display:block;height:220px;border-radius:14px;
+    background:linear-gradient(90deg,var(--line) 25%,var(--paper-2) 45%,var(--line) 65%);
+    background-size:400% 100%;animation:shimmer 1.4s ease infinite .15s}
+  @keyframes shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
+
+  /* — EMPTY STATES — */
+  .empty{border:1.5px dashed var(--line-2);border-radius:12px;margin:14px 16px;padding:34px 16px;background:var(--paper-2)}
+  .empty::before{content:"–  –  –";display:block;letter-spacing:.3em;color:var(--txt-3);opacity:.5;margin-bottom:8px;font-family:var(--mono)}
+
+  /* — MOTION: entrance & feedback (respects prefers-reduced-motion) — */
+  @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  @keyframes modalIn{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
+  @keyframes overlayIn{from{opacity:0}to{opacity:1}}
+  .view>*{animation:fadeUp .22s ease both}
+  .overlay{animation:overlayIn .18s ease both}
+  .modal{animation:modalIn .22s cubic-bezier(.2,.8,.3,1) both}
+  .gate-btn:active,.btn-ghost:active,.btn-del:active{transform:translateY(1px)}
+  .kpi,.panel{will-change:auto}
+  input,select,textarea{transition:border-color .15s,box-shadow .15s}
+  .field input:focus,.field select:focus,.field textarea:focus,.gate-inp:focus{box-shadow:0 0 0 3px rgba(232,67,46,.12)}
+
+  @media (prefers-color-scheme:dark){
+    :root{--line-soft:rgba(255,255,255,.05)}
+    tbody tr:nth-child(even) td{background:rgba(255,255,255,.018)}
+    tbody tr:hover td{background:var(--ink-2)}
+  }
 </style>
 </head>
 <body>
@@ -446,8 +494,29 @@ document.addEventListener('keydown',e=>{
   if(/^[1-9]$/.test(e.key)){ const btns=document.querySelectorAll('.side .nav-btn'); const b=btns[+e.key-1]; if(b){e.preventDefault();b.click();} }
 });
 
-/* A11y enhancer: JS-rendered content gets keyboard + screen-reader support */
+/* A11y + table enhancer: JS-rendered content gets keyboard, ARIA and column typing */
+const NUM_RE=/^\s*(R\$\s*)?-?[\d.,]+\s*%?\s*$|^\s*-?\s*R\$[\d.,\s]+$/;
+function enhanceTables(){
+  document.querySelectorAll('#view table:not([data-cols]),#modalMount table:not([data-cols])').forEach(tb=>{
+    const rows=tb.tBodies[0]?Array.from(tb.tBodies[0].rows).slice(0,8):[];
+    if(!rows.length)return;
+    const nCols=Math.max(...rows.map(r=>r.cells.length));
+    for(let c=0;c<nCols;c++){
+      const cells=rows.map(r=>r.cells[c]).filter(Boolean);
+      const filled=cells.filter(td=>td.textContent.trim());
+      if(!filled.length)continue;
+      const numeric=filled.filter(td=>NUM_RE.test(td.textContent)&&!td.querySelector('button,select,input'));
+      if(numeric.length/filled.length>=.7){
+        Array.from(tb.tBodies[0].rows).forEach(r=>r.cells[c]&&r.cells[c].classList.add('td-num'));
+        const th=tb.tHead&&tb.tHead.rows[0]&&tb.tHead.rows[0].cells[c];
+        if(th)th.classList.add('th-num');
+      }
+    }
+    tb.setAttribute('data-cols','1');
+  });
+}
 const _a11y=new MutationObserver(()=>{
+  enhanceTables();
   document.querySelectorAll('#view [onclick]:not([tabindex]),#modalMount [onclick]:not([tabindex])').forEach(el=>{
     const t=el.tagName;
     if(t==='BUTTON'||t==='A'||t==='INPUT'||t==='SELECT'||t==='TEXTAREA')return;
