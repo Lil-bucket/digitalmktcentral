@@ -6,25 +6,28 @@
 <title>TCL Platform — Work + Budget</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <style>
   :root{
-    --ink:#14161c; --ink-2:#1c1f28; --ink-3:#262a36;
-    --paper:#f4f3ef; --paper-2:#fbfaf7; --card:#fff;
-    --line:#e3e1da; --line-2:#d3d0c6;
-    --txt:#1a1c22; --txt-2:#5d6068; --txt-3:#8b8d95;
-    --accent:#ff5436; --accent-deep:#d83f24; --po:#e20613;
-    --green:#16a06a; --green-bg:#e4f5ec; --amber:#d68a04; --amber-bg:#fbf0d8;
-    --red:#e0392b; --red-bg:#fbe4e1; --violet:#6d4bd1; --violet-bg:#ece6fa;
-    --blue:#2f6fd8; --blue-bg:#e3edfb; --slate:#5d6068; --slate-bg:#ecebe6;
+    --ink:#101319; --ink-2:#181c25; --ink-3:#232936;
+    --paper:#f5f6f8; --paper-2:#fbfcfd; --card:#fff;
+    --line:#e6e8ec; --line-2:#d5d8df;
+    --txt:#171a20; --txt-2:#5b616c; --txt-3:#8a8f9a;
+    --accent:#e8432e; --accent-deep:#c92f1c; --po:#e20613;
+    --green:#149465; --green-bg:#e2f4ec; --amber:#c98204; --amber-bg:#faf0d9;
+    --red:#dc3427; --red-bg:#fbe5e2; --violet:#6a4bd4; --violet-bg:#ebe6fb;
+    --blue:#2e6bd6; --blue-bg:#e4edfb; --slate:#5b616c; --slate-bg:#eceef1;
     --mono:'JetBrains Mono',monospace;
+    --brand-grad:linear-gradient(90deg,#e8432e,#e20613);
+    --shadow-sm:0 1px 2px rgba(16,19,25,.05),0 1px 3px rgba(16,19,25,.04);
+    --shadow-md:0 2px 4px rgba(16,19,25,.04),0 8px 24px -8px rgba(16,19,25,.12);
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%}
   body{font-family:'DM Sans',system-ui,sans-serif;background:var(--paper);color:var(--txt);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
-  h1,h2,h3,h4{font-family:'Sora',sans-serif;letter-spacing:-.02em;font-weight:700}
+  h1,h2,h3,h4{font-family:'Bricolage Grotesque',sans-serif;letter-spacing:-.02em;font-weight:700}
   .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
   button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
   a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
@@ -35,7 +38,7 @@
   .gate{position:fixed;inset:0;z-index:200;background:var(--ink);display:none;align-items:center;justify-content:center;padding:24px}
   .gate.show{display:flex}
   .gate-card{background:var(--card);border-radius:18px;padding:38px 32px;max-width:390px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.45)}
-  .gate-logo{width:52px;height:52px;border-radius:13px;background:linear-gradient(135deg,#ff5436 50%,#e20613 50%);color:#fff;font-family:'Sora';font-weight:800;font-size:24px;display:grid;place-items:center;margin:0 auto 16px}
+  .gate-logo{width:52px;height:52px;border-radius:13px;background:linear-gradient(135deg,#e8432e 50%,#e20613 50%);color:#fff;font-family:'Bricolage Grotesque';font-weight:800;font-size:24px;display:grid;place-items:center;margin:0 auto 16px}
   .gate-card h2{font-size:20px;margin-bottom:6px}
   .gate-card p{font-size:13px;color:var(--txt-2);line-height:1.5;margin-bottom:20px}
   .gate-inp{width:100%;background:var(--paper);border:1px solid var(--line);color:var(--txt);border-radius:11px;padding:12px 14px;font:inherit;font-size:14px;margin-bottom:10px;outline:none}
@@ -52,8 +55,8 @@
   .app{display:flex;min-height:100vh}
   .side{width:228px;flex-shrink:0;background:var(--ink);color:#d6d8df;padding:20px 12px;display:flex;flex-direction:column;gap:2px;position:sticky;top:0;height:100vh}
   .brand{display:flex;align-items:center;gap:10px;padding:2px 8px 16px}
-  .brand .dot{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#ff5436 50%,#e20613 50%);display:grid;place-items:center;font-family:'Sora';font-weight:800;color:#fff;font-size:15px}
-  .brand b{font-family:'Sora';color:#fff;font-size:14px;font-weight:700;display:block;line-height:1.1}
+  .brand .dot{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#e8432e 50%,#e20613 50%);display:grid;place-items:center;font-family:'Bricolage Grotesque';font-weight:800;color:#fff;font-size:15px}
+  .brand b{font-family:'Bricolage Grotesque';color:#fff;font-size:14px;font-weight:700;display:block;line-height:1.1}
   .brand span{font-size:10px;color:#7e828e;letter-spacing:.06em;text-transform:uppercase}
   .nav-sec{font-size:9.5px;font-weight:800;letter-spacing:.15em;padding:12px 10px 5px}
   .nav-sec.work{color:var(--accent)} .nav-sec.budget{color:#ef7f88}
@@ -81,7 +84,7 @@
   .kpi{background:#fff;border:1px solid var(--line);border-radius:13px;padding:14px 14px 12px;position:relative;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)}
   .kpi .bar{position:absolute;left:0;top:0;bottom:0;width:4px}
   .kpi .lbl{font-size:10.5px;color:var(--txt-2);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
-  .kpi .num{font-family:'Sora';font-size:28px;font-weight:800;margin-top:7px;letter-spacing:-.03em}
+  .kpi .num{font-family:'Bricolage Grotesque';font-size:28px;font-weight:800;margin-top:7px;letter-spacing:-.03em}
   .kpi .meta{font-size:11px;color:var(--txt-3);margin-top:4px}
   .grid2{display:grid;grid-template-columns:1.45fr 1fr;gap:18px}
   .panel{background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)}
@@ -138,15 +141,13 @@
   .field{margin-bottom:14px}.field.full{grid-column:1/-1}
   .field label{display:block;font-size:12px;font-weight:600;color:var(--txt-2);margin-bottom:5px}
   .field input,.field select,.field textarea{width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px;color:var(--txt);outline:none}
-  .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px rgba(255,84,54,.12)}
+  .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px rgba(232,67,46,.12)}
   .btn-acc{padding:10px 18px;border-radius:9px;background:var(--accent);color:#fff;font-weight:700;font-size:13.5px}
   .btn-acc:hover{background:var(--accent-deep)}
   .btn-ghost{padding:10px 16px;border-radius:9px;font-weight:600;font-size:13.5px;color:var(--txt-2);border:1px solid var(--line-2)}
   .btn-ghost:hover{background:var(--paper)}
   .btn-del{padding:10px 16px;border-radius:9px;font-weight:600;font-size:13.5px;color:var(--red);border:1px solid #f0b8b2;background:#fff}
   .btn-del:hover{background:var(--red);color:#fff;border-color:var(--red)}
-  .btn-del{padding:10px 14px;border-radius:9px;font-weight:600;font-size:13px;color:var(--red)}
-  .btn-del:hover{background:var(--red-bg)}
   .atv{border:1px solid var(--line-2);border-radius:11px;padding:12px;margin-bottom:9px;background:#fff}
   .atv.done{background:#eef8f1;border-color:#bfe4d0}
   .atv-top{display:flex;align-items:center;gap:10px}
@@ -235,6 +236,82 @@
     .btn-ghost:hover,.modal-h .x:hover{background:var(--ink-2);color:var(--txt)}
     .chip-btn{color:var(--txt-2)}
   }
+
+  /* ============================================================
+     IMPECCABLE DESIGN LAYER — "porcelain & graphite"
+     Signature: the TCL dual-brand thread
+     ============================================================ */
+
+  h1,h2,h3,h4{letter-spacing:-.025em}
+
+  /* Signature thread: gradient hairline across the top of the app */
+  .top{position:sticky;border-bottom:1px solid var(--line)}
+  .top::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:var(--brand-grad)}
+
+  /* Sidebar: graphite, active item carries the thread */
+  .side{background:linear-gradient(180deg,#101319,#12161f)}
+  .nav-btn{border-radius:10px;position:relative;transition:background .15s,color .15s}
+  .nav-btn.on{background:var(--ink-3);color:#fff}
+  .nav-btn.on::before{content:"";position:absolute;left:-6px;top:8px;bottom:8px;width:3px;border-radius:3px;background:var(--brand-grad)}
+  .brand .dot{box-shadow:0 2px 8px rgba(0,0,0,.35)}
+  .side-foot button{transition:background .15s,color .15s}
+
+  /* KPI cards: quiet card, display number, thread as the color bar */
+  .kpi{border-radius:14px;box-shadow:var(--shadow-sm);transition:box-shadow .2s,transform .2s}
+  .kpi:hover{box-shadow:var(--shadow-md);transform:translateY(-1px)}
+  .kpi .bar{width:3px;border-radius:0 3px 3px 0}
+  .kpi .num{font-size:30px;font-weight:800;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+  .kpi .lbl{font-size:10px;letter-spacing:.08em}
+
+  /* Panels & tables: lighter chrome, content first */
+  .panel,.tbl-wrap{border-radius:14px;box-shadow:var(--shadow-sm)}
+  .panel-h{padding:15px 18px 13px}
+  .panel-h h3{font-size:13.5px;letter-spacing:-.01em}
+  th{font-size:10.5px;letter-spacing:.07em;color:var(--txt-3);background:transparent;border-bottom:1px solid var(--line-2)}
+  td{font-size:13px}
+  tbody tr{transition:background .12s}
+  .prog{height:5px;background:var(--line);width:100px}
+  .prog i{background-image:var(--brand-grad)}
+  .meter{height:20px;border-radius:8px}
+
+  /* Buttons: confident, quiet until needed */
+  .gate-btn,.btn-acc{transition:background .15s,box-shadow .15s,transform .1s}
+  .btn-acc{background:var(--po);box-shadow:0 2px 8px -2px rgba(226,6,19,.4)}
+  .btn-acc:hover{background:#c40511;transform:translateY(-1px)}
+  .btn-acc:active{transform:translateY(0)}
+  .btn-ghost{transition:background .15s,border-color .15s}
+  .btn-ghost:hover{border-color:var(--txt-3)}
+  .chip-btn{transition:border-color .15s,color .15s}
+
+  /* Badges: tighter, calmer */
+  .badge{font-size:11px;padding:3px 10px;letter-spacing:.01em}
+  .who{background:var(--ink-2)}
+
+  /* Modals & drawer: deeper elevation, softer entry */
+  .modal{border-radius:16px;box-shadow:0 32px 80px -24px rgba(16,19,25,.45)}
+  .modal-h h3{font-size:16px}
+  .overlay{background:rgba(16,19,25,.5);backdrop-filter:blur(3px)}
+  .gate-card{border-radius:20px}
+  .gate{background:radial-gradient(1200px 600px at 70% -10%,#1c2230,#101319)}
+
+  /* Toast: thread on the edge */
+  .toast{border-left:3px solid transparent;border-image:var(--brand-grad) 1;background:var(--ink);border-radius:0 11px 11px 0}
+
+  /* Scrollbar: slimmer */
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-thumb{background:#c8ccd4;border:2px solid var(--paper)}
+
+  @media (prefers-color-scheme:dark){
+    :root{
+      --paper:#101319;--paper-2:#161a22;--card:#191e28;
+      --line:#272c38;--line-2:#333a49;
+      --shadow-sm:0 1px 2px rgba(0,0,0,.3);
+      --shadow-md:0 8px 24px -8px rgba(0,0,0,.5);
+    }
+    .side{background:linear-gradient(180deg,#0b0e14,#0e121a)}
+    .top::before{opacity:.85}
+    ::-webkit-scrollbar-thumb{background:#3a4150;border-color:var(--paper)}
+  }
 </style>
 </head>
 <body>
@@ -246,17 +323,17 @@
     <h2>TCL Platform</h2>
     <p id="gateMsg">Sign in with your corporate email.</p>
     <div id="gateLogin">
-      <input id="liEmail" class="gate-inp" type="email" placeholder="seu.email@tclsemp.com.br" autocomplete="username" aria-label="E-mail corporativo">
-      <input id="liSenha" class="gate-inp" type="password" placeholder="Password" autocomplete="current-password" aria-label="Senha" onkeydown="if(event.key==='Enter')doLogin()">
+      <input id="liEmail" class="gate-inp" type="email" placeholder="seu.email@tclsemp.com.br" autocomplete="username" aria-label="Corporate email">
+      <input id="liSenha" class="gate-inp" type="password" placeholder="Password" autocomplete="current-password" aria-label="Password" onkeydown="if(event.key==='Enter')doLogin()">
       <button class="gate-btn" onclick="doLogin()">Sign in</button>
       <div class="gate-links"><a onclick="gateTo('primeiro')">First access</a><a onclick="gateTo('esqueci')">Forgot password</a></div>
     </div>
     <div id="gateCode" class="hide">
-      <input id="caEmail" class="gate-inp" type="email" placeholder="seu.email@tclsemp.com.br" autocomplete="username" aria-label="E-mail corporativo">
+      <input id="caEmail" class="gate-inp" type="email" placeholder="seu.email@tclsemp.com.br" autocomplete="username" aria-label="Corporate email">
       <button class="gate-btn" id="caSendBtn" onclick="sendCode()">Send code</button>
       <div id="caStep2" class="hide">
-        <input id="caCode" class="gate-inp" type="text" inputmode="numeric" placeholder="Code received by email" aria-label="Código recebido por e-mail" style="margin-top:10px">
-        <input id="caSenha" class="gate-inp" type="password" placeholder="Create a password (min. 6)" autocomplete="new-password" aria-label="Criar senha, mínimo 6 caracteres" onkeydown="if(event.key==='Enter')setPassword()">
+        <input id="caCode" class="gate-inp" type="text" inputmode="numeric" placeholder="Code received by email" aria-label="Code received by email" style="margin-top:10px">
+        <input id="caSenha" class="gate-inp" type="password" placeholder="Create a password (min. 6)" autocomplete="new-password" aria-label="Create a password, minimum 6 characters" onkeydown="if(event.key==='Enter')setPassword()">
         <button class="gate-btn" onclick="setPassword()">Set password and sign in</button>
       </div>
       <div class="gate-links"><a onclick="gateTo('login')">← Back to login</a></div>
@@ -266,7 +343,7 @@
 
 <!-- ===== APP ===== -->
 <div class="app" id="app" style="display:none">
-  <aside class="side" aria-label="Navegação principal">
+  <aside class="side" aria-label="Main navigation">
     <div class="brand"><div class="dot" aria-hidden="true">T</div><div><b>TCL Platform</b><span>Work + Budget</span></div></div>
     <div id="navGlobal"></div>
     <div id="navWork"></div>
@@ -274,12 +351,13 @@
     <div class="side-foot">
       <div class="acct"><span class="av" id="acctAv">?</span><span id="acctEmail">—</span></div>
       <div id="poDiag" style="font-size:10px;color:#7e828e;padding:0 10px 4px"></div>
+      <button onclick="showHelp()">Help &amp; shortcuts <span style="float:right;opacity:.6" class="mono">?</span></button>
       <button onclick="signOut()">Sign out</button>
     </div>
   </aside>
   <main class="main">
     <header class="top">
-      <div class="tl"><button class="menu-btn" aria-label="Abrir menu de navegação" aria-expanded="false" onclick="toggleSide()">☰</button><span class="barcol" id="barcol" aria-hidden="true"></span><div><h1 id="scrTitle">Dashboard</h1><div class="sub" id="scrSub"></div></div></div>
+      <div class="tl"><button class="menu-btn" aria-label="Open navigation menu" aria-expanded="false" onclick="toggleSide()">☰</button><span class="barcol" id="barcol" aria-hidden="true"></span><div><h1 id="scrTitle">Dashboard</h1><div class="sub" id="scrSub"></div></div></div>
       <div id="ctaBox"></div>
     </header>
     <section class="view" id="view"><div class="loading">Loading…</div></section>
@@ -293,6 +371,41 @@
 /* ============================================================
    IMPECCABLE UI SHELL — mobile nav + keyboard (no data logic)
    ============================================================ */
+/* Chart.js global defaults — clean, objective charts (presentation only) */
+if(window.Chart){
+  const D=window.Chart.defaults;
+  D.font.family="'DM Sans',system-ui,sans-serif";
+  D.font.size=11.5;
+  D.color='#8a8f9a';
+  D.plugins.legend.position='bottom';
+  D.plugins.legend.labels.boxWidth=10;
+  D.plugins.legend.labels.boxHeight=10;
+  D.plugins.legend.labels.usePointStyle=true;
+  D.plugins.legend.labels.pointStyle='rectRounded';
+  D.plugins.legend.labels.padding=14;
+  D.plugins.tooltip.backgroundColor='#101319';
+  D.plugins.tooltip.titleFont={family:"'DM Sans'",weight:'700',size:12};
+  D.plugins.tooltip.bodyFont={family:"'JetBrains Mono',monospace",size:11.5};
+  D.plugins.tooltip.padding=10;
+  D.plugins.tooltip.cornerRadius=8;
+  D.plugins.tooltip.displayColors=true;
+  D.plugins.tooltip.boxPadding=4;
+  D.elements.bar.borderRadius=5;
+  D.elements.bar.borderSkipped='bottom';
+  D.elements.line.tension=0.35;
+  D.elements.line.borderWidth=2;
+  D.elements.point.radius=2.5;
+  D.elements.point.hoverRadius=5;
+  D.elements.arc.borderWidth=2;
+  D.elements.arc.borderColor='#fff';
+  D.scale.grid={color:'rgba(16,19,25,.055)',drawTicks:false};
+  D.scale.border={display:false};
+  D.scale.ticks={padding:8};
+  if(D.scales&&D.scales.category)D.scales.category.grid={display:false};
+  const mq=window.matchMedia('(prefers-color-scheme: dark)');
+  const applyDark=d=>{ D.color=d?'#8a8f9a':'#8a8f9a'; D.scale.grid.color=d?'rgba(255,255,255,.06)':'rgba(16,19,25,.055)'; D.elements.arc.borderColor=d?'#191e28':'#fff'; };
+  applyDark(mq.matches); mq.addEventListener&&mq.addEventListener('change',e=>applyDark(e.matches));
+}
 function toggleSide(force){
   const s=document.querySelector('.side'),b=document.getElementById('sideBackdrop'),btn=document.querySelector('.menu-btn');
   const open=typeof force==='boolean'?force:!s.classList.contains('open');
@@ -309,6 +422,71 @@ document.addEventListener('keydown',e=>{
 document.addEventListener('click',e=>{
   if(window.innerWidth<=768&&e.target.closest('.side .nav-btn'))toggleSide(false);
 });
+
+/* Friendly error messages — raw backend errors stay in the console */
+function friendlyErr(e){
+  const m=String((e&&e.message)||e||''); console.error(e);
+  if(/foreign key|violates/i.test(m))return 'This item is linked to other records and can\u2019t be changed. Remove the linked items first.';
+  if(/duplicate|unique/i.test(m))return 'This entry already exists.';
+  if(/permission|policy|rls|denied/i.test(m))return 'You don\u2019t have permission for this action.';
+  if(/failed to fetch|network|timeout/i.test(m))return 'Connection issue \u2014 check your network and try again.';
+  if(/jwt|token|expired|session/i.test(m))return 'Your session expired. Please sign in again.';
+  return 'Something went wrong. Please try again.'+(m?' ('+m.slice(0,70)+')':'');
+}
+
+/* Keyboard shortcuts (skip while typing or inside a modal) */
+document.addEventListener('keydown',e=>{
+  const tag=(e.target.tagName||'').toLowerCase();
+  if(['input','textarea','select'].includes(tag)||e.target.isContentEditable)return;
+  if(e.metaKey||e.ctrlKey||e.altKey)return;
+  const modalOpen=document.getElementById('modalMount').innerHTML.trim();
+  if(e.key==='?'){ e.preventDefault(); showHelp(); return; }
+  if(modalOpen)return;
+  if(e.key==='n'||e.key==='N'){ const b=document.querySelector('#ctaBox button'); if(b){e.preventDefault();b.click();} return; }
+  if(/^[1-9]$/.test(e.key)){ const btns=document.querySelectorAll('.side .nav-btn'); const b=btns[+e.key-1]; if(b){e.preventDefault();b.click();} }
+});
+
+/* A11y enhancer: JS-rendered content gets keyboard + screen-reader support */
+const _a11y=new MutationObserver(()=>{
+  document.querySelectorAll('#view [onclick]:not([tabindex]),#modalMount [onclick]:not([tabindex])').forEach(el=>{
+    const t=el.tagName;
+    if(t==='BUTTON'||t==='A'||t==='INPUT'||t==='SELECT'||t==='TEXTAREA')return;
+    el.setAttribute('tabindex','0'); el.setAttribute('role','button');
+  });
+  document.querySelectorAll('#view canvas:not([role])').forEach(cv=>{
+    cv.setAttribute('role','img');
+    const h=cv.closest('.panel')&&cv.closest('.panel').querySelector('.panel-h h3');
+    cv.setAttribute('aria-label',(h?h.textContent+' — ':'')+'chart. Data available in the tables on this page.');
+  });
+});
+_a11y.observe(document.body,{childList:true,subtree:true});
+document.addEventListener('keydown',e=>{
+  if((e.key==='Enter'||e.key===' ')&&e.target.matches&&e.target.matches('[role="button"][onclick]')){e.preventDefault();e.target.click();}
+});
+
+/* Help modal — static, uses the app's own modal styles */
+function showHelp(){
+  document.getElementById('modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeHelp()"><div class="modal" style="max-width:560px" role="dialog" aria-label="Help">
+    <div class="modal-h"><h3>Help &amp; shortcuts</h3><button class="x" aria-label="Close" onclick="closeHelp()">\u2715</button></div>
+    <div class="modal-b" style="font-size:13px;line-height:1.7">
+      <b style="display:block;margin-bottom:6px">Keyboard shortcuts</b>
+      <div style="display:grid;grid-template-columns:110px 1fr;gap:4px 14px;margin-bottom:16px">
+        <span class="mono">1\u20139</span><span>Jump to a section in the sidebar</span>
+        <span class="mono">N</span><span>Primary action of the current screen (e.g. new project / PO)</span>
+        <span class="mono">Esc</span><span>Close the open dialog or menu</span>
+        <span class="mono">?</span><span>Open this help</span>
+      </div>
+      <b style="display:block;margin-bottom:6px">PO lifecycle</b>
+      <p style="color:var(--txt-2);margin-bottom:14px">Every PO moves through 4 phases: <b>Requested</b> \u2192 <b>Approved</b> \u2192 <b>Invoicing</b> \u2192 <b>Completed</b>. The stepper on each PO card shows exactly where it stands.</p>
+      <b style="display:block;margin-bottom:6px">Budgets</b>
+      <p style="color:var(--txt-2);margin-bottom:14px">One budget per product category (TV, AC, MOB, REF, WG, LABG). Fee splits (rateio) distribute shared invoices across categories by fixed percentages.</p>
+      <b style="display:block;margin-bottom:6px">Project stages</b>
+      <p style="color:var(--txt-2)">Stages advance automatically from task progress. Open any project and use the stage guide (\u201cWhat does this stage mean?\u201d) for details.</p>
+    </div>
+    <div class="modal-f"><span></span><button class="btn-ghost" onclick="closeHelp()">Close</button></div>
+  </div></div>`;
+}
+function closeHelp(){ if(typeof closeModal==='function'){closeModal();} else {document.getElementById('modalMount').innerHTML='';} }
 </script>
 <script>
 /* ============================================================
@@ -333,7 +511,7 @@ let TEAM=[];
 let SCREEN='dash';
 
 /* domain models (do painel) */
-const STAGES=[{id:'briefing',name:'Briefing',color:'#8b8d95'},{id:'producao',name:'In Production',color:'#2f6fd8'},{id:'revisao',name:'Review/Approval',color:'#d68a04'},{id:'ajustes',name:'Adjustments',color:'#6d4bd1'},{id:'entrega',name:'Delivery',color:'#16a06a'},{id:'concluido',name:'Completed',color:'#5d6068'}];
+const STAGES=[{id:'briefing',name:'Briefing',color:'#8a8f9a'},{id:'producao',name:'In Production',color:'#2e6bd6'},{id:'revisao',name:'Review/Approval',color:'#c98204'},{id:'ajustes',name:'Adjustments',color:'#6a4bd4'},{id:'entrega',name:'Delivery',color:'#149465'},{id:'concluido',name:'Completed',color:'#5d6068'}];
 const STAGE_DESCS_DEFAULT={
   briefing:'Objectives, scope and creative direction are being defined with the team.',
   producao:'Assets/creative are in active production by the responsible team or agency.',
@@ -351,7 +529,7 @@ const PO_STATUS={
   FATURADA:{t:'Invoiced',c:'s-amber',icon:'💰'}, VALIDADA:{t:'Validated',c:'s-green',icon:'✓'},
   CONCLUIDA:{t:'Completed',c:'s-green',icon:'✔'}, CANCELADA:{t:'Cancelled',c:'s-slate',icon:'✕'}
 };
-const AV_COLORS=['#ff5436','#2f6fd8','#6d4bd1','#16a06a','#e20613','#d68a04','#0ea5a5','#bd9f68'];
+const AV_COLORS=['#e8432e','#2e6bd6','#6a4bd4','#149465','#e20613','#c98204','#0ea5a5','#bd9f68'];
 
 /* Ciclo de vida da PO em 4 fases (substitui 9 badges crus) */
 const PO_PHASES=['Requested','Approved','Invoicing','Completed'];
@@ -362,11 +540,11 @@ function poStepperHTML(st){
   const cur=done<4?done+1:0;
   let dots='';
   for(let i=1;i<=4;i++){
-    const dst=i<=done?'background:#16a06a;color:#fff':(i===cur?'background:#fff;border:2.5px solid #cf8a16;color:#cf8a16':'background:#f0eee8;color:#8b8d95');
+    const dst=i<=done?'background:#149465;color:#fff':(i===cur?'background:#fff;border:2.5px solid #cf8a16;color:#cf8a16':'background:#eceef1;color:#8a8f9a');
     dots+=`<span style="width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:800;flex-shrink:0;${dst}">${i<=done?'✓':i}</span>`;
-    if(i<4)dots+=`<span style="flex:1;height:3px;background:${i<=done?'#16a06a':'#f0eee8'}"></span>`;
+    if(i<4)dots+=`<span style="flex:1;height:3px;background:${i<=done?'#149465':'#eceef1'}"></span>`;
   }
-  const labs=PO_PHASES.map((l,ix)=>{const i=ix+1;const c=i<=done?'#16a06a':(i===cur?'#cf8a16':'#8b8d95');return `<span style="color:${c}">${l}</span>`;}).join('');
+  const labs=PO_PHASES.map((l,ix)=>{const i=ix+1;const c=i<=done?'#149465':(i===cur?'#cf8a16':'#8a8f9a');return `<span style="color:${c}">${l}</span>`;}).join('');
   return `<div style="display:flex;align-items:center;margin-top:10px">${dots}</div><div style="display:flex;justify-content:space-between;font-size:10px;font-weight:700;margin-top:5px">${labs}</div>`;
 }
 
@@ -381,12 +559,12 @@ const TYPES=[
 function typeOf(i){return TYPES.find(t=>t.id===i)||TYPES[TYPES.length-1];}
 /* Tipo de Projeto (classificação de negócio, usada em filtros/relatórios) */
 const BUSINESS_TYPES=[
-  {id:'campanha',name:'Campaign',color:'#ff5436'},
-  {id:'midia',name:'Media',color:'#2f6fd8'},
-  {id:'social',name:'Social',color:'#6d4bd1'},
-  {id:'kol',name:'KOL',color:'#d68a04'},
-  {id:'evento',name:'Event',color:'#16a06a'},
-  {id:'pr',name:'PR',color:'#8b8d95'}
+  {id:'campanha',name:'Campaign',color:'#e8432e'},
+  {id:'midia',name:'Media',color:'#2e6bd6'},
+  {id:'social',name:'Social',color:'#6a4bd4'},
+  {id:'kol',name:'KOL',color:'#c98204'},
+  {id:'evento',name:'Event',color:'#149465'},
+  {id:'pr',name:'PR',color:'#8a8f9a'}
 ];
 function businessTypeOf(id){return BUSINESS_TYPES.find(b=>b.id===id)||null;}
 let PTIPO_FILTER='';
@@ -702,10 +880,10 @@ function navBadge(id){
 function buildNav(){
   const nav=currentNav();
   let gh='';
-  (nav.global||[]).forEach(id=>gh+=navBtn({id,label:W_LABELS[id]||id,badge:navBadge(id)},'#8b8d95'));
+  (nav.global||[]).forEach(id=>gh+=navBtn({id,label:W_LABELS[id]||id,badge:navBadge(id)},'#8a8f9a'));
   $('#navGlobal').innerHTML=gh;
   let html='<div class="nav-sec work">WORK</div>';
-  nav.work.forEach(id=>html+=navBtn({id,label:W_LABELS[id]||id,badge:navBadge(id)},'#ff5436'));
+  nav.work.forEach(id=>html+=navBtn({id,label:W_LABELS[id]||id,badge:navBadge(id)},'#e8432e'));
   $('#navWork').innerHTML=html;
   if(PO_ACCESS && nav.budget.length){
     let bh='<div class="nav-sec budget">BUDGET</div>';
@@ -745,7 +923,7 @@ function go(screen){
   if(!valid.includes(screen)) screen=valid[0]||'dash';
   SCREEN=screen; buildNav();
   const meta=SCREEN_META[screen]||{t:'',s:'',mod:'work'};
-  const col=meta.mod==='budget'?'#e20613':'#ff5436';
+  const col=meta.mod==='budget'?'#e20613':'#e8432e';
   $('#scrTitle').textContent=meta.t; $('#scrSub').textContent=meta.s; $('#barcol').style.background=col;
   // CTA per screen (mirrors the prototype)
   if(['dash','board','list','timeline'].includes(screen)){
@@ -784,7 +962,7 @@ function destroyCharts(){_charts.forEach(c=>{try{c.destroy();}catch(e){}});_char
 function buildDashCharts(){
   const el=document.getElementById('chartStatus'); if(!el||!window.Chart)return;
   const list=DATA.projetos;
-  const defs=[['On track','no_prazo','#16a06a'],['At risk','atencao','#d68a04'],['Late','atrasado','#e0392b'],['Blocked','bloqueado','#6d4bd1'],['Completed','concluido','#5d6068']];
+  const defs=[['On track','no_prazo','#149465'],['At risk','atencao','#c98204'],['Late','atrasado','#dc3427'],['Blocked','bloqueado','#6a4bd4'],['Completed','concluido','#5d6068']];
   const vals=defs.map(d=>list.filter(p=>p.status===d[1]).length);
   _charts.push(new Chart(el,{type:'doughnut',data:{labels:defs.map(d=>d[0]),datasets:[{data:vals,backgroundColor:defs.map(d=>d[2]),borderWidth:2,borderColor:'#fff'}]},options:{cutout:'62%',plugins:{legend:{position:'right',labels:{font:{family:'DM Sans',size:12},boxWidth:12,padding:10}}}}}));
 }
@@ -860,12 +1038,12 @@ function renderProjetos(){
     <div style="display:grid;grid-template-columns:1.7fr 1fr 1.1fr 1fr 1.2fr .7fr;gap:10px;padding:11px 17px;background:#fbfaf7;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">
       <span>Project</span><span>Owner</span><span>Stage</span><span>Health</span><span>Progress</span><span>Due</span></div>
     ${list.map(p=>{const stg=stageOf(p.etapa);const hp=healthPill(p.status);const di=deadlineInfo(p);const pr=computeProg(p);const bt=businessTypeOf(p.ptipo);
-      return `<div onclick="openProj('${esc(p.id)}')" style="display:grid;grid-template-columns:1.7fr 1fr 1.1fr 1fr 1.2fr .7fr;gap:10px;padding:13px 17px;border-bottom:1px solid #f0eee8;align-items:center;font-size:13px;cursor:pointer" onmouseover="this.style.background='#faf9f5'" onmouseout="this.style.background=''">
+      return `<div onclick="openProj('${esc(p.id)}')" style="display:grid;grid-template-columns:1.7fr 1fr 1.1fr 1fr 1.2fr .7fr;gap:10px;padding:13px 17px;border-bottom:1px solid #eceef1;align-items:center;font-size:13px;cursor:pointer" onmouseover="this.style.background='#faf9f5'" onmouseout="this.style.background=''">
         <span style="min-width:0"><span style="font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span><span style="font-size:11px;color:var(--txt-3);display:flex;align-items:center;gap:6px">${bt?`<span style="font-weight:800;color:${bt.color}">${esc(bt.name)}</span> · `:''}${esc(p.partner||p.marca||'')}</span></span>
         <span style="display:flex;align-items:center;gap:7px;min-width:0"><span class="avatar" style="background:${avColor(p.resp)};width:22px;height:22px;font-size:9.5px">${initials(p.resp)}</span><span style="color:var(--txt-2);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.resp||'—')}</span></span>
         <span style="color:var(--txt-2);font-size:12.5px">${stg.name}</span>
         <span><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;background:${hp.bg};color:${hp.fg}"><span style="width:6px;height:6px;border-radius:50%;background:${hp.dot}"></span>${hp.name}</span></span>
-        <span style="display:flex;align-items:center;gap:8px"><span style="flex:1;height:6px;background:#f0eee8;border-radius:6px;overflow:hidden;min-width:40px"><span style="display:block;height:100%;width:${pr}%;background:${hp.dot}"></span></span><span class="mono" style="font-size:11px;color:var(--txt-2)">${pr}%</span></span>
+        <span style="display:flex;align-items:center;gap:8px"><span style="flex:1;height:6px;background:#eceef1;border-radius:6px;overflow:hidden;min-width:40px"><span style="display:block;height:100%;width:${pr}%;background:${hp.dot}"></span></span><span class="mono" style="font-size:11px;color:var(--txt-2)">${pr}%</span></span>
         <span class="mono" style="font-size:11.5px;color:${di.color}">${di.txt}</span>
       </div>`;
     }).join('')}</div>`;
@@ -880,7 +1058,7 @@ function openProjNew(){
 }
 
 /* Quadro (kanban) por etapa */
-function healthPill(sid){const M={no_prazo:{name:'On track',bg:'#e4f5ec',fg:'#0c7048',dot:'#16a06a'},atencao:{name:'At risk',bg:'#fbf0d8',fg:'#9c6404',dot:'#d68a04'},atrasado:{name:'Late',bg:'#fbe4e1',fg:'#b32418',dot:'#e0392b'},bloqueado:{name:'Blocked',bg:'#ece6fa',fg:'#5535ad',dot:'#6d4bd1'},concluido:{name:'Completed',bg:'#e3edfb',fg:'#1f53a8',dot:'#2f6fd8'}};return M[sid]||M.no_prazo;}
+function healthPill(sid){const M={no_prazo:{name:'On track',bg:'#e4f5ec',fg:'#0c7048',dot:'#149465'},atencao:{name:'At risk',bg:'#fbf0d8',fg:'#9c6404',dot:'#c98204'},atrasado:{name:'Late',bg:'#fbe4e1',fg:'#b32418',dot:'#dc3427'},bloqueado:{name:'Blocked',bg:'#ece6fa',fg:'#5535ad',dot:'#6a4bd4'},concluido:{name:'Completed',bg:'#e3edfb',fg:'#1f53a8',dot:'#2e6bd6'}};return M[sid]||M.no_prazo;}
 async function editStageDesc(stageId){
   if(PAPEL!=='admin'&&!isManager){ toast('Only admin can edit column descriptions.'); return; }
   const stg=STAGES.find(s=>s.id===stageId); if(!stg)return;
@@ -899,11 +1077,11 @@ async function editStageDesc(stageId){
 }
 function openStageGuide(){
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:600px">
-    <div class="modal-h"><h3>❔ How project stages work</h3><button class="x" aria-label="Fechar" onclick="closeModal()">✕</button></div>
+    <div class="modal-h"><h3>❔ How project stages work</h3><button class="x" aria-label="Close" onclick="closeModal()">✕</button></div>
     <div class="modal-b">
       <div style="font-size:12.5px;color:var(--txt-3);margin-bottom:14px">What is considered for a project to be in each stage — used across Board, List and Timeline.</div>
       ${STAGES.map(s=>`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;margin-bottom:10px">
-        <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px"><span style="width:8px;height:17px;border-radius:3px;background:${s.color}"></span><b style="font-family:Sora,sans-serif;font-size:14px">${s.name}</b>${(PAPEL==='admin'||isManager)?`<button onclick="editStageDesc('${s.id}').then(openStageGuide)" style="margin-left:auto;border:none;background:none;color:var(--txt-3);cursor:pointer;font-size:11px">✎ edit</button>`:''}</div>
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px"><span style="width:8px;height:17px;border-radius:3px;background:${s.color}"></span><b style="font-family:'Bricolage Grotesque',sans-serif;font-size:14px">${s.name}</b>${(PAPEL==='admin'||isManager)?`<button onclick="editStageDesc('${s.id}').then(openStageGuide)" style="margin-left:auto;border:none;background:none;color:var(--txt-3);cursor:pointer;font-size:11px">✎ edit</button>`:''}</div>
         <div style="font-size:13px;color:var(--txt-2);line-height:1.5">${esc(STAGE_DESCS[s.id]||'—')}</div>
       </div>`).join('')}
     </div>
@@ -940,7 +1118,7 @@ function renderKanban(){
     const items=list.filter(p=>p.etapa===stg.id);
     return `<div ondragover="dragOverCol(event)" ondrop="dropOnStage(event,'${stg.id}')" style="background:var(--paper-2);border:1px solid var(--line);border-radius:13px;width:250px;flex-shrink:0">
       <div style="padding:12px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line)">
-        <span style="display:flex;align-items:center;gap:8px;font-weight:700;font-family:Sora;font-size:13px"><span style="width:8px;height:17px;border-radius:3px;background:${stg.color}"></span>${stg.name}
+        <span style="display:flex;align-items:center;gap:8px;font-weight:700;font-family:'Bricolage Grotesque';font-size:13px"><span style="width:8px;height:17px;border-radius:3px;background:${stg.color}"></span>${stg.name}
           <span title="${esc(STAGE_DESCS[stg.id]||'')}" style="width:15px;height:15px;border-radius:50%;background:#fff;border:1px solid var(--line-2);color:var(--txt-3);font-size:9.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;cursor:help">i</span>
           ${(PAPEL==='admin'||isManager)?`<button onclick="editStageDesc('${stg.id}')" title="Edit description" style="border:none;background:none;color:var(--txt-3);cursor:pointer;font-size:10.5px;padding:0">✎</button>`:''}
         </span>
@@ -953,7 +1131,7 @@ function renderKanban(){
           <div style="font-size:11px;color:var(--txt-3);margin-top:5px">${esc(p.partner||p.marca||'')}</div>
           ${cats.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${cats.slice(0,3).map(c=>`<span style="font-size:9.5px;font-weight:700;color:var(--txt-2);background:var(--paper);border:1px solid var(--line-2);border-radius:20px;padding:2px 7px">${esc(c)}</span>`).join('')}${cats.length>3?`<span style="font-size:9.5px;font-weight:700;color:var(--txt-3);padding:2px 4px">+${cats.length-3}</span>`:''}</div>`:''}
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px"><span style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:20px;background:${hp.bg};color:${hp.fg}"><span style="width:6px;height:6px;border-radius:50%;background:${hp.dot}"></span>${hp.name}</span><span class="avatar" style="width:22px;height:22px;background:${avColor(p.resp)};font-size:9.5px" title="${esc(p.resp||'')}">${initials(p.resp)}</span></div>
-          <div style="height:5px;background:#f0eee8;border-radius:6px;overflow:hidden;margin-top:9px"><span style="display:block;height:100%;width:${pr}%;background:${hp.dot};border-radius:6px"></span></div>
+          <div style="height:5px;background:#eceef1;border-radius:6px;overflow:hidden;margin-top:9px"><span style="display:block;height:100%;width:${pr}%;background:${hp.dot};border-radius:6px"></span></div>
           <div style="font-size:10.5px;color:var(--txt-3);font-weight:600;margin-top:6px">${tt} task(s) · due ${di.txt}</div></div>`;
       }).join('')||'<div style="padding:16px 8px;font-size:12px;color:var(--txt-3);text-align:center">Empty</div>'}</div></div>`;
   }).join('')}</div>`;
@@ -968,14 +1146,14 @@ function renderAprovacoes(){
   if(PAPEL==='agencia'&&MINHA_AGENCIA) posPend=posPend.filter(po=>po.agencia===MINHA_AGENCIA);
   const canAprova=['admin','marketing','financeiro'].includes(PAPEL)||isManager;
   const campCol=`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-    <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px"><b style="font-family:Sora,sans-serif;font-size:14px">Campaigns awaiting approval</b>${projPend.length?`<span style="background:var(--po);color:#fff;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800">${projPend.length}</span>`:''}</div>
+    <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px"><b style="font-family:'Bricolage Grotesque',sans-serif;font-size:14px">Campaigns awaiting approval</b>${projPend.length?`<span style="background:var(--po);color:#fff;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800">${projPend.length}</span>`:''}</div>
     <div style="padding:12px 16px;display:flex;flex-direction:column;gap:10px">${projPend.length?projPend.map(p=>`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;background:#fbfaf7">
       <div style="display:flex;justify-content:space-between;gap:10px"><b style="font-size:13px">${esc(p.nome)}</b><span class="mono" style="font-size:12px">${BRL(tetoBy[p.id]||0)}</span></div>
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">${esc(p.agencia||'')} · ${esc(p.product_category||'')} · ${esc(p.activity||'')}</div>
       ${canAprova?`<div style="display:flex;gap:7px;margin-top:10px"><button onclick="aprovarCamp('${esc(p.id)}')" style="padding:7px 14px;border-radius:8px;border:none;background:var(--po);color:#fff;font-weight:700;font-size:12px;cursor:pointer">Approve</button><button onclick="rejeitarCamp('${esc(p.id)}')" style="padding:7px 14px;border-radius:8px;border:1px solid var(--line-2);background:#fff;color:var(--txt-2);font-weight:700;font-size:12px;cursor:pointer">Reject</button></div>`:''}
     </div>`).join(''):'<div class="empty">No pending campaigns.</div>'}</div></div>`;
   const poCol=`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-    <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px"><b style="font-family:Sora,sans-serif;font-size:14px">POs awaiting decision</b>${posPend.length?`<span style="background:var(--po);color:#fff;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800">${posPend.length}</span>`:''}</div>
+    <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px"><b style="font-family:'Bricolage Grotesque',sans-serif;font-size:14px">POs awaiting decision</b>${posPend.length?`<span style="background:var(--po);color:#fff;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800">${posPend.length}</span>`:''}</div>
     <div style="padding:12px 16px;display:flex;flex-direction:column;gap:10px">${posPend.length?posPend.map(po=>`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;background:#fbfaf7">
       <div style="display:flex;justify-content:space-between;gap:10px"><b style="font-size:13px">${esc(nomeBy[po.projeto_id]||'—')}</b><span class="mono" style="font-size:12px">${BRL(po.valor)}</span></div>
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">${esc(po.agencia||'')} · ${fmtMes(po.competencia)} · ${esc(po.descricao||'')}</div>
@@ -990,15 +1168,15 @@ function renderAprovacoes(){
 const CONS=['FATURADA','VALIDADA','CONCLUIDA'], COMP=['APROVADA','PO_GERADA','ATUALIZAR_INFO'], PEND=['SOLICITADA','EM_APROVACAO'];
 /* Campaigns screen — visual meta + UI state */
 const CAT_META={
-  TV:  {c:'#2f6fd8', bg:'#eaf1fc', icon:'📺', label:'TV'},
+  TV:  {c:'#2e6bd6', bg:'#eaf1fc', icon:'📺', label:'TV'},
   AC:  {c:'#0e9888', bg:'#e5f6f3', icon:'❄️', label:'Air Conditioning'},
-  MOB: {c:'#6d4bd1', bg:'#efeafa', icon:'📱', label:'Mobile & Devices'},
-  REF: {c:'#d68a04', bg:'#fdf3e2', icon:'🧊', label:'Refrigerators'},
+  MOB: {c:'#6a4bd4', bg:'#efeafa', icon:'📱', label:'Mobile & Devices'},
+  REF: {c:'#c98204', bg:'#fdf3e2', icon:'🧊', label:'Refrigerators'},
   WG:  {c:'#c2417c', bg:'#fceaf3', icon:'🫧', label:'Washer & Dryer'},
   LABG:{c:'#5b7a1f', bg:'#f0f5e3', icon:'🏢', label:'Matriz (Corporate)'},
   MON: {c:'#3a7bb5', bg:'#e9f2fa', icon:'🖥️', label:'Monitors'}
 };
-const catMeta=k=>CAT_META[k]||{c:'#5d6068',bg:'#f0eee8',icon:'📁',label:k};
+const catMeta=k=>CAT_META[k]||{c:'#5d6068',bg:'#eceef1',icon:'📁',label:k};
 const ACT_META={KOL:{icon:'🎤',label:'KOL / Influencer'},FEE:{icon:'📋',label:'Agency fee'},AON:{icon:'📡',label:'Always On'},Campaings:{icon:'🚀',label:'Campaign'},Campaign:{icon:'🚀',label:'Campaign'}};
 const actMeta=a=>ACT_META[a]||{icon:'🏷️',label:a||'—'};
 let CAMP_Q='', CAMP_COLLAPSED={};
@@ -1006,9 +1184,9 @@ function campSearch(v){ CAMP_Q=(v||'').toLowerCase(); const b=document.getElemen
 function campToggleCat(ck){ CAMP_COLLAPSED[ck]=!CAMP_COLLAPSED[ck]; const b=document.getElementById('campBody'); if(b){ b.outerHTML=renderCampBody(); } }
 function campDonut(pct,danger,size){
   const r=(size-8)/2, circ=2*Math.PI*r, off=circ*(1-Math.min(pct,100)/100);
-  const col=danger?'#e0392b':(pct>=90?'#cf8a16':'#14161c');
+  const col=danger?'#dc3427':(pct>=90?'#cf8a16':'#14161c');
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="flex-shrink:0;transform:rotate(-90deg)">
-    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="#f0eee8" stroke-width="6"></circle>
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="#eceef1" stroke-width="6"></circle>
     <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${col}" stroke-width="6" stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${off}"></circle>
   </svg>`;
 }
@@ -1032,12 +1210,12 @@ function renderCampanhas(){
     const over=!!teto&&pctTot>100.5, near=!!teto&&!over&&pctTot>=90, danger=over;
     const ap=AP[p.aprovacao_status]||AP.PENDENTE;
     const nMes=new Set([...DATA.tetos.filter(t=>t.projeto_id===p.id).map(t=>String(t.competencia).slice(0,7)),...DATA.rateio.filter(r=>r.projeto_id===p.id).map(r=>String(r.competencia).slice(0,7))]).size;
-    return `<div onclick="openCampDetail('${esc(p.id)}')" style="display:grid;grid-template-columns:1.6fr .9fr .9fr .9fr 1.3fr .9fr .9fr;gap:10px;padding:13px 17px;border-bottom:1px solid #f0eee8;align-items:center;font-size:13px;cursor:pointer;${over?'background:#fff8f7;box-shadow:inset 3px 0 0 var(--po)':near?'background:#fffcf4;box-shadow:inset 3px 0 0 #d68a04':''}" onmouseover="this.style.filter='brightness(.985)'" onmouseout="this.style.filter=''">
+    return `<div onclick="openCampDetail('${esc(p.id)}')" style="display:grid;grid-template-columns:1.6fr .9fr .9fr .9fr 1.3fr .9fr .9fr;gap:10px;padding:13px 17px;border-bottom:1px solid #eceef1;align-items:center;font-size:13px;cursor:pointer;${over?'background:#fff8f7;box-shadow:inset 3px 0 0 var(--po)':near?'background:#fffcf4;box-shadow:inset 3px 0 0 #c98204':''}" onmouseover="this.style.filter='brightness(.985)'" onmouseout="this.style.filter=''">
       <span style="min-width:0"><span style="font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span><span style="font-size:11px;color:var(--txt-3)">${nMes?nMes+(nMes===1?' month':' months'):''}${p.rateio?' · rateio':''}</span></span>
       <span style="color:var(--txt-2)">${esc(p.agencia||'—')}</span>
       <span style="color:var(--txt-2);font-size:12px">${esc(p.product_category||'—')}</span>
       <span class="mono" style="text-align:right;font-size:12.5px">${BRL(teto)}</span>
-      <span style="display:flex;align-items:center;gap:9px;min-width:0"><span style="flex:1;height:9px;background:#f0eee8;border-radius:5px;overflow:hidden;display:flex;min-width:40px"><span style="width:${pC}%;background:${danger?'var(--po)':'#14161c'}"></span><span style="width:${pCo}%;background:#5d6068"></span><span style="width:${pPe}%;background:#cf8a16"></span></span><span class="mono" style="font-size:11px;font-weight:${danger?'800':'600'};color:${danger?'#bf0008':'var(--txt-2)'};flex-shrink:0">${teto?Math.round(pctTot)+'%':'—'}</span></span>
+      <span style="display:flex;align-items:center;gap:9px;min-width:0"><span style="flex:1;height:9px;background:#eceef1;border-radius:5px;overflow:hidden;display:flex;min-width:40px"><span style="width:${pC}%;background:${danger?'var(--po)':'#14161c'}"></span><span style="width:${pCo}%;background:#5d6068"></span><span style="width:${pPe}%;background:#cf8a16"></span></span><span class="mono" style="font-size:11px;font-weight:${danger?'800':'600'};color:${danger?'#bf0008':'var(--txt-2)'};flex-shrink:0">${teto?Math.round(pctTot)+'%':'—'}</span></span>
       <span class="mono" style="text-align:right;font-size:12.5px;color:${saldo<0?'var(--po)':'var(--txt)'}">${BRL(saldo)}</span>
       <span>${over?`<span style="font-size:11px;font-weight:700;color:#bf0008;background:#fbe4e1;border-radius:20px;padding:3px 10px;white-space:nowrap">⚠ ${Math.round(pctTot)}% over</span>`:near?`<span style="font-size:11px;font-weight:700;color:#9c6404;background:#fbf0d8;border-radius:20px;padding:3px 10px;white-space:nowrap">${Math.round(pctTot)}% committed</span>`:`<span style="font-size:11px;font-weight:600;border:1.5px solid ${ap.c};color:${ap.c};border-radius:20px;padding:2px 10px;white-space:nowrap">${ap.t}</span>`}</span>
     </div>`;
@@ -1079,20 +1257,20 @@ function renderCampBody(){
     const tot=catTotal[ck], pct=grandTotal?(tot/grandTotal*100):0;
     const collapsed=!!CAMP_COLLAPSED[ck]&&!q;
     return `<div style="background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-      <div onclick="campToggleCat('${esc(ck)}')" style="padding:13px 17px;display:flex;align-items:center;gap:12px;cursor:pointer;border-left:4px solid ${m.c};background:${m.bg}66" onmouseover="this.style.filter='brightness(.97)'" onmouseout="this.style.filter=''">
+      <div onclick="campToggleCat('${esc(ck)}')" style="padding:13px 17px;display:flex;align-items:center;gap:12px;cursor:pointer;border-left:3px solid ${m.c};background:${m.bg}66" onmouseover="this.style.filter='brightness(.97)'" onmouseout="this.style.filter=''">
         <span style="width:34px;height:34px;border-radius:10px;background:${m.bg};display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${m.icon}</span>
         <span style="min-width:0">
-          <b style="font-family:Sora,sans-serif;font-size:13.5px;display:block">${esc(ck)}${m.label!==ck?` <span style=\"font-weight:500;color:var(--txt-3);font-size:11.5px\">· ${m.label}</span>`:''}</b>
+          <b style="font-family:'Bricolage Grotesque',sans-serif;font-size:13.5px;display:block">${esc(ck)}${m.label!==ck?` <span style=\"font-weight:500;color:var(--txt-3);font-size:11.5px\">· ${m.label}</span>`:''}</b>
           <span style="font-size:11px;color:var(--txt-3);font-weight:600">${camps.length} campaign${camps.length===1?'':'s'}</span>
         </span>
         <span style="flex:1;display:flex;align-items:center;gap:8px;min-width:60px;margin:0 6px">
-          <span style="flex:1;height:6px;border-radius:4px;background:#f0eee8;overflow:hidden"><span style="display:block;height:100%;width:${pct}%;background:${m.c};border-radius:4px"></span></span>
+          <span style="flex:1;height:6px;border-radius:4px;background:#eceef1;overflow:hidden"><span style="display:block;height:100%;width:${pct}%;background:${m.c};border-radius:4px"></span></span>
           <span style="font-size:11px;font-weight:700;color:${m.c};min-width:40px;text-align:right">${pct.toFixed(1)}%</span>
         </span>
         <span class="mono" style="font-size:12.5px;font-weight:700;color:var(--ink)">${BRL(tot)}</span>
         <span style="font-size:11px;color:var(--txt-3);transform:rotate(${collapsed?0:90}deg);transition:transform .15s">▶</span>
       </div>
-      ${collapsed?'':`<div style=\"padding:14px 16px;border-top:1px solid var(--line);border-left:4px solid ${m.c};background:${m.bg}2e;display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:11px\">${camps.map(p=>campCardHTML(p,m)).join('')}</div>`}
+      ${collapsed?'':`<div style=\"padding:14px 16px;border-top:1px solid var(--line);border-left:3px solid ${m.c};background:${m.bg}2e;display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:11px\">${camps.map(p=>campCardHTML(p,m)).join('')}</div>`}
     </div>`;
   }).join('');
   return `<div id="campBody" style="display:flex;flex-direction:column;gap:13px">${sections}</div>`;
@@ -1118,7 +1296,7 @@ function campCardHTML(p,m){
       </span>
       <span style="font-size:10px;font-weight:700;color:${over?'#bf0008':near?'#9c6404':ap.c};background:${over?'#fbe4e1':near?'#fbf0d8':ap.bg};border-radius:20px;padding:3px 9px;white-space:nowrap;flex-shrink:0">${over?'⚠ '+Math.round(pctTot)+'% over':near?Math.round(pctTot)+'%':ap.t}</span>
     </div>
-    <div style="height:7px;border-radius:4px;background:#f0eee8;overflow:hidden;display:flex" title="Consumed · committed · awaiting approval"><span style="width:${pC}%;background:${danger?'var(--po)':'#14161c'}"></span><span style="width:${pCo}%;background:#5d6068"></span><span style="width:${pPe}%;background:#cf8a16"></span></div>
+    <div style="height:7px;border-radius:4px;background:#eceef1;overflow:hidden;display:flex" title="Consumed · committed · awaiting approval"><span style="width:${pC}%;background:${danger?'var(--po)':'#14161c'}"></span><span style="width:${pCo}%;background:#5d6068"></span><span style="width:${pPe}%;background:#cf8a16"></span></div>
     <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--txt-3)">
       <span style="white-space:nowrap">Cap <b class="mono" style="color:var(--txt);font-size:11.5px">${BRL(teto)}</b></span>
       <span style="white-space:nowrap">Balance <b class="mono" style="color:${saldo<0?'var(--po)':'#1f8a4c'};font-size:11.5px">${BRL(saldo)}</b></span>
@@ -1141,8 +1319,8 @@ function openCampDetail(pid){
     const saldo=cap-totM; const rawM=cap?totM/cap*100:0, overM=rawM>100.5;
     const w1=cap?Math.min(100,cM/cap*100):0, w2=cap?Math.min(100-w1,coM/cap*100):0, w3=cap?Math.min(100-w1-w2,peM/cap*100):0;
     return `<div id="cd-${m}" style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;margin-bottom:10px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><b style="font-family:Sora,sans-serif;font-size:13.5px">${fmtMes(m+'-01')}</b><span class="mono" style="font-size:12px;color:${saldo<0?'var(--po)':'var(--txt-2)'}">balance ${BRL(saldo)} · cap ${BRL(cap)}</span></div>
-      <div style="height:8px;border-radius:5px;background:#f0eee8;overflow:hidden;margin-bottom:10px;display:flex" title="Consumed · committed · awaiting approval"><span style="width:${w1}%;background:${overM?'var(--po)':'#14161c'}"></span><span style="width:${w2}%;background:#5d6068"></span><span style="width:${w3}%;background:#cf8a16"></span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><b style="font-family:'Bricolage Grotesque',sans-serif;font-size:13.5px">${fmtMes(m+'-01')}</b><span class="mono" style="font-size:12px;color:${saldo<0?'var(--po)':'var(--txt-2)'}">balance ${BRL(saldo)} · cap ${BRL(cap)}</span></div>
+      <div style="height:8px;border-radius:5px;background:#eceef1;overflow:hidden;margin-bottom:10px;display:flex" title="Consumed · committed · awaiting approval"><span style="width:${w1}%;background:${overM?'var(--po)':'#14161c'}"></span><span style="width:${w2}%;background:#5d6068"></span><span style="width:${w3}%;background:#cf8a16"></span></div>
       ${list.length?list.map(po=>`<div style="padding:9px 0;border-top:1px dashed var(--line)"><div style="display:flex;align-items:center;gap:10px"><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.descricao||'—')}</div><div style="font-size:11px;color:var(--txt-3)">${esc(po.agencia||'')} · ${esc(po.numero_po||'no number')}</div></div><span class="mono" style="font-weight:700;font-size:12.5px;flex-shrink:0">${BRL(po.valor)}</span></div>${poStepperHTML(po.status)}</div>`).join(''):'<div style="font-size:12px;color:var(--txt-3)">No POs this month.</div>'}
     </div>`;
   }).join('')||'<div class="empty">No months registered.</div>';
@@ -1163,7 +1341,7 @@ function openCampDetail(pid){
     </div>
     ${(p.rateio&&catKeys.length)?`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;margin-bottom:14px">
       <div style="font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:9px">Rateio — allocation by budget</div>
-      ${(function(){const tot=catKeys.reduce((s,k)=>s+catAlloc[k],0);return catKeys.map((k,i)=>{const pc=tot?catAlloc[k]/tot*100:0;return `<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><b>${esc(k)}</b><span class="mono">${BRL(catAlloc[k])} · ${Math.round(pc)}%</span></div><div style="height:8px;border-radius:5px;background:#f0eee8;overflow:hidden"><span style="display:block;height:100%;width:${pc}%;background:${palette[i%palette.length]}"></span></div></div>`;}).join('');})()}
+      ${(function(){const tot=catKeys.reduce((s,k)=>s+catAlloc[k],0);return catKeys.map((k,i)=>{const pc=tot?catAlloc[k]/tot*100:0;return `<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><b>${esc(k)}</b><span class="mono">${BRL(catAlloc[k])} · ${Math.round(pc)}%</span></div><div style="height:8px;border-radius:5px;background:#eceef1;overflow:hidden"><span style="display:block;height:100%;width:${pc}%;background:${palette[i%palette.length]}"></span></div></div>`;}).join('');})()}
     </div>`:''}`;
   const mNowD=new Date().toISOString().slice(0,7);
   const chips=months.map(m=>{
@@ -1173,14 +1351,14 @@ function openCampDetail(pid){
     const st=cur?'background:var(--ink);color:#fff;border:1px solid var(--ink)':(over?'background:#fbe4e1;border:1px solid #f2c4bf;color:#bf0008':'background:var(--paper-2);border:1px solid var(--line);color:var(--txt-2)');
     return `<button class="mono" style="font-size:11.5px;font-weight:700;border-radius:8px;padding:5px 11px;cursor:pointer;${st}" onclick="campDrawerJump('${m}')">${fmtMes(m+'-01')}${over?' '+Math.round(consM/cap*100)+'%':''}</button>`;
   }).join('');
-  const alertHTML=(rawTot>=90&&!allPos.some(po=>po.status==='CONCLUIDA'))?`<div style="display:flex;align-items:center;gap:10px;background:#fbf0d8;border:1px solid #ecd9a4;border-radius:9px;padding:8px 12px;margin-top:12px;font-size:12px;color:#7a5200"><span style="width:7px;height:7px;border-radius:50%;background:#d68a04;flex-shrink:0"></span>No PO completed yet — check with the agency before approving new ones.</div>`:'';
+  const alertHTML=(rawTot>=90&&!allPos.some(po=>po.status==='CONCLUIDA'))?`<div style="display:flex;align-items:center;gap:10px;background:#fbf0d8;border:1px solid #ecd9a4;border-radius:9px;padding:8px 12px;margin-top:12px;font-size:12px;color:#7a5200"><span style="width:7px;height:7px;border-radius:50%;background:#c98204;flex-shrink:0"></span>No PO completed yet — check with the agency before approving new ones.</div>`:'';
   $('#modalMount').innerHTML=`<div class="overlay right" onclick="if(event.target===this)closeModal()"><div class="modal drawer">
     <div style="padding:18px 22px 16px;border-bottom:1px solid var(--line)">
       <div style="display:flex;align-items:flex-start;gap:10px">
         <div style="flex:1;min-width:0"><h3 style="font-size:16px">${esc(p.nome)}</h3><div style="font-size:11.5px;color:var(--txt-3);margin-top:2px">${esc(p.agencia||'')} · ${esc(p.product_category||'')}${p.rateio?' · rateio':''}</div></div>
-        <button class="x" aria-label="Fechar" onclick="closeModal()">✕</button>
+        <button class="x" aria-label="Close" onclick="closeModal()">✕</button>
       </div>
-      <div style="display:flex;height:12px;border-radius:6px;overflow:hidden;background:#f0eee8;margin-top:13px" title="Consumed · committed · awaiting approval"><span style="width:${totCap?Math.min(100,totConsu/totCap*100):0}%;background:${overT?'var(--po)':'#14161c'}"></span><span style="width:${totCap?Math.min(100,totComp/totCap*100):0}%;background:#5d6068"></span><span style="width:${totCap?Math.min(100,totPend/totCap*100):0}%;background:#cf8a16"></span></div>
+      <div style="display:flex;height:12px;border-radius:6px;overflow:hidden;background:#eceef1;margin-top:13px" title="Consumed · committed · awaiting approval"><span style="width:${totCap?Math.min(100,totConsu/totCap*100):0}%;background:${overT?'var(--po)':'#14161c'}"></span><span style="width:${totCap?Math.min(100,totComp/totCap*100):0}%;background:#5d6068"></span><span style="width:${totCap?Math.min(100,totPend/totCap*100):0}%;background:#cf8a16"></span></div>
       <div style="display:flex;justify-content:space-between;margin-top:7px;font-size:12px" class="mono">
         <span style="font-weight:700;color:${overT?'#bf0008':nearT?'#9c6404':'var(--txt-1)'}">${Math.round(rawTot)}% committed</span>
         <span style="color:var(--txt-2)">balance <b>${BRL(saldoTot)}</b> of ${BRL(totCap)}</span>
@@ -1218,7 +1396,7 @@ function renderCampValues(){
   if(!CAMPVAL)return; const p=DATA.poProjetos.find(x=>x.id===CAMPVAL.id)||{};
   const total=CAMPVAL.rows.reduce((s,r)=>s+(+r.valor||0),0);
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:520px">
-    <div class="modal-h"><h3>Monthly values — ${esc(p.nome||'')}</h3><button class="x" aria-label="Fechar" onclick="closeModal()">✕</button></div>
+    <div class="modal-h"><h3>Monthly values — ${esc(p.nome||'')}</h3><button class="x" aria-label="Close" onclick="closeModal()">✕</button></div>
     <div class="modal-b">
       ${CAMPVAL.rateio?`<div class="banner" style="margin-bottom:12px">Rateio campaign — the value you type per month is the <b>total</b>, split across ${esc(CAMPVAL.qual||'the rateio')} categories on save.</div>`:''}
       <div style="border:1px solid var(--line);border-radius:12px;overflow:hidden">
@@ -1227,7 +1405,7 @@ function renderCampValues(){
           ${CAMPVAL.rows.map(r=>`<div style="display:flex;align-items:center;gap:9px"><input type="month" value="${esc(r.mes)}" onchange="campValRowSet('${r.id}','mes',this.value)" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font:inherit;font-size:12.5px"><input type="number" min="0" step="100" value="${esc(r.valor)}" onchange="campValRowSet('${r.id}','valor',this.value)" placeholder="R$ 0" style="flex:1;padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font:inherit;font-size:12.5px;text-align:right" class="mono"><button class="chip-btn" onclick="campValDelRow('${r.id}')">✕</button></div>`).join('')}
           <button class="btn-ghost" onclick="campValAddRow()" style="align-self:flex-start;margin-top:2px">+ Add month</button>
         </div>
-        <div style="padding:11px 14px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between"><b style="font-family:Sora,sans-serif;font-size:13px">Total</b><span class="mono" style="font-size:15px;font-weight:800">${BRL(total)}</span></div>
+        <div style="padding:11px 14px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between"><b style="font-family:'Bricolage Grotesque',sans-serif;font-size:13px">Total</b><span class="mono" style="font-size:15px;font-weight:800">${BRL(total)}</span></div>
       </div>
     </div>
     <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitCampValues()">Save</button></div></div>
@@ -1252,7 +1430,7 @@ async function submitCampValues(){
       const {error}=await SBPO.from('tetos').insert(tetos); if(error)throw error;
     }
     CAMPVAL=null; toast('Values updated ✓'); closeModal(); await reloadPOAll(); go('campaigns');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toast(friendlyErr(e)); }
 }
 
 /* Edit an existing campaign — reassign it to the correct PRODUCT CATEGORY
@@ -1290,7 +1468,7 @@ function renderCampEditForm(){
   const catOpts=`<option value="" ${ce.cat===''?'selected':''}>— pick category —</option>`+PRODUCT_CATS.map(c=>`<option value="${c}" ${ce.cat===c?'selected':''}>${c}</option>`).join('');
   const classField = `<div class="field full" style="margin-top:6px"><label>Product category <span style="font-weight:600;color:var(--txt-3)">${isFee?'(100% of this fee goes here — e.g. TV, AC…)':'(the budget this campaign consumes)'}</span></label><select onchange="campEditSet('cat',this.value)">${catOpts}</select>${isFee?'<div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">Splitting a fee across categories (e.g. TV/AC/LABG) is now done automatically when requesting the PO, using the agency\'s configured percentages — no separate rateio campaign needed.</div>':''}</div>`;
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:520px">
-    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--po);flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Edit campaign</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Set which budget(s) this value belongs to</div></div><button class="x" aria-label="Fechar" onclick="closeModal()">✕</button></div>
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--po);flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Edit campaign</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Set which budget(s) this value belongs to</div></div><button class="x" aria-label="Close" onclick="closeModal()">✕</button></div>
     <div class="modal-b">
       <div class="field full"><label>Campaign name</label><input value="${esc(ce.nome)}" onchange="campEditSet('nome',this.value)" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
       <div class="fgrid" style="margin-top:14px">
@@ -1318,7 +1496,7 @@ async function submitCampEdit(){
       if(error)throw error;
     }
     CAMPEDIT=null; toast('Campaign updated ✓'); closeModal(); await reloadPOAll(); go('campaigns');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toast(friendlyErr(e)); }
 }
 
 function renderPOs(){
@@ -1336,7 +1514,7 @@ function renderPOs(){
   const head=`<div style="display:grid;grid-template-columns:1.4fr 1fr .8fr .9fr 1fr .8fr 1.1fr 1.1fr;gap:10px;padding:11px 17px;background:#fbfaf7;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">
     <span>Campaign</span><span>Agency</span><span>Month</span><span style="text-align:right">Value</span><span>Payment</span><span>PO nº</span><span>Status</span><span>Action</span></div>`;
   const rowHTML=po=>{const s=PO_STATUS[po.status]||{t:po.status,c:'s-slate',icon:''};const pend=['SOLICITADA','EM_APROVACAO'].includes(po.status);const est=poEstimativaPagamento(po);
-    return `<div class="po-row" data-camp="${esc(po.projeto_id)}" data-ag="${esc(po.agencia||'')}" data-st="${esc(po.status)}" onclick="openPODetail('${esc(po.id)}')" style="display:grid;grid-template-columns:1.4fr 1fr .8fr .9fr 1fr .8fr 1.1fr 1.1fr;gap:10px;padding:12px 17px;border-bottom:1px solid #f0eee8;align-items:center;font-size:13px;cursor:pointer">
+    return `<div class="po-row" data-camp="${esc(po.projeto_id)}" data-ag="${esc(po.agencia||'')}" data-st="${esc(po.status)}" onclick="openPODetail('${esc(po.id)}')" style="display:grid;grid-template-columns:1.4fr 1fr .8fr .9fr 1fr .8fr 1.1fr 1.1fr;gap:10px;padding:12px 17px;border-bottom:1px solid #eceef1;align-items:center;font-size:13px;cursor:pointer">
       <span style="min-width:0"><span style="font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(nomeBy[po.projeto_id]||'—')}</span><span style="font-size:11px;color:var(--txt-3)">${esc(po.descricao||'')}</span>${poMetaHTML(po)}</span>
       <span style="color:var(--txt-2)">${esc(po.agencia||'—')}</span>
       <span style="font-size:12px;color:var(--txt-2)">${fmtMes(po.competencia)}</span>
@@ -1359,7 +1537,7 @@ function renderPOs(){
   const restPos=pos.filter(po=>!knownSt.has(po.status));
   const phaseGroup=(t,list,id)=>list.length?`<div class="po-phase" data-phase="${id}">
     <div style="padding:9px 17px;background:#fbfaf7;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px">
-      <b style="font-family:Sora,sans-serif;font-size:12px;letter-spacing:.02em">${t}</b>
+      <b style="font-family:'Bricolage Grotesque',sans-serif;font-size:12px;letter-spacing:.02em">${t}</b>
       <span class="mono" style="font-size:10.5px;font-weight:800;background:#fff;border:1px solid var(--line);border-radius:20px;padding:1px 8px;color:var(--txt-2)">${list.length}</span>
       <span style="flex:1"></span>
       <span class="mono" style="font-size:11.5px;font-weight:700;color:var(--txt-2)">${BRL(list.reduce((sum,po)=>sum+(+po.valor||0),0))}</span>
@@ -1372,7 +1550,7 @@ function renderPOs(){
   const tetoPend={};
   if(projPend.length){ DATA.tetos.forEach(t=>tetoPend[t.projeto_id]=(tetoPend[t.projeto_id]||0)+(+t.teto||0)); DATA.rateio.forEach(r=>tetoPend[r.projeto_id]=(tetoPend[r.projeto_id]||0)+(+r.valor||0)); }
   const campPend=projPend.length?`<div style="background:#fff;border:1px solid #f2c4bf;border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05);margin-bottom:16px">
-    <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px"><b style="font-family:Sora,sans-serif;font-size:14px">Campaigns awaiting approval</b><span style="background:var(--po);color:#fff;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800">${projPend.length}</span></div>
+    <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px"><b style="font-family:'Bricolage Grotesque',sans-serif;font-size:14px">Campaigns awaiting approval</b><span style="background:var(--po);color:#fff;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800">${projPend.length}</span></div>
     <div style="padding:12px 16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">${projPend.map(p=>`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;background:#fbfaf7">
       <div style="display:flex;justify-content:space-between;gap:10px"><b style="font-size:13px">${esc(p.nome)}</b><span class="mono" style="font-size:12px">${BRL(tetoPend[p.id]||0)}</span></div>
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">${esc(p.agencia||'')} · ${esc(p.product_category||'')} · ${esc(p.activity||'')}</div>
@@ -1394,20 +1572,20 @@ function renderPOsFilter(){
 }
 async function aprovarPO(id){
   try{ const {error}=await SBPO.rpc('aprovar_po',{p_po:id}); if(error)throw error; toast('PO approved ✓'); await reloadPO(); go(SCREEN); }
-  catch(e){ toast('Error: '+(e.message||e)); }
+  catch(e){ toast(friendlyErr(e)); }
 }
 async function rejeitarPO(id){
   try{ const {error}=await SBPO.rpc('rejeitar_po',{p_po:id}); if(error)throw error; toast('PO rejected'); await reloadPO(); go(SCREEN); }
-  catch(e){ toast('Error: '+(e.message||e)); }
+  catch(e){ toast(friendlyErr(e)); }
 }
 async function aprovarCamp(id){
   try{ const {error}=await SBPO.rpc('aprovar_projeto',{p_projeto:id}); if(error)throw error; toast('Campaign approved ✓'); await reloadPOAll(); go(SCREEN); }
-  catch(e){ toast('Error: '+(e.message||e)); }
+  catch(e){ toast(friendlyErr(e)); }
 }
 async function rejeitarCamp(id){
   const motivo=prompt('Reason for rejecting the campaign:'); if(motivo===null)return;
   try{ const {error}=await SBPO.rpc('rejeitar_projeto',{p_projeto:id,p_motivo:motivo}); if(error)throw error; toast('Campaign rejected'); await reloadPOAll(); go(SCREEN); }
-  catch(e){ toast('Error: '+(e.message||e)); }
+  catch(e){ toast(friendlyErr(e)); }
 }
 
 /* ============================================================
@@ -1509,7 +1687,7 @@ function renderPODetailModal(){
   if(po.motivo_rejeicao&&['ATUALIZAR_INFO','REJEITADA'].includes(po.status)) sections.push(`<div style="padding:10px 12px;border-radius:9px;background:#fbe4e1;color:#b32418;font-size:12.5px;font-weight:600;margin-bottom:12px">⚠ ${esc(po.motivo_rejeicao)}</div>`);
   if(poFieldVisible('contabil',po)) sections.push(`<div style="margin-bottom:4px">${cell('Cost center / account / description',esc(proj.cc||'—')+' · '+esc(proj.account||'—')+'<div style="font-weight:500;font-size:12px;color:var(--txt-2);margin-top:2px">'+esc(proj.account_desc||'')+'</div>')}</div>`);
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:560px">
-    <div class="modal-h" style="align-items:flex-start"><div style="flex:1"><h3>${esc(proj.nome||'PO')}</h3><span class="badge ${s.c}" style="margin-top:6px;display:inline-flex"><span class="d"></span>${s.icon} ${s.t}</span></div><button class="x" aria-label="Fechar" onclick="closeModal()">✕</button></div>
+    <div class="modal-h" style="align-items:flex-start"><div style="flex:1"><h3>${esc(proj.nome||'PO')}</h3><span class="badge ${s.c}" style="margin-top:6px;display:inline-flex"><span class="d"></span>${s.icon} ${s.t}</span></div><button class="x" aria-label="Close" onclick="closeModal()">✕</button></div>
     <div class="modal-b">${poStepper(po)}${sections.join('')}</div>
     <div class="modal-f"><span></span><div style="display:flex;gap:8px;flex-wrap:wrap">${poActionsHTML(po)}</div></div>
   </div></div>`;
@@ -1545,7 +1723,7 @@ function gerarFile(inp){ const f=inp.files&&inp.files[0]; if(f){GERAR.file=f;GER
 function renderGerarPO(){
   if(!GERAR)return; const po=DATA.pos.find(p=>p.id===GERAR.id)||{};
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:480px">
-    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:#3c7a63;flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Issue PO number</h3><div style="font-size:12px;color:var(--txt-3)">${esc(poNome(po.projeto_id))} · ${esc(po.agencia||'')} · ${BRL(po.valor)}</div></div><button class="x" aria-label="Fechar" onclick="closeModal()">✕</button></div>
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:#3c7a63;flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Issue PO number</h3><div style="font-size:12px;color:var(--txt-3)">${esc(poNome(po.projeto_id))} · ${esc(po.agencia||'')} · ${BRL(po.valor)}</div></div><button class="x" aria-label="Close" onclick="closeModal()">✕</button></div>
     <div class="modal-b">
       <div class="field"><label>PO number</label><input value="${esc(GERAR.num)}" onchange="gerarSet('num',this.value)" placeholder="e.g. PO-1183"></div>
       <div class="field"><label>Attach PO document (optional, PDF)</label><input type="file" accept="application/pdf,image/*" onchange="gerarFile(this)"></div>
@@ -1561,7 +1739,7 @@ async function submitGerarPO(){
     const {error}=await SBPO.rpc('gerar_po',{p_po:GERAR.id,p_numero:num,p_arquivo:path});
     if(error)throw error;
     GERAR=null; closeModal(); await reloadPO(); await reloadNotif(); go(SCREEN); toast('PO '+num+' issued ✓ — agency can now post the NF.');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toast(friendlyErr(e)); }
 }
 
 /* ---- Invoice / NF (agency, admin) ---- */
@@ -1573,7 +1751,7 @@ function renderFaturarPO(){
   if(!FAT)return; const po=DATA.pos.find(p=>p.id===FAT.id)||{};
   const redo=po.status==='ATUALIZAR_INFO';
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:500px">
-    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:#b5550c;flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Post invoice (NF)</h3><div style="font-size:12px;color:var(--txt-3)">${esc(poNome(po.projeto_id))} · PO ${esc(po.numero_po||'—')} · ${BRL(po.valor)}</div></div><button class="x" aria-label="Fechar" onclick="closeModal()">✕</button></div>
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:#b5550c;flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Post invoice (NF)</h3><div style="font-size:12px;color:var(--txt-3)">${esc(poNome(po.projeto_id))} · PO ${esc(po.numero_po||'—')} · ${BRL(po.valor)}</div></div><button class="x" aria-label="Close" onclick="closeModal()">✕</button></div>
     <div class="modal-b">
       ${redo&&po.motivo_rejeicao?`<div class="banner" style="background:var(--red-bg);border-color:#f0b8b2;color:#b32418">↩ Sent back by finance: ${esc(po.motivo_rejeicao)}</div>`:''}
       <div class="field"><label>NF number</label><input value="${esc(FAT.nf)}" onchange="fatSet('nf',this.value)" placeholder="e.g. NF 8842"></div>
@@ -1596,7 +1774,7 @@ async function submitFaturarPO(){
     if(error)throw error;
     const venc=(data&&data.vencimento)?fmtDataBR(data.vencimento):'—';
     FAT=null; closeModal(); await reloadPO(); await reloadNotif(); go(SCREEN); toast('NF posted ✓ — payment forecast '+venc+'.');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toast(friendlyErr(e)); }
 }
 
 /* ---- Validate NF (finance/admin) ---- */
@@ -1606,7 +1784,7 @@ function renderValidarPO(){
   if(!VALID)return; const po=DATA.pos.find(p=>p.id===VALID.id)||{};
   const cell=(l,v,c)=>`<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--paper-2)"><div style="font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em">${l}</div><div class="mono" style="font-size:13.5px;font-weight:700;margin-top:3px;color:${c||'var(--txt-1)'}">${v}</div></div>`;
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:480px">
-    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:#1f8a4c;flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Validate invoice (NF)</h3><div style="font-size:12px;color:var(--txt-3)">${esc(poNome(po.projeto_id))} · ${esc(po.agencia||'')}</div></div><button class="x" aria-label="Fechar" onclick="closeModal()">✕</button></div>
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:#1f8a4c;flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Validate invoice (NF)</h3><div style="font-size:12px;color:var(--txt-3)">${esc(poNome(po.projeto_id))} · ${esc(po.agencia||'')}</div></div><button class="x" aria-label="Close" onclick="closeModal()">✕</button></div>
     <div class="modal-b">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
         ${cell('PO number', esc(po.numero_po||'—'))}
@@ -1628,13 +1806,13 @@ async function submitValidarPO(){
   try{ const {error}=await SBPO.rpc('validar_po',{p_po:VALID.id}); if(error)throw error;
     const po=DATA.pos.find(p=>p.id===VALID.id)||{}; const venc=fmtDataBR(po.vencimento);
     VALID=null; closeModal(); await reloadPO(); await reloadNotif(); go(SCREEN); toast('Invoice validated ✓ — payment scheduled for '+venc+'.');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toast(friendlyErr(e)); }
 }
 async function rejeitarFatPO(){
   if(!VALID)return; const motivo=prompt('Reason to send the NF back to the agency:'); if(motivo===null)return; if(!motivo.trim()){toast('Describe the reason.');return;}
   try{ const {error}=await SBPO.rpc('rejeitar_faturamento',{p_po:VALID.id,p_motivo:motivo}); if(error)throw error;
     VALID=null; closeModal(); await reloadPO(); await reloadNotif(); go(SCREEN); toast('Sent back to the agency for update.');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toast(friendlyErr(e)); }
 }
 
 /* ============================================================
@@ -1694,7 +1872,7 @@ function tasksInner(){
   const l=loadPTasks(); const open=l.filter(t=>!t.done), done=l.filter(t=>t.done);
   const row=t=>{
     const exp=!!PT_EXPANDED[t.id];
-    return `<div style="border-bottom:1px solid #f0eee8">
+    return `<div style="border-bottom:1px solid #eceef1">
       <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 4px">
         <input type="checkbox" ${t.done?'checked':''} onchange="ptToggle('${t.id}')" style="width:17px;height:17px;accent-color:var(--po);margin-top:2px;cursor:pointer;flex-shrink:0">
         <div style="flex:1;min-width:0;cursor:pointer" onclick="ptExpand('${t.id}')">
@@ -1727,7 +1905,7 @@ function tasksInner(){
     </div>`;
   };
   return `<div style="max-width:640px">
-    <div style="font-family:Sora,sans-serif;font-weight:700;font-size:13px;margin-bottom:9px">To-do · <span style="color:var(--txt-3);font-weight:600">${open.length} open</span></div>
+    <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:13px;margin-bottom:9px">To-do · <span style="color:var(--txt-3);font-weight:600">${open.length} open</span></div>
     <div style="border:1px solid var(--line-2);border-radius:12px;padding:12px;background:#fff;margin-bottom:12px;display:flex;flex-direction:column;gap:8px">
       <input id="ptNewTitle" onkeydown="ptKey(event)" placeholder="Task title…" style="padding:9px 11px;border:1px solid var(--line-2);border-radius:8px;background:var(--paper-2);font:inherit;font-size:13px">
       <div style="display:flex;gap:5px"><button class="chip-btn" onclick="ptRtFmt('ptNewDesc','bold')" style="font-weight:800;width:26px;padding:5px 0">B</button><button class="chip-btn" onclick="ptRtFmt('ptNewDesc','insertUnorderedList')" style="width:26px;padding:5px 0">•</button></div>
@@ -1753,7 +1931,7 @@ function ptToProject(id){
 }
 function renderNotes(){
   return `<div style="max-width:1000px">
-    <div style="margin-bottom:14px"><div style="font-family:Sora,sans-serif;font-weight:700;font-size:16px">Tasks</div><div style="font-size:12px;color:var(--txt-3)">Personal to-dos — not tied to any project. Saved on this device.</div></div>
+    <div style="margin-bottom:14px"><div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:16px">Tasks</div><div style="font-size:12px;color:var(--txt-3)">Personal to-dos — not tied to any project. Saved on this device.</div></div>
     <div id="tasksHost">${tasksInner()}</div>
   </div>`;
 }
@@ -1785,13 +1963,13 @@ function renderTLModal(){
     const weeks=Math.ceil(totalDays/7); const dayPct=100/(weeks*7);
     const tdy=today0();
     const MM=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    let wkHead=''; for(let w=0;w<weeks;w++){const dd=new Date(min);dd.setDate(dd.getDate()+w*7);const now=tdy>=dd&&tdy<new Date(dd.getFullYear(),dd.getMonth(),dd.getDate()+7);wkHead+=`<div style="flex:1;min-width:0;padding:7px 2px;text-align:center;font-size:9.5px;font-weight:600;color:${now?'#fff':'#8b8d95'};background:${now?'#14161c':'transparent'};border-right:1px solid #f0eee8">${dd.getDate()}/${MM[dd.getMonth()]}</div>`;}
+    let wkHead=''; for(let w=0;w<weeks;w++){const dd=new Date(min);dd.setDate(dd.getDate()+w*7);const now=tdy>=dd&&tdy<new Date(dd.getFullYear(),dd.getMonth(),dd.getDate()+7);wkHead+=`<div style="flex:1;min-width:0;padding:7px 2px;text-align:center;font-size:9.5px;font-weight:600;color:${now?'#fff':'#8a8f9a'};background:${now?'#14161c':'transparent'};border-right:1px solid #eceef1">${dd.getDate()}/${MM[dd.getMonth()]}</div>`;}
     const rowsHtml=rows.map(r=>{
       const s=new Date(r.inicio+'T00:00:00'), e=new Date(r.fim+'T00:00:00');
       const left=Math.max(0,((s-min)/864e5)*dayPct), width=Math.max(dayPct*1.2,(((e-s)/864e5)+1)*dayPct);
-      return `<div style="display:flex;border-bottom:1px solid #f0eee8;align-items:center">
+      return `<div style="display:flex;border-bottom:1px solid #eceef1;align-items:center">
         <div style="width:190px;flex-shrink:0;padding:9px 12px;border-right:1px solid var(--line);min-width:0"><div style="font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.name)}</div><div style="font-size:10.5px;color:var(--txt-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.task)}${r.resp?' · '+esc(r.resp):''}</div></div>
-        <div style="flex:1;position:relative;height:36px"><div style="position:absolute;left:${left}%;width:${width}%;top:8px;height:20px;border-radius:6px;background:${r.done?'#16a06a':'#2f6fd8'};display:flex;align-items:center;padding:0 7px;overflow:hidden"><span style="font-size:9.5px;font-weight:700;color:#fff;white-space:nowrap">${r.done?'✓ done':''}</span></div></div>
+        <div style="flex:1;position:relative;height:36px"><div style="position:absolute;left:${left}%;width:${width}%;top:8px;height:20px;border-radius:6px;background:${r.done?'#149465':'#2e6bd6'};display:flex;align-items:center;padding:0 7px;overflow:hidden"><span style="font-size:9.5px;font-weight:700;color:#fff;white-space:nowrap">${r.done?'✓ done':''}</span></div></div>
       </div>`;
     }).join('');
     body=`<div style="border:1px solid var(--line);border-radius:11px;overflow:hidden">
@@ -1800,7 +1978,7 @@ function renderTLModal(){
     </div>`;
   }
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:720px">
-    <div class="modal-h"><h3>Timeline — ${esc(p.nome)}</h3><button class="x" aria-label="Fechar" onclick="closeModal()">✕</button></div>
+    <div class="modal-h"><h3>Timeline — ${esc(p.nome)}</h3><button class="x" aria-label="Close" onclick="closeModal()">✕</button></div>
     <div class="modal-b">${body}</div>
     <div class="modal-f"><span></span><button class="btn-ghost" onclick="closeModal()">Close</button></div>
   </div></div>`;
@@ -1842,7 +2020,7 @@ function renderProjModal(){
   const atvHTML=tasks.map((t,i)=>`
     <div style="border:1px solid ${t.done?'#bfe4d0':'var(--line-2)'};border-radius:10px;padding:9px 11px;margin-bottom:7px;background:${t.done?'#eef8f1':'#fff'}">
       <div style="display:flex;align-items:center;gap:8px">
-        <button onclick="pmAtvDone('${t.id}')" title="Mark done" style="width:18px;height:18px;border-radius:5px;border:2px solid ${t.done?'#16a06a':'var(--line-2)'};background:${t.done?'#16a06a':'#fff'};color:#fff;font-size:11px;font-weight:800;cursor:pointer;flex-shrink:0;padding:0;line-height:1">${t.done?'✓':''}</button>
+        <button onclick="pmAtvDone('${t.id}')" title="Mark done" style="width:18px;height:18px;border-radius:5px;border:2px solid ${t.done?'#149465':'var(--line-2)'};background:${t.done?'#149465':'#fff'};color:#fff;font-size:11px;font-weight:800;cursor:pointer;flex-shrink:0;padding:0;line-height:1">${t.done?'✓':''}</button>
         <span class="mono" style="font-size:10px;color:var(--txt-3);width:18px;text-align:right;flex-shrink:0">${String(i+1).padStart(2,'0')}</span>
         <input class="nm" value="${esc(t.n)}" onchange="pmAtvSet('${t.id}','n',this.value)" ${dis} placeholder="Activity name…" style="flex:1;padding:7px 10px;border:1px solid var(--line-2);border-radius:8px;background:var(--paper-2);font:inherit;font-size:12.5px;font-weight:600;min-width:0">
         <input type="date" value="${esc(t.fim||'')}" onchange="pmAtvSet('${t.id}','fim',this.value)" title="Due date" style="width:150px;padding:7px 8px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font:inherit;font-size:11.5px;color:var(--txt-2);flex-shrink:0">
@@ -1862,7 +2040,7 @@ function renderProjModal(){
     </div>`).join('');
   const logsHTML=(EDIT.logs||[]).slice().reverse().map(l=>`<div style="background:var(--paper-2);border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-bottom:7px"><div style="font-size:11px;color:var(--txt-3);font-weight:600;margin-bottom:4px">${esc(l.autor)} · ${fmtDate(l.t)}</div><div style="font-size:13px">${fmtLogTxt(l.txt)}</div></div>`).join('')||'<div style="font-size:12.5px;color:var(--txt-3)">No updates yet.</div>';
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
-    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--accent);flex-shrink:0;margin-right:2px"></span><div style="flex:1;min-width:0"><h3>${EDIT._new?'New project':esc(EDIT.nome||'Project')}</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Everything below stays open for editing by the creator and admins</div></div><button class="x" aria-label="Fechar" onclick="closeModal()">✕</button></div>
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--accent);flex-shrink:0;margin-right:2px"></span><div style="flex:1;min-width:0"><h3>${EDIT._new?'New project':esc(EDIT.nome||'Project')}</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Everything below stays open for editing by the creator and admins</div></div><button class="x" aria-label="Close" onclick="closeModal()">✕</button></div>
     <div class="modal-b">
       ${ED?'':'<div class="banner">You are not the owner or admin: you can update status, check activities/sub-items and post to the log, but not edit the main fields.</div>'}
       <div class="field"><label>Project name</label><input value="${esc(EDIT.nome||'')}" onchange="pmSet('nome',this.value)" ${dis} placeholder="e.g. Holiday Campaign 2026" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
@@ -1870,14 +2048,14 @@ function renderProjModal(){
         <div class="field"><label>Project type <span style="font-weight:600;color:var(--txt-3)">(sets activity template &amp; filters)</span></label><select onchange="pmPTipo(this.value)" ${dis}><option value="">Select…</option>${BUSINESS_TYPES.map(b=>`<option value="${b.id}" ${EDIT.ptipo===b.id?'selected':''}>${b.name}</option>`).join('')}</select></div>
         <div class="field"><label>Due date</label><input type="date" value="${esc(EDIT.prazo||'')}" onchange="pmSet('prazo',this.value)" ${dis}></div>
       </div>
-      ${!EDIT._new?`<div style="display:flex;align-items:center;gap:12px;margin:4px 0 14px"><b style="font-family:Sora,sans-serif;font-size:16px">${prog}%</b><span style="flex:1;height:7px;background:#f0eee8;border-radius:6px;overflow:hidden"><span style="display:block;height:100%;width:${prog}%;background:${healthPill(EDIT.status||autoStatus(EDIT)).dot};border-radius:6px"></span></span><span style="font-size:11.5px;color:var(--txt-3);font-weight:600">${done}/${tasks.length} tasks done</span></div>`:''}
+      ${!EDIT._new?`<div style="display:flex;align-items:center;gap:12px;margin:4px 0 14px"><b style="font-family:'Bricolage Grotesque',sans-serif;font-size:16px">${prog}%</b><span style="flex:1;height:7px;background:#eceef1;border-radius:6px;overflow:hidden"><span style="display:block;height:100%;width:${prog}%;background:${healthPill(EDIT.status||autoStatus(EDIT)).dot};border-radius:6px"></span></span><span style="font-size:11.5px;color:var(--txt-3);font-weight:600">${done}/${tasks.length} tasks done</span></div>`:''}
       <div style="border:1px solid var(--line);border-radius:11px;overflow:hidden;margin-bottom:14px">
         <div style="padding:9px 13px;background:#fdf3e7;border-bottom:1px solid #f0d9c2;display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="font-size:10.5px;font-weight:800;color:#b5550c">${tasks.length} activities from the "${esc(tName)}" pattern — edit names, dates & sub-items now or after</span>${(!EDIT._new&&projHasSubs(EDIT))?`<button class="chip-btn" onclick="openProjTimeline('${esc(EDIT.id)}')" style="flex-shrink:0">🗓 View timeline</button>`:''}</div>
         <div style="padding:9px 11px;max-height:280px;overflow-y:auto">
           ${atvHTML||'<div style="font-size:12.5px;color:var(--txt-3);padding:6px">No activities.</div>'}
           ${ED?'<button class="btn-ghost" onclick="pmAddAtv()" style="margin-top:2px">+ Add activity</button>':''}
         </div>
-        <div style="padding:8px 13px;border-top:1px solid #f0eee8;background:var(--paper-2);font-size:10.5px;color:var(--txt-3)">Open status — everyone involved can post status updates and add sub-items after creation.</div>
+        <div style="padding:8px 13px;border-top:1px solid #eceef1;background:var(--paper-2);font-size:10.5px;color:var(--txt-3)">Open status — everyone involved can post status updates and add sub-items after creation.</div>
       </div>
       <div class="fgrid">
         <div class="field"><label>Owner <span style="font-weight:600;color:var(--txt-3)">(you — creator)</span></label><div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:var(--paper)"><span class="avatar" style="width:22px;height:22px;background:${avColor(EDIT.owner)};font-size:9.5px">${initials(EDIT.owner||'?')}</span><b style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(EDIT.owner||'—')}</b></div></div>
@@ -1885,7 +2063,7 @@ function renderProjModal(){
       </div>
       <div class="field full"><label>Categories <span style="font-weight:600;color:var(--txt-3)">(product categories — multi-select)</span></label><div style="display:flex;flex-wrap:wrap;gap:6px">${CAT_CHIPS.map(c=>{const on=(EDIT.categorias||[]).includes(c);return `<button ${dis} onclick="pmToggleCat('${esc(c)}')" style="padding:6px 13px;border-radius:18px;border:1px solid ${on?'var(--accent)':'var(--line-2)'};background:${on?'#fff2ee':'#fff'};color:${on?'var(--accent-deep)':'var(--txt-2)'};font-weight:700;font-size:12px;cursor:pointer">${esc(c)}</button>`;}).join('')}</div></div>
       <div class="field full"><label>Brand</label><div style="display:flex;flex-wrap:wrap;gap:6px">${BRAND_CHIPS.map(b=>{const on=EDIT.marca===b;return `<button ${dis} onclick="pmSet('marca','${esc(b)}');renderProjModal()" style="padding:6px 13px;border-radius:18px;border:1px solid ${on?'var(--accent)':'var(--line-2)'};background:${on?'#fff2ee':'#fff'};color:${on?'var(--accent-deep)':'var(--txt-2)'};font-weight:700;font-size:12px;cursor:pointer">${esc(b)}</button>`;}).join('')}</div></div>
-      <div style="margin:14px 0 8px"><b style="font-family:Sora">Status / updates</b> <span style="font-size:11.5px;color:var(--txt-3)">— use @Name to mention and notify</span></div>
+      <div style="margin:14px 0 8px"><b style="font-family:'Bricolage Grotesque'">Status / updates</b> <span style="font-size:11.5px;color:var(--txt-3)">— use @Name to mention and notify</span></div>
       <div style="display:flex;gap:8px;margin-bottom:10px"><textarea id="pmLog" rows="2" placeholder="Write an update… e.g. @Giuliana review by Friday" style="flex:1;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px;resize:vertical"></textarea><button class="btn-acc" onclick="pmAddLog()" style="align-self:flex-end">Post</button></div>
       ${logsHTML}
     </div>
@@ -1915,7 +2093,7 @@ async function saveProj(){
 async function delProj(id){
   if(!confirm('Delete this project? This action cannot be undone.'))return;
   try{ await SB.from('projetos').delete().eq('id',id); DATA.projetos=DATA.projetos.filter(p=>p.id!==id); toast('Project deleted'); closeModal(); go(SCREEN); }
-  catch(e){ toast('Error: '+(e.message||e)); }
+  catch(e){ toast(friendlyErr(e)); }
 }
 
 /* Notificações in-app (menções a mim) */
@@ -1932,23 +2110,23 @@ function myMentions(){
 }
 async function notifMarkRead(id,val){
   try{ await SBPO.from('notificacoes').update({lida:val}).eq('id',id); const n=DATA.notif.find(x=>x.id===id); if(n)n.lida=val; go(SCREEN); }
-  catch(e){ toast('Error: '+(e.message||e)); }
+  catch(e){ toast(friendlyErr(e)); }
 }
 async function notifMarkAllRead(){
   const ids=DATA.notif.filter(n=>!n.lida).map(n=>n.id); if(!ids.length)return;
   try{ await SBPO.from('notificacoes').update({lida:true}).in('id',ids); DATA.notif.forEach(n=>n.lida=true); go(SCREEN); toast('All marked as read ✓'); }
-  catch(e){ toast('Error: '+(e.message||e)); }
+  catch(e){ toast(friendlyErr(e)); }
 }
 async function notifDelete(id){
   try{ await SBPO.from('notificacoes').delete().eq('id',id); DATA.notif=DATA.notif.filter(n=>n.id!==id); go(SCREEN); }
-  catch(e){ toast('Error: '+(e.message||e)); }
+  catch(e){ toast(friendlyErr(e)); }
 }
 async function notifClearAll(){
   if(!DATA.notif.length)return;
   if(!confirm('Delete all notifications? This cannot be undone.'))return;
   const ids=DATA.notif.map(n=>n.id);
   try{ await SBPO.from('notificacoes').delete().in('id',ids); DATA.notif=[]; go(SCREEN); toast('Notifications cleared'); }
-  catch(e){ toast('Error: '+(e.message||e)); }
+  catch(e){ toast(friendlyErr(e)); }
 }
 function buildNotifList(){
   const ms=myMentions().map(m=>({...m,origin:'work'}));
@@ -2136,7 +2314,7 @@ function renderReqPO(){
     `;
   }
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:560px">
-    <div class="modal-h"><h3>Request PO</h3><button class="x" aria-label="Fechar" onclick="closeModal()">✕</button></div>
+    <div class="modal-h"><h3>Request PO</h3><button class="x" aria-label="Close" onclick="closeModal()">✕</button></div>
     <div class="modal-b">${body}</div>
     <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" onclick="submitReqPO()">Submit request</button></div></div>
   </div></div>`;
@@ -2156,7 +2334,7 @@ async function submitReqPO(){
       }
       toast('PO split across '+rows.length+' categories for '+fmtMes(REQ.competencia)+' ✓'); closeModal();
       await reloadPO(); go('pos');
-    }catch(e){ toast('Error: '+(e.message||e)); }
+    }catch(e){ toast(friendlyErr(e)); }
     return;
   }
   if(!REQ.projeto_id){ toast('Choose the campaign.'); return; }
@@ -2168,7 +2346,7 @@ async function submitReqPO(){
     if(error)throw error;
     toast('PO requested for '+fmtMes(REQ.competencia)+' ✓'); closeModal();
     await reloadPO(); go('pos');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toast(friendlyErr(e)); }
 }
 async function reloadPO(){
   try{
@@ -2208,7 +2386,7 @@ async function renderPOEdit(){
   const stOpts=Object.keys(PO_STATUS).map(k=>`<option value="${k}" ${pe.status===k?'selected':''}>${PO_STATUS[k].t}</option>`).join('');
   const moOpts=monthOpts.map(m=>`<option value="${m}" ${pe.mes===m?'selected':''}>${fmtMes(m+'-01')}</option>`).join('');
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:500px">
-    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--po);flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Edit PO ${esc(pe.numero_po||'')}</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">${esc(poNome(pe.projeto_id))} — admin can edit any field</div></div><button class="x" aria-label="Fechar" onclick="closeModal()">✕</button></div>
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--po);flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Edit PO ${esc(pe.numero_po||'')}</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">${esc(poNome(pe.projeto_id))} — admin can edit any field</div></div><button class="x" aria-label="Close" onclick="closeModal()">✕</button></div>
     <div class="modal-b">
       <div class="fgrid">
         <div class="field"><label>Value (R$)</label><input type="number" min="0" step="100" value="${esc(pe.valor)}" onchange="poeSet('valor',this.value)" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px" class="mono"></div>
@@ -2232,7 +2410,7 @@ async function submitPOEdit(){
     const {error}=await SBPO.from('pos').update({valor:Math.round(val),descricao:pe.descricao||null,numero_po:pe.numero_po||null,competencia:comp,status:pe.status}).eq('id',pe.id);
     if(error)throw error;
     POEDIT=null; toast('PO updated ✓'); closeModal(); await reloadPO(); go('pos');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toast(friendlyErr(e)); }
 }
 
 /* ===== DELETE (admin only) — POs, campaigns, budgets ===== */
@@ -2242,7 +2420,7 @@ async function deletarPO(id){
   if(!confirm('Delete this PO permanently?\n\n'+(poNome(po.projeto_id)||'')+' · '+BRL(po.valor)+(po.numero_po?' · PO '+po.numero_po:'')+'\n\nThis cannot be undone.'))return;
   try{ const {error}=await SBPO.rpc('excluir_po',{p_po:id}); if(error)throw error;
     POEDIT=null; closeModal(); await reloadPO(); await reloadNotif(); go(SCREEN); toast('PO deleted.');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toast(friendlyErr(e)); }
 }
 async function deletarCampanha(id){
   if(PAPEL!=='admin'){ toast('Only admin can delete.'); return; }
@@ -2251,7 +2429,7 @@ async function deletarCampanha(id){
   if(!confirm('Delete campaign "'+(p.nome||'')+'"?\n\nThis also deletes its '+nPos+' PO(s) and all monthly caps/rateio.\n\nThis cannot be undone.'))return;
   try{ const {error}=await SBPO.rpc('excluir_projeto',{p_projeto:id}); if(error)throw error;
     CAMPEDIT=null; closeModal(); await reloadPOAll(); go('campaigns'); toast('Campaign deleted.');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toast(friendlyErr(e)); }
 }
 async function deletarOrcamento(id){
   if(PAPEL!=='admin'){ toast('Only admin can delete.'); return; }
@@ -2259,7 +2437,7 @@ async function deletarOrcamento(id){
   if(!confirm('Delete budget "'+(o.nome||o.product_category||'')+'"?\n\nOnly possible if no campaign is linked to it.\n\nThis cannot be undone.'))return;
   try{ const {error}=await SBPO.rpc('excluir_orcamento',{p_orc:id}); if(error)throw error;
     ORC=null; closeModal(); await reloadPOAll(); go('budgets'); toast('Budget deleted.');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toast(friendlyErr(e)); }
 }
 
 /* ============================================================
@@ -2276,12 +2454,12 @@ function renderTimeline(){
   const weeks=Math.ceil(totalDays/7); const dayPct=100/(weeks*7);
   const tdy=today0();
   const MM=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  let wkHead=''; for(let w=0;w<weeks;w++){const dd=new Date(min);dd.setDate(dd.getDate()+w*7);const now=tdy>=dd&&tdy<new Date(dd.getFullYear(),dd.getMonth(),dd.getDate()+7);wkHead+=`<div style="flex:1;min-width:0;padding:9px 2px;text-align:center;font-size:10px;font-weight:600;color:${now?'#fff':'#8b8d95'};background:${now?'#14161c':'transparent'};border-right:1px solid #f0eee8">${dd.getDate()}/${MM[dd.getMonth()]}</div>`;}
+  let wkHead=''; for(let w=0;w<weeks;w++){const dd=new Date(min);dd.setDate(dd.getDate()+w*7);const now=tdy>=dd&&tdy<new Date(dd.getFullYear(),dd.getMonth(),dd.getDate()+7);wkHead+=`<div style="flex:1;min-width:0;padding:9px 2px;text-align:center;font-size:10px;font-weight:600;color:${now?'#fff':'#8a8f9a'};background:${now?'#14161c':'transparent'};border-right:1px solid #eceef1">${dd.getDate()}/${MM[dd.getMonth()]}</div>`;}
   const rows=list.sort((a,b)=>new Date((a.inicio||a.prazo)+'T00:00:00')-new Date((b.inicio||b.prazo)+'T00:00:00')).map(p=>{
     const stg=stageOf(p.etapa); const pr=computeProg(p);
     const s=new Date((p.inicio||p.prazo)+'T00:00:00'), e=new Date(p.prazo+'T00:00:00');
     const left=Math.max(0,((s-min)/864e5)*dayPct), width=Math.max(dayPct*2,(((e-s)/864e5)+1)*dayPct);
-    return `<div style="display:flex;border-bottom:1px solid #f0eee8;align-items:center">
+    return `<div style="display:flex;border-bottom:1px solid #eceef1;align-items:center">
       <div style="width:230px;flex-shrink:0;padding:11px 16px;border-right:1px solid var(--line);min-width:0"><div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.nome)}</div><div style="font-size:11px;color:var(--txt-3);margin-top:1px">${esc(p.resp||'—')} · ${esc(stg.name)}</div></div>
       <div style="flex:1;position:relative;height:46px;cursor:pointer" onclick="openProj('${esc(p.id)}')"><div style="position:absolute;left:${left}%;width:${width}%;top:11px;height:24px;border-radius:7px;background:${stg.color};box-shadow:0 3px 8px -3px rgba(0,0,0,.3);display:flex;align-items:center;padding:0 9px;overflow:hidden"><span style="font-size:10.5px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.25);white-space:nowrap">${pr}%</span></div></div>
     </div>`;
@@ -2290,10 +2468,10 @@ function renderTimeline(){
     <div style="display:flex;border-bottom:1px solid var(--line);background:#fbfaf7"><div style="width:230px;flex-shrink:0;padding:11px 16px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);border-right:1px solid var(--line)">Project</div><div style="flex:1;display:flex">${wkHead}</div></div>
     ${rows}</div>
   <div style="display:flex;gap:16px;margin-top:12px;font-size:11.5px;color:var(--txt-2);font-weight:600;flex-wrap:wrap">
-    <span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#2f6fd8;margin-right:5px;vertical-align:-1px"></span>In production</span>
-    <span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#d68a04;margin-right:5px;vertical-align:-1px"></span>Review / approval</span>
-    <span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#6d4bd1;margin-right:5px;vertical-align:-1px"></span>Adjustments</span>
-    <span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#16a06a;margin-right:5px;vertical-align:-1px"></span>Delivery</span>
+    <span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#2e6bd6;margin-right:5px;vertical-align:-1px"></span>In production</span>
+    <span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#c98204;margin-right:5px;vertical-align:-1px"></span>Review / approval</span>
+    <span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#6a4bd4;margin-right:5px;vertical-align:-1px"></span>Adjustments</span>
+    <span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#149465;margin-right:5px;vertical-align:-1px"></span>Delivery</span>
   </div>`;
 }
 function renderTeam(){
@@ -2303,21 +2481,21 @@ function renderTeam(){
   const names=Object.keys(load).sort((a,b)=>load[b].length-load[a].length);
   if(!names.length)return '<div class="empty">No active projects assigned.</div>';
   const max=Math.max(1,...names.map(n=>load[n].length));
-  const barColor=n=>{const late=load[n].filter(p=>p.status==='atrasado'||p.status==='bloqueado').length;return late?'#e0392b':(load[n].length>=max?'#d68a04':'#16a06a');};
+  const barColor=n=>{const late=load[n].filter(p=>p.status==='atrasado'||p.status==='bloqueado').length;return late?'#dc3427':(load[n].length>=max?'#c98204':'#149465');};
   const workload=`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;padding:17px 19px;margin-bottom:18px;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-    <b style="font-family:Sora,sans-serif;font-size:14px">Workload</b>
+    <b style="font-family:'Bricolage Grotesque',sans-serif;font-size:14px">Workload</b>
     <div style="display:flex;flex-direction:column;gap:4px;margin-top:12px">${(function(){const totalActive=names.reduce((s,n)=>s+load[n].length,0);return names.map(n=>{const items=load[n];const late=items.filter(p=>p.status==='atrasado'||p.status==='bloqueado').length;const shareOfTeam=totalActive?Math.round(items.length/totalActive*100):0;const capPct=Math.round(items.length/max*100);
-      return `<div style="display:flex;align-items:center;gap:14px;padding:7px 0"><span style="width:190px;flex-shrink:0;display:flex;align-items:center;gap:9px;font-weight:600;font-size:13px"><span class="avatar" style="width:24px;height:24px;background:${avColor(n)};font-size:10px">${initials(n)}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n)}</span>${late?`<span style="font-size:9.5px;font-weight:800;color:#b32418;background:var(--red-bg);border-radius:20px;padding:2px 7px;flex-shrink:0">⚠ CRITICAL</span>`:''}</span><span style="flex:1;height:13px;background:#f4f3ef;border:1px solid var(--line);border-radius:8px;overflow:hidden"><span style="display:block;height:100%;width:${capPct}%;background:${barColor(n)};border-radius:8px"></span></span><span style="width:210px;flex-shrink:0;text-align:right;font-size:11.5px;color:var(--txt-2)"><b>${items.length}</b> project(s) · <b class="mono">${shareOfTeam}%</b> of team load${late?` · <span style="color:var(--red);font-weight:700">${late} critical</span>`:''}</span></div>`;
+      return `<div style="display:flex;align-items:center;gap:14px;padding:7px 0"><span style="width:190px;flex-shrink:0;display:flex;align-items:center;gap:9px;font-weight:600;font-size:13px"><span class="avatar" style="width:24px;height:24px;background:${avColor(n)};font-size:10px">${initials(n)}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n)}</span>${late?`<span style="font-size:9.5px;font-weight:800;color:#b32418;background:var(--red-bg);border-radius:20px;padding:2px 7px;flex-shrink:0">⚠ CRITICAL</span>`:''}</span><span style="flex:1;height:13px;background:var(--paper);border:1px solid var(--line);border-radius:8px;overflow:hidden"><span style="display:block;height:100%;width:${capPct}%;background:${barColor(n)};border-radius:8px"></span></span><span style="width:210px;flex-shrink:0;text-align:right;font-size:11.5px;color:var(--txt-2)"><b>${items.length}</b> project(s) · <b class="mono">${shareOfTeam}%</b> of team load${late?` · <span style="color:var(--red);font-weight:700">${late} critical</span>`:''}</span></div>`;
     }).join('');})()}</div></div>`;
   const cards=names.slice(0,4).map(n=>{const items=load[n];const late=items.filter(p=>p.status==='atrasado'||p.status==='bloqueado').length;const done=DATA.projetos.filter(p=>p.resp===n&&p.status==='concluido').length;const tasks=items.reduce((s,p)=>s+((p.tasks||[]).filter(t=>!t.done).length),0);
     return `<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-      <div style="padding:14px 17px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line)"><span class="avatar" style="width:38px;height:38px;border-radius:11px;background:${avColor(n)};font-size:14px">${initials(n)}</span><span style="flex:1"><b style="font-family:Sora,sans-serif;font-size:14px;display:block">${esc(n)}</b><span style="font-size:11px;color:var(--txt-3)">Owner</span></span>${late?`<span style="font-size:10px;font-weight:800;color:#b32418;background:var(--red-bg);border-radius:20px;padding:3px 9px">⚠ ${late} CRITICAL</span>`:''}</div>
+      <div style="padding:14px 17px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line)"><span class="avatar" style="width:38px;height:38px;border-radius:11px;background:${avColor(n)};font-size:14px">${initials(n)}</span><span style="flex:1"><b style="font-family:'Bricolage Grotesque',sans-serif;font-size:14px;display:block">${esc(n)}</b><span style="font-size:11px;color:var(--txt-3)">Owner</span></span>${late?`<span style="font-size:10px;font-weight:800;color:#b32418;background:var(--red-bg);border-radius:20px;padding:3px 9px">⚠ ${late} CRITICAL</span>`:''}</div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--line)">
-        <span style="padding:11px 6px;text-align:center;border-right:1px solid #f0eee8"><b style="font-family:Sora,sans-serif;font-size:18px;display:block">${items.length}</b><span style="font-size:9.5px;color:var(--txt-3);font-weight:700;text-transform:uppercase">Active</span></span>
-        <span style="padding:11px 6px;text-align:center;border-right:1px solid #f0eee8"><b style="font-family:Sora,sans-serif;font-size:18px;display:block;color:${late?'#b32418':'inherit'}">${late}</b><span style="font-size:9.5px;color:var(--txt-3);font-weight:700;text-transform:uppercase">Critical</span></span>
-        <span style="padding:11px 6px;text-align:center;border-right:1px solid #f0eee8"><b style="font-family:Sora,sans-serif;font-size:18px;display:block">${done}</b><span style="font-size:9.5px;color:var(--txt-3);font-weight:700;text-transform:uppercase">Done</span></span>
-        <span style="padding:11px 6px;text-align:center"><b style="font-family:Sora,sans-serif;font-size:18px;display:block">${tasks}</b><span style="font-size:9.5px;color:var(--txt-3);font-weight:700;text-transform:uppercase">Tasks</span></span></div>
-      <div style="padding:10px 12px;display:flex;flex-direction:column;gap:2px">${items.slice(0,4).map(p=>{const hp=healthPill(p.status);const pr=computeProg(p);const isCrit=p.status==='atrasado'||p.status==='bloqueado';return `<div onclick="openProj('${esc(p.id)}')" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;cursor:pointer;${isCrit?'border-left:3px solid var(--red);background:#fdf4f3':''}"><span style="flex:1;min-width:0;font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span><span style="width:54px;height:5px;background:#f0eee8;border-radius:5px;overflow:hidden;flex-shrink:0"><span style="display:block;height:100%;width:${pr}%;background:${hp.dot}"></span></span></div>`;}).join('')}</div></div>`;
+        <span style="padding:11px 6px;text-align:center;border-right:1px solid #eceef1"><b style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;display:block">${items.length}</b><span style="font-size:9.5px;color:var(--txt-3);font-weight:700;text-transform:uppercase">Active</span></span>
+        <span style="padding:11px 6px;text-align:center;border-right:1px solid #eceef1"><b style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;display:block;color:${late?'#b32418':'inherit'}">${late}</b><span style="font-size:9.5px;color:var(--txt-3);font-weight:700;text-transform:uppercase">Critical</span></span>
+        <span style="padding:11px 6px;text-align:center;border-right:1px solid #eceef1"><b style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;display:block">${done}</b><span style="font-size:9.5px;color:var(--txt-3);font-weight:700;text-transform:uppercase">Done</span></span>
+        <span style="padding:11px 6px;text-align:center"><b style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;display:block">${tasks}</b><span style="font-size:9.5px;color:var(--txt-3);font-weight:700;text-transform:uppercase">Tasks</span></span></div>
+      <div style="padding:10px 12px;display:flex;flex-direction:column;gap:2px">${items.slice(0,4).map(p=>{const hp=healthPill(p.status);const pr=computeProg(p);const isCrit=p.status==='atrasado'||p.status==='bloqueado';return `<div onclick="openProj('${esc(p.id)}')" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;cursor:pointer;${isCrit?'border-left:3px solid var(--red);background:#fdf4f3':''}"><span style="flex:1;min-width:0;font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span><span style="width:54px;height:5px;background:#eceef1;border-radius:5px;overflow:hidden;flex-shrink:0"><span style="display:block;height:100%;width:${pr}%;background:${hp.dot}"></span></span></div>`;}).join('')}</div></div>`;
   }).join('');
   return workload+`<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">${cards}</div>`;
 }
@@ -2328,12 +2506,12 @@ function renderWeekly(){
   const progress=list.filter(p=>p.status==='no_prazo'||p.status==='atencao');
   const tasksDone=list.reduce((s,p)=>s+((p.tasks||[]).filter(t=>t.done).length),0);
   const now=new Date().toLocaleDateString('en-US',{day:'2-digit',month:'long',year:'numeric'});
-  const st=(n,l,col)=>`<span><b style="font-family:Sora,sans-serif;font-size:24px;display:block${col?';color:'+col:''}">${n}</b><span style="font-size:11.5px;color:var(--txt-2);font-weight:600">${l}</span></span>`;
+  const st=(n,l,col)=>`<span><b style="font-family:'Bricolage Grotesque',sans-serif;font-size:24px;display:block${col?';color:'+col:''}">${n}</b><span style="font-size:11.5px;color:var(--txt-2);font-weight:600">${l}</span></span>`;
   const line=(p,extra)=>`<div style="padding:9px 0;border-bottom:1px dashed var(--line);font-size:13px;cursor:pointer" onclick="openProj('${esc(p.id)}')"><b>${esc(p.nome)}</b>${extra?' — '+extra:''} <span style="color:var(--txt-2)">· ${esc(p.resp||'—')}</span></div>`;
   const sec=(label,col,items,extraFn)=>`<div style="padding:16px 22px;border-bottom:1px solid var(--line)"><div style="font-size:11.5px;font-weight:800;letter-spacing:.06em;color:${col};margin-bottom:9px">${label}</div>${items.length?items.map(p=>line(p,extraFn(p))).join(''):'<div style="font-size:12.5px;color:var(--txt-3)">Nothing here.</div>'}</div>`;
   const luTxt=p=>{const lu=latestLog(p);return lu?esc(lu.txt):'';};
   return `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;gap:16px;flex-wrap:wrap">
-      <div style="max-width:520px"><b style="font-family:Sora,sans-serif;font-size:15px">Week of ${now}</b><div style="font-size:12.5px;color:var(--txt-2);margin-top:2px">Auto-generated from project data — copy or email.</div></div>
+      <div style="max-width:520px"><b style="font-family:'Bricolage Grotesque',sans-serif;font-size:15px">Week of ${now}</b><div style="font-size:12.5px;color:var(--txt-2);margin-top:2px">Auto-generated from project data — copy or email.</div></div>
       <div style="display:flex;gap:8px"><button onclick="copyWeekly()" style="padding:9px 15px;border-radius:9px;border:none;background:#14161c;color:#fff;font-weight:600;font-size:12.5px;cursor:pointer">📋 Copy report</button></div></div>
     <div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
       <div style="padding:18px 22px;border-bottom:1px solid var(--line);background:#fbfaf7;display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
@@ -2360,11 +2538,11 @@ function renderMyTasks(){
   const dueTag=fim=>{if(!fim)return{txt:'no date',bg:'#ecebe6',fg:'#494c54'};const dd=daysTo(fim);if(dd<0)return{txt:Math.abs(dd)+'d late',bg:'#fbe4e1',fg:'#b32418'};if(dd<=5)return{txt:'in '+dd+'d',bg:'#fbf0d8',fg:'#9c6404'};return{txt:fmtDate(fim),bg:'#e4f5ec',fg:'#0c7048'};};
   return `<div style="display:grid;grid-template-columns:1.3fr 1fr;gap:18px">
     <div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-      <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between"><b style="font-family:Sora,sans-serif;font-size:14px">My checklist</b><span style="font-size:11px;color:var(--txt-3);font-weight:600">${checks.length} pending</span></div>
-      <div style="padding:4px 10px 10px">${checks.length?checks.map(c=>{const d=dueTag(c.fim);return `<div style="display:flex;align-items:center;gap:11px;padding:11px 6px;border-bottom:1px solid #f0eee8"><button onclick="toggleMyTask('${esc(c.pid)}','${esc(c.tid)}')" style="width:19px;height:19px;border-radius:6px;border:2px solid #cfccc3;background:#fff;cursor:pointer;flex-shrink:0"></button><div style="flex:1;min-width:0;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.title)} <span style="color:var(--txt-3);font-size:11.5px">· ${esc(c.proj)}</span></div><span style="flex-shrink:0;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;background:${d.bg};color:${d.fg}">${d.txt}</span></div>`;}).join(''):'<div class="empty">No pending tasks.</div>'}</div></div>
+      <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between"><b style="font-family:'Bricolage Grotesque',sans-serif;font-size:14px">My checklist</b><span style="font-size:11px;color:var(--txt-3);font-weight:600">${checks.length} pending</span></div>
+      <div style="padding:4px 10px 10px">${checks.length?checks.map(c=>{const d=dueTag(c.fim);return `<div style="display:flex;align-items:center;gap:11px;padding:11px 6px;border-bottom:1px solid #eceef1"><button onclick="toggleMyTask('${esc(c.pid)}','${esc(c.tid)}')" style="width:19px;height:19px;border-radius:6px;border:2px solid #cfccc3;background:#fff;cursor:pointer;flex-shrink:0"></button><div style="flex:1;min-width:0;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.title)} <span style="color:var(--txt-3);font-size:11.5px">· ${esc(c.proj)}</span></div><span style="flex-shrink:0;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;background:${d.bg};color:${d.fg}">${d.txt}</span></div>`;}).join(''):'<div class="empty">No pending tasks.</div>'}</div></div>
     <div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-      <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line)"><b style="font-family:Sora,sans-serif;font-size:14px">Requests / mentions</b></div>
-      <div style="padding:12px 14px;display:flex;flex-direction:column;gap:10px">${ms.length?ms.map(m=>`<div style="border:1px solid var(--line);border-left:4px solid var(--violet);border-radius:11px;padding:12px 14px;background:#fbfaf7;cursor:${m.pid?'pointer':'default'}" ${m.pid?`onclick="openProj('${esc(m.pid)}')"`:''}><div style="font-weight:600;font-size:13px">${esc(m.proj)}</div><div style="font-size:12px;color:var(--txt-2);margin-top:3px">${fmtLogTxt(m.txt)}</div><div style="font-size:11px;color:var(--txt-3);margin-top:4px">from <b style="color:var(--txt-2)">${esc(m.autor)}</b> · ${fmtDate(m.t)}</div></div>`).join(''):'<div class="empty">No requests.</div>'}</div></div>
+      <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line)"><b style="font-family:'Bricolage Grotesque',sans-serif;font-size:14px">Requests / mentions</b></div>
+      <div style="padding:12px 14px;display:flex;flex-direction:column;gap:10px">${ms.length?ms.map(m=>`<div style="border:1px solid var(--line);border-left:3px solid var(--violet);border-radius:11px;padding:12px 14px;background:#fbfaf7;cursor:${m.pid?'pointer':'default'}" ${m.pid?`onclick="openProj('${esc(m.pid)}')"`:''}><div style="font-weight:600;font-size:13px">${esc(m.proj)}</div><div style="font-size:12px;color:var(--txt-2);margin-top:3px">${fmtLogTxt(m.txt)}</div><div style="font-size:11px;color:var(--txt-3);margin-top:4px">from <b style="color:var(--txt-2)">${esc(m.autor)}</b> · ${fmtDate(m.t)}</div></div>`).join(''):'<div class="empty">No requests.</div>'}</div></div>
   </div>`;
 }
 async function toggleMyTask(pid,tid){
@@ -2392,7 +2570,7 @@ function feeSplitBlock(){
   const tipoKeys=Object.keys(groups).sort();
   const rateioRow=k=>{
     const rows=groups[k]; const open=!!RATEIO_ACC_OPEN[k];
-    return `<div style="border-bottom:1px solid #f0eee8">
+    return `<div style="border-bottom:1px solid #eceef1">
       <div style="display:flex;align-items:center;gap:10px;padding:11px 4px;cursor:pointer" onclick="toggleRateioAcc('${esc(k)}')">
         <span style="flex:1;font-weight:600;font-size:13px">Rateio ${esc(k)}</span>
         <span style="font-size:11px;color:var(--txt-3);font-weight:600">${rows.length} split(s)</span>
@@ -2400,12 +2578,12 @@ function feeSplitBlock(){
       </div>
       ${open?`<div style="padding:2px 4px 12px 4px">
         <div style="display:grid;grid-template-columns:1fr .6fr 1fr 1fr 1.3fr;gap:10px;padding:8px 10px;background:var(--paper-2);border-radius:8px 8px 0 0;font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em"><span>Category</span><span style="text-align:right">%</span><span>Cost center</span><span>Account</span><span>Description</span></div>
-        ${rows.map(f=>`<div style="display:grid;grid-template-columns:1fr .6fr 1fr 1fr 1.3fr;gap:10px;padding:8px 10px;border-bottom:1px solid #f0eee8;font-size:12px"><span>${esc(f.categoria||'—')}</span><span class="mono" style="text-align:right">${f.percentual!=null?(Math.round(f.percentual*1000)/10)+'%':'—'}</span><span class="mono">${esc(f.cc||'—')}</span><span class="mono">${esc(f.account||'—')}</span><span>${esc(f.descricao||'—')}</span></div>`).join('')}
+        ${rows.map(f=>`<div style="display:grid;grid-template-columns:1fr .6fr 1fr 1fr 1.3fr;gap:10px;padding:8px 10px;border-bottom:1px solid #eceef1;font-size:12px"><span>${esc(f.categoria||'—')}</span><span class="mono" style="text-align:right">${f.percentual!=null?(Math.round(f.percentual*1000)/10)+'%':'—'}</span><span class="mono">${esc(f.cc||'—')}</span><span class="mono">${esc(f.account||'—')}</span><span>${esc(f.descricao||'—')}</span></div>`).join('')}
       </div>`:''}
     </div>`;
   };
   const rateioBlock=`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-    <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between"><b style="font-family:Sora,sans-serif;font-size:14px">Rateios</b>${canFee?'<button class="chip-btn" onclick="openFeeEditor()">Define / edit rateios</button>':''}</div>
+    <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between"><b style="font-family:'Bricolage Grotesque',sans-serif;font-size:14px">Rateios</b>${canFee?'<button class="chip-btn" onclick="openFeeEditor()">Define / edit rateios</button>':''}</div>
     <div style="padding:2px 12px">${tipoKeys.length?tipoKeys.map(rateioRow).join(''):'<div style="padding:14px 4px;font-size:12.5px;color:var(--txt-3)">No rateios configured yet.</div>'}</div>
   </div>`;
   // Accounts table — one row per CC/Account/Description, monthly budget × consumption × balance
@@ -2460,7 +2638,7 @@ function feeSplitBlock(){
   let gB=0,gC=0; const gByM={};
   accRows.forEach(a=>{monthList.forEach(m=>{const b=a.months[m]||0,c=a.cons[m]||0;gByM[m]=gByM[m]||{b:0,c:0};gByM[m].b+=b;gByM[m].c+=c;gB+=b;gC+=c;});});
   const accountsBlock=`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05);margin-top:16px">
-    <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line)"><b style="font-family:Sora,sans-serif;font-size:14px">Cost center / account / description — budget · consumption · balance</b></div>
+    <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line)"><b style="font-family:'Bricolage Grotesque',sans-serif;font-size:14px">Cost center / account / description — budget · consumption · balance</b></div>
     ${accRows.length?`<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%">
       <thead>
         <tr>
@@ -2476,7 +2654,7 @@ function feeSplitBlock(){
         </tr>
       </thead>
       <tbody>
-      ${accRows.map(a=>{const totB=Object.values(a.months).reduce((s,v)=>s+v,0);const totC=Object.values(a.cons).reduce((s,v)=>s+v,0);const totS=totB-totC;return `<tr style="border-bottom:1px solid #f0eee8">
+      ${accRows.map(a=>{const totB=Object.values(a.months).reduce((s,v)=>s+v,0);const totC=Object.values(a.cons).reduce((s,v)=>s+v,0);const totS=totB-totC;return `<tr style="border-bottom:1px solid #eceef1">
         <td class="mono" style="padding:9px 10px;font-size:11.5px;white-space:nowrap">${esc(a.cc||'—')}</td>
         <td class="mono" style="padding:9px 10px;font-size:11.5px;white-space:nowrap">${esc(a.acc||'—')}</td>
         <td style="padding:9px 10px;font-size:12px">${esc(a.desc||'—')}</td>
@@ -2485,7 +2663,7 @@ function feeSplitBlock(){
       </tr>`;}).join('')}
       </tbody>
       <tfoot><tr style="background:var(--paper-2);border-top:1px solid var(--line)">
-        <td colspan="3" style="padding:10px;font-weight:800;font-size:12px;font-family:Sora,sans-serif">Total</td>
+        <td colspan="3" style="padding:10px;font-weight:800;font-size:12px;font-family:'Bricolage Grotesque',sans-serif">Total</td>
         ${monthList.map(m=>{const g=gByM[m]||{b:0,c:0},s=g.b-g.c;return `<td class="mono" style="${tdNum};color:var(--txt-3);font-weight:700;${sep}">${BRL(g.b)}</td><td class="mono" style="${tdNum};font-weight:700">${BRL(g.c)}</td><td class="mono" style="${tdNum};font-weight:800;color:${s<0?'var(--po)':'#1f8a4c'}">${BRL(s)}</td>`;}).join('')}
         <td class="mono" style="${tdNum};font-weight:800;color:var(--txt-3);${sepT}">${BRL(gB)}</td><td class="mono" style="${tdNum};font-weight:800">${BRL(gC)}</td><td class="mono" style="${tdNum};font-weight:900;color:${(gB-gC)<0?'var(--po)':'#1f8a4c'}">${BRL(gB-gC)}</td>
       </tr></tfoot>
@@ -2565,16 +2743,16 @@ function renderBudgetOverview(isBalance){
     const pcC=tot?Math.min(100,cons/tot*100):0, pcM=tot?Math.min(100-pcC,comp/tot*100):0, pcP=tot?Math.min(100-pcC-pcM,pnd/tot*100):0;
     const open=!!CAMP_ACC_OPEN[p.id];
     const pos=(DATA.pos||[]).filter(po=>po.projeto_id===p.id);
-    return `<div style="border-bottom:1px solid #f0eee8">
+    return `<div style="border-bottom:1px solid #eceef1">
       <div style="display:flex;align-items:center;gap:10px;padding:11px 4px;cursor:pointer" onclick="toggleCampAcc('${esc(p.id)}')">
         <span style="flex:1;min-width:0;font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span>
-        <span style="width:90px;height:7px;background:#f0eee8;border-radius:5px;overflow:hidden;flex-shrink:0;display:flex"><span style="width:${pcC}%;background:${over?'var(--po)':'#14161c'}"></span><span style="width:${pcM}%;background:#5d6068"></span><span style="width:${pcP}%;background:#cf8a16"></span></span>
+        <span style="width:90px;height:7px;background:#eceef1;border-radius:5px;overflow:hidden;flex-shrink:0;display:flex"><span style="width:${pcC}%;background:${over?'var(--po)':'#14161c'}"></span><span style="width:${pcM}%;background:#5d6068"></span><span style="width:${pcP}%;background:#cf8a16"></span></span>
         <span class="mono" style="font-size:10.5px;font-weight:700;color:${over?'#bf0008':near?'#9c6404':'var(--txt-3)'};width:38px;text-align:right;flex-shrink:0" title="Consumed + committed + awaiting approval, over the cap">${Math.round(rawc)}%</span>
         <span class="mono" style="font-size:12px;color:var(--txt-2)" title="Consumed + committed / cap">${BRL(cons+comp)} <span style="color:var(--txt-3)">/ ${BRL(tot)}</span></span>
         <span style="font-size:11px;color:var(--txt-3)">${open?'▲':'▼'}</span>
       </div>
       ${open?`<div style="padding:0 4px 12px 4px">
-        <div style="height:5px;background:#f0eee8;border-radius:6px;overflow:hidden;margin-bottom:9px;display:flex"><span style="width:${pcC}%;background:${over?'var(--po)':'#14161c'}"></span><span style="width:${pcM}%;background:#5d6068"></span><span style="width:${pcP}%;background:#cf8a16"></span></div>
+        <div style="height:5px;background:#eceef1;border-radius:6px;overflow:hidden;margin-bottom:9px;display:flex"><span style="width:${pcC}%;background:${over?'var(--po)':'#14161c'}"></span><span style="width:${pcM}%;background:#5d6068"></span><span style="width:${pcP}%;background:#cf8a16"></span></div>
         ${pos.length?pos.map(po=>`<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:6px 10px;background:var(--paper-2);border-radius:8px;margin-bottom:5px"><span>${esc(po.numero_po||po.descricao||'PO')} <span style="color:var(--txt-3)">· ${esc((PO_STATUS[po.status]||{}).t||po.status)}</span></span><span class="mono" style="font-weight:600">${BRL(po.valor)}</span></div>`).join(''):'<div style="font-size:11.5px;color:var(--txt-3);padding:4px 10px">No POs yet.</div>'}
       </div>`:''}
     </div>`;
@@ -2589,17 +2767,17 @@ function renderBudgetOverview(isBalance){
     const rawc=tot?(cons+comp+pnd)/tot*100:0, pctc=Math.min(100,rawc), over=rawc>100.5, near=!over&&rawc>=90;
     const pcC=tot?Math.min(100,cons/tot*100):0, pcM=tot?Math.min(100-pcC,comp/tot*100):0, pcP=tot?Math.min(100-pcC-pcM,pnd/tot*100):0;
     const open=!!CAT_ACC_OPEN[key];
-    return `<div style="border-bottom:1px solid #f0eee8;border-left:4px solid ${m.c}">
+    return `<div style="border-bottom:1px solid #eceef1;border-left:3px solid ${m.c}">
       <div style="display:flex;align-items:center;gap:10px;padding:11px 10px;cursor:pointer;background:${open?m.bg+'55':''}" onclick="toggleCatAcc('${esc(key)}')">
         <span style="width:28px;height:28px;border-radius:8px;background:${m.bg};display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">${m.icon}</span>
         <span style="flex:1;min-width:0"><span style="font-weight:700;font-size:13.5px;display:block">${esc(key)}</span><span style="font-size:10.5px;color:var(--txt-3);font-weight:600">${esc(m.label)} · ${list.length} campaign(s)</span></span>
-        <span style="width:90px;height:7px;background:#f0eee8;border-radius:5px;overflow:hidden;flex-shrink:0;display:flex"><span style="width:${pcC}%;background:${over?'var(--po)':'#14161c'}"></span><span style="width:${pcM}%;background:#5d6068"></span><span style="width:${pcP}%;background:#cf8a16"></span></span>
+        <span style="width:90px;height:7px;background:#eceef1;border-radius:5px;overflow:hidden;flex-shrink:0;display:flex"><span style="width:${pcC}%;background:${over?'var(--po)':'#14161c'}"></span><span style="width:${pcM}%;background:#5d6068"></span><span style="width:${pcP}%;background:#cf8a16"></span></span>
         <span class="mono" style="font-size:10.5px;font-weight:700;color:${over?'#bf0008':near?'#9c6404':'var(--txt-3)'};width:38px;text-align:right;flex-shrink:0" title="Consumed + committed + awaiting approval, over the cap">${Math.round(rawc)}%</span>
         <span class="mono" style="font-size:12px;color:var(--txt-2)" title="Consumed + committed / cap">${BRL(cons+comp)} <span style="color:var(--txt-3)">/ ${BRL(tot)}</span></span>
         <span style="font-size:11px;color:var(--txt-3)">${open?'▲':'▼'}</span>
       </div>
       ${open?`<div style="padding:0 4px 10px 16px">
-        <div style="height:5px;background:#f0eee8;border-radius:6px;overflow:hidden;margin-bottom:9px;display:flex"><span style="width:${pcC}%;background:${over?'var(--po)':'#14161c'}"></span><span style="width:${pcM}%;background:#5d6068"></span><span style="width:${pcP}%;background:#cf8a16"></span></div>
+        <div style="height:5px;background:#eceef1;border-radius:6px;overflow:hidden;margin-bottom:9px;display:flex"><span style="width:${pcC}%;background:${over?'var(--po)':'#14161c'}"></span><span style="width:${pcM}%;background:#5d6068"></span><span style="width:${pcP}%;background:#cf8a16"></span></div>
         ${list.map(campRow).join('')}
       </div>`:''}
     </div>`;
@@ -2615,12 +2793,12 @@ function renderBudgetOverview(isBalance){
     if(comprometido>tot) alerts.push({sev:'over',html:`<b>${esc(p.nome)}</b> went over its cap — ${BRL(comprometido)} committed of ${BRL(tot)}.`,id:p.id});
     else if(pct>=90&&!hasConclBy[p.id]) alerts.push({sev:'near',html:`<b>${esc(p.nome)}</b> has committed ${Math.round(pct)}% of its budget and no PO has been completed yet.`,id:p.id});
   });
-  const ALERT_SEV={over:{bg:'#fbe4e1',bd:'#f2c4bf',dot:'#bf0008',fg:'#7d1a14',btn:'#bf0008'},near:{bg:'#fbf0d8',bd:'#ecd9a4',dot:'#d68a04',fg:'#7a5200',btn:'#9c6404'}};
+  const ALERT_SEV={over:{bg:'#fbe4e1',bd:'#f2c4bf',dot:'#bf0008',fg:'#7d1a14',btn:'#bf0008'},near:{bg:'#fbf0d8',bd:'#ecd9a4',dot:'#c98204',fg:'#7a5200',btn:'#9c6404'}};
   const alertsHTML=alerts.length?`<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px">${alerts.slice(0,4).map(a=>{const s=ALERT_SEV[a.sev]||ALERT_SEV.near;return `<div style="display:flex;align-items:center;gap:12px;background:${s.bg};border:1px solid ${s.bd};border-radius:12px;padding:11px 16px"><span style="width:8px;height:8px;border-radius:50%;background:${s.dot};flex-shrink:0"></span><span style="flex:1;font-size:13px;color:${s.fg}">${a.html}</span><button style="font-size:12px;font-weight:700;color:${s.btn};white-space:nowrap" onclick="openCampDetail('${esc(a.id)}')">View campaign →</button></div>`;}).join('')}</div>`:'';
   const heroStat=(l,v,c,tt)=>`<div title="${tt||''}"><div style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3)">${l}</div><div class="mono" style="font-size:17px;font-weight:700;margin-top:2px;color:${c||'var(--txt)'}">${v}</div></div>`;
   const hero=`<div style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px 24px;box-shadow:0 1px 2px rgba(20,22,28,.05);margin-bottom:18px">
       <div style="display:flex;align-items:flex-end;gap:36px;flex-wrap:wrap">
-        <div title="Cap minus consumed, committed and awaiting approval"><div style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3)">Available</div><div class="mono" style="font-size:32px;font-weight:700;letter-spacing:-.02em;margin-top:2px;color:${saldo<0?'var(--po)':'#16a06a'}">${BRL(saldo)}</div></div>
+        <div title="Cap minus consumed, committed and awaiting approval"><div style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3)">Available</div><div class="mono" style="font-size:32px;font-weight:700;letter-spacing:-.02em;margin-top:2px;color:${saldo<0?'var(--po)':'#149465'}">${BRL(saldo)}</div></div>
         <div style="display:flex;gap:28px;padding-bottom:5px;flex-wrap:wrap">
           ${heroStat(isBalance?'Allocated':'Budgeted',BRL(orcado),null,'Sum of the monthly caps of approved campaigns in the period')}
           ${heroStat('Consumed',BRL(consumido)+` <span style="font-size:12px;color:var(--txt-3);font-weight:500">· ${Math.round(pctCons)}%</span>`,null,'POs invoiced, validated or completed')}
@@ -2644,7 +2822,7 @@ function renderBudgetOverview(isBalance){
   }
   return boPeriodBar()+`${hero}${alertsHTML}
     <div style="background:#fff;border:1px solid var(--line);border-radius:13px;padding:17px 18px;margin-bottom:18px;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><b style="font-family:Sora,sans-serif;font-size:14px">${fmtMes(mNow+'-01')} — month balance</b><span class="mono" style="font-size:12px;color:var(--txt-2)">cap ${BRL(capMes)}</span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><b style="font-family:'Bricolage Grotesque',sans-serif;font-size:14px">${fmtMes(mNow+'-01')} — month balance</b><span class="mono" style="font-size:12px;color:var(--txt-2)">cap ${BRL(capMes)}</span></div>
       <div style="display:flex;height:24px;border-radius:7px;overflow:hidden;border:1px solid var(--line);background:#f3f4f6"><span style="width:${consPctM}%;background:#14161c"></span><span style="width:${compPctM}%;background:#5d6068"></span><span style="width:${penPctM}%;background:#cf8a16"></span></div>
       <div style="display:flex;gap:18px;font-size:12px;color:var(--txt-2);margin-top:9px;font-weight:600;flex-wrap:wrap">
         <span title="POs invoiced, validated or completed"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#14161c;margin-right:5px"></span>Consumed ${BRL(consMes)}</span>
@@ -2653,7 +2831,7 @@ function renderBudgetOverview(isBalance){
         <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#d9d6cc;margin-right:5px"></span>Balance ${BRL(balMes)}</span>
       </div>
     </div>
-    ${cats.length?`<div style="display:flex;align-items:baseline;gap:10px;margin:0 0 10px"><h3 style="font-family:Sora,sans-serif;font-size:14px">By product category</h3><span style="font-size:11.5px;color:var(--txt-3)">allocated to campaigns vs. registered budget${BO_PER.mode!=='all'?' — ⚠ period allocation compared against the FULL budget total':''} — click to open the campaigns</span></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">${cats.map(c=>{const m=catMeta(c.n);const nC=camps.filter(p=>(p.product_category||'')===c.n).length;const hot=c.pct>=90;return `<div style="background:#fff;border:1px solid ${hot?'#f2c4bf':'var(--line)'};border-top:4px solid ${hot?'var(--po)':m.c};border-radius:13px;padding:14px 16px;box-shadow:0 1px 2px rgba(20,22,28,.05);cursor:pointer" onclick="toggleCatAcc('${esc(c.n)}')"><div style="display:flex;align-items:center;gap:9px"><span style="width:30px;height:30px;border-radius:9px;background:${m.bg};display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">${m.icon}</span><span style="min-width:0;flex:1"><b style="font-family:Sora,sans-serif;font-size:14px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</b><span style="font-size:10.5px;color:var(--txt-3);font-weight:600">${esc(m.label)} · ${nC} campaign${nC===1?'':'s'}</span></span><span class="mono" style="font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:${hot?'#fbe4e1':m.bg};color:${hot?'#bf0008':m.c}">${Math.round(c.pct)}%</span></div><div style="display:flex;height:8px;border-radius:5px;overflow:hidden;background:#f0eee8;margin-top:12px"><span style="width:${c.pct}%;background:${hot?'var(--po)':m.c}"></span></div><div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt-2);margin-top:8px" class="mono"><span>${BRL(c.used)} allocated</span><span style="color:var(--txt-3)">of ${BRL(c.total)} budget</span></div></div>`;}).join('')}</div>`:''}
+    ${cats.length?`<div style="display:flex;align-items:baseline;gap:10px;margin:0 0 10px"><h3 style="font-family:'Bricolage Grotesque',sans-serif;font-size:14px">By product category</h3><span style="font-size:11.5px;color:var(--txt-3)">allocated to campaigns vs. registered budget${BO_PER.mode!=='all'?' — ⚠ period allocation compared against the FULL budget total':''} — click to open the campaigns</span></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">${cats.map(c=>{const m=catMeta(c.n);const nC=camps.filter(p=>(p.product_category||'')===c.n).length;const hot=c.pct>=90;return `<div style="background:#fff;border:1px solid ${hot?'#f2c4bf':'var(--line)'};border-top:3px solid ${hot?'var(--po)':m.c};border-radius:13px;padding:14px 16px;box-shadow:0 1px 2px rgba(20,22,28,.05);cursor:pointer" onclick="toggleCatAcc('${esc(c.n)}')"><div style="display:flex;align-items:center;gap:9px"><span style="width:30px;height:30px;border-radius:9px;background:${m.bg};display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">${m.icon}</span><span style="min-width:0;flex:1"><b style="font-family:'Bricolage Grotesque',sans-serif;font-size:14px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</b><span style="font-size:10.5px;color:var(--txt-3);font-weight:600">${esc(m.label)} · ${nC} campaign${nC===1?'':'s'}</span></span><span class="mono" style="font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:${hot?'#fbe4e1':m.bg};color:${hot?'#bf0008':m.c}">${Math.round(c.pct)}%</span></div><div style="display:flex;height:8px;border-radius:5px;overflow:hidden;background:#eceef1;margin-top:12px"><span style="width:${c.pct}%;background:${hot?'var(--po)':m.c}"></span></div><div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt-2);margin-top:8px" class="mono"><span>${BRL(c.used)} allocated</span><span style="color:var(--txt-3)">of ${BRL(c.total)} budget</span></div></div>`;}).join('')}</div>`:''}
     <div class="panel" style="margin-top:18px"><div class="panel-h"><h3>Monthly evolution</h3><span class="tag">cap · consumed · committed · awaiting approval</span></div>
       <div style="padding:18px;height:280px"><canvas id="chartMonthly"></canvas></div>
     </div>
@@ -2700,10 +2878,10 @@ function renderBudgets(){
     </div>`;
   };
   const catTable=orcs.length?`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05);margin-bottom:18px">
-    <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between"><b style="font-family:Sora,sans-serif;font-size:14px">Budget categories</b>${canBudget?'<button class="chip-btn" onclick="openOrcNew()">+ New budget</button>':''}</div>
+    <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between"><b style="font-family:'Bricolage Grotesque',sans-serif;font-size:14px">Budget categories</b>${canBudget?'<button class="chip-btn" onclick="openOrcNew()">+ New budget</button>':''}</div>
     <div style="display:grid;grid-template-columns:1.3fr 1fr .9fr ${canBudget?'70px':''};gap:10px;padding:10px 17px;background:#fbfaf7;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em"><span>Category</span><span>Period</span><span style="text-align:right">Total</span>${canBudget?'<span></span>':''}</div>
     ${orcs.map(o=>`<div>
-      <div style="display:grid;grid-template-columns:1.3fr 1fr .9fr ${canBudget?'70px':''};gap:10px;padding:12px 17px;border-bottom:1px solid #f0eee8;align-items:center;font-size:13px;cursor:pointer" onclick="toggleOrcDetail('${esc(o.id)}')"><span style="font-weight:600;display:flex;align-items:center;gap:8px;min-width:0">${(()=>{const m=catMeta(o.product_category||'');return `<span style=\"width:24px;height:24px;border-radius:7px;background:${m.bg};display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0\">${m.icon}</span>`;})()}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(o.nome||o.product_category||'—')}</span></span><span class="mono" style="font-size:11.5px;color:var(--txt-2)">${o.periodo_inicio?fmtMes(o.periodo_inicio):'—'}${o.periodo_fim?' → '+fmtMes(o.periodo_fim):''}</span><span class="mono" style="text-align:right;font-size:12px">${BRL(o.valor_total)}</span>${canBudget?`<span style="text-align:right" onclick="event.stopPropagation()"><button class="chip-btn" onclick="openOrcEdit('${esc(o.id)}')">Edit</button></span>`:''}</div>
+      <div style="display:grid;grid-template-columns:1.3fr 1fr .9fr ${canBudget?'70px':''};gap:10px;padding:12px 17px;border-bottom:1px solid #eceef1;align-items:center;font-size:13px;cursor:pointer" onclick="toggleOrcDetail('${esc(o.id)}')"><span style="font-weight:600;display:flex;align-items:center;gap:8px;min-width:0">${(()=>{const m=catMeta(o.product_category||'');return `<span style=\"width:24px;height:24px;border-radius:7px;background:${m.bg};display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0\">${m.icon}</span>`;})()}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(o.nome||o.product_category||'—')}</span></span><span class="mono" style="font-size:11.5px;color:var(--txt-2)">${o.periodo_inicio?fmtMes(o.periodo_inicio):'—'}${o.periodo_fim?' → '+fmtMes(o.periodo_fim):''}</span><span class="mono" style="text-align:right;font-size:12px">${BRL(o.valor_total)}</span>${canBudget?`<span style="text-align:right" onclick="event.stopPropagation()"><button class="chip-btn" onclick="openOrcEdit('${esc(o.id)}')">Edit</button></span>`:''}</div>
       ${ORC_DETAIL_OPEN[o.id]?budgetDetail(o):''}
     </div>`).join('')}
     <div style="display:grid;grid-template-columns:1.3fr 1fr .9fr ${canBudget?'70px':''};gap:10px;padding:12px 17px;align-items:center;font-size:13px;background:var(--paper-2)"><span style="font-weight:800">Total</span><span></span><span class="mono" style="text-align:right;font-size:12px;font-weight:800">${BRL(orcs.reduce((s,o)=>s+(+o.valor_total||0),0))}</span>${canBudget?'<span></span>':''}</div>
@@ -2718,7 +2896,7 @@ function renderPeople(){
   const row=pe=>{
     const nome=[pe.nome,pe.sobrenome].filter(Boolean).join(' ')||pe.email||'—';
     const r=ROLE[pe.papel]||ROLE.pendente;
-    return `<div style="display:grid;grid-template-columns:1.3fr 1.6fr 1.1fr .8fr;gap:10px;padding:11px 17px;border-bottom:1px solid #f0eee8;align-items:center;font-size:13px">
+    return `<div style="display:grid;grid-template-columns:1.3fr 1.6fr 1.1fr .8fr;gap:10px;padding:11px 17px;border-bottom:1px solid #eceef1;align-items:center;font-size:13px">
       <span style="display:flex;align-items:center;gap:9px;min-width:0"><span class="avatar" style="width:26px;height:26px;background:${avColor(nome)};font-size:10px">${initials(nome)}</span><span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(nome)}</span></span>
       <span class="mono" style="font-size:11.5px;color:var(--txt-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(pe.email||'')}</span>
       <span><span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:${r.bg};color:${r.fg}">${r.t}</span></span>
@@ -2730,7 +2908,7 @@ function renderPeople(){
     return `<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05);margin-bottom:16px">
       <div style="padding:12px 17px;border-bottom:1px solid var(--line);background:${isTcl?'var(--paper-2)':'#fff'};display:flex;align-items:center;gap:9px">
         <span style="width:8px;height:17px;border-radius:3px;background:${isTcl?'var(--ink)':'var(--po)'}"></span>
-        <b style="font-family:Sora,sans-serif;font-size:13.5px">${esc(k)}</b>
+        <b style="font-family:'Bricolage Grotesque',sans-serif;font-size:13.5px">${esc(k)}</b>
         <span style="font-size:11px;color:var(--txt-3);font-weight:600">${groups[k].length} ${groups[k].length===1?'person':'people'}</span>
       </div>
       <div style="display:grid;grid-template-columns:1.3fr 1.6fr 1.1fr .8fr;gap:10px;padding:9px 17px;background:#fbfaf7;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">
@@ -2753,7 +2931,7 @@ function renderPersonModal(){
   const roles=[['admin','Admin'],['marketing','Marketing'],['financeiro','Finance'],['agencia','Agency'],['pendente','Pending']];
   const ags=agencyOpts();
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:480px">
-    <div class="modal-h"><h3>Edit person</h3><button class="x" aria-label="Fechar" onclick="closeModal()">✕</button></div>
+    <div class="modal-h"><h3>Edit person</h3><button class="x" aria-label="Close" onclick="closeModal()">✕</button></div>
     <div class="modal-b">
       <div class="fgrid">
         <div class="field"><label>First name</label><input value="${esc(PERSON.nome)}" onchange="personSet('nome',this.value)"></div>
@@ -2777,7 +2955,7 @@ async function savePerson(){
     try{ await SBPO.from('perfis').update({nome:PERSON.nome,sobrenome:PERSON.sobrenome,email:PERSON.email}).eq('user_id',PERSON.user_id); }catch(e){ console.warn('name update:',e); }
     const {data:pes}=await SBPO.rpc('listar_pessoas'); DATA.pessoas=pes||[];
     toast('Person updated ✓'); closeModal(); go(SCREEN);
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toast(friendlyErr(e)); }
 }
 async function deletarPessoa(userId){
   if(PAPEL!=='admin'){ toast('Only admin can delete.'); return; }
@@ -2793,7 +2971,7 @@ async function deletarPessoa(userId){
     if(!j||j.error) throw new Error((j&&j.error)||'delete failed');
     const {data:pes}=await SBPO.rpc('listar_pessoas'); DATA.pessoas=pes||[];
     PERSON=null; closeModal(); go(SCREEN); toast('User deleted.');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toast(friendlyErr(e)); }
 }
 
 /* ============================================================
@@ -2836,7 +3014,7 @@ function renderCampForm(){
   const total=CAMP.rows.reduce((s,r)=>s+(+r.valor||0),0);
   const ags=agencyOpts(); const tipos=rateioTipos();
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:600px">
-    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--po);flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>New campaign</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Activity → rateio → manual monthly distribution over the period</div></div><button class="x" aria-label="Fechar" onclick="closeModal()">✕</button></div>
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--po);flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>New campaign</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Activity → rateio → manual monthly distribution over the period</div></div><button class="x" aria-label="Close" onclick="closeModal()">✕</button></div>
     <div class="modal-b">
       <div class="field full"><label>Campaign name</label><input value="${esc(CAMP.nome)}" onchange="CAMP.nome=this.value" placeholder="e.g. Mini LED Push" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
       <div class="fgrid" style="margin-top:14px">
@@ -2850,7 +3028,7 @@ function renderCampForm(){
           ${CAMP.rows.map(r=>`<div style="display:flex;align-items:center;gap:9px"><input type="month" value="${esc(r.mes)}" onchange="campRowSet('${r.id}','mes',this.value)" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font:inherit;font-size:12.5px"><input type="number" min="0" step="100" value="${esc(r.valor)}" onchange="campRowSet('${r.id}','valor',this.value)" placeholder="R$ 0" style="flex:1;padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font:inherit;font-size:12.5px;text-align:right" class="mono"><button class="chip-btn" onclick="campDelRow('${r.id}')">✕</button></div>`).join('')}
           <button class="btn-ghost" onclick="campAddRow()" style="align-self:flex-start;margin-top:2px">+ Add month</button>
         </div>
-        <div style="padding:11px 14px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between"><b style="font-family:Sora,sans-serif;font-size:13px">Total caps (sum of months)</b><span class="mono" style="font-size:15px;font-weight:800">${BRL(total)}</span></div>
+        <div style="padding:11px 14px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between"><b style="font-family:'Bricolage Grotesque',sans-serif;font-size:13px">Total caps (sum of months)</b><span class="mono" style="font-size:15px;font-weight:800">${BRL(total)}</span></div>
       </div>
     </div>
     <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitCamp()">Create campaign</button></div></div>
@@ -2875,7 +3053,7 @@ async function submitCamp(){
       const {error:e2}=await SBPO.from('tetos').upsert(tetos,{onConflict:'projeto_id,competencia'}); if(e2)throw e2;
     }
     toast('Campaign created ✓'); closeModal(); await reloadPOAll(); go('campaigns');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toast(friendlyErr(e)); }
 }
 
 let ORC=null;
@@ -2901,7 +3079,7 @@ function renderOrcForm(){
       </div>`
     : `<div class="banner">All product categories (${PRODUCT_CATS.join(', ')}) already have a budget. Edit the existing one instead of creating a duplicate.</div>`;
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:480px">
-    <div class="modal-h"><h3>${editing?'Edit budget — '+esc(ORC.cat):'New budget'}</h3><button class="x" aria-label="Fechar" onclick="closeModal()">✕</button></div>
+    <div class="modal-h"><h3>${editing?'Edit budget — '+esc(ORC.cat):'New budget'}</h3><button class="x" aria-label="Close" onclick="closeModal()">✕</button></div>
     <div class="modal-b">${body}</div>
     <div class="modal-f"><span>${(editing&&PAPEL==='admin')?`<button class="btn-del" onclick="deletarOrcamento('${esc(ORC.id)}')">Delete budget</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button>${(editing||free.length)?`<button class="btn-acc" style="background:var(--po)" onclick="submitOrc()">${editing?'Save':'Create budget'}</button>`:''}</div></div>
   </div></div>`;
@@ -2924,22 +3102,22 @@ async function submitOrc(){
       toast('Budget created ✓');
     }
     closeModal(); await reloadPOAll(); go('budgets');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toast(friendlyErr(e)); }
 }
 
 let FEE=null;
 function openFeeEditor(){ FEE=(DATA.fee||[]).map(f=>({agencia:f.agencia||'',tipo:f.tipo||'',categoria:f.categoria||'',percentual:f.percentual!=null?Math.round(f.percentual*1000)/10:'',cc:f.cc||'',account:f.account||'',descricao:f.descricao||''})); if(!FEE.length)FEE=[{agencia:'',tipo:'',categoria:'',percentual:'',cc:'',account:'',descricao:''}]; renderFeeEditor(); }
 function feeRowSet(i,k,v){ if(FEE&&FEE[i])FEE[i][k]=v; }
 function feeAddRow(){ FEE.push({agencia:'',tipo:'',categoria:'',percentual:'',cc:'',account:'',descricao:''}); renderFeeEditor(); }
-function feeDelRow(i){ FEE.splice(i,1); renderFeeEditor(); }
+function feeDelRow(i){ if(!confirm('Remove this split row?'))return; FEE.splice(i,1); renderFeeEditor(); }
 function renderFeeEditor(){
   if(!FEE)return;
   const inp=(i,k,ph,w)=>`<input value="${esc(FEE[i][k])}" onchange="feeRowSet(${i},'${k}',this.value)" placeholder="${ph}" style="width:${w||'100%'};padding:6px 8px;border:1px solid var(--line-2);border-radius:7px;background:#fff;font:inherit;font-size:12px">`;
   const rows=FEE.map((f,i)=>`<div style="display:grid;grid-template-columns:1fr 1fr .8fr .6fr 1fr 1fr 1.4fr 24px;gap:7px;align-items:center;margin-bottom:7px">
-    ${inp(i,'agencia','Agency')}${inp(i,'tipo','Type (FEE/KOL…)')}${inp(i,'categoria','Category')}<input type="number" value="${esc(f.percentual)}" onchange="feeRowSet(${i},'percentual',this.value)" placeholder="%" style="padding:6px 8px;border:1px solid var(--line-2);border-radius:7px;background:#fff;font:inherit;font-size:12px;text-align:right" class="mono">${inp(i,'cc','Cost center')}${inp(i,'account','Account')}${inp(i,'descricao','Description')}<button onclick="feeDelRow(${i})" aria-label="Remover linha" style="width:32px;height:32px;border-radius:6px;border:none;background:transparent;color:var(--txt-3);font-size:11px;cursor:pointer">✕</button>
+    ${inp(i,'agencia','Agency')}${inp(i,'tipo','Type (FEE/KOL…)')}${inp(i,'categoria','Category')}<input type="number" value="${esc(f.percentual)}" onchange="feeRowSet(${i},'percentual',this.value)" placeholder="%" style="padding:6px 8px;border:1px solid var(--line-2);border-radius:7px;background:#fff;font:inherit;font-size:12px;text-align:right" class="mono">${inp(i,'cc','Cost center')}${inp(i,'account','Account')}${inp(i,'descricao','Description')}<button onclick="feeDelRow(${i})" aria-label="Remove row" style="width:32px;height:32px;border-radius:6px;border:none;background:transparent;color:var(--txt-3);font-size:11px;cursor:pointer">✕</button>
   </div>`).join('');
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:920px">
-    <div class="modal-h"><h3>Fee split configuration (rateio)</h3><button class="x" aria-label="Fechar" onclick="closeModal()">✕</button></div>
+    <div class="modal-h"><h3>Fee split configuration (rateio)</h3><button class="x" aria-label="Close" onclick="closeModal()">✕</button></div>
     <div class="modal-b">
       <div style="font-size:11.5px;color:var(--txt-3);margin-bottom:10px">Define how a shared invoice is split across categories by fixed percentages. % is per row; each row carries its cost center and account for the payment process.</div>
       <div style="display:grid;grid-template-columns:1fr 1fr .8fr .6fr 1fr 1fr 1.4fr 24px;gap:7px;font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px"><span>Agency</span><span>Type</span><span>Category</span><span style="text-align:right">%</span><span>Cost center</span><span>Account</span><span>Description</span><span></span></div>
@@ -2957,7 +3135,7 @@ async function saveFee(){
     if(rows.length){ const {error}=await SBPO.from('fee_rateio').insert(rows); if(error)throw error; }
     const {data:fee}=await SBPO.from('fee_rateio').select('agencia,tipo,categoria,percentual,cc,account,descricao'); DATA.fee=fee||[];
     toast('Fee splits saved ✓'); closeModal(); go('budgets');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toast(friendlyErr(e)); }
 }
 
 /* ============================================================
