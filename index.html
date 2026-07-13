@@ -198,6 +198,30 @@
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   .ment{background:var(--violet-bg);color:var(--violet);font-weight:700;border-radius:4px;padding:0 4px}
 
+  /* ===== ICONS + PROGRESS ALIGNMENT ===== */
+  svg.icn{display:inline-block;vertical-align:-2px;flex-shrink:0}
+  .ich{width:30px;height:30px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+  .pbar{height:6px;border-radius:4px;background:#e9ebf1;overflow:hidden;display:flex;min-width:0}
+  .pbar span{display:block;height:100%}
+  .pct{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:11px;font-weight:600;width:40px;text-align:right;flex-shrink:0;color:var(--txt-2)}
+
+  /* ===== COST CENTER TABLE ===== */
+  .cc-wrap{overflow-x:auto}
+  .cc-tbl{border-collapse:separate;border-spacing:0;width:100%}
+  .cc-tbl th{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;background:var(--paper-2);border-bottom:1px solid var(--line);padding:8px 10px}
+  .cc-tbl td{padding:9px 10px;border-bottom:1px solid #edeff4;white-space:nowrap;font-size:11.5px}
+  .cc-tbl .num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .cc-tbl .mband{background:#fafbfe}
+  .cc-tbl thead .mband{background:#f4f6fb}
+  .cc-tbl .msep{border-left:1px solid var(--line)}
+  .cc-tbl .s1,.cc-tbl .s2,.cc-tbl .s3{position:sticky;z-index:2;background:#fff}
+  .cc-tbl .s1{left:0;min-width:92px;max-width:92px;overflow:hidden;text-overflow:ellipsis}
+  .cc-tbl .s2{left:92px;min-width:96px;max-width:96px;overflow:hidden;text-overflow:ellipsis}
+  .cc-tbl .s3{left:188px;min-width:170px;max-width:170px;overflow:hidden;text-overflow:ellipsis;box-shadow:inset -1px 0 0 var(--line-2)}
+  .cc-tbl thead .s1,.cc-tbl thead .s2,.cc-tbl thead .s3{background:var(--paper-2);z-index:3}
+  .cc-tbl tfoot td{background:var(--paper-2);border-top:1px solid var(--line);border-bottom:none;font-weight:700}
+  .cc-tbl tfoot .s1,.cc-tbl tfoot .s2,.cc-tbl tfoot .s3{background:var(--paper-2)}
+
   /* ===== RESPONSIVE ===== */
   @media (max-width:1500px){ .kpis{grid-template-columns:repeat(3,1fr)} }
   @media (max-width:1100px){ .grid2{grid-template-columns:1fr} .view{padding:20px 18px 48px} .top{padding:13px 18px} }
@@ -331,7 +355,7 @@ function poStepperHTML(st){
   let dots='';
   for(let i=1;i<=4;i++){
     const dst=i<=done?'background:#16a06a;color:#fff':(i===cur?'background:#fff;border:2.5px solid #cf8a16;color:#cf8a16':'background:#edeff4;color:#8a90a0');
-    dots+=`<span style="width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:800;flex-shrink:0;${dst}">${i<=done?'✓':i}</span>`;
+    dots+=`<span style="width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:800;flex-shrink:0;${dst}">${i<=done?icn('check',10,2.4):i}</span>`;
     if(i<4)dots+=`<span style="flex:1;height:3px;background:${i<=done?'#16a06a':'#edeff4'}"></span>`;
   }
   const labs=PO_PHASES.map((l,ix)=>{const i=ix+1;const c=i<=done?'#16a06a':(i===cur?'#cf8a16':'#8a90a0');return `<span style="color:${c}">${l}</span>`;}).join('');
@@ -383,6 +407,39 @@ function visProjs(){ if(PAPEL==='agencia'&&MINHA_AGENCIA) return DATA.projetos.f
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const BRL=n=>'R$ '+Math.round(+n||0).toLocaleString('pt-BR');
+/* inline SVG icon set — single stroke family, inherits currentColor (replaces emojis) */
+const ICONS={
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/>',
+  paperclip:'<path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
+  receipt:'<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+  calendar:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  alert:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4M12 17h.01"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+  sparkle:'<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8Z"/><path d="m19 15 .9 2.6 2.6.9-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9Z"/>',
+  pencil:'<path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>',
+  info:'<circle cx="12" cy="12" r="9"/><path d="M12 16v-5M12 8h.01"/>',
+  lock:'<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  pause:'<path d="M10 5v14M15 5v14"/>',
+  coins:'<circle cx="12" cy="12" r="9"/><path d="M12 7v10M15 9.5c0-1.1-1.34-2-3-2s-3 .9-3 2 1.34 2 3 2 3 .9 3 2-1.34 2-3 2-3-.9-3-2"/>',
+  scale:'<path d="M12 3v18M7 21h10M4 7h16"/><path d="m6 7-2.5 6a2.9 2.9 0 0 0 5 0Z"/><path d="m18 7-2.5 6a2.9 2.9 0 0 0 5 0Z"/>',
+  tv:'<rect x="2" y="7" width="20" height="14" rx="2"/><path d="m17 2-5 5-5-5"/>',
+  snow:'<path d="M12 2v20M2 12h20M5.5 5.5l13 13M18.5 5.5l-13 13"/>',
+  phone:'<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/>',
+  fridge:'<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M6 9.5h12M15 5v2M15 12.5v3"/>',
+  washer:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="13.5" r="4.5"/><path d="M3 8h18"/>',
+  building:'<rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 6h1M14 6h1M9 10h1M14 10h1M9 14h1M14 14h1M10 22v-3h4v3"/>',
+  monitor:'<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
+  folder:'<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  mic:'<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10a7 7 0 0 1-14 0M12 17v5"/>',
+  clipboard:'<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>',
+  radio:'<circle cx="12" cy="12" r="2"/><path d="M4.9 19.1a10 10 0 0 1 0-14.2M19.1 4.9a10 10 0 0 1 0 14.2M7.8 16.2a6 6 0 0 1 0-8.4M16.2 7.8a6 6 0 0 1 0 8.4"/>',
+  megaphone:'<path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',
+  tag:'<path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4Z"/><circle cx="7.5" cy="7.5" r=".5"/>',
+  chev:'<path d="m6 9 6 6 6-6"/>'
+};
+function icn(n,s,st){const d=ICONS[n]||ICONS.folder;return `<svg class="icn" width="${s||14}" height="${s||14}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${st||1.8}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;}
 function avColor(n){let h=0;for(const c of(n||'?'))h=c.charCodeAt(0)+((h<<5)-h);return AV_COLORS[Math.abs(h)%AV_COLORS.length];}
 function initials(n){if(!n)return'?';const p=String(n).trim().split(/\s+/);return((p[0]||'')[0]||'').toUpperCase()+((p[1]||'')[0]||'').toUpperCase();}
 function today0(){const d=new Date();d.setHours(0,0,0,0);return d;}
@@ -407,7 +464,7 @@ function computeRecommendations(){
     if(!base)return;
     const days=Math.round((today0()-new Date(String(base).slice(0,10)+'T00:00:00'))/864e5);
     if(days>=10){
-      out.push({sev:'high',icon:'⏸',text:`"${p.nome}" has had no updates in ${days} days (stage: ${stageOf(p.etapa).name}).`,onclick:`openProj('${p.id}')`});
+      out.push({sev:'high',icon:'pause',text:`"${p.nome}" has had no updates in ${days} days (stage: ${stageOf(p.etapa).name}).`,onclick:`openProj('${p.id}')`});
     }
   });
   // 2) Budget >90% consumed with no closed PO yet
@@ -421,12 +478,12 @@ function computeRecommendations(){
       const tot=tetoBy[p.id]||0; if(!tot)return;
       const pct=(consBy[p.id]||0)/tot*100;
       if(pct>=90&&!hasConcl[p.id]){
-        out.push({sev:'high',icon:'💸',text:`Campaign "${p.nome}" has ${Math.round(pct)}% of its budget committed but no PO has been closed (CONCLUÍDA) yet.`,onclick:`openCampDetail('${p.id}')`});
+        out.push({sev:'high',icon:'coins',text:`Campaign "${p.nome}" has ${Math.round(pct)}% of its budget committed but no PO has been closed (CONCLUÍDA) yet.`,onclick:`openCampDetail('${p.id}')`});
       }
     });
     // Cap possibly double-counted: rows in BOTH tetos and rateio_alocacao
     const _hasTeto=new Set(DATA.tetos.map(t=>t.projeto_id)), _hasRat=new Set(DATA.rateio.map(r=>r.projeto_id));
-    camps.forEach(p=>{ if(_hasTeto.has(p.id)&&_hasRat.has(p.id)) out.push({sev:'high',icon:'🧮',text:`Campaign "${p.nome}" has cap rows in BOTH tetos and rateio_alocacao — its cap may be double-counted. Check with diag_fees_rateio.sql.`,onclick:`openCampDetail('${p.id}')`}); });
+    camps.forEach(p=>{ if(_hasTeto.has(p.id)&&_hasRat.has(p.id)) out.push({sev:'high',icon:'scale',text:`Campaign "${p.nome}" has cap rows in BOTH tetos and rateio_alocacao — its cap may be double-counted. Check with diag_fees_rateio.sql.`,onclick:`openCampDetail('${p.id}')`}); });
     // 4) Agency PO volume vs. configured rateio split
     const feeByTipo={}; (DATA.fee||[]).forEach(f=>{ if(!f.tipo)return; (feeByTipo[f.tipo]=feeByTipo[f.tipo]||[]).push(f); });
     Object.keys(feeByTipo).forEach(tipo=>{
@@ -440,7 +497,7 @@ function computeRecommendations(){
         const expected=(+f.percentual||0)/totalPct*100;
         const actual=((byCat[f.categoria]||0)/totalAlloc)*100;
         if(Math.abs(actual-expected)>=15){
-          out.push({sev:'medium',icon:'⚖️',text:`Rateio "${tipo}" — category "${f.categoria||'—'}" is running at ${Math.round(actual)}% of allocation vs. ${Math.round(expected)}% configured.`,onclick:`go('budgets')`});
+          out.push({sev:'medium',icon:'scale',text:`Rateio "${tipo}" — category "${f.categoria||'—'}" is running at ${Math.round(actual)}% of allocation vs. ${Math.round(expected)}% configured.`,onclick:`go('budgets')`});
         }
       });
     });
@@ -452,7 +509,7 @@ function computeRecommendations(){
       if(t.done||!t.fim)return;
       const dd=daysTo(t.fim);
       if(dd!==null&&dd<0){
-        out.push({sev:'medium',icon:'⏰',text:`Task "${t.n||'Untitled'}" in "${p.nome}" is ${-dd} day(s) overdue.`,onclick:`openProj('${p.id}')`});
+        out.push({sev:'medium',icon:'clock',text:`Task "${t.n||'Untitled'}" in "${p.nome}" is ${-dd} day(s) overdue.`,onclick:`openProj('${p.id}')`});
       }
     });
   });
@@ -489,14 +546,15 @@ function renderRecommendations(){
   return `<div class="panel" style="margin-top:18px"><div class="panel-h" style="cursor:pointer" onclick="toggleRecs()"><h3>Recommendations</h3><span style="display:flex;align-items:center;gap:10px">
       <span class="tag">${recs.length} item${recs.length===1?'':'s'}</span>
       ${byS.high?`<span class="badge s-red"><span class="d"></span>${byS.high} high</span>`:''}${byS.medium?`<span class="badge s-amber"><span class="d"></span>${byS.medium} medium</span>`:''}
-      ${hasAI?`<button class="chip-btn" onclick="event.stopPropagation();generateAISummary()" ${AI_LOADING?'disabled':''}>${AI_LOADING?'Summarizing…':'✨ Summarize with Claude'}</button>`:''}
+      ${hasAI?`<button class="chip-btn" onclick="event.stopPropagation();generateAISummary()" ${AI_LOADING?'disabled':''}>${AI_LOADING?'Summarizing…':icn('sparkle',12)+' Summarize with Claude'}</button>`:''}
       <span style="display:inline-block;transition:.15s;transform:rotate(${RECS_OPEN?'180deg':'0deg'});color:var(--txt-3);font-size:12px">▾</span></span></div>
     ${RECS_OPEN?`
     <div style="padding:10px 17px 0;font-size:11.5px;color:var(--txt-3)">Based on project activity, budget risk and recent user behavior.</div>
     ${AI_SUMMARY?`<div style="margin:12px 17px 0;padding:12px 14px;background:#f3f0fb;border:1px solid #ded4f5;border-radius:10px;font-size:12.5px;color:#4a3c80;white-space:pre-wrap;line-height:1.6">${esc(AI_SUMMARY)}</div>`:''}
-    <div class="panel-b">${recs.length?recs.map(r=>{const s=sevMeta[r.sev]||sevMeta.low;return `<div style="display:flex;align-items:center;gap:11px;padding:11px 11px;border-radius:10px;border-left:3px solid ${s.c}">
+    <div class="panel-b">${recs.length?recs.map(r=>{const s=sevMeta[r.sev]||sevMeta.low;return `<div style="display:flex;align-items:center;gap:11px;padding:11px 11px;border-radius:10px">
       <span style="font-size:11px;font-weight:800;color:${s.fg};background:${s.bg};border-radius:20px;padding:2px 9px;flex-shrink:0">${s.t}</span>
-      <div style="flex:1;min-width:0;font-size:13px;cursor:pointer" onclick="${r.onclick}">${r.icon} ${esc(r.text)}</div>
+      <span style="color:var(--txt-3);flex-shrink:0;display:inline-flex">${icn(r.icon,14)}</span>
+      <div style="flex:1;min-width:0;font-size:13px;cursor:pointer" onclick="${r.onclick}">${esc(r.text)}</div>
       <div style="display:flex;gap:6px;flex-shrink:0">
         <button class="chip-btn" onclick="${r.onclick}">Open →</button>
         <button class="chip-btn" title="Dismiss for 14 days" onclick="dismissRec('${r.hash}')">✕</button>
@@ -828,12 +886,12 @@ function renderProjetos(){
     <div style="display:grid;grid-template-columns:1.7fr 1fr 1.1fr 1fr 1.2fr .7fr;gap:10px;padding:11px 17px;background:#fafbfd;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">
       <span>Project</span><span>Owner</span><span>Stage</span><span>Health</span><span>Progress</span><span>Due</span></div>
     ${list.map(p=>{const stg=stageOf(p.etapa);const hp=healthPill(p.status);const di=deadlineInfo(p);const pr=computeProg(p);const bt=businessTypeOf(p.ptipo);
-      return `<div onclick="openProj('${esc(p.id)}')" style="display:grid;grid-template-columns:1.7fr 1fr 1.1fr 1fr 1.2fr .7fr;gap:10px;padding:13px 17px;border-bottom:1px solid #edeff4;align-items:center;font-size:13px;cursor:pointer" onmouseover="this.style.background='#faf9f5'" onmouseout="this.style.background=''">
+      return `<div onclick="openProj('${esc(p.id)}')" style="display:grid;grid-template-columns:1.7fr 1fr 1.1fr 1fr 1.2fr .7fr;gap:10px;padding:13px 17px;border-bottom:1px solid #edeff4;align-items:center;font-size:13px;cursor:pointer" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
         <span style="min-width:0"><span style="font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span><span style="font-size:11px;color:var(--txt-3);display:flex;align-items:center;gap:6px">${bt?`<span style="font-weight:800;color:${bt.color}">${esc(bt.name)}</span> · `:''}${esc(p.partner||p.marca||'')}</span></span>
         <span style="display:flex;align-items:center;gap:7px;min-width:0"><span class="avatar" style="background:${avColor(p.resp)};width:22px;height:22px;font-size:9.5px">${initials(p.resp)}</span><span style="color:var(--txt-2);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.resp||'—')}</span></span>
         <span style="color:var(--txt-2);font-size:12.5px">${stg.name}</span>
         <span><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;background:${hp.bg};color:${hp.fg}"><span style="width:6px;height:6px;border-radius:50%;background:${hp.dot}"></span>${hp.name}</span></span>
-        <span style="display:flex;align-items:center;gap:8px"><span style="flex:1;height:6px;background:#edeff4;border-radius:6px;overflow:hidden;min-width:40px"><span style="display:block;height:100%;width:${pr}%;background:${hp.dot}"></span></span><span class="mono" style="font-size:11px;color:var(--txt-2)">${pr}%</span></span>
+        <span style="display:flex;align-items:center;gap:8px"><span class="pbar" style="flex:1;min-width:40px"><span style="width:${pr}%;background:${hp.dot}"></span></span><span class="pct">${pr}%</span></span>
         <span class="mono" style="font-size:11.5px;color:${di.color}">${di.txt}</span>
       </div>`;
     }).join('')}</div>`;
@@ -871,7 +929,7 @@ function openStageGuide(){
     <div class="modal-b">
       <div style="font-size:12.5px;color:var(--txt-3);margin-bottom:14px">What is considered for a project to be in each stage — used across Board, List and Timeline.</div>
       ${STAGES.map(s=>`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;margin-bottom:10px">
-        <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px"><span style="width:8px;height:17px;border-radius:3px;background:${s.color}"></span><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">${s.name}</b>${(PAPEL==='admin'||isManager)?`<button onclick="editStageDesc('${s.id}').then(openStageGuide)" style="margin-left:auto;border:none;background:none;color:var(--txt-3);cursor:pointer;font-size:11px">✎ edit</button>`:''}</div>
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px"><span style="width:8px;height:17px;border-radius:3px;background:${s.color}"></span><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">${s.name}</b>${(PAPEL==='admin'||isManager)?`<button onclick="editStageDesc('${s.id}').then(openStageGuide)" style="margin-left:auto;border:none;background:none;color:var(--txt-3);cursor:pointer;font-size:11px;display:inline-flex;align-items:center;gap:4px">${icn('pencil',11)} edit</button>`:''}</div>
         <div style="font-size:13px;color:var(--txt-2);line-height:1.5">${esc(STAGE_DESCS[s.id]||'—')}</div>
       </div>`).join('')}
     </div>
@@ -910,18 +968,18 @@ function renderKanban(){
       <div style="padding:12px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line)">
         <span style="display:flex;align-items:center;gap:8px;font-weight:700;font-family:'Hanken Grotesk';font-size:13px"><span style="width:8px;height:17px;border-radius:3px;background:${stg.color}"></span>${stg.name}
           <span title="${esc(STAGE_DESCS[stg.id]||'')}" style="width:15px;height:15px;border-radius:50%;background:#fff;border:1px solid var(--line-2);color:var(--txt-3);font-size:9.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;cursor:help">i</span>
-          ${(PAPEL==='admin'||isManager)?`<button onclick="editStageDesc('${stg.id}')" title="Edit description" style="border:none;background:none;color:var(--txt-3);cursor:pointer;font-size:10.5px;padding:0">✎</button>`:''}
+          ${(PAPEL==='admin'||isManager)?`<button onclick="editStageDesc('${stg.id}')" title="Edit description" style="border:none;background:none;color:var(--txt-3);cursor:pointer;padding:0;display:inline-flex">${icn('pencil',11)}</button>`:''}
         </span>
         <span style="font-size:11.5px;color:var(--txt-3);font-weight:600;background:#fff;padding:1px 8px;border-radius:20px">${items.length}</span></div>
       <div style="padding:10px;display:flex;flex-direction:column;gap:9px;min-height:60px">${items.map(p=>{const hp=healthPill(p.status);const di=deadlineInfo(p);const pr=computeProg(p);const tt=(p.tasks||[]).length;const bt=businessTypeOf(p.ptipo);const cats=p.categorias||[];
         return `<div draggable="true" ondragstart="dragStartCard(event,'${esc(p.id)}')" onclick="openProj('${esc(p.id)}')" style="background:#fff;border:1px solid var(--line);border-radius:11px;padding:12px;cursor:grab;box-shadow:0 1px 2px rgba(20,22,28,.04);position:relative">
-          ${projHasSubs(p)?`<button onclick="event.stopPropagation();openProjTimeline('${esc(p.id)}')" title="View timeline" style="position:absolute;top:10px;right:10px;border:1px solid var(--line-2);background:#fff;color:var(--txt-2);border-radius:7px;font-size:10.5px;padding:3px 7px;cursor:pointer">🗓</button>`:''}
+          ${projHasSubs(p)?`<button onclick="event.stopPropagation();openProjTimeline('${esc(p.id)}')" title="View timeline" style="position:absolute;top:10px;right:10px;border:1px solid var(--line-2);background:#fff;color:var(--txt-2);border-radius:7px;padding:3px 7px;cursor:pointer;display:inline-flex">${icn('calendar',12)}</button>`:''}
           ${bt?`<span style="display:inline-flex;align-items:center;gap:5px;font-size:9.5px;font-weight:800;color:${bt.color};background:${bt.color}18;border-radius:20px;padding:2px 8px;margin-bottom:6px">${esc(bt.name)}</span>`:''}
           <div style="font-weight:600;font-size:13px;line-height:1.3">${esc(p.nome)}</div>
           <div style="font-size:11px;color:var(--txt-3);margin-top:5px">${esc(p.partner||p.marca||'')}</div>
           ${cats.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${cats.slice(0,3).map(c=>`<span style="font-size:9.5px;font-weight:700;color:var(--txt-2);background:var(--paper);border:1px solid var(--line-2);border-radius:20px;padding:2px 7px">${esc(c)}</span>`).join('')}${cats.length>3?`<span style="font-size:9.5px;font-weight:700;color:var(--txt-3);padding:2px 4px">+${cats.length-3}</span>`:''}</div>`:''}
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px"><span style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:20px;background:${hp.bg};color:${hp.fg}"><span style="width:6px;height:6px;border-radius:50%;background:${hp.dot}"></span>${hp.name}</span><span class="avatar" style="width:22px;height:22px;background:${avColor(p.resp)};font-size:9.5px" title="${esc(p.resp||'')}">${initials(p.resp)}</span></div>
-          <div style="height:5px;background:#edeff4;border-radius:6px;overflow:hidden;margin-top:9px"><span style="display:block;height:100%;width:${pr}%;background:${hp.dot};border-radius:6px"></span></div>
+          <div class="pbar" style="margin-top:9px"><span style="width:${pr}%;background:${hp.dot}"></span></div>
           <div style="font-size:10.5px;color:var(--txt-3);font-weight:600;margin-top:6px">${tt} task(s) · due ${di.txt}</div></div>`;
       }).join('')||'<div style="padding:16px 8px;font-size:12px;color:var(--txt-3);text-align:center">Empty</div>'}</div></div>`;
   }).join('')}</div>`;
@@ -958,28 +1016,20 @@ function renderAprovacoes(){
 const CONS=['FATURADA','VALIDADA','CONCLUIDA'], COMP=['APROVADA','PO_GERADA','ATUALIZAR_INFO'], PEND=['SOLICITADA','EM_APROVACAO'];
 /* Campaigns screen — visual meta + UI state */
 const CAT_META={
-  TV:  {c:'#1273cf', bg:'#eaf1fc', icon:'📺', label:'TV'},
-  AC:  {c:'#0e9888', bg:'#e5f6f3', icon:'❄️', label:'Air Conditioning'},
-  MOB: {c:'#6d4bd1', bg:'#efeafa', icon:'📱', label:'Mobile & Devices'},
-  REF: {c:'#d68a04', bg:'#fdf3e2', icon:'🧊', label:'Refrigerators'},
-  WG:  {c:'#c2417c', bg:'#fceaf3', icon:'🫧', label:'Washer & Dryer'},
-  LABG:{c:'#5b7a1f', bg:'#f0f5e3', icon:'🏢', label:'Matriz (Corporate)'},
-  MON: {c:'#3a7bb5', bg:'#e9f2fa', icon:'🖥️', label:'Monitors'}
+  TV:  {c:'#1273cf', bg:'#eaf1fc', icon:'tv', label:'TV'},
+  AC:  {c:'#0e9888', bg:'#e5f6f3', icon:'snow', label:'Air Conditioning'},
+  MOB: {c:'#6d4bd1', bg:'#efeafa', icon:'phone', label:'Mobile & Devices'},
+  REF: {c:'#d68a04', bg:'#fdf3e2', icon:'fridge', label:'Refrigerators'},
+  WG:  {c:'#c2417c', bg:'#fceaf3', icon:'washer', label:'Washer & Dryer'},
+  LABG:{c:'#5b7a1f', bg:'#f0f5e3', icon:'building', label:'Matriz (Corporate)'},
+  MON: {c:'#3a7bb5', bg:'#e9f2fa', icon:'monitor', label:'Monitors'}
 };
-const catMeta=k=>CAT_META[k]||{c:'#59606e',bg:'#edeff4',icon:'📁',label:k};
-const ACT_META={KOL:{icon:'🎤',label:'KOL / Influencer'},FEE:{icon:'📋',label:'Agency fee'},AON:{icon:'📡',label:'Always On'},Campaings:{icon:'🚀',label:'Campaign'},Campaign:{icon:'🚀',label:'Campaign'}};
-const actMeta=a=>ACT_META[a]||{icon:'🏷️',label:a||'—'};
+const catMeta=k=>CAT_META[k]||{c:'#59606e',bg:'#edeff4',icon:'folder',label:k};
+const ACT_META={KOL:{icon:'mic',label:'KOL / Influencer'},FEE:{icon:'clipboard',label:'Agency fee'},AON:{icon:'radio',label:'Always On'},Campaings:{icon:'megaphone',label:'Campaign'},Campaign:{icon:'megaphone',label:'Campaign'}};
+const actMeta=a=>ACT_META[a]||{icon:'tag',label:a||'—'};
 let CAMP_Q='', CAMP_COLLAPSED={};
 function campSearch(v){ CAMP_Q=(v||'').toLowerCase(); const b=document.getElementById('campBody'); if(b){ b.outerHTML=renderCampBody(); } }
 function campToggleCat(ck){ CAMP_COLLAPSED[ck]=!CAMP_COLLAPSED[ck]; const b=document.getElementById('campBody'); if(b){ b.outerHTML=renderCampBody(); } }
-function campDonut(pct,danger,size){
-  const r=(size-8)/2, circ=2*Math.PI*r, off=circ*(1-Math.min(pct,100)/100);
-  const col=danger?'#e0392b':(pct>=90?'#cf8a16':'#10131a');
-  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="flex-shrink:0;transform:rotate(-90deg)">
-    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="#edeff4" stroke-width="6"></circle>
-    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${col}" stroke-width="6" stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${off}"></circle>
-  </svg>`;
-}
 function renderCampanhas(){
   let list=DATA.poProjetos.slice();
   if(PAPEL==='agencia'&&MINHA_AGENCIA) list=list.filter(p=>p.agencia===MINHA_AGENCIA);
@@ -990,27 +1040,9 @@ function renderCampanhas(){
   const aprov=list.filter(p=>p.aprovacao_status==='APROVADO');
   let orcado=0,consumido=0,comprometido=0; aprov.forEach(p=>{orcado+=tetoBy[p.id]||0;consumido+=consBy[p.id]||0;comprometido+=compBy[p.id]||0;});
   const pendCount=list.filter(p=>p.aprovacao_status==='PENDENTE').length;
-  const stat=(l,v,col)=>`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;padding:14px 16px;box-shadow:0 1px 2px rgba(20,22,28,.05)"><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-2);font-weight:700">${l}</div><div class="mono" style="font-size:19px;font-weight:700;margin-top:7px;color:${col}">${v}</div></div>`;
+  const stat=(l,v,col)=>`<div class="kpi"><span class="bar" style="background:${col}"></span><div class="lbl">${l}</div><div class="num" style="font-size:19px;margin-top:7px">${v}</div></div>`;
   const AP={APROVADO:{t:'Approved',c:'#1f8a4c'},PENDENTE:{t:'Pending',c:'#cf8a16'},REJEITADO:{t:'Rejected',c:'#bf0008'}};
-  const campRowHTML=(p)=>{
-    const teto=tetoBy[p.id]||0, cons=consBy[p.id]||0, comp=compBy[p.id]||0, pend=pendBy[p.id]||0;
-    const saldo=teto-cons-comp-pend;
-    const pC=teto?Math.min(100,cons/teto*100):0, pCo=teto?Math.min(100-pC,comp/teto*100):0, pPe=teto?Math.min(100-pC-pCo,pend/teto*100):0;
-    const pctTot=teto?((cons+comp+pend)/teto*100):0;
-    const over=!!teto&&pctTot>100.5, near=!!teto&&!over&&pctTot>=90, danger=over;
-    const ap=AP[p.aprovacao_status]||AP.PENDENTE;
-    const nMes=new Set([...DATA.tetos.filter(t=>t.projeto_id===p.id).map(t=>String(t.competencia).slice(0,7)),...DATA.rateio.filter(r=>r.projeto_id===p.id).map(r=>String(r.competencia).slice(0,7))]).size;
-    return `<div onclick="openCampDetail('${esc(p.id)}')" style="display:grid;grid-template-columns:1.6fr .9fr .9fr .9fr 1.3fr .9fr .9fr;gap:10px;padding:13px 17px;border-bottom:1px solid #edeff4;align-items:center;font-size:13px;cursor:pointer;${over?'background:#fff8f7;box-shadow:inset 3px 0 0 var(--po)':near?'background:#fffcf4;box-shadow:inset 3px 0 0 #d68a04':''}" onmouseover="this.style.filter='brightness(.985)'" onmouseout="this.style.filter=''">
-      <span style="min-width:0"><span style="font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span><span style="font-size:11px;color:var(--txt-3)">${nMes?nMes+(nMes===1?' month':' months'):''}${p.rateio?' · rateio':''}</span></span>
-      <span style="color:var(--txt-2)">${esc(p.agencia||'—')}</span>
-      <span style="color:var(--txt-2);font-size:12px">${esc(p.product_category||'—')}</span>
-      <span class="mono" style="text-align:right;font-size:12.5px">${BRL(teto)}</span>
-      <span style="display:flex;align-items:center;gap:9px;min-width:0"><span style="flex:1;height:9px;background:#edeff4;border-radius:5px;overflow:hidden;display:flex;min-width:40px"><span style="width:${pC}%;background:${danger?'var(--po)':'#10131a'}"></span><span style="width:${pCo}%;background:#59606e"></span><span style="width:${pPe}%;background:#cf8a16"></span></span><span class="mono" style="font-size:11px;font-weight:${danger?'800':'600'};color:${danger?'#bf0008':'var(--txt-2)'};flex-shrink:0">${teto?Math.round(pctTot)+'%':'—'}</span></span>
-      <span class="mono" style="text-align:right;font-size:12.5px;color:${saldo<0?'var(--po)':'var(--txt)'}">${BRL(saldo)}</span>
-      <span>${over?`<span style="font-size:11px;font-weight:700;color:#bf0008;background:#fbe4e1;border-radius:20px;padding:3px 10px;white-space:nowrap">⚠ ${Math.round(pctTot)}% over</span>`:near?`<span style="font-size:11px;font-weight:700;color:#9c6404;background:#fbf0d8;border-radius:20px;padding:3px 10px;white-space:nowrap">${Math.round(pctTot)}% committed</span>`:`<span style="font-size:11px;font-weight:600;border:1.5px solid ${ap.c};color:${ap.c};border-radius:20px;padding:2px 10px;white-space:nowrap">${ap.t}</span>`}</span>
-    </div>`;
-  };
-  CAMP_CTX={list,tetoBy,consBy,compBy,pendBy,campRowHTML};
+  CAMP_CTX={list,tetoBy,consBy,compBy,pendBy};
   return `<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px">
       ${stat('Campaigns',String(list.length),'#10131a')}
       ${stat('Budgeted (approved)',BRL(orcado),'#10131a')}
@@ -1020,7 +1052,7 @@ function renderCampanhas(){
     </div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
       <div style="position:relative;flex:1;max-width:340px">
-        <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:13px;opacity:.55">🔍</span>
+        <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--txt-3);display:flex">${icn('search',14)}</span>
         <input id="campQ" value="${esc(CAMP_Q)}" oninput="campSearch(this.value)" placeholder="Search campaign, agency…" style="width:100%;padding:9px 12px 9px 34px;border-radius:10px;border:1px solid var(--line-2);background:#fff;font-size:13px;font-family:inherit;outline:none">
       </div>
       <span style="font-size:11.5px;color:var(--txt-3)">Click a card for the month-by-month detail (cap × POs).</span>
@@ -1047,20 +1079,21 @@ function renderCampBody(){
     const tot=catTotal[ck], pct=grandTotal?(tot/grandTotal*100):0;
     const collapsed=!!CAMP_COLLAPSED[ck]&&!q;
     return `<div style="background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-      <div onclick="campToggleCat('${esc(ck)}')" style="padding:13px 17px;display:flex;align-items:center;gap:12px;cursor:pointer;border-left:4px solid ${m.c};background:${m.bg}66" onmouseover="this.style.filter='brightness(.97)'" onmouseout="this.style.filter=''">
-        <span style="width:34px;height:34px;border-radius:10px;background:${m.bg};display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${m.icon}</span>
+      <div onclick="campToggleCat('${esc(ck)}')" style="padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer" onmouseover="this.style.background='var(--paper-2)'" onmouseout="this.style.background=''">
+        <span class="ich" style="background:${m.bg};color:${m.c}">${icn(m.icon,15)}</span>
         <span style="min-width:0">
           <b style="font-family:'Hanken Grotesk',sans-serif;font-size:13.5px;display:block">${esc(ck)}${m.label!==ck?` <span style=\"font-weight:500;color:var(--txt-3);font-size:11.5px\">· ${m.label}</span>`:''}</b>
           <span style="font-size:11px;color:var(--txt-3);font-weight:600">${camps.length} campaign${camps.length===1?'':'s'}</span>
         </span>
-        <span style="flex:1;display:flex;align-items:center;gap:8px;min-width:60px;margin:0 6px">
-          <span style="flex:1;height:6px;border-radius:4px;background:#edeff4;overflow:hidden"><span style="display:block;height:100%;width:${pct}%;background:${m.c};border-radius:4px"></span></span>
-          <span style="font-size:11px;font-weight:700;color:${m.c};min-width:40px;text-align:right">${pct.toFixed(1)}%</span>
+        <span style="flex:1"></span>
+        <span style="display:flex;align-items:center;gap:8px;width:200px;flex-shrink:0" title="Share of the total budgeted">
+          <span class="pbar" style="flex:1"><span style="width:${pct}%;background:${m.c}"></span></span>
+          <span class="pct">${pct.toFixed(1)}%</span>
         </span>
-        <span class="mono" style="font-size:12.5px;font-weight:700;color:var(--ink)">${BRL(tot)}</span>
-        <span style="font-size:11px;color:var(--txt-3);transform:rotate(${collapsed?0:90}deg);transition:transform .15s">▶</span>
+        <span class="mono" style="font-size:12.5px;font-weight:700;color:var(--ink);width:110px;text-align:right;flex-shrink:0">${BRL(tot)}</span>
+        <span style="color:var(--txt-3);display:flex;transform:rotate(${collapsed?'-90deg':'0deg'});transition:transform .15s">${icn('chev',14)}</span>
       </div>
-      ${collapsed?'':`<div style=\"padding:14px 16px;border-top:1px solid var(--line);border-left:4px solid ${m.c};background:${m.bg}2e;display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:11px\">${camps.map(p=>campCardHTML(p,m)).join('')}</div>`}
+      ${collapsed?'':`<div style=\"padding:14px 16px;border-top:1px solid var(--line);background:var(--paper-2);display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:11px\">${camps.map(p=>campCardHTML(p,m)).join('')}</div>`}
     </div>`;
   }).join('');
   return `<div id="campBody" style="display:flex;flex-direction:column;gap:13px">${sections}</div>`;
@@ -1077,19 +1110,21 @@ function campCardHTML(p,m){
   const pC=teto?Math.min(100,cons/teto*100):0, pCo=teto?Math.min(100-pC,comp/teto*100):0, pPe=teto?Math.min(100-pC-pCo,pend/teto*100):0;
   return `<div onclick="openCampDetail('${esc(p.id)}')" style="background:#fff;border:1px solid ${over?'#f3c1ba':near?'#ecd9a4':'var(--line)'};border-radius:12px;padding:13px 14px;cursor:pointer;display:flex;flex-direction:column;gap:10px;box-shadow:0 1px 2px rgba(20,22,28,.04)" onmouseover="this.style.boxShadow='0 3px 10px rgba(20,22,28,.09)';this.style.transform='translateY(-1px)'" onmouseout="this.style.boxShadow='0 1px 2px rgba(20,22,28,.04)';this.style.transform=''">
     <div style="display:flex;align-items:flex-start;gap:10px">
-      <span style="position:relative;width:44px;height:44px;flex-shrink:0;display:flex;align-items:center;justify-content:center">${campDonut(pctTot,danger,44)}<span class="mono" style="position:absolute;font-size:9.5px;font-weight:800;color:${over?'#bf0008':near?'#9c6404':'var(--txt-2)'}">${teto?Math.round(pctTot)+'%':'—'}</span></span>
       <span style="min-width:0;flex:1">
         <b style="font-size:13px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</b>
         <span style="font-size:11px;color:var(--txt-3);display:flex;align-items:center;gap:5px;margin-top:3px;flex-wrap:wrap">
-          <span title="${esc(act.label)}" style="white-space:nowrap">${act.icon} ${esc(p.activity||'—')}</span><span style="opacity:.45">·</span><span style="white-space:nowrap">${esc(p.agencia||'—')}</span>${p.rateio?'<span style="opacity:.45">·</span><span title="Split across categories">rateio</span>':''}
+          <span style="white-space:nowrap">${esc(act.label)}</span><span style="opacity:.45">·</span><span style="white-space:nowrap">${esc(p.agencia||'—')}</span>${p.rateio?'<span style="opacity:.45">·</span><span title="Split across categories">rateio</span>':''}
         </span>
       </span>
-      <span style="font-size:10px;font-weight:700;color:${over?'#bf0008':near?'#9c6404':ap.c};background:${over?'#fbe4e1':near?'#fbf0d8':ap.bg};border-radius:20px;padding:3px 9px;white-space:nowrap;flex-shrink:0">${over?'⚠ '+Math.round(pctTot)+'% over':near?Math.round(pctTot)+'%':ap.t}</span>
+      <span style="font-size:10px;font-weight:700;color:${over?'#bf0008':near?'#9c6404':ap.c};background:${over?'#fbe4e1':near?'#fbf0d8':ap.bg};border-radius:20px;padding:3px 9px;white-space:nowrap;flex-shrink:0;display:inline-flex;align-items:center;gap:4px">${over?icn('alert',11)+' '+Math.round(pctTot)+'% over':near?Math.round(pctTot)+'% committed':ap.t}</span>
     </div>
-    <div style="height:7px;border-radius:4px;background:#edeff4;overflow:hidden;display:flex" title="Consumed · committed · awaiting approval"><span style="width:${pC}%;background:${danger?'var(--po)':'#10131a'}"></span><span style="width:${pCo}%;background:#59606e"></span><span style="width:${pPe}%;background:#cf8a16"></span></div>
+    <div style="display:flex;align-items:center;gap:8px" title="Consumed · committed · awaiting approval">
+      <span class="pbar" style="flex:1"><span style="width:${pC}%;background:${danger?'var(--po)':'#10131a'}"></span><span style="width:${pCo}%;background:#59606e"></span><span style="width:${pPe}%;background:#cf8a16"></span></span>
+      <span class="pct" style="font-weight:700;color:${over?'#bf0008':near?'#9c6404':'var(--txt-2)'}">${teto?Math.round(pctTot)+'%':'—'}</span>
+    </div>
     <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--txt-3)">
       <span style="white-space:nowrap">Cap <b class="mono" style="color:var(--txt);font-size:11.5px">${BRL(teto)}</b></span>
-      <span style="white-space:nowrap">Balance <b class="mono" style="color:${saldo<0?'var(--po)':'#1f8a4c'};font-size:11.5px">${BRL(saldo)}</b></span>
+      <span style="white-space:nowrap">Balance <b class="mono" style="color:${saldo<0?'var(--po)':'var(--txt)'};font-size:11.5px">${BRL(saldo)}</b></span>
     </div>
   </div>`;
 }
@@ -1311,7 +1346,7 @@ function renderPOs(){
       <span class="mono" style="text-align:right;font-size:12.5px">${BRL(po.valor)}</span>
       <span class="mono" style="font-size:12px;${est?(est.confirmed?'color:#1f8a4c;font-weight:700':'color:var(--txt-3);font-style:italic'):'color:var(--txt-3)'}">${est?(est.confirmed?est.date:'~'+est.date):'—'}</span>
       <span class="mono" style="font-size:12px;color:var(--txt-3)">${esc(po.numero_po||'—')}</span>
-      <span><span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap" class="badge ${s.c}"><span class="d"></span>${s.icon} ${s.t}</span></span>
+      <span><span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap" class="badge ${s.c}"><span class="d"></span>${s.t}</span></span>
       <span style="display:flex;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">${poActionsHTML(po)}</span>
     </div>`;
   };
@@ -1421,11 +1456,11 @@ async function abrirAnexo(path){
 function poMetaHTML(po){
   const b=[];
   if(po.numero_po) b.push('nº '+esc(po.numero_po));
-  if(po.po_arquivo) b.push(`<a onclick="abrirAnexo('${esc(po.po_arquivo)}')" style="color:#3c7a63;cursor:pointer;text-decoration:underline">📎 PO</a>`);
+  if(po.po_arquivo) b.push(`<a onclick="abrirAnexo('${esc(po.po_arquivo)}')" style="color:#3c7a63;cursor:pointer;text-decoration:underline">${icn('paperclip',11)} PO</a>`);
   if(po.nf_numero) b.push('NF '+esc(po.nf_numero));
-  if(po.fatura_url) b.push(`<a onclick="abrirAnexo('${esc(po.fatura_url)}')" style="color:#b5550c;cursor:pointer;text-decoration:underline">🧾 NF</a>`);
-  if(po.evidencia_url) b.push(`<a onclick="abrirAnexo('${esc(po.evidencia_url)}')" style="color:#b5550c;cursor:pointer;text-decoration:underline">📎 evidence</a>`);
-  if(po.status==='ATUALIZAR_INFO' && po.motivo_rejeicao) b.push('<span style="color:#bf0008">⚠ '+esc(po.motivo_rejeicao)+'</span>');
+  if(po.fatura_url) b.push(`<a onclick="abrirAnexo('${esc(po.fatura_url)}')" style="color:#b5550c;cursor:pointer;text-decoration:underline">${icn('receipt',11)} NF</a>`);
+  if(po.evidencia_url) b.push(`<a onclick="abrirAnexo('${esc(po.evidencia_url)}')" style="color:#b5550c;cursor:pointer;text-decoration:underline">${icn('paperclip',11)} evidence</a>`);
+  if(po.status==='ATUALIZAR_INFO' && po.motivo_rejeicao) b.push('<span style="color:#bf0008">'+icn('alert',11)+' '+esc(po.motivo_rejeicao)+'</span>');
   return b.length?`<span style="font-size:11px;color:var(--txt-3);display:block;margin-top:3px;line-height:1.6">${b.join(' · ')}</span>`:'';
 }
 /* PO detail — stage × role visibility matrix */
@@ -1456,7 +1491,7 @@ function poStepper(po){
       <div style="width:100%;height:5px;border-radius:4px;background:${done||cur?'var(--po)':'#e4e7ee'}"></div>
       <span style="font-size:9.5px;font-weight:700;color:${cur?'var(--po)':(done?'var(--txt-2)':'var(--txt-3)')};text-align:center">${lbl}</span>
     </div>`;
-  }).join('')}</div>${po.status==='ATUALIZAR_INFO'?`<div style="padding:8px 12px;border-radius:9px;background:#fbf0d8;color:#8a6300;font-weight:700;font-size:12px;margin-bottom:14px">⚠ Update requested — agency must repost NF/evidence</div>`:''}`;
+  }).join('')}</div>${po.status==='ATUALIZAR_INFO'?`<div style="padding:8px 12px;border-radius:9px;background:#fbf0d8;color:#8a6300;font-weight:700;font-size:12px;margin-bottom:14px">${icn('alert',12)} Update requested — agency must repost NF/evidence</div>`:''}`;
 }
 let PODETAIL=null;
 function openPODetail(id){ const po=DATA.pos.find(x=>x.id===id); if(!po)return; PODETAIL={id}; renderPODetailModal(); }
@@ -1472,12 +1507,12 @@ function renderPODetailModal(){
   }
   if(poFieldVisible('numero',po)&&po.numero_po) sections.push(`<div style="margin-bottom:12px">${cell('PO number',esc(po.numero_po)+(po.po_arquivo?` · <a onclick="abrirAnexo('${esc(po.po_arquivo)}')" style="color:#3c7a63;cursor:pointer;text-decoration:underline">view file</a>`:''))}</div>`);
   if(poFieldVisible('fatura',po)&&(po.nf_numero||po.fatura_url||po.evidencia_url)) sections.push(`<div style="margin-bottom:12px">${cell('Invoice (NF)',(po.nf_numero?esc(po.nf_numero):'—')+(po.fatura_url?` · <a onclick="abrirAnexo('${esc(po.fatura_url)}')" style="color:#b5550c;cursor:pointer;text-decoration:underline">NF file</a>`:'')+(po.evidencia_url?` · <a onclick="abrirAnexo('${esc(po.evidencia_url)}')" style="color:#b5550c;cursor:pointer;text-decoration:underline">evidence</a>`:''))}</div>`);
-  if(poFieldVisible('pagamento',po)&&po.vencimento) sections.push(`<div style="margin-bottom:12px">${cell('Payment forecast','💰 '+fmtDataBR(po.vencimento))}</div>`);
-  else if(!['REJEITADA','CANCELADA'].includes(po.status)){ const est=poEstimativaPagamento(po); if(est) sections.push(`<div style="margin-bottom:12px">${cell('Estimated payment (based on request date)','🗓 ~'+est.date)}</div>`); }
-  if(po.motivo_rejeicao&&['ATUALIZAR_INFO','REJEITADA'].includes(po.status)) sections.push(`<div style="padding:10px 12px;border-radius:9px;background:#fbe4e1;color:#b32418;font-size:12.5px;font-weight:600;margin-bottom:12px">⚠ ${esc(po.motivo_rejeicao)}</div>`);
+  if(poFieldVisible('pagamento',po)&&po.vencimento) sections.push(`<div style="margin-bottom:12px">${cell('Payment forecast',icn('coins',13)+' '+fmtDataBR(po.vencimento))}</div>`);
+  else if(!['REJEITADA','CANCELADA'].includes(po.status)){ const est=poEstimativaPagamento(po); if(est) sections.push(`<div style="margin-bottom:12px">${cell('Estimated payment (based on request date)',icn('calendar',13)+' ~'+est.date)}</div>`); }
+  if(po.motivo_rejeicao&&['ATUALIZAR_INFO','REJEITADA'].includes(po.status)) sections.push(`<div style="padding:10px 12px;border-radius:9px;background:#fbe4e1;color:#b32418;font-size:12.5px;font-weight:600;margin-bottom:12px">${icn('alert',12)} ${esc(po.motivo_rejeicao)}</div>`);
   if(poFieldVisible('contabil',po)) sections.push(`<div style="margin-bottom:4px">${cell('Cost center / account / description',esc(proj.cc||'—')+' · '+esc(proj.account||'—')+'<div style="font-weight:500;font-size:12px;color:var(--txt-2);margin-top:2px">'+esc(proj.account_desc||'')+'</div>')}</div>`);
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:560px">
-    <div class="modal-h" style="align-items:flex-start"><div style="flex:1"><h3>${esc(proj.nome||'PO')}</h3><span class="badge ${s.c}" style="margin-top:6px;display:inline-flex"><span class="d"></span>${s.icon} ${s.t}</span></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
+    <div class="modal-h" style="align-items:flex-start"><div style="flex:1"><h3>${esc(proj.nome||'PO')}</h3><span class="badge ${s.c}" style="margin-top:6px;display:inline-flex"><span class="d"></span>${s.t}</span></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">${poStepper(po)}${sections.join('')}</div>
     <div class="modal-f"><span></span><div style="display:flex;gap:8px;flex-wrap:wrap">${poActionsHTML(po)}</div></div>
   </div></div>`;
@@ -1517,7 +1552,7 @@ function renderGerarPO(){
     <div class="modal-b">
       <div class="field"><label>PO number</label><input value="${esc(GERAR.num)}" onchange="gerarSet('num',this.value)" placeholder="e.g. PO-1183"></div>
       <div class="field"><label>Attach PO document (optional, PDF)</label><input type="file" accept="application/pdf,image/*" onchange="gerarFile(this)"></div>
-      ${GERAR.fileName?`<div style="font-size:12px;color:var(--txt-2)">📎 ${esc(GERAR.fileName)}</div>`:''}
+      ${GERAR.fileName?`<div style="font-size:12px;color:var(--txt-2)">${icn('paperclip',12)} ${esc(GERAR.fileName)}</div>`:''}
     </div>
     <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" onclick="submitGerarPO()">Issue PO</button></div></div>
   </div></div>`;
@@ -1545,9 +1580,9 @@ function renderFaturarPO(){
     <div class="modal-b">
       ${redo&&po.motivo_rejeicao?`<div class="banner" style="background:var(--red-bg);border-color:#f0b8b2;color:#b32418">↩ Sent back by finance: ${esc(po.motivo_rejeicao)}</div>`:''}
       <div class="field"><label>NF number</label><input value="${esc(FAT.nf)}" onchange="fatSet('nf',this.value)" placeholder="e.g. NF 8842"></div>
-      <div class="field"><label>Invoice file (NF — PDF)</label><input type="file" accept="application/pdf,image/*" onchange="fatFile(this,'nf')">${FAT.nfName?`<div style="font-size:12px;color:var(--txt-2);margin-top:4px">🧾 ${esc(FAT.nfName)}</div>`:''}</div>
-      <div class="field"><label>Evidence file (delivery proof)</label><input type="file" accept="application/pdf,image/*" onchange="fatFile(this,'ev')">${FAT.evName?`<div style="font-size:12px;color:var(--txt-2);margin-top:4px">📎 ${esc(FAT.evName)}</div>`:''}</div>
-      <div style="font-size:11.5px;color:var(--txt-3);background:var(--paper-2);border:1px solid var(--line);border-radius:9px;padding:9px 12px">💡 The payment forecast is calculated automatically from today's posting date and shown once the NF is posted.</div>
+      <div class="field"><label>Invoice file (NF — PDF)</label><input type="file" accept="application/pdf,image/*" onchange="fatFile(this,'nf')">${FAT.nfName?`<div style="font-size:12px;color:var(--txt-2);margin-top:4px">${icn('receipt',12)} ${esc(FAT.nfName)}</div>`:''}</div>
+      <div class="field"><label>Evidence file (delivery proof)</label><input type="file" accept="application/pdf,image/*" onchange="fatFile(this,'ev')">${FAT.evName?`<div style="font-size:12px;color:var(--txt-2);margin-top:4px">${icn('paperclip',12)} ${esc(FAT.evName)}</div>`:''}</div>
+      <div style="font-size:11.5px;color:var(--txt-3);background:var(--paper-2);border:1px solid var(--line);border-radius:9px;padding:9px 12px">${icn('info',12)} The payment forecast is calculated automatically from today's posting date and shown once the NF is posted.</div>
     </div>
     <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" onclick="submitFaturarPO()">Post NF</button></div></div>
   </div></div>`;
@@ -1584,8 +1619,8 @@ function renderValidarPO(){
       </div>
       <div style="font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Attachments to review</div>
       <div style="display:flex;flex-direction:column;gap:8px">
-        <button onclick="abrirAnexo('${esc(po.fatura_url||'')}')" style="display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;font-size:12.5px;font-weight:600;color:var(--txt-1);cursor:pointer;text-align:left"><span>🧾</span><span style="flex:1">Open Nota Fiscal (NF)</span><span style="font-size:11px;color:var(--txt-3)">↗</span></button>
-        <button onclick="abrirAnexo('${esc(po.evidencia_url||'')}')" style="display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;font-size:12.5px;font-weight:600;color:var(--txt-1);cursor:pointer;text-align:left"><span>📎</span><span style="flex:1">Open evidence</span><span style="font-size:11px;color:var(--txt-3)">↗</span></button>
+        <button onclick="abrirAnexo('${esc(po.fatura_url||'')}')" style="display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;font-size:12.5px;font-weight:600;color:var(--txt-1);cursor:pointer;text-align:left"><span style="color:var(--txt-2);display:flex">${icn('receipt',15)}</span><span style="flex:1">Open Nota Fiscal (NF)</span><span style="font-size:11px;color:var(--txt-3)">↗</span></button>
+        <button onclick="abrirAnexo('${esc(po.evidencia_url||'')}')" style="display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;font-size:12.5px;font-weight:600;color:var(--txt-1);cursor:pointer;text-align:left"><span style="color:var(--txt-2);display:flex">${icn('paperclip',15)}</span><span style="flex:1">Open evidence</span><span style="font-size:11px;color:var(--txt-3)">↗</span></button>
       </div>
     </div>
     <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="rejeitarFatPO()">Request update</button><button class="btn-acc" style="background:#1f8a4c" onclick="submitValidarPO()">Validate &amp; schedule payment</button></div></div>
@@ -1839,9 +1874,9 @@ function renderProjModal(){
         <div class="field"><label>Project type <span style="font-weight:600;color:var(--txt-3)">(sets activity template &amp; filters)</span></label><select onchange="pmPTipo(this.value)" ${dis}><option value="">Select…</option>${BUSINESS_TYPES.map(b=>`<option value="${b.id}" ${EDIT.ptipo===b.id?'selected':''}>${b.name}</option>`).join('')}</select></div>
         <div class="field"><label>Due date</label><input type="date" value="${esc(EDIT.prazo||'')}" onchange="pmSet('prazo',this.value)" ${dis}></div>
       </div>
-      ${!EDIT._new?`<div style="display:flex;align-items:center;gap:12px;margin:4px 0 14px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:16px">${prog}%</b><span style="flex:1;height:7px;background:#edeff4;border-radius:6px;overflow:hidden"><span style="display:block;height:100%;width:${prog}%;background:${healthPill(EDIT.status||autoStatus(EDIT)).dot};border-radius:6px"></span></span><span style="font-size:11.5px;color:var(--txt-3);font-weight:600">${done}/${tasks.length} tasks done</span></div>`:''}
+      ${!EDIT._new?`<div style="display:flex;align-items:center;gap:12px;margin:4px 0 14px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:16px">${prog}%</b><span class="pbar" style="flex:1"><span style="width:${prog}%;background:${healthPill(EDIT.status||autoStatus(EDIT)).dot}"></span></span><span style="font-size:11.5px;color:var(--txt-3);font-weight:600">${done}/${tasks.length} tasks done</span></div>`:''}
       <div style="border:1px solid var(--line);border-radius:11px;overflow:hidden;margin-bottom:14px">
-        <div style="padding:9px 13px;background:#fdf3e7;border-bottom:1px solid #f0d9c2;display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="font-size:10.5px;font-weight:800;color:#b5550c">${tasks.length} activities from the "${esc(tName)}" pattern — edit names, dates & sub-items now or after</span>${(!EDIT._new&&projHasSubs(EDIT))?`<button class="chip-btn" onclick="openProjTimeline('${esc(EDIT.id)}')" style="flex-shrink:0">🗓 View timeline</button>`:''}</div>
+        <div style="padding:9px 13px;background:#fdf3e7;border-bottom:1px solid #f0d9c2;display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="font-size:10.5px;font-weight:800;color:#b5550c">${tasks.length} activities from the "${esc(tName)}" pattern — edit names, dates & sub-items now or after</span>${(!EDIT._new&&projHasSubs(EDIT))?`<button class="chip-btn" onclick="openProjTimeline('${esc(EDIT.id)}')" style="flex-shrink:0;display:inline-flex;align-items:center;gap:5px">${icn('calendar',12)} View timeline</button>`:''}</div>
         <div style="padding:9px 11px;max-height:280px;overflow-y:auto">
           ${atvHTML||'<div style="font-size:12.5px;color:var(--txt-3);padding:6px">No activities.</div>'}
           ${ED?'<button class="btn-ghost" onclick="pmAddAtv()" style="margin-top:2px">+ Add activity</button>':''}
@@ -1961,7 +1996,7 @@ function renderNotif(){
         </div>`:''}
       </div>`;
     }).join(''):'<div class="empty">No notifications.</div>'}</div>
-    <div style="padding:12px 20px;border-top:1px solid var(--line);font-size:11px;color:var(--txt-3)">One bell for both modules — dots show origin (orange = Work, red = Budget). Read/delete controls apply to Budget notifications.</div></div>`;
+    <div style="padding:12px 20px;border-top:1px solid var(--line);font-size:11px;color:var(--txt-3)">One bell for both modules — dots show origin (blue = Work, red = Budget). Read/delete controls apply to Budget notifications.</div></div>`;
 }
 
 /* ============================================================
@@ -2086,7 +2121,7 @@ function renderReqPO(){
         </div>
       </div>
       <div class="field"><label>Description</label><input value="${esc(REQ.descricao)}" onchange="reqSet('descricao',this.value)" placeholder="e.g. Agency fee — July"></div>
-      <div style="font-size:11.5px;color:var(--txt-3);background:var(--paper-2);border:1px solid var(--line);border-radius:9px;padding:9px 12px;margin-bottom:14px">🗓 Estimated payment if requested today: <b style="color:var(--txt-2)">~${fmtDateObjBR(calcVencimento(new Date().toISOString().slice(0,10)))}</b> <span style="color:var(--txt-3)">(final date is confirmed once the invoice is posted)</span></div>
+      <div style="font-size:11.5px;color:var(--txt-3);background:var(--paper-2);border:1px solid var(--line);border-radius:9px;padding:9px 12px;margin-bottom:14px">${icn('calendar',12)} Estimated payment if requested today: <b style="color:var(--txt-2)">~${fmtDateObjBR(calcVencimento(new Date().toISOString().slice(0,10)))}</b> <span style="color:var(--txt-3)">(final date is confirmed once the invoice is posted)</span></div>
       ${estoura?'<div class="banner" style="background:var(--red-bg);border-color:#f0b8b2;color:#b32418">One or more categories exceed the balance of the selected month.</div>':''}
     `;
   }else{
@@ -2100,7 +2135,7 @@ function renderReqPO(){
         ${REQ.competencia?`<div style="font-size:11.5px;color:${estoura?'var(--red)':'var(--txt-3)'};margin-top:5px">Month balance: <b class="mono">${BRL(saldo)}</b> (cap ${BRL(teto)} − consumed ${BRL(cons)})</div>`:''}</div>
       <div class="field"><label>Value (R$)</label><input type="number" min="0" step="100" value="${esc(REQ.valor)}" onchange="reqSet('valor',this.value)" placeholder="0,00"></div>
       <div class="field"><label>Description</label><input value="${esc(REQ.descricao)}" onchange="reqSet('descricao',this.value)" placeholder="e.g. Video production, paid media…"></div>
-      <div style="font-size:11.5px;color:var(--txt-3);background:var(--paper-2);border:1px solid var(--line);border-radius:9px;padding:9px 12px;margin-bottom:14px">🗓 Estimated payment if requested today: <b style="color:var(--txt-2)">~${fmtDateObjBR(calcVencimento(new Date().toISOString().slice(0,10)))}</b> <span style="color:var(--txt-3)">(final date is confirmed once the invoice is posted)</span></div>
+      <div style="font-size:11.5px;color:var(--txt-3);background:var(--paper-2);border:1px solid var(--line);border-radius:9px;padding:9px 12px;margin-bottom:14px">${icn('calendar',12)} Estimated payment if requested today: <b style="color:var(--txt-2)">~${fmtDateObjBR(calcVencimento(new Date().toISOString().slice(0,10)))}</b> <span style="color:var(--txt-3)">(final date is confirmed once the invoice is posted)</span></div>
       ${estoura?'<div class="banner" style="background:var(--red-bg);border-color:#f0b8b2;color:#b32418">The value exceeds the balance of the selected month. Pick another month or reduce the value.</div>':''}
     `;
   }
@@ -2276,17 +2311,17 @@ function renderTeam(){
   const workload=`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;padding:17px 19px;margin-bottom:18px;box-shadow:0 1px 2px rgba(20,22,28,.05)">
     <b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">Workload</b>
     <div style="display:flex;flex-direction:column;gap:4px;margin-top:12px">${(function(){const totalActive=names.reduce((s,n)=>s+load[n].length,0);return names.map(n=>{const items=load[n];const late=items.filter(p=>p.status==='atrasado'||p.status==='bloqueado').length;const shareOfTeam=totalActive?Math.round(items.length/totalActive*100):0;const capPct=Math.round(items.length/max*100);
-      return `<div style="display:flex;align-items:center;gap:14px;padding:7px 0"><span style="width:190px;flex-shrink:0;display:flex;align-items:center;gap:9px;font-weight:600;font-size:13px"><span class="avatar" style="width:24px;height:24px;background:${avColor(n)};font-size:10px">${initials(n)}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n)}</span>${late?`<span style="font-size:9.5px;font-weight:800;color:#b32418;background:var(--red-bg);border-radius:20px;padding:2px 7px;flex-shrink:0">⚠ CRITICAL</span>`:''}</span><span style="flex:1;height:13px;background:#f3f4f8;border:1px solid var(--line);border-radius:8px;overflow:hidden"><span style="display:block;height:100%;width:${capPct}%;background:${barColor(n)};border-radius:8px"></span></span><span style="width:210px;flex-shrink:0;text-align:right;font-size:11.5px;color:var(--txt-2)"><b>${items.length}</b> project(s) · <b class="mono">${shareOfTeam}%</b> of team load${late?` · <span style="color:var(--red);font-weight:700">${late} critical</span>`:''}</span></div>`;
+      return `<div style="display:flex;align-items:center;gap:14px;padding:7px 0"><span style="width:190px;flex-shrink:0;display:flex;align-items:center;gap:9px;font-weight:600;font-size:13px"><span class="avatar" style="width:24px;height:24px;background:${avColor(n)};font-size:10px">${initials(n)}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n)}</span>${late?`<span style="font-size:9.5px;font-weight:800;color:#b32418;background:var(--red-bg);border-radius:20px;padding:2px 7px;flex-shrink:0;display:inline-flex;align-items:center;gap:3px">${icn('alert',9)} CRITICAL</span>`:''}</span><span style="flex:1;height:13px;background:#f3f4f8;border:1px solid var(--line);border-radius:8px;overflow:hidden"><span style="display:block;height:100%;width:${capPct}%;background:${barColor(n)};border-radius:8px"></span></span><span style="width:210px;flex-shrink:0;text-align:right;font-size:11.5px;color:var(--txt-2)"><b>${items.length}</b> project(s) · <b class="mono">${shareOfTeam}%</b> of team load${late?` · <span style="color:var(--red);font-weight:700">${late} critical</span>`:''}</span></div>`;
     }).join('');})()}</div></div>`;
   const cards=names.slice(0,4).map(n=>{const items=load[n];const late=items.filter(p=>p.status==='atrasado'||p.status==='bloqueado').length;const done=DATA.projetos.filter(p=>p.resp===n&&p.status==='concluido').length;const tasks=items.reduce((s,p)=>s+((p.tasks||[]).filter(t=>!t.done).length),0);
     return `<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-      <div style="padding:14px 17px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line)"><span class="avatar" style="width:38px;height:38px;border-radius:11px;background:${avColor(n)};font-size:14px">${initials(n)}</span><span style="flex:1"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px;display:block">${esc(n)}</b><span style="font-size:11px;color:var(--txt-3)">Owner</span></span>${late?`<span style="font-size:10px;font-weight:800;color:#b32418;background:var(--red-bg);border-radius:20px;padding:3px 9px">⚠ ${late} CRITICAL</span>`:''}</div>
+      <div style="padding:14px 17px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line)"><span class="avatar" style="width:38px;height:38px;border-radius:11px;background:${avColor(n)};font-size:14px">${initials(n)}</span><span style="flex:1"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px;display:block">${esc(n)}</b><span style="font-size:11px;color:var(--txt-3)">Owner</span></span>${late?`<span style="font-size:10px;font-weight:800;color:#b32418;background:var(--red-bg);border-radius:20px;padding:3px 9px;display:inline-flex;align-items:center;gap:4px">${icn('alert',10)} ${late} CRITICAL</span>`:''}</div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--line)">
         <span style="padding:11px 6px;text-align:center;border-right:1px solid #edeff4"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:18px;display:block">${items.length}</b><span style="font-size:9.5px;color:var(--txt-3);font-weight:700;text-transform:uppercase">Active</span></span>
         <span style="padding:11px 6px;text-align:center;border-right:1px solid #edeff4"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:18px;display:block;color:${late?'#b32418':'inherit'}">${late}</b><span style="font-size:9.5px;color:var(--txt-3);font-weight:700;text-transform:uppercase">Critical</span></span>
         <span style="padding:11px 6px;text-align:center;border-right:1px solid #edeff4"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:18px;display:block">${done}</b><span style="font-size:9.5px;color:var(--txt-3);font-weight:700;text-transform:uppercase">Done</span></span>
         <span style="padding:11px 6px;text-align:center"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:18px;display:block">${tasks}</b><span style="font-size:9.5px;color:var(--txt-3);font-weight:700;text-transform:uppercase">Tasks</span></span></div>
-      <div style="padding:10px 12px;display:flex;flex-direction:column;gap:2px">${items.slice(0,4).map(p=>{const hp=healthPill(p.status);const pr=computeProg(p);const isCrit=p.status==='atrasado'||p.status==='bloqueado';return `<div onclick="openProj('${esc(p.id)}')" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;cursor:pointer;${isCrit?'border-left:3px solid var(--red);background:#fdf4f3':''}"><span style="flex:1;min-width:0;font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span><span style="width:54px;height:5px;background:#edeff4;border-radius:5px;overflow:hidden;flex-shrink:0"><span style="display:block;height:100%;width:${pr}%;background:${hp.dot}"></span></span></div>`;}).join('')}</div></div>`;
+      <div style="padding:10px 12px;display:flex;flex-direction:column;gap:2px">${items.slice(0,4).map(p=>{const hp=healthPill(p.status);const pr=computeProg(p);const isCrit=p.status==='atrasado'||p.status==='bloqueado';return `<div onclick="openProj('${esc(p.id)}')" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;cursor:pointer;${isCrit?'background:#fdf4f3':''}">${isCrit?'<span style="width:7px;height:7px;border-radius:50%;background:var(--red);flex-shrink:0"></span>':''}<span style="flex:1;min-width:0;font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span><span style="width:54px;height:5px;background:#edeff4;border-radius:5px;overflow:hidden;flex-shrink:0"><span style="display:block;height:100%;width:${pr}%;background:${hp.dot}"></span></span></div>`;}).join('')}</div></div>`;
   }).join('');
   return workload+`<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">${cards}</div>`;
 }
@@ -2299,17 +2334,17 @@ function renderWeekly(){
   const now=new Date().toLocaleDateString('en-US',{day:'2-digit',month:'long',year:'numeric'});
   const st=(n,l,col)=>`<span><b style="font-family:'Hanken Grotesk',sans-serif;font-size:24px;display:block${col?';color:'+col:''}">${n}</b><span style="font-size:11.5px;color:var(--txt-2);font-weight:600">${l}</span></span>`;
   const line=(p,extra)=>`<div style="padding:9px 0;border-bottom:1px dashed var(--line);font-size:13px;cursor:pointer" onclick="openProj('${esc(p.id)}')"><b>${esc(p.nome)}</b>${extra?' — '+extra:''} <span style="color:var(--txt-2)">· ${esc(p.resp||'—')}</span></div>`;
-  const sec=(label,col,items,extraFn)=>`<div style="padding:16px 22px;border-bottom:1px solid var(--line)"><div style="font-size:11.5px;font-weight:800;letter-spacing:.06em;color:${col};margin-bottom:9px">${label}</div>${items.length?items.map(p=>line(p,extraFn(p))).join(''):'<div style="font-size:12.5px;color:var(--txt-3)">Nothing here.</div>'}</div>`;
+  const sec=(label,col,items,extraFn)=>`<div style="padding:16px 22px;border-bottom:1px solid var(--line)"><div style="font-size:11.5px;font-weight:800;letter-spacing:.06em;color:${col};margin-bottom:9px;display:flex;align-items:center;gap:7px"><span style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></span>${label}</div>${items.length?items.map(p=>line(p,extraFn(p))).join(''):'<div style="font-size:12.5px;color:var(--txt-3)">Nothing here.</div>'}</div>`;
   const luTxt=p=>{const lu=latestLog(p);return lu?esc(lu.txt):'';};
   return `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;gap:16px;flex-wrap:wrap">
       <div style="max-width:520px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:15px">Week of ${now}</b><div style="font-size:12.5px;color:var(--txt-2);margin-top:2px">Auto-generated from project data — copy or email.</div></div>
-      <div style="display:flex;gap:8px"><button onclick="copyWeekly()" style="padding:9px 15px;border-radius:9px;border:none;background:#10131a;color:#fff;font-weight:600;font-size:12.5px;cursor:pointer">📋 Copy report</button></div></div>
+      <div style="display:flex;gap:8px"><button onclick="copyWeekly()" style="padding:9px 15px;border-radius:9px;border:none;background:#10131a;color:#fff;font-weight:600;font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center;gap:7px">${icn('copy',13)} Copy report</button></div></div>
     <div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
       <div style="padding:18px 22px;border-bottom:1px solid var(--line);background:#fafbfd;display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
         ${st(delivered.length,'Delivered')}${st(progress.length,'In progress')}${st(risk.length,'At risk','#b32418')}${st(tasksDone,'Tasks completed')}</div>
-      ${sec('✅ DELIVERED','#0c7048',delivered,luTxt)}
-      ${sec('🔶 AT RISK','#9c6404',risk,luTxt)}
-      ${sec('▶ IN PROGRESS','#0e5ba6',progress,p=>luTxt(p)+' ('+computeProg(p)+'%)')}
+      ${sec('DELIVERED','#0c7048',delivered,luTxt)}
+      ${sec('AT RISK','#9c6404',risk,luTxt)}
+      ${sec('IN PROGRESS','#0e5ba6',progress,p=>luTxt(p)+' ('+computeProg(p)+'%)')}
     </div>`;
 }
 function copyWeekly(){
@@ -2333,7 +2368,7 @@ function renderMyTasks(){
       <div style="padding:4px 10px 10px">${checks.length?checks.map(c=>{const d=dueTag(c.fim);return `<div style="display:flex;align-items:center;gap:11px;padding:11px 6px;border-bottom:1px solid #edeff4"><button onclick="toggleMyTask('${esc(c.pid)}','${esc(c.tid)}')" style="width:19px;height:19px;border-radius:6px;border:2px solid #c7ccd8;background:#fff;cursor:pointer;flex-shrink:0"></button><div style="flex:1;min-width:0;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.title)} <span style="color:var(--txt-3);font-size:11.5px">· ${esc(c.proj)}</span></div><span style="flex-shrink:0;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;background:${d.bg};color:${d.fg}">${d.txt}</span></div>`;}).join(''):'<div class="empty">No pending tasks.</div>'}</div></div>
     <div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
       <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line)"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">Requests / mentions</b></div>
-      <div style="padding:12px 14px;display:flex;flex-direction:column;gap:10px">${ms.length?ms.map(m=>`<div style="border:1px solid var(--line);border-left:4px solid var(--violet);border-radius:11px;padding:12px 14px;background:#fafbfd;cursor:${m.pid?'pointer':'default'}" ${m.pid?`onclick="openProj('${esc(m.pid)}')"`:''}><div style="font-weight:600;font-size:13px">${esc(m.proj)}</div><div style="font-size:12px;color:var(--txt-2);margin-top:3px">${fmtLogTxt(m.txt)}</div><div style="font-size:11px;color:var(--txt-3);margin-top:4px">from <b style="color:var(--txt-2)">${esc(m.autor)}</b> · ${fmtDate(m.t)}</div></div>`).join(''):'<div class="empty">No requests.</div>'}</div></div>
+      <div style="padding:12px 14px;display:flex;flex-direction:column;gap:10px">${ms.length?ms.map(m=>`<div style="border:1px solid var(--line);border-radius:11px;padding:12px 14px;background:var(--violet-bg);cursor:${m.pid?'pointer':'default'}" ${m.pid?`onclick="openProj('${esc(m.pid)}')"`:''}><div style="font-weight:600;font-size:13px">${esc(m.proj)}</div><div style="font-size:12px;color:var(--txt-2);margin-top:3px">${fmtLogTxt(m.txt)}</div><div style="font-size:11px;color:var(--txt-3);margin-top:4px">from <b style="color:var(--txt-2)">${esc(m.autor)}</b> · ${fmtDate(m.t)}</div></div>`).join(''):'<div class="empty">No requests.</div>'}</div></div>
   </div>`;
 }
 async function toggleMyTask(pid,tid){
@@ -2347,7 +2382,7 @@ async function toggleMyTask(pid,tid){
 function renderAgencyWork(){
   let list=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO');
   if(MINHA_AGENCIA) list=list.filter(p=>p.agencia===MINHA_AGENCIA);
-  return `<div class="banner" style="background:var(--violet-bg);border-color:#cfc2f0;color:#5535ad">🔒 Read-only — you see the work assigned to your agency${MINHA_AGENCIA?' ('+esc(MINHA_AGENCIA)+')':''}.</div>
+  return `<div class="banner" style="background:var(--violet-bg);border-color:#cfc2f0;color:#5535ad">${icn('lock',12)} Read-only — you see the work assigned to your agency${MINHA_AGENCIA?' ('+esc(MINHA_AGENCIA)+')':''}.</div>
     <div class="tbl-wrap"><table><thead><tr><th>Campaign</th><th>Category</th><th>Activity</th></tr></thead><tbody>
     ${list.length?list.map(p=>`<tr><td style="font-weight:600">${esc(p.nome)}</td><td>${esc(p.product_category||'—')}</td><td>${esc(p.activity||'—')}</td></tr>`).join(''):'<tr><td colspan="3"><div class="empty">No assigned work.</div></td></tr>'}
   </tbody></table></div>`;
@@ -2422,41 +2457,38 @@ function feeSplitBlock(){
   const allMonths=new Set(); Object.values(accMap).forEach(a=>{Object.keys(a.months).forEach(m=>allMonths.add(m));Object.keys(a.cons).forEach(m=>allMonths.add(m));});
   const monthList=Array.from(allMonths).sort();
   const accRows=Object.values(accMap);
-  const thBase='padding:7px 10px;font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;background:#fafbfd;border-bottom:1px solid var(--line)';
-  const tdNum='padding:9px 10px;text-align:right;white-space:nowrap;font-size:11.5px';
-  const sep='border-left:1px solid var(--line)';
-  const sepT='border-left:2px solid var(--line-2)';
   let gB=0,gC=0; const gByM={};
   accRows.forEach(a=>{monthList.forEach(m=>{const b=a.months[m]||0,c=a.cons[m]||0;gByM[m]=gByM[m]||{b:0,c:0};gByM[m].b+=b;gByM[m].c+=c;gB+=b;gC+=c;});});
+  const band=i=>i%2?' mband':'';
   const accountsBlock=`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05);margin-top:16px">
-    <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line)"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">Cost center / account / description — budget · consumption · balance</b></div>
-    ${accRows.length?`<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%">
+    <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">Cost center / account — monthly budget, consumption &amp; balance</b><span style="font-size:11.5px;color:var(--txt-3)">scroll sideways — identification stays fixed</span></div>
+    ${accRows.length?`<div class="cc-wrap"><table class="cc-tbl">
       <thead>
         <tr>
-          <th rowspan="2" style="${thBase};text-align:left">Cost center</th>
-          <th rowspan="2" style="${thBase};text-align:left">Account</th>
-          <th rowspan="2" style="${thBase};text-align:left;min-width:150px">Description</th>
-          ${monthList.map(m=>`<th colspan="3" style="${thBase};text-align:center;${sep}">${esc(fmtMes(m+'-01'))}</th>`).join('')}
-          <th colspan="3" style="${thBase};text-align:center;${sepT};background:#f0f2f7">Total</th>
+          <th rowspan="2" class="s1" style="text-align:left">Cost center</th>
+          <th rowspan="2" class="s2" style="text-align:left">Account</th>
+          <th rowspan="2" class="s3" style="text-align:left">Description</th>
+          ${monthList.map((m,i)=>`<th colspan="3" class="msep${band(i)}" style="text-align:center;color:var(--txt-2)">${esc(fmtMes(m+'-01'))}</th>`).join('')}
+          <th colspan="3" class="msep" style="text-align:center;background:#eef0f6;color:var(--txt-2)">Total</th>
         </tr>
         <tr>
-          ${monthList.map(()=>`<th style="${thBase};text-align:right;font-weight:600;${sep}">Budget</th><th style="${thBase};text-align:right;font-weight:600">Cons.</th><th style="${thBase};text-align:right;font-weight:600">Balance</th>`).join('')}
-          <th style="${thBase};text-align:right;${sepT};background:#f0f2f7">Budget</th><th style="${thBase};text-align:right;background:#f0f2f7">Cons.</th><th style="${thBase};text-align:right;background:#f0f2f7">Balance</th>
+          ${monthList.map((m,i)=>`<th class="msep${band(i)}" style="text-align:right;font-weight:600">Budget</th><th class="${band(i).trim()}" style="text-align:right;font-weight:600">Cons.</th><th class="${band(i).trim()}" style="text-align:right;font-weight:600">Balance</th>`).join('')}
+          <th class="msep" style="text-align:right;background:#eef0f6">Budget</th><th style="text-align:right;background:#eef0f6">Cons.</th><th style="text-align:right;background:#eef0f6">Balance</th>
         </tr>
       </thead>
       <tbody>
-      ${accRows.map(a=>{const totB=Object.values(a.months).reduce((s,v)=>s+v,0);const totC=Object.values(a.cons).reduce((s,v)=>s+v,0);const totS=totB-totC;return `<tr style="border-bottom:1px solid #edeff4">
-        <td class="mono" style="padding:9px 10px;font-size:11.5px;white-space:nowrap">${esc(a.cc||'—')}</td>
-        <td class="mono" style="padding:9px 10px;font-size:11.5px;white-space:nowrap">${esc(a.acc||'—')}</td>
-        <td style="padding:9px 10px;font-size:12px">${esc(a.desc||'—')}</td>
-        ${monthList.map(m=>{const b=a.months[m]||0,c=a.cons[m]||0,s=b-c;return `<td class="mono" style="${tdNum};color:var(--txt-3);${sep}">${b?BRL(b):'—'}</td><td class="mono" style="${tdNum};font-weight:600">${c?BRL(c):'—'}</td><td class="mono" style="${tdNum};font-weight:700;color:${s<0?'var(--po)':'#1f8a4c'}">${(b||c)?BRL(s):'—'}</td>`;}).join('')}
-        <td class="mono" style="${tdNum};color:var(--txt-3);${sepT};background:#fafbfd">${BRL(totB)}</td><td class="mono" style="${tdNum};font-weight:600;background:#fafbfd">${BRL(totC)}</td><td class="mono" style="${tdNum};font-weight:800;background:#fafbfd;color:${totS<0?'var(--po)':'#1f8a4c'}">${BRL(totS)}</td>
+      ${accRows.map(a=>{const totB=Object.values(a.months).reduce((s,v)=>s+v,0);const totC=Object.values(a.cons).reduce((s,v)=>s+v,0);const totS=totB-totC;return `<tr>
+        <td class="mono s1" title="${esc(a.cc||'')}">${esc(a.cc||'—')}</td>
+        <td class="mono s2" title="${esc(a.acc||'')}">${esc(a.acc||'—')}</td>
+        <td class="s3" style="font-size:12px" title="${esc(a.desc||'')}">${esc(a.desc||'—')}</td>
+        ${monthList.map((m,i)=>{const b=a.months[m]||0,c=a.cons[m]||0,s=b-c;return `<td class="num msep${band(i)}" style="color:var(--txt-3)">${b?BRL(b):'—'}</td><td class="num${band(i)}" style="font-weight:600">${c?BRL(c):'—'}</td><td class="num${band(i)}" style="font-weight:700;color:${s<0?'var(--po)':'var(--txt)'}">${(b||c)?BRL(s):'—'}</td>`;}).join('')}
+        <td class="num msep" style="color:var(--txt-3);background:#fafbfd">${BRL(totB)}</td><td class="num" style="font-weight:600;background:#fafbfd">${BRL(totC)}</td><td class="num" style="font-weight:800;background:#fafbfd;color:${totS<0?'var(--po)':'var(--txt)'}">${BRL(totS)}</td>
       </tr>`;}).join('')}
       </tbody>
-      <tfoot><tr style="background:var(--paper-2);border-top:1px solid var(--line)">
-        <td colspan="3" style="padding:10px;font-weight:800;font-size:12px;font-family:'Hanken Grotesk',sans-serif">Total</td>
-        ${monthList.map(m=>{const g=gByM[m]||{b:0,c:0},s=g.b-g.c;return `<td class="mono" style="${tdNum};color:var(--txt-3);font-weight:700;${sep}">${BRL(g.b)}</td><td class="mono" style="${tdNum};font-weight:700">${BRL(g.c)}</td><td class="mono" style="${tdNum};font-weight:800;color:${s<0?'var(--po)':'#1f8a4c'}">${BRL(s)}</td>`;}).join('')}
-        <td class="mono" style="${tdNum};font-weight:800;color:var(--txt-3);${sepT}">${BRL(gB)}</td><td class="mono" style="${tdNum};font-weight:800">${BRL(gC)}</td><td class="mono" style="${tdNum};font-weight:900;color:${(gB-gC)<0?'var(--po)':'#1f8a4c'}">${BRL(gB-gC)}</td>
+      <tfoot><tr>
+        <td class="s1" style="font-weight:800;font-size:12px;font-family:'Hanken Grotesk',sans-serif">Total</td><td class="s2"></td><td class="s3"></td>
+        ${monthList.map((m,i)=>{const g=gByM[m]||{b:0,c:0},s=g.b-g.c;return `<td class="num msep${band(i)}" style="color:var(--txt-3)">${BRL(g.b)}</td><td class="num${band(i)}">${BRL(g.c)}</td><td class="num${band(i)}" style="color:${s<0?'var(--po)':'var(--txt)'}">${BRL(s)}</td>`;}).join('')}
+        <td class="num msep" style="color:var(--txt-3)">${BRL(gB)}</td><td class="num">${BRL(gC)}</td><td class="num" style="font-weight:800;color:${(gB-gC)<0?'var(--po)':'var(--txt)'}">${BRL(gB-gC)}</td>
       </tr></tfoot>
     </table></div>`:'<div style="padding:16px 17px;font-size:12.5px;color:var(--txt-3)">No classified amounts yet.</div>'}
   </div>`;
@@ -2537,13 +2569,13 @@ function renderBudgetOverview(isBalance){
     return `<div style="border-bottom:1px solid #edeff4">
       <div style="display:flex;align-items:center;gap:10px;padding:11px 4px;cursor:pointer" onclick="toggleCampAcc('${esc(p.id)}')">
         <span style="flex:1;min-width:0;font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span>
-        <span style="width:90px;height:7px;background:#edeff4;border-radius:5px;overflow:hidden;flex-shrink:0;display:flex"><span style="width:${pcC}%;background:${over?'var(--po)':'#10131a'}"></span><span style="width:${pcM}%;background:#59606e"></span><span style="width:${pcP}%;background:#cf8a16"></span></span>
-        <span class="mono" style="font-size:10.5px;font-weight:700;color:${over?'#bf0008':near?'#9c6404':'var(--txt-3)'};width:38px;text-align:right;flex-shrink:0" title="Consumed + committed + awaiting approval, over the cap">${Math.round(rawc)}%</span>
-        <span class="mono" style="font-size:12px;color:var(--txt-2)" title="Consumed + committed / cap">${BRL(cons+comp)} <span style="color:var(--txt-3)">/ ${BRL(tot)}</span></span>
-        <span style="font-size:11px;color:var(--txt-3)">${open?'▲':'▼'}</span>
+        <span class="pbar" style="width:110px;flex-shrink:0"><span style="width:${pcC}%;background:${over?'var(--po)':'#10131a'}"></span><span style="width:${pcM}%;background:#59606e"></span><span style="width:${pcP}%;background:#cf8a16"></span></span>
+        <span class="pct" style="font-weight:700;color:${over?'#bf0008':near?'#9c6404':'var(--txt-2)'}" title="Consumed + committed + awaiting approval, over the cap">${Math.round(rawc)}%</span>
+        <span class="mono" style="font-size:11.5px;color:var(--txt-2);width:200px;text-align:right;flex-shrink:0;white-space:nowrap" title="Consumed + committed / cap">${BRL(cons+comp)} <span style="color:var(--txt-3)">/ ${BRL(tot)}</span></span>
+        <span style="color:var(--txt-3);display:flex;transform:rotate(${open?'180deg':'0deg'});transition:transform .15s">${icn('chev',13)}</span>
       </div>
       ${open?`<div style="padding:0 4px 12px 4px">
-        <div style="height:5px;background:#edeff4;border-radius:6px;overflow:hidden;margin-bottom:9px;display:flex"><span style="width:${pcC}%;background:${over?'var(--po)':'#10131a'}"></span><span style="width:${pcM}%;background:#59606e"></span><span style="width:${pcP}%;background:#cf8a16"></span></div>
+        <div class="pbar" style="margin-bottom:9px"><span style="width:${pcC}%;background:${over?'var(--po)':'#10131a'}"></span><span style="width:${pcM}%;background:#59606e"></span><span style="width:${pcP}%;background:#cf8a16"></span></div>
         ${pos.length?pos.map(po=>`<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:6px 10px;background:var(--paper-2);border-radius:8px;margin-bottom:5px"><span>${esc(po.numero_po||po.descricao||'PO')} <span style="color:var(--txt-3)">· ${esc((PO_STATUS[po.status]||{}).t||po.status)}</span></span><span class="mono" style="font-weight:600">${BRL(po.valor)}</span></div>`).join(''):'<div style="font-size:11.5px;color:var(--txt-3);padding:4px 10px">No POs yet.</div>'}
       </div>`:''}
     </div>`;
@@ -2558,17 +2590,17 @@ function renderBudgetOverview(isBalance){
     const rawc=tot?(cons+comp+pnd)/tot*100:0, pctc=Math.min(100,rawc), over=rawc>100.5, near=!over&&rawc>=90;
     const pcC=tot?Math.min(100,cons/tot*100):0, pcM=tot?Math.min(100-pcC,comp/tot*100):0, pcP=tot?Math.min(100-pcC-pcM,pnd/tot*100):0;
     const open=!!CAT_ACC_OPEN[key];
-    return `<div style="border-bottom:1px solid #edeff4;border-left:4px solid ${m.c}">
-      <div style="display:flex;align-items:center;gap:10px;padding:11px 10px;cursor:pointer;background:${open?m.bg+'55':''}" onclick="toggleCatAcc('${esc(key)}')">
-        <span style="width:28px;height:28px;border-radius:8px;background:${m.bg};display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">${m.icon}</span>
+    return `<div style="border-bottom:1px solid #edeff4">
+      <div style="display:flex;align-items:center;gap:10px;padding:11px 10px;cursor:pointer;background:${open?'var(--paper-2)':''}" onclick="toggleCatAcc('${esc(key)}')" onmouseover="this.style.background='var(--paper-2)'" onmouseout="this.style.background='${open?'var(--paper-2)':''}'">
+        <span class="ich" style="width:28px;height:28px;background:${m.bg};color:${m.c}">${icn(m.icon,14)}</span>
         <span style="flex:1;min-width:0"><span style="font-weight:700;font-size:13.5px;display:block">${esc(key)}</span><span style="font-size:10.5px;color:var(--txt-3);font-weight:600">${esc(m.label)} · ${list.length} campaign(s)</span></span>
-        <span style="width:90px;height:7px;background:#edeff4;border-radius:5px;overflow:hidden;flex-shrink:0;display:flex"><span style="width:${pcC}%;background:${over?'var(--po)':'#10131a'}"></span><span style="width:${pcM}%;background:#59606e"></span><span style="width:${pcP}%;background:#cf8a16"></span></span>
-        <span class="mono" style="font-size:10.5px;font-weight:700;color:${over?'#bf0008':near?'#9c6404':'var(--txt-3)'};width:38px;text-align:right;flex-shrink:0" title="Consumed + committed + awaiting approval, over the cap">${Math.round(rawc)}%</span>
-        <span class="mono" style="font-size:12px;color:var(--txt-2)" title="Consumed + committed / cap">${BRL(cons+comp)} <span style="color:var(--txt-3)">/ ${BRL(tot)}</span></span>
-        <span style="font-size:11px;color:var(--txt-3)">${open?'▲':'▼'}</span>
+        <span class="pbar" style="width:110px;flex-shrink:0"><span style="width:${pcC}%;background:${over?'var(--po)':'#10131a'}"></span><span style="width:${pcM}%;background:#59606e"></span><span style="width:${pcP}%;background:#cf8a16"></span></span>
+        <span class="pct" style="font-weight:700;color:${over?'#bf0008':near?'#9c6404':'var(--txt-2)'}" title="Consumed + committed + awaiting approval, over the cap">${Math.round(rawc)}%</span>
+        <span class="mono" style="font-size:11.5px;color:var(--txt-2);width:200px;text-align:right;flex-shrink:0;white-space:nowrap" title="Consumed + committed / cap">${BRL(cons+comp)} <span style="color:var(--txt-3)">/ ${BRL(tot)}</span></span>
+        <span style="color:var(--txt-3);display:flex;transform:rotate(${open?'180deg':'0deg'});transition:transform .15s">${icn('chev',13)}</span>
       </div>
       ${open?`<div style="padding:0 4px 10px 16px">
-        <div style="height:5px;background:#edeff4;border-radius:6px;overflow:hidden;margin-bottom:9px;display:flex"><span style="width:${pcC}%;background:${over?'var(--po)':'#10131a'}"></span><span style="width:${pcM}%;background:#59606e"></span><span style="width:${pcP}%;background:#cf8a16"></span></div>
+        <div class="pbar" style="margin-bottom:9px"><span style="width:${pcC}%;background:${over?'var(--po)':'#10131a'}"></span><span style="width:${pcM}%;background:#59606e"></span><span style="width:${pcP}%;background:#cf8a16"></span></div>
         ${list.map(campRow).join('')}
       </div>`:''}
     </div>`;
@@ -2622,7 +2654,7 @@ function renderBudgetOverview(isBalance){
         <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#d9d6cc;margin-right:5px"></span>Balance ${BRL(balMes)}</span>
       </div>
     </div>
-    ${cats.length?`<div style="display:flex;align-items:baseline;gap:10px;margin:0 0 10px"><h3 style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">By product category</h3><span style="font-size:11.5px;color:var(--txt-3)">allocated to campaigns vs. registered budget${BO_PER.mode!=='all'?' — ⚠ period allocation compared against the FULL budget total':''} — click to open the campaigns</span></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">${cats.map(c=>{const m=catMeta(c.n);const nC=camps.filter(p=>(p.product_category||'')===c.n).length;const hot=c.pct>=90;return `<div style="background:#fff;border:1px solid ${hot?'#f2c4bf':'var(--line)'};border-top:4px solid ${hot?'var(--po)':m.c};border-radius:13px;padding:14px 16px;box-shadow:0 1px 2px rgba(20,22,28,.05);cursor:pointer" onclick="toggleCatAcc('${esc(c.n)}')"><div style="display:flex;align-items:center;gap:9px"><span style="width:30px;height:30px;border-radius:9px;background:${m.bg};display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">${m.icon}</span><span style="min-width:0;flex:1"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</b><span style="font-size:10.5px;color:var(--txt-3);font-weight:600">${esc(m.label)} · ${nC} campaign${nC===1?'':'s'}</span></span><span class="mono" style="font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:${hot?'#fbe4e1':m.bg};color:${hot?'#bf0008':m.c}">${Math.round(c.pct)}%</span></div><div style="display:flex;height:8px;border-radius:5px;overflow:hidden;background:#edeff4;margin-top:12px"><span style="width:${c.pct}%;background:${hot?'var(--po)':m.c}"></span></div><div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt-2);margin-top:8px" class="mono"><span>${BRL(c.used)} allocated</span><span style="color:var(--txt-3)">of ${BRL(c.total)} budget</span></div></div>`;}).join('')}</div>`:''}
+    ${cats.length?`<div style="display:flex;align-items:baseline;gap:10px;margin:0 0 10px"><h3 style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">By product category</h3><span style="font-size:11.5px;color:var(--txt-3)">allocated to campaigns vs. registered budget${BO_PER.mode!=='all'?' — note: period allocation compared against the FULL budget total':''} — click to open the campaigns</span></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">${cats.map(c=>{const m=catMeta(c.n);const nC=camps.filter(p=>(p.product_category||'')===c.n).length;const hot=c.pct>=90;return `<div style="background:#fff;border:1px solid ${hot?'#f2c4bf':'var(--line)'};border-radius:13px;padding:14px 16px;box-shadow:0 1px 2px rgba(20,22,28,.05);cursor:pointer" onclick="toggleCatAcc('${esc(c.n)}')"><div style="display:flex;align-items:center;gap:9px"><span class="ich" style="background:${m.bg};color:${hot?'#bf0008':m.c}">${icn(m.icon,15)}</span><span style="min-width:0;flex:1"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</b><span style="font-size:10.5px;color:var(--txt-3);font-weight:600">${esc(m.label)} · ${nC} campaign${nC===1?'':'s'}</span></span><span class="mono" style="font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:${hot?'#fbe4e1':m.bg};color:${hot?'#bf0008':m.c}">${Math.round(c.pct)}%</span></div><div style="display:flex;height:8px;border-radius:5px;overflow:hidden;background:#edeff4;margin-top:12px"><span style="width:${c.pct}%;background:${hot?'var(--po)':m.c}"></span></div><div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt-2);margin-top:8px" class="mono"><span>${BRL(c.used)} allocated</span><span style="color:var(--txt-3)">of ${BRL(c.total)} budget</span></div></div>`;}).join('')}</div>`:''}
     <div class="panel" style="margin-top:18px"><div class="panel-h"><h3>Monthly evolution</h3><span class="tag">cap · consumed · committed · awaiting approval</span></div>
       <div style="padding:18px;height:280px"><canvas id="chartMonthly"></canvas></div>
     </div>
@@ -2672,7 +2704,7 @@ function renderBudgets(){
     <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">Budget categories</b>${canBudget?'<button class="chip-btn" onclick="openOrcNew()">+ New budget</button>':''}</div>
     <div style="display:grid;grid-template-columns:1.3fr 1fr .9fr ${canBudget?'70px':''};gap:10px;padding:10px 17px;background:#fafbfd;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em"><span>Category</span><span>Period</span><span style="text-align:right">Total</span>${canBudget?'<span></span>':''}</div>
     ${orcs.map(o=>`<div>
-      <div style="display:grid;grid-template-columns:1.3fr 1fr .9fr ${canBudget?'70px':''};gap:10px;padding:12px 17px;border-bottom:1px solid #edeff4;align-items:center;font-size:13px;cursor:pointer" onclick="toggleOrcDetail('${esc(o.id)}')"><span style="font-weight:600;display:flex;align-items:center;gap:8px;min-width:0">${(()=>{const m=catMeta(o.product_category||'');return `<span style=\"width:24px;height:24px;border-radius:7px;background:${m.bg};display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0\">${m.icon}</span>`;})()}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(o.nome||o.product_category||'—')}</span></span><span class="mono" style="font-size:11.5px;color:var(--txt-2)">${o.periodo_inicio?fmtMes(o.periodo_inicio):'—'}${o.periodo_fim?' → '+fmtMes(o.periodo_fim):''}</span><span class="mono" style="text-align:right;font-size:12px">${BRL(o.valor_total)}</span>${canBudget?`<span style="text-align:right" onclick="event.stopPropagation()"><button class="chip-btn" onclick="openOrcEdit('${esc(o.id)}')">Edit</button></span>`:''}</div>
+      <div style="display:grid;grid-template-columns:1.3fr 1fr .9fr ${canBudget?'70px':''};gap:10px;padding:12px 17px;border-bottom:1px solid #edeff4;align-items:center;font-size:13px;cursor:pointer" onclick="toggleOrcDetail('${esc(o.id)}')"><span style="font-weight:600;display:flex;align-items:center;gap:8px;min-width:0">${(()=>{const m=catMeta(o.product_category||'');return `<span class=\"ich\" style=\"width:24px;height:24px;border-radius:7px;background:${m.bg};color:${m.c}\">${icn(m.icon,13)}</span>`;})()}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(o.nome||o.product_category||'—')}</span></span><span class="mono" style="font-size:11.5px;color:var(--txt-2)">${o.periodo_inicio?fmtMes(o.periodo_inicio):'—'}${o.periodo_fim?' → '+fmtMes(o.periodo_fim):''}</span><span class="mono" style="text-align:right;font-size:12px">${BRL(o.valor_total)}</span>${canBudget?`<span style="text-align:right" onclick="event.stopPropagation()"><button class="chip-btn" onclick="openOrcEdit('${esc(o.id)}')">Edit</button></span>`:''}</div>
       ${ORC_DETAIL_OPEN[o.id]?budgetDetail(o):''}
     </div>`).join('')}
     <div style="display:grid;grid-template-columns:1.3fr 1fr .9fr ${canBudget?'70px':''};gap:10px;padding:12px 17px;align-items:center;font-size:13px;background:var(--paper-2)"><span style="font-weight:800">Total</span><span></span><span class="mono" style="text-align:right;font-size:12px;font-weight:800">${BRL(orcs.reduce((s,o)=>s+(+o.valor_total||0),0))}</span>${canBudget?'<span></span>':''}</div>
