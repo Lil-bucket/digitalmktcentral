@@ -1101,10 +1101,100 @@ function renderCampBody(){
         <span class="mono" style="font-size:12.5px;font-weight:700;color:var(--ink);width:110px;text-align:right;flex-shrink:0">${BRL(tot)}</span>
         <span style="color:var(--txt-3);display:flex;transform:rotate(${collapsed?'-90deg':'0deg'});transition:transform .15s">${icn('chev',14)}</span>
       </div>
-      ${collapsed?'':`<div style=\"padding:14px 16px;border-top:1px solid var(--line);background:var(--paper-2);display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:11px\">${camps.map(p=>campCardHTML(p,m)).join('')}</div>`}
+      ${collapsed?'':campCatBody(camps,m)}
     </div>`;
   }).join('');
   return `<div id="campBody" style="display:flex;flex-direction:column;gap:13px">${sections}</div>`;
+}
+/* ===== Category view: activity columns (fixed, aligned across categories) + compact cards ===== */
+const ACT_COL_ORDER=['Campaign','FEE','KOL','AON','Communication'];
+function actColLabel(a){ return ({Campaign:'Campaign',FEE:'Fee',KOL:'KOL',AON:'AON',Communication:'Comms'})[a]||a||'Other'; }
+function actKey(p){ return (p.activity||'').trim()||'Other'; }
+function orderActs(keys){
+  const set=[...new Set(keys)];
+  return set.sort((a,b)=>{ let ia=ACT_COL_ORDER.indexOf(a), ib=ACT_COL_ORDER.indexOf(b); if(ia<0)ia=99; if(ib<0)ib=99; return ia-ib||a.localeCompare(b); });
+}
+function campGlobalActs(){
+  const {list}=CAMP_CTX||{list:[]};
+  return orderActs(list.map(actKey));
+}
+function campColumnHTML(actLabel,items,m){
+  const {tetoBy}=CAMP_CTX;
+  const sorted=items.slice().sort((a,b)=>(LC_ORDER[campLifecycle(a)]-LC_ORDER[campLifecycle(b)])||((tetoBy[b.id]||0)-(tetoBy[a.id]||0)));
+  const tot=items.reduce((s,p)=>s+(tetoBy[p.id]||0),0);
+  return `<div style="min-width:0;display:flex;flex-direction:column;gap:8px">
+    <div style="display:flex;align-items:center;gap:7px;padding:0 2px">
+      <span style="font-family:var(--mono);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3)">${esc(actLabel)}</span>
+      <span class="mono" style="font-size:9.5px;font-weight:800;color:var(--txt-3);background:#fff;border:1px solid var(--line);border-radius:20px;padding:0 6px">${items.length}</span>
+      <span style="flex:1"></span>
+      ${tot?`<span class="mono" style="font-size:10px;font-weight:700;color:var(--txt-3)">${BRL(tot)}</span>`:''}
+    </div>
+    ${sorted.length?sorted.map(p=>campCardCompactHTML(p)).join(''):'<div style="border:1px dashed var(--line-2);border-radius:10px;padding:12px 8px;text-align:center;font-size:11px;color:var(--txt-3)">—</div>'}
+  </div>`;
+}
+let CAMP_CARD_OPEN=null;
+function toggleCampCard(id){ CAMP_CARD_OPEN=CAMP_CARD_OPEN===id?null:id; const b=document.getElementById('campBody'); if(b){ b.outerHTML=renderCampBody(); } }
+function campCatBody(camps,m){
+  const byAct={}; camps.forEach(p=>{ (byAct[actKey(p)]=byAct[actKey(p)]||[]).push(p); });
+  const acts=campGlobalActs(); // same activity columns in every category, so they line up vertically
+  const cols=acts.map(a=>campColumnHTML(actColLabel(a),byAct[a]||[],m)).join('');
+  const openP = CAMP_CARD_OPEN && camps.find(c=>c.id===CAMP_CARD_OPEN);
+  const detail = openP ? campInlineDetailHTML(openP) : '';
+  return `<div style="padding:14px 16px;border-top:1px solid var(--line);background:var(--paper-2);overflow-x:auto">
+    <div style="display:grid;grid-template-columns:repeat(${acts.length},minmax(176px,1fr));gap:12px;min-width:min-content">${cols}${detail}</div>
+  </div>`;
+}
+/* Campaigns menu — same expandable dynamic as Overview + the campaign's POs with status */
+function campInlineDetailHTML(p){
+  const {tetoBy,consBy,compBy,pendBy}=CAMP_CTX;
+  const teto=tetoBy[p.id]||0, cons=consBy[p.id]||0, comp=compBy[p.id]||0, pend=pendBy[p.id]||0;
+  const pctTot=teto?((cons+comp+pend)/teto*100):0, over=pctTot>100.5, near=!over&&pctTot>=90;
+  const pC=teto?Math.min(100,cons/teto*100):0, pCo=teto?Math.min(100-pC,comp/teto*100):0, pPe=teto?Math.min(100-pC-pCo,pend/teto*100):0;
+  const col=catMeta(String(p.product_category||'').trim()||'Uncategorized').c;
+  let pos=(DATA.pos||[]).filter(po=>po.projeto_id===p.id);
+  if(PAPEL==='agencia'&&MINHA_AGENCIA) pos=pos.filter(po=>po.agencia===MINHA_AGENCIA);
+  pos.sort((a,b)=>String(b.competencia||'').localeCompare(String(a.competencia||'')));
+  const poRow=po=>{const s=PO_STATUS[po.status]||{t:po.status,c:'s-slate'};return `<div onclick="event.stopPropagation();openPODetail('${esc(po.id)}')" style="display:flex;align-items:center;gap:10px;padding:8px 11px;border:1px solid var(--line);border-radius:9px;margin-bottom:6px;cursor:pointer;background:#fff" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background='#fff'">
+    <span style="flex:1;min-width:0;font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.numero_po||po.descricao||'PO')}${po.numero_po&&po.descricao?` <span style="font-weight:400;color:var(--txt-3)">· ${esc(po.descricao)}</span>`:''}</span>
+    <span class="mono" style="font-size:11px;color:var(--txt-3);flex-shrink:0">${fmtMes(po.competencia)}</span>
+    <span class="badge ${s.c}" style="font-size:10.5px;flex-shrink:0"><span class="d"></span>${s.t}</span>
+    <span class="mono" style="font-size:12px;font-weight:700;width:96px;text-align:right;flex-shrink:0">${BRL(po.valor)}</span>
+  </div>`;};
+  return `<div style="grid-column:1/-1;background:#fff;border:1px solid var(--line-2);border-radius:12px;padding:15px 17px;box-shadow:var(--sh-1)">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:13px">
+      <span class="ich" style="width:26px;height:26px;background:${catMeta(String(p.product_category||'').trim()||'Uncategorized').bg};color:${col}">${icn(catMeta(String(p.product_category||'').trim()||'Uncategorized').icon,13)}</span>
+      <b style="flex:1;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</b>
+      <span style="font-size:11.5px;color:var(--txt-3)">${esc(p.agencia||'—')}</span>
+      <button class="chip-btn" onclick="event.stopPropagation();openCampDetail('${esc(p.id)}')">Month-by-month →</button>
+      <button onclick="event.stopPropagation();toggleCampCard('${esc(p.id)}')" style="width:26px;height:26px;border-radius:7px;border:1px solid var(--line-2);background:#fff;color:var(--txt-3);cursor:pointer;display:grid;place-items:center">✕</button>
+    </div>
+    <div style="height:18px;border-radius:7px;background:#e9ebf1;overflow:hidden;display:flex;margin-bottom:14px" title="Consumed · committed · awaiting approval"><span style="height:100%;width:${pC}%;background:${over?'var(--po)':'#10131a'}"></span><span style="height:100%;width:${pCo}%;background:#59606e"></span><span style="height:100%;width:${pPe}%;background:#cf8a16"></span></div>
+    <div style="display:flex;align-items:flex-start;gap:30px;flex-wrap:wrap;margin-bottom:15px">
+      <div><div style="font-family:var(--mono);font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:8px">Period</div><div style="display:flex;gap:10px;flex-wrap:wrap">${campPeriodDotsHTML(p.id,col)}</div></div>
+      <div><div style="font-family:var(--mono);font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:8px">Activity</div><span style="font-size:12.5px;font-weight:600;color:var(--txt);display:inline-flex;align-items:center;gap:6px">${icn(actMeta(p.activity).icon,13)} ${esc(actMeta(p.activity).label)}</span></div>
+    </div>
+    <div style="font-family:var(--mono);font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:9px">Purchase orders${pos.length?` · ${pos.length}`:''}</div>
+    ${pos.length?pos.map(poRow).join(''):'<div style="font-size:11.5px;color:var(--txt-3)">No POs requested yet.</div>'}
+  </div>`;
+}
+function campCardCompactHTML(p){
+  const {tetoBy,consBy,compBy,pendBy}=CAMP_CTX;
+  const teto=tetoBy[p.id]||0, cons=consBy[p.id]||0, comp=compBy[p.id]||0, pend=pendBy[p.id]||0;
+  const saldo=teto-cons-comp-pend, pctTot=teto?((cons+comp+pend)/teto*100):0;
+  const lc=campLifecycle(p), over=lc==='over', near=lc==='near';
+  const pC=teto?Math.min(100,cons/teto*100):0, pCo=teto?Math.min(100-pC,comp/teto*100):0, pPe=teto?Math.min(100-pC-pCo,pend/teto*100):0;
+  const sel=CAMP_CARD_OPEN===p.id;
+  const bd=sel?'var(--po)':lc==='done'?'var(--line)':over?'#f3c1ba':near?'#ecd9a4':'var(--line)';
+  return `<div onclick="toggleCampCard('${esc(p.id)}')" title="${esc(p.nome)} · ${esc(p.agencia||'—')}&#10;Cap ${BRL(teto)} · Balance ${BRL(saldo)}" style="background:${sel?'#fff':'#fff'};border:1.5px solid ${bd};border-radius:10px;padding:9px 11px;cursor:pointer;${lc==='done'&&!sel?'opacity:.6;':''}${sel?'box-shadow:0 0 0 3px rgba(226,6,19,.12);':''}display:flex;flex-direction:column;gap:7px" onmouseover="if(!${sel})this.style.boxShadow='0 3px 9px rgba(20,22,28,.09)'" onmouseout="if(!${sel})this.style.boxShadow='none'">
+    <div style="display:flex;align-items:center;gap:7px">
+      <b style="flex:1;min-width:0;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</b>
+      ${campBadgeHTML(p)}
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="pbar" style="flex:1"><span style="width:${pC}%;background:${over?'var(--po)':'#10131a'}"></span><span style="width:${pCo}%;background:#59606e"></span><span style="width:${pPe}%;background:#cf8a16"></span></span>
+      <span class="pct" style="font-weight:700;color:${over?'#bf0008':near?'#9c6404':'var(--txt-2)'}">${teto?Math.round(pctTot)+'%':'—'}</span>
+    </div>
+  </div>`;
 }
 function campCardHTML(p,m){
   const {tetoBy,consBy,compBy,pendBy}=CAMP_CTX;
@@ -2538,7 +2628,7 @@ function renderAgencyWork(){
 }
 let RATEIO_ACC_OPEN={};
 function toggleRateioAcc(key){ RATEIO_ACC_OPEN[key]=!RATEIO_ACC_OPEN[key]; go(SCREEN); }
-function feeSplitBlock(){
+function feeSplitBlock(only){
   const fee=DATA.fee||[];
   const canFee=isManager||PAPEL==='admin';
   const groups={}; fee.forEach(f=>{ const k=f.tipo||'(sem tipo)'; (groups[k]=groups[k]||[]).push(f); });
@@ -2641,6 +2731,8 @@ function feeSplitBlock(){
       </tr></tfoot>
     </table></div>`:'<div style="padding:16px 17px;font-size:12.5px;color:var(--txt-3)">No classified amounts yet.</div>'}
   </div>`;
+  if(only==='accounts') return accountsBlock;
+  if(only==='rateio') return rateioBlock;
   return rateioBlock+accountsBlock;
 }
 /* ---- Overview period filter (all / year / quarter / month) ---- */
@@ -2684,6 +2776,20 @@ function boPeriodBar(){
 let CAMP_ACC_OPEN={}, CAT_ACC_OPEN={};
 function toggleCampAcc(id){ CAMP_ACC_OPEN[id]=!CAMP_ACC_OPEN[id]; go(SCREEN); }
 function toggleCatAcc(key){ CAT_ACC_OPEN[key]=!CAT_ACC_OPEN[key]; go(SCREEN); }
+/* Month "bolinhas": one dot per campaign month, filled when that month is fully
+   consumed (completed), amber when in progress, hollow when not started. */
+function campMonthCons(pid,m){ return (DATA.pos||[]).filter(po=>po.projeto_id===pid&&String(po.competencia).slice(0,7)===m&&CONS.includes(po.status)).reduce((s,po)=>s+(+po.valor||0),0); }
+function campMonthCap(pid,m){ let c=0; (DATA.tetos||[]).forEach(t=>{if(t.projeto_id===pid&&String(t.competencia).slice(0,7)===m)c+=(+t.teto||0);}); (DATA.rateio||[]).forEach(r=>{if(r.projeto_id===pid&&String(r.competencia).slice(0,7)===m)c+=(+r.valor||0);}); return c; }
+function campPeriodDotsHTML(pid,col){
+  const months=Object.keys(campMonthlyTotals(pid)).sort();
+  if(!months.length) return '<span style="font-size:11px;color:var(--txt-3)">No months registered</span>';
+  return months.map(m=>{
+    const cap=campMonthCap(pid,m), cons=campMonthCons(pid,m);
+    const done=cap>0&&cons>=cap-0.5, partial=!done&&cons>0;
+    const bg=done?col:(partial?'#cf8a16':'#fff'), bd=done?col:(partial?'#cf8a16':'var(--line-2)');
+    return `<span style="display:inline-flex;flex-direction:column;align-items:center;gap:4px"><span title="${fmtMes(m+'-01')} · ${done?'completed':partial?'in progress':'not started'}" style="width:17px;height:17px;border-radius:50%;background:${bg};border:1.5px solid ${bd};display:grid;place-items:center;color:#fff">${done?icn('check',10,2.6):''}</span><span style="font-size:9px;color:${done?'var(--txt-2)':'var(--txt-3)'};font-family:var(--mono);font-weight:600">${fmtMes(m+'-01')}</span></span>`;
+  }).join('');
+}
 function renderBudgetOverview(isBalance){
   let camps=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO');
   if(PAPEL==='agencia'&&MINHA_AGENCIA) camps=camps.filter(p=>p.agencia===MINHA_AGENCIA);
@@ -2709,23 +2815,30 @@ function renderBudgetOverview(isBalance){
   const cats=(DATA.orcamentos||[]).map(o=>{const tot=+o.valor_total||0,cat=o.product_category||'',rel=catUsed[cat]||0;return {name:o.nome||cat||'—',n:cat,used:rel,total:tot,pct:tot?Math.min(100,rel/tot*100):0};});
   const canSensitive=isManager||['admin','financeiro'].includes(PAPEL);
   const isMkt=PAPEL==='marketing'&&!isManager;
+  const isFin=PAPEL==='financeiro'&&!isManager;
+  const HIDE_MONEY=isMkt; // marketing sees campaign progress but not budget values
+  // Finance: only the cost-center table (no hero, no campaign accordions)
+  if(isFin) return `<div style="margin-bottom:2px">${feeSplitBlock('accounts')}</div>`;
   const campRow=p=>{
     const tot=tetoBy[p.id]||0, cons=consBy[p.id]||0, comp=compBy[p.id]||0, pnd=pendBy[p.id]||0;
     const rawc=tot?(cons+comp+pnd)/tot*100:0, pctc=Math.min(100,rawc), over=rawc>100.5, near=!over&&rawc>=90;
     const pcC=tot?Math.min(100,cons/tot*100):0, pcM=tot?Math.min(100-pcC,comp/tot*100):0, pcP=tot?Math.min(100-pcC-pcM,pnd/tot*100):0;
     const open=!!CAMP_ACC_OPEN[p.id];
-    const pos=(DATA.pos||[]).filter(po=>po.projeto_id===p.id);
+    const col=catMeta(String(p.product_category||'').trim()||'Uncategorized').c;
     return `<div style="border-bottom:1px solid #edeff4">
       <div style="display:flex;align-items:center;gap:10px;padding:11px 4px;cursor:pointer" onclick="toggleCampAcc('${esc(p.id)}')">
         <span style="flex:1;min-width:0;font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span>
-        <span class="pbar" style="width:110px;flex-shrink:0"><span style="width:${pcC}%;background:${over?'var(--po)':'#10131a'}"></span><span style="width:${pcM}%;background:#59606e"></span><span style="width:${pcP}%;background:#cf8a16"></span></span>
+        ${open?'':`<span class="pbar" style="width:110px;flex-shrink:0"><span style="width:${pcC}%;background:${over?'var(--po)':'#10131a'}"></span><span style="width:${pcM}%;background:#59606e"></span><span style="width:${pcP}%;background:#cf8a16"></span></span>
         <span class="pct" style="font-weight:700;color:${over?'#bf0008':near?'#9c6404':'var(--txt-2)'}" title="Consumed + committed + awaiting approval, over the cap">${Math.round(rawc)}%</span>
-        <span class="mono" style="font-size:11.5px;color:var(--txt-2);width:200px;text-align:right;flex-shrink:0;white-space:nowrap" title="Consumed + committed / cap">${BRL(cons+comp)} <span style="color:var(--txt-3)">/ ${BRL(tot)}</span></span>
+        ${HIDE_MONEY?'':`<span class="mono" style="font-size:11.5px;color:var(--txt-2);width:200px;text-align:right;flex-shrink:0;white-space:nowrap" title="Consumed + committed / cap">${BRL(cons+comp)} <span style="color:var(--txt-3)">/ ${BRL(tot)}</span></span>`}`}
         <span style="color:var(--txt-3);display:flex;transform:rotate(${open?'180deg':'0deg'});transition:transform .15s">${icn('chev',13)}</span>
       </div>
-      ${open?`<div style="padding:0 4px 12px 4px">
-        <div class="pbar" style="margin-bottom:9px"><span style="width:${pcC}%;background:${over?'var(--po)':'#10131a'}"></span><span style="width:${pcM}%;background:#59606e"></span><span style="width:${pcP}%;background:#cf8a16"></span></div>
-        ${pos.length?pos.map(po=>`<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:6px 10px;background:var(--paper-2);border-radius:8px;margin-bottom:5px"><span>${esc(po.numero_po||po.descricao||'PO')} <span style="color:var(--txt-3)">· ${esc((PO_STATUS[po.status]||{}).t||po.status)}</span></span><span class="mono" style="font-weight:600">${BRL(po.valor)}</span></div>`).join(''):'<div style="font-size:11.5px;color:var(--txt-3);padding:4px 10px">No POs yet.</div>'}
+      ${open?`<div style="padding:2px 4px 15px 4px">
+        <div style="height:18px;border-radius:7px;background:#e9ebf1;overflow:hidden;display:flex;margin-bottom:14px" title="Consumed · committed · awaiting approval"><span style="height:100%;width:${pcC}%;background:${over?'var(--po)':'#10131a'}"></span><span style="height:100%;width:${pcM}%;background:#59606e"></span><span style="height:100%;width:${pcP}%;background:#cf8a16"></span></div>
+        <div style="display:flex;align-items:flex-start;gap:26px;flex-wrap:wrap">
+          <div><div style="font-family:var(--mono);font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:8px">Period</div><div style="display:flex;gap:10px;flex-wrap:wrap">${campPeriodDotsHTML(p.id,col)}</div></div>
+          <div><div style="font-family:var(--mono);font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:8px">Activity</div><span style="font-size:12.5px;font-weight:600;color:var(--txt);display:inline-flex;align-items:center;gap:6px">${icn(actMeta(p.activity).icon,13)} ${esc(actMeta(p.activity).label)}</span></div>
+        </div>
       </div>`:''}
     </div>`;
   };
@@ -2745,7 +2858,7 @@ function renderBudgetOverview(isBalance){
         <span style="flex:1;min-width:0"><span style="font-weight:700;font-size:13.5px;display:block">${esc(key)}</span><span style="font-size:10.5px;color:var(--txt-3);font-weight:600">${esc(m.label)} · ${list.length} campaign(s)</span></span>
         <span class="pbar" style="width:110px;flex-shrink:0"><span style="width:${pcC}%;background:${over?'var(--po)':'#10131a'}"></span><span style="width:${pcM}%;background:#59606e"></span><span style="width:${pcP}%;background:#cf8a16"></span></span>
         <span class="pct" style="font-weight:700;color:${over?'#bf0008':near?'#9c6404':'var(--txt-2)'}" title="Consumed + committed + awaiting approval, over the cap">${Math.round(rawc)}%</span>
-        <span class="mono" style="font-size:11.5px;color:var(--txt-2);width:200px;text-align:right;flex-shrink:0;white-space:nowrap" title="Consumed + committed / cap">${BRL(cons+comp)} <span style="color:var(--txt-3)">/ ${BRL(tot)}</span></span>
+        ${HIDE_MONEY?'':`<span class="mono" style="font-size:11.5px;color:var(--txt-2);width:200px;text-align:right;flex-shrink:0;white-space:nowrap" title="Consumed + committed / cap">${BRL(cons+comp)} <span style="color:var(--txt-3)">/ ${BRL(tot)}</span></span>`}
         <span style="color:var(--txt-3);display:flex;transform:rotate(${open?'180deg':'0deg'});transition:transform .15s">${icn('chev',13)}</span>
       </div>
       ${open?`<div style="padding:0 4px 10px 16px">
@@ -2790,7 +2903,9 @@ function renderBudgetOverview(isBalance){
       ${(()=>{const totOrc=(DATA.orcamentos||[]).reduce((s,o)=>s+(+o.valor_total||0),0);const diff=totOrc-orcado;return (BO_PER.mode==='all'&&totOrc&&Math.abs(diff)>=1)?`<div style="margin-top:10px;font-size:11.5px;color:var(--txt-3)">Registered budgets total <b class="mono">${BRL(totOrc)}</b> — ${diff>0?`<b class="mono">${BRL(diff)}</b> not yet allocated to campaigns`:`<b class="mono">${BRL(-diff)}</b> allocated above the registered budgets`}.</div>`:''})()}
     </div>`;
   if(isMkt){
-    return boPeriodBar()+hero+alertsHTML+categoriaAccordion;
+    // Marketing: campaigns only, progress without budget values
+    const mktAlerts=alerts.length?`<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px">${alerts.slice(0,4).map(a=>{const s=ALERT_SEV[a.sev]||ALERT_SEV.near;const p=camps.find(x=>x.id===a.id)||{};const txt=a.sev==='over'?`<b>${esc(p.nome)}</b> is over its cap.`:`<b>${esc(p.nome)}</b> is close to its cap and has no completed PO yet.`;return `<div style="display:flex;align-items:center;gap:12px;background:${s.bg};border:1px solid ${s.bd};border-radius:12px;padding:11px 16px"><span style="width:8px;height:8px;border-radius:50%;background:${s.dot};flex-shrink:0"></span><span style="flex:1;font-size:13px;color:${s.fg}">${txt}</span><button style="font-size:12px;font-weight:700;color:${s.btn};white-space:nowrap" onclick="openCampDetail('${esc(a.id)}')">View campaign →</button></div>`;}).join('')}</div>`:'';
+    return boPeriodBar()+mktAlerts+categoriaAccordion;
   }
   return boPeriodBar()+`${hero}${alertsHTML}
     <div style="background:#fff;border:1px solid var(--line);border-radius:13px;padding:17px 18px;margin-bottom:18px;box-shadow:0 1px 2px rgba(20,22,28,.05)">
@@ -3086,13 +3201,13 @@ function renderFeeEditor(){
   if(!FEE)return;
   const inp=(i,k,ph,w)=>`<input value="${esc(FEE[i][k])}" onchange="feeRowSet(${i},'${k}',this.value)" placeholder="${ph}" style="width:${w||'100%'};padding:6px 8px;border:1px solid var(--line-2);border-radius:7px;background:#fff;font:inherit;font-size:12px">`;
   const rows=FEE.map((f,i)=>`<div style="display:grid;grid-template-columns:1fr 1fr .8fr .6fr 1fr 1fr 1.4fr 24px;gap:7px;align-items:center;margin-bottom:7px">
-    ${inp(i,'agencia','Agency')}${inp(i,'tipo','Type (FEE/KOL…)')}${inp(i,'categoria','Category')}<input type="number" value="${esc(f.percentual)}" onchange="feeRowSet(${i},'percentual',this.value)" placeholder="%" style="padding:6px 8px;border:1px solid var(--line-2);border-radius:7px;background:#fff;font:inherit;font-size:12px;text-align:right" class="mono">${inp(i,'cc','Cost center')}${inp(i,'account','Account')}${inp(i,'descricao','Description')}<button onclick="feeDelRow(${i})" style="width:24px;height:24px;border-radius:6px;border:none;background:transparent;color:var(--txt-3);font-size:11px;cursor:pointer">✕</button>
+    ${inp(i,'agencia','Type')}${inp(i,'tipo','Agency')}${inp(i,'categoria','Category')}<input type="number" value="${esc(f.percentual)}" onchange="feeRowSet(${i},'percentual',this.value)" placeholder="%" style="padding:6px 8px;border:1px solid var(--line-2);border-radius:7px;background:#fff;font:inherit;font-size:12px;text-align:right" class="mono">${inp(i,'cc','Cost center')}${inp(i,'account','Account')}${inp(i,'descricao','Description')}<button onclick="feeDelRow(${i})" style="width:24px;height:24px;border-radius:6px;border:none;background:transparent;color:var(--txt-3);font-size:11px;cursor:pointer">✕</button>
   </div>`).join('');
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:920px">
     <div class="modal-h"><h3>Fee split configuration (rateio)</h3><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">
       <div style="font-size:11.5px;color:var(--txt-3);margin-bottom:10px">Define how a shared invoice is split across categories by fixed percentages. % is per row; each row carries its cost center and account for the payment process.</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr .8fr .6fr 1fr 1fr 1.4fr 24px;gap:7px;font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px"><span>Agency</span><span>Type</span><span>Category</span><span style="text-align:right">%</span><span>Cost center</span><span>Account</span><span>Description</span><span></span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr .8fr .6fr 1fr 1fr 1.4fr 24px;gap:7px;font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px"><span>Type</span><span>Agency</span><span>Category</span><span style="text-align:right">%</span><span>Cost center</span><span>Account</span><span>Description</span><span></span></div>
       ${rows}
       <button class="btn-ghost" onclick="feeAddRow()" style="margin-top:4px">+ Add split row</button>
     </div>
