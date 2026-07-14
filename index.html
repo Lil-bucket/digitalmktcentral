@@ -626,6 +626,7 @@ async function onSignedIn(user){
   $('#acctAv').style.background=avColor(user.email);
   try{ await ssoPO(user.email); }catch(e){ console.warn('PO SSO:',e); window.__poErr=(e&&e.message)||String(e); }
   try{ await loadAll(); }catch(e){ console.error('load:',e); }
+  try{ await loadPTasksRemote(); }catch(e){}
   // diagnostic line in sidebar footer
   try{ const d=$('#poDiag'); if(d){ d.textContent = PO_ACCESS ? ('Budget: '+PAPEL) : ('Budget off — '+(window.__poErr||'no PO role')); d.style.color = PO_ACCESS ? '#7d8493' : '#ef7f88'; } }catch(e){}
   buildNav(); const nav=currentNav(); go((nav.work.concat(nav.budget))[0]||'dash');
@@ -1028,6 +1029,8 @@ const catMeta=k=>CAT_META[k]||{c:'#59606e',bg:'#edeff4',icon:'folder',label:k};
 const ACT_META={KOL:{icon:'mic',label:'KOL / Influencer'},FEE:{icon:'clipboard',label:'Agency fee'},AON:{icon:'radio',label:'Always On'},Campaings:{icon:'megaphone',label:'Campaign'},Campaign:{icon:'megaphone',label:'Campaign'}};
 const actMeta=a=>ACT_META[a]||{icon:'tag',label:a||'—'};
 let CAMP_Q='', CAMP_COLLAPSED={};
+let CAMP_VIEW=(function(){try{return localStorage.getItem('camp_view')||'cat';}catch(e){return 'cat';}})();
+function campSetView(v){ CAMP_VIEW=v; try{localStorage.setItem('camp_view',v);}catch(e){} go('campaigns'); }
 function campSearch(v){ CAMP_Q=(v||'').toLowerCase(); const b=document.getElementById('campBody'); if(b){ b.outerHTML=renderCampBody(); } }
 function campToggleCat(ck){ CAMP_COLLAPSED[ck]=!CAMP_COLLAPSED[ck]; const b=document.getElementById('campBody'); if(b){ b.outerHTML=renderCampBody(); } }
 function renderCampanhas(){
@@ -1043,19 +1046,22 @@ function renderCampanhas(){
   const stat=(l,v,col)=>`<div class="kpi"><span class="bar" style="background:${col}"></span><div class="lbl">${l}</div><div class="num" style="font-size:19px;margin-top:7px">${v}</div></div>`;
   const AP={APROVADO:{t:'Approved',c:'#1f8a4c'},PENDENTE:{t:'Pending',c:'#cf8a16'},REJEITADO:{t:'Rejected',c:'#bf0008'}};
   CAMP_CTX={list,tetoBy,consBy,compBy,pendBy};
-  return `<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px">
+  const doneCount=aprov.filter(p=>campLifecycle(p)==='done').length;
+  return `<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:18px">
       ${stat('Campaigns',String(list.length),'#10131a')}
       ${stat('Budgeted (approved)',BRL(orcado),'#10131a')}
       ${stat('Consumed',BRL(consumido),'var(--po)')}
       ${stat('Committed',BRL(comprometido),'#59606e')}
       ${stat('Pending approval',String(pendCount),'#cf8a16')}
+      ${stat('Completed',String(doneCount),'#59606e')}
     </div>
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-      <div style="position:relative;flex:1;max-width:340px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <div style="display:flex;gap:6px">${[['cat','Categories'],['list','List'],['tl','Timeline']].map(v=>`<button onclick="campSetView('${v[0]}')" style="padding:8px 13px;border-radius:8px;border:1px solid ${CAMP_VIEW===v[0]?'var(--po)':'var(--line-2)'};background:${CAMP_VIEW===v[0]?'#fbe4e1':'#fff'};color:${CAMP_VIEW===v[0]?'#bf0008':'var(--txt-2)'};font-size:12px;font-weight:700;cursor:pointer">${v[1]}</button>`).join('')}</div>
+      <div style="position:relative;flex:1;max-width:340px;min-width:200px">
         <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--txt-3);display:flex">${icn('search',14)}</span>
         <input id="campQ" value="${esc(CAMP_Q)}" oninput="campSearch(this.value)" placeholder="Search campaign, agency…" style="width:100%;padding:9px 12px 9px 34px;border-radius:10px;border:1px solid var(--line-2);background:#fff;font-size:13px;font-family:inherit;outline:none">
       </div>
-      <span style="font-size:11.5px;color:var(--txt-3)">Click a card for the month-by-month detail (cap × POs).</span>
+      <span style="font-size:11.5px;color:var(--txt-3)">${CAMP_VIEW==='tl'?'Row = campaign period · cell shade = monthly investment. Click a row to open.':CAMP_VIEW==='list'?'Grouped by health — needs attention first, completed last.':'Click a card for the month-by-month detail (cap × POs).'}</span>
     </div>
     ${renderCampBody()}`;
 }
@@ -1065,6 +1071,8 @@ function renderCampBody(){
   const {list,tetoBy}=CAMP_CTX;
   const q=CAMP_Q;
   const fl=q?list.filter(p=>((p.nome||'')+' '+(p.agencia||'')+' '+(p.product_category||'')+' '+(p.activity||'')).toLowerCase().includes(q)):list;
+  if(CAMP_VIEW==='list') return campListHTML(fl,q);
+  if(CAMP_VIEW==='tl') return campTimelineHTML(fl,q);
   const catOf=p=>(String(p.product_category||'').trim())||'Uncategorized';
   const byCat={};
   fl.forEach(p=>{ (byCat[catOf(p)]=byCat[catOf(p)]||[]).push(p); });
@@ -1075,7 +1083,7 @@ function renderCampBody(){
   if(!catKeys.length) return `<div id="campBody"><div class="empty">${q?'No campaigns match "'+esc(q)+'".':'No campaigns for your access.'}</div></div>`;
   const sections=catKeys.map(ck=>{
     const m=catMeta(ck);
-    const camps=byCat[ck].slice().sort((a,b)=>(tetoBy[b.id]||0)-(tetoBy[a.id]||0));
+    const camps=byCat[ck].slice().sort((a,b)=>(LC_ORDER[campLifecycle(a)]-LC_ORDER[campLifecycle(b)])||((tetoBy[b.id]||0)-(tetoBy[a.id]||0)));
     const tot=catTotal[ck], pct=grandTotal?(tot/grandTotal*100):0;
     const collapsed=!!CAMP_COLLAPSED[ck]&&!q;
     return `<div style="background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
@@ -1104,11 +1112,10 @@ function campCardHTML(p,m){
   const saldo=teto-cons-comp-pend;
   const pctTot=teto?((cons+comp+pend)/teto*100):0;
   const over=!!teto&&pctTot>100.5, near=!!teto&&!over&&pctTot>=90, danger=over;
-  const AP={APROVADO:{t:'Approved',c:'#1f8a4c',bg:'#e7f4ec'},PENDENTE:{t:'Pending',c:'#cf8a16',bg:'#fdf3e2'},REJEITADO:{t:'Rejected',c:'#bf0008',bg:'#fbe4e1'}};
-  const ap=AP[p.aprovacao_status]||AP.PENDENTE;
+  const lc=campLifecycle(p);
   const act=actMeta(p.activity);
   const pC=teto?Math.min(100,cons/teto*100):0, pCo=teto?Math.min(100-pC,comp/teto*100):0, pPe=teto?Math.min(100-pC-pCo,pend/teto*100):0;
-  return `<div onclick="openCampDetail('${esc(p.id)}')" style="background:#fff;border:1px solid ${over?'#f3c1ba':near?'#ecd9a4':'var(--line)'};border-radius:12px;padding:13px 14px;cursor:pointer;display:flex;flex-direction:column;gap:10px;box-shadow:0 1px 2px rgba(20,22,28,.04)" onmouseover="this.style.boxShadow='0 3px 10px rgba(20,22,28,.09)';this.style.transform='translateY(-1px)'" onmouseout="this.style.boxShadow='0 1px 2px rgba(20,22,28,.04)';this.style.transform=''">
+  return `<div onclick="openCampDetail('${esc(p.id)}')" style="background:#fff;border:1px solid ${lc==='done'?'var(--line)':over?'#f3c1ba':near?'#ecd9a4':'var(--line)'};border-radius:12px;padding:13px 14px;cursor:pointer;${lc==='done'?'opacity:.66;':''}display:flex;flex-direction:column;gap:10px;box-shadow:0 1px 2px rgba(20,22,28,.04)" onmouseover="this.style.boxShadow='0 3px 10px rgba(20,22,28,.09)';this.style.transform='translateY(-1px)'" onmouseout="this.style.boxShadow='0 1px 2px rgba(20,22,28,.04)';this.style.transform=''">
     <div style="display:flex;align-items:flex-start;gap:10px">
       <span style="min-width:0;flex:1">
         <b style="font-size:13px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</b>
@@ -1116,7 +1123,7 @@ function campCardHTML(p,m){
           <span style="white-space:nowrap">${esc(act.label)}</span><span style="opacity:.45">·</span><span style="white-space:nowrap">${esc(p.agencia||'—')}</span>${p.rateio?'<span style="opacity:.45">·</span><span title="Split across categories">rateio</span>':''}
         </span>
       </span>
-      <span style="font-size:10px;font-weight:700;color:${over?'#bf0008':near?'#9c6404':ap.c};background:${over?'#fbe4e1':near?'#fbf0d8':ap.bg};border-radius:20px;padding:3px 9px;white-space:nowrap;flex-shrink:0;display:inline-flex;align-items:center;gap:4px">${over?icn('alert',11)+' '+Math.round(pctTot)+'% over':near?Math.round(pctTot)+'% committed':ap.t}</span>
+      ${campBadgeHTML(p)}
     </div>
     <div style="display:flex;align-items:center;gap:8px" title="Consumed · committed · awaiting approval">
       <span class="pbar" style="flex:1"><span style="width:${pC}%;background:${danger?'var(--po)':'#10131a'}"></span><span style="width:${pCo}%;background:#59606e"></span><span style="width:${pPe}%;background:#cf8a16"></span></span>
@@ -1125,6 +1132,122 @@ function campCardHTML(p,m){
     <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--txt-3)">
       <span style="white-space:nowrap">Cap <b class="mono" style="color:var(--txt);font-size:11.5px">${BRL(teto)}</b></span>
       <span style="white-space:nowrap">Balance <b class="mono" style="color:${saldo<0?'var(--po)':'var(--txt)'};font-size:11.5px">${BRL(saldo)}</b></span>
+    </div>
+  </div>`;
+}
+
+/* ===== Campaign lifecycle + alternative views (list / timeline) ===== */
+const LC_ORDER={over:0,near:1,active:2,pending:3,done:4};
+function campLastMonth(pid){
+  const ms=Object.keys(campMonthlyTotals(pid));
+  (DATA.pos||[]).forEach(po=>{ if(po.projeto_id===pid&&po.competencia&&!['REJEITADA','CANCELADA'].includes(po.status)) ms.push(String(po.competencia).slice(0,7)); });
+  ms.sort(); return ms[ms.length-1]||'';
+}
+function campLifecycle(p){
+  if(!CAMP_CTX) return 'active';
+  if(p.aprovacao_status==='PENDENTE') return 'pending';
+  const {tetoBy,consBy,compBy,pendBy}=CAMP_CTX;
+  const teto=tetoBy[p.id]||0, tot=(consBy[p.id]||0)+(compBy[p.id]||0)+(pendBy[p.id]||0);
+  const pct=teto?tot/teto*100:0;
+  const lastM=campLastMonth(p.id), nowM=new Date().toISOString().slice(0,7);
+  if(teto&&pct>=99.5&&lastM&&lastM<nowM) return 'done';
+  if(teto&&pct>100.5) return 'over';
+  if(teto&&pct>=90) return 'near';
+  return 'active';
+}
+function campBadgeHTML(p){
+  const {tetoBy,consBy,compBy,pendBy}=CAMP_CTX;
+  const teto=tetoBy[p.id]||0, tot=(consBy[p.id]||0)+(compBy[p.id]||0)+(pendBy[p.id]||0);
+  const pctTot=teto?tot/teto*100:0, lc=campLifecycle(p);
+  const base='font-size:10px;font-weight:700;border-radius:20px;padding:3px 9px;white-space:nowrap;flex-shrink:0;display:inline-flex;align-items:center;gap:4px';
+  if(lc==='done') return `<span style="${base};background:var(--slate-bg);color:#494c54">${icn('check',10)} Completed</span>`;
+  if(lc==='over') return `<span style="${base};background:#fbe4e1;color:#bf0008">${icn('alert',11)} ${Math.round(pctTot)}% over</span>`;
+  if(lc==='near') return `<span style="${base};background:#fbf0d8;color:#9c6404">${Math.round(pctTot)}% committed</span>`;
+  const AP={APROVADO:{t:'Approved',c:'#1f8a4c',bg:'#e7f4ec'},PENDENTE:{t:'Pending',c:'#cf8a16',bg:'#fdf3e2'},REJEITADO:{t:'Rejected',c:'#bf0008',bg:'#fbe4e1'}};
+  const ap=AP[p.aprovacao_status]||AP.PENDENTE;
+  return `<span style="${base};background:${ap.bg};color:${ap.c}">${ap.t}</span>`;
+}
+function campListHTML(fl,q){
+  const {tetoBy,consBy,compBy,pendBy}=CAMP_CTX;
+  if(!fl.length) return `<div id="campBody"><div class="empty">${q?'No campaigns match "'+esc(q)+'".':'No campaigns for your access.'}</div></div>`;
+  const groups={over:[],near:[],active:[],pending:[],done:[]};
+  fl.forEach(p=>{(groups[campLifecycle(p)]||groups.active).push(p);});
+  const GMETA=[['over','Needs attention','#bf0008'],['near','Close to the cap','#9c6404'],['active','Active','#0e5ba6'],['pending','Awaiting approval','#cf8a16'],['done','Completed','#59606e']];
+  const cols='grid-template-columns:1.8fr .9fr .6fr .85fr 1.25fr .85fr 1fr';
+  const head=`<div style="display:grid;${cols};gap:10px;padding:10px 16px;background:var(--paper-2);border-bottom:1px solid var(--line);font-family:var(--mono);font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.06em"><span>Campaign</span><span>Agency</span><span>Category</span><span style="text-align:right">Cap</span><span>Consumption</span><span style="text-align:right">Balance</span><span>Status</span></div>`;
+  const row=p=>{
+    const teto=tetoBy[p.id]||0, cons=consBy[p.id]||0, comp=compBy[p.id]||0, pend=pendBy[p.id]||0;
+    const saldo=teto-cons-comp-pend, raw=teto?((cons+comp+pend)/teto*100):0;
+    const pC=teto?Math.min(100,cons/teto*100):0, pCo=teto?Math.min(100-pC,comp/teto*100):0, pPe=teto?Math.min(100-pC-pCo,pend/teto*100):0;
+    const lc=campLifecycle(p), m=catMeta(String(p.product_category||'').trim()||'Uncategorized');
+    const nMes=Object.keys(campMonthlyTotals(p.id)).length;
+    return `<div onclick="openCampDetail('${esc(p.id)}')" style="display:grid;${cols};gap:10px;padding:12px 16px;border-bottom:1px solid #edeff4;align-items:center;font-size:13px;cursor:pointer;${lc==='done'?'opacity:.6':''}" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
+      <span style="min-width:0"><span style="font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span><span style="font-size:11px;color:var(--txt-3)">${esc(actMeta(p.activity).label)}${nMes?' · '+nMes+(nMes===1?' month':' months'):''}${p.rateio?' · rateio':''}</span></span>
+      <span style="color:var(--txt-2);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.agencia||'—')}</span>
+      <span style="font-size:11.5px;font-weight:700;color:${m.c}">${esc(String(p.product_category||'—'))}</span>
+      <span class="mono" style="text-align:right;font-size:12px">${teto?BRL(teto):'—'}</span>
+      <span style="display:flex;align-items:center;gap:8px;min-width:0"><span class="pbar" style="flex:1;min-width:40px"><span style="width:${pC}%;background:${lc==='over'?'var(--po)':'#10131a'}"></span><span style="width:${pCo}%;background:#59606e"></span><span style="width:${pPe}%;background:#cf8a16"></span></span><span class="pct" style="font-weight:700;color:${lc==='over'?'#bf0008':lc==='near'?'#9c6404':'var(--txt-2)'}">${teto?Math.round(raw)+'%':'—'}</span></span>
+      <span class="mono" style="text-align:right;font-size:12px;color:${saldo<0?'var(--po)':'var(--txt)'}">${teto?BRL(saldo):'—'}</span>
+      <span>${campBadgeHTML(p)}</span>
+    </div>`;
+  };
+  const grp=g=>{
+    const l=groups[g[0]]; if(!l.length) return '';
+    l.sort((a,b)=>(tetoBy[b.id]||0)-(tetoBy[a.id]||0));
+    const tot=l.reduce((s,p)=>s+(tetoBy[p.id]||0),0);
+    return `<div style="padding:9px 16px;background:var(--paper-2);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:9px">
+      <span style="width:8px;height:8px;border-radius:50%;background:${g[2]};flex-shrink:0"></span>
+      <b style="font-family:'Hanken Grotesk',sans-serif;font-size:12px;letter-spacing:.02em">${g[1]}</b>
+      <span class="mono" style="font-size:10.5px;font-weight:800;background:#fff;border:1px solid var(--line);border-radius:20px;padding:1px 8px;color:var(--txt-2)">${l.length}</span>
+      <span style="flex:1"></span>
+      <span class="mono" style="font-size:11.5px;font-weight:700;color:var(--txt-2)">${BRL(tot)}</span>
+    </div>`+l.map(row).join('');
+  };
+  return `<div id="campBody" style="background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">${head}${GMETA.map(grp).join('')}</div>`;
+}
+function campTimelineHTML(fl,q){
+  const {tetoBy}=CAMP_CTX;
+  const rows=fl.filter(p=>p.aprovacao_status==='APROVADO').map(p=>{const mt=campMonthlyTotals(p.id);const months=Object.keys(mt).sort();return {p,mt,months,teto:tetoBy[p.id]||0};}).filter(r=>r.months.length);
+  if(!rows.length) return `<div id="campBody"><div class="empty">${q?'No campaigns match "'+esc(q)+'".':'No approved campaigns with monthly values to plot.'}</div></div>`;
+  const allM=[...new Set(rows.flatMap(r=>r.months))].sort();
+  const axis=[]; let cm=allM[0]; const endM=allM[allM.length-1];
+  while(cm<=endM&&axis.length<36){ axis.push(cm); const y=+cm.slice(0,4), mo=+cm.slice(5,7); cm=mo===12?(y+1)+'-01':cm.slice(0,4)+'-'+String(mo+1).padStart(2,'0'); }
+  const maxVal=Math.max(1,...rows.flatMap(r=>Object.values(r.mt).map(v=>+v||0)));
+  const nowM=new Date().toISOString().slice(0,7);
+  rows.sort((a,b)=>a.months[0].localeCompare(b.months[0])||b.teto-a.teto);
+  const th='font-family:var(--mono);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3)';
+  const headCells=axis.map(mm=>`<div style="flex:1;min-width:0;padding:8px 2px;text-align:center;font-family:var(--mono);font-size:9.5px;font-weight:700;color:${mm===nowM?'#fff':'var(--txt-3)'};background:${mm===nowM?'var(--ink)':'transparent'};border-right:1px solid #edeff4;white-space:nowrap;overflow:hidden">${fmtMes(mm+'-01')}</div>`).join('');
+  const trs=rows.map(r=>{
+    const m=catMeta(String(r.p.product_category||'').trim()||'Uncategorized');
+    const lc=campLifecycle(r.p);
+    const first=r.months[0], last=r.months[r.months.length-1];
+    const cells=axis.map(mm=>{
+      const val=+r.mt[mm]||0, inSpan=mm>=first&&mm<=last;
+      const rl=mm===first?'5px':'0', rr=mm===last?'5px':'0';
+      const bg=val?m.c:(inSpan?'#e9ebf1':'transparent');
+      const op=val?(0.3+0.7*val/maxVal).toFixed(2):'1';
+      return `<div style="flex:1;min-width:0;display:flex;align-items:center;border-right:1px solid #f2f3f7;padding:0 1px"><span title="${fmtMes(mm+'-01')} · ${val?BRL(val):'no allocation'}" style="display:block;width:100%;height:16px;background:${bg};opacity:${op};border-radius:${rl} ${rr} ${rr} ${rl}"></span></div>`;
+    }).join('');
+    return `<div onclick="openCampDetail('${esc(r.p.id)}')" style="display:flex;border-bottom:1px solid #edeff4;cursor:pointer;${lc==='done'?'opacity:.55':''}" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
+      <div style="width:230px;flex-shrink:0;padding:8px 14px;border-right:1px solid var(--line);min-width:0;display:flex;align-items:center;gap:8px">
+        <span style="width:8px;height:8px;border-radius:2px;background:${m.c};flex-shrink:0"></span>
+        <span style="min-width:0"><span style="font-weight:600;font-size:12.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.p.nome)}</span><span style="font-size:10.5px;color:var(--txt-3);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.p.agencia||'—')} · ${fmtMes(first+'-01')} → ${fmtMes(last+'-01')}${lc==='done'?' · completed':''}</span></span>
+      </div>
+      <div style="flex:1;display:flex;min-width:0;align-items:stretch">${cells}</div>
+      <div class="mono" style="width:112px;flex-shrink:0;padding:8px 14px;font-size:11.5px;font-weight:700;border-left:1px solid var(--line);display:flex;align-items:center;justify-content:flex-end">${BRL(r.teto)}</div>
+    </div>`;
+  }).join('');
+  return `<div id="campBody" style="background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
+    <div style="display:flex;border-bottom:1px solid var(--line);background:var(--paper-2)">
+      <div style="width:230px;flex-shrink:0;padding:9px 14px;${th};border-right:1px solid var(--line);display:flex;align-items:center">Campaign</div>
+      <div style="flex:1;display:flex;min-width:0">${headCells}</div>
+      <div style="width:112px;flex-shrink:0;padding:9px 14px;${th};border-left:1px solid var(--line);display:flex;align-items:center;justify-content:flex-end">Investment</div>
+    </div>
+    ${trs}
+    <div style="padding:9px 14px;border-top:1px solid var(--line);font-size:11px;color:var(--txt-3);display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+      <span>Cell shade = investment in that month (darker = higher)</span>
+      <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:12px;height:8px;background:var(--ink);border-radius:2px;display:inline-block"></span>current month</span>
+      <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:12px;height:8px;background:#e9ebf1;border-radius:2px;display:inline-block"></span>in period, no allocation</span>
     </div>
   </div>`;
 }
@@ -1647,8 +1770,34 @@ let EDIT=null;
 function closeModal(){ $('#modalMount').innerHTML=''; EDIT=null; PODETAIL=null; }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&$('#modalMount').firstElementChild) closeModal(); });
 function tasksKey(){ return 'po_ptasks_'+((currentUser&&currentUser.email)||'anon'); }
-function loadPTasks(){ try{ const l=JSON.parse(localStorage.getItem(tasksKey())||'[]')||[]; return l.map(t=>typeof t==='string'?({id:uid(),title:t,desc:'',due:'',done:false,t:Date.now(),createdAt:Date.now(),updatedAt:Date.now()}):{id:t.id||uid(),title:t.title!=null?t.title:(t.n||''),desc:t.desc||'',due:t.due||'',done:!!t.done,t:t.t||Date.now(),createdAt:t.createdAt||t.t||Date.now(),updatedAt:t.updatedAt||t.t||Date.now()}); }catch(e){ return []; } }
-function savePTasks(list){ try{ localStorage.setItem(tasksKey(), JSON.stringify(list)); }catch(e){} }
+/* Personal tasks live in Supabase (painel · tarefas_pessoais, RLS per email).
+   localStorage is an offline cache; on first load, local tasks migrate to the server. */
+function normPTask(t){ return typeof t==='string'?({id:uid(),title:t,desc:'',due:'',done:false,t:Date.now(),createdAt:Date.now(),updatedAt:Date.now()}):{id:t.id||uid(),title:t.title!=null?t.title:(t.n||''),desc:t.desc||'',due:t.due||'',done:!!t.done,t:t.t||Date.now(),createdAt:t.createdAt||t.t||Date.now(),updatedAt:t.updatedAt||t.t||Date.now()}; }
+let PTASKS=null, _ptTimer=null;
+function loadPTasksLocal(){ try{ return JSON.parse(localStorage.getItem(tasksKey())||'[]')||[]; }catch(e){ return []; } }
+function loadPTasks(){ return (PTASKS!=null?PTASKS:loadPTasksLocal()).map(normPTask); }
+function savePTasks(list){
+  PTASKS=list;
+  try{ localStorage.setItem(tasksKey(), JSON.stringify(list)); }catch(e){}
+  clearTimeout(_ptTimer);
+  _ptTimer=setTimeout(async()=>{
+    const email=((currentUser&&currentUser.email)||'').toLowerCase(); if(!email)return;
+    try{ const {error}=await SB.from('tarefas_pessoais').upsert({email,data:list,atualizado_em:new Date().toISOString()}); if(error)throw error; }
+    catch(e){ console.warn('tasks sync:',(e&&e.message)||e); toast('Task saved on this device — cloud sync failed.'); }
+  },600);
+}
+async function loadPTasksRemote(){
+  const email=((currentUser&&currentUser.email)||'').toLowerCase(); if(!email)return;
+  try{
+    const {data,error}=await SB.from('tarefas_pessoais').select('data').eq('email',email).maybeSingle();
+    if(error)throw error;
+    if(data&&Array.isArray(data.data)){ PTASKS=data.data; try{localStorage.setItem(tasksKey(),JSON.stringify(PTASKS));}catch(e){} }
+    else{
+      const local=loadPTasksLocal(); PTASKS=local;
+      if(local.length){ await SB.from('tarefas_pessoais').upsert({email,data:local,atualizado_em:new Date().toISOString()}); }
+    }
+  }catch(e){ console.warn('tasks load:',(e&&e.message)||e); }
+}
 function sanitizeRich(html){
   const tmp=document.createElement('div'); tmp.innerHTML=html||'';
   const allowed=new Set(['B','STRONG','UL','LI','BR','DIV']);
@@ -1757,7 +1906,7 @@ function ptToProject(id){
 }
 function renderNotes(){
   return `<div style="max-width:1000px">
-    <div style="margin-bottom:14px"><div style="font-family:'Hanken Grotesk',sans-serif;font-weight:700;font-size:16px">Tasks</div><div style="font-size:12px;color:var(--txt-3)">Personal to-dos — not tied to any project. Saved on this device.</div></div>
+    <div style="margin-bottom:14px"><div style="font-family:'Hanken Grotesk',sans-serif;font-weight:700;font-size:16px">Tasks</div><div style="font-size:12px;color:var(--txt-3)">Personal to-dos — not tied to any project. Synced to your account and available on any device.</div></div>
     <div id="tasksHost">${tasksInner()}</div>
   </div>`;
 }
