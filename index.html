@@ -333,6 +333,14 @@ function effPapel(){ return VIEW_AS?(VIEW_AS.type==='agencia'?'agencia':VIEW_AS.
 function effAgencia(){ return (VIEW_AS&&VIEW_AS.type==='agencia')?VIEW_AS.value:MINHA_AGENCIA; }
 function effIsManager(){ return VIEW_AS?false:isManager; }
 function roMsg(){ return DEMO_MODE?'Demo mode — sandbox with fake data, nothing is written anywhere.':'Read-only view — exit "View as" to make changes.'; }
+/* Used only for the small subset of write actions that ARE simulated
+   locally in demo mode (campaign creation/approval, PO request/approval/
+   issue/invoice — see the DEMO_MODE branches further down): shows the
+   button when either a real write is allowed, or we're in demo mode
+   (where the click still works, just against local DATA). Every other
+   write action stays hidden in demo (plain !viewOnly()) since it isn't
+   locally simulated. */
+function demoWritable(cond){ return cond&&(DEMO_MODE||!viewOnly()); }
 let DATA={projetos:[], orcamentos:[], poProjetos:[], pos:[], tetos:[], rateio:[], notif:[], mencoes:[], pessoas:[], fee:[]};
 let TEAM=[];
 let SCREEN='dash';
@@ -391,7 +399,8 @@ const BUSINESS_TYPES=[
   {id:'social',name:'Social',color:'#6d4bd1'},
   {id:'kol',name:'KOL',color:'#d68a04'},
   {id:'evento',name:'Event',color:'#16a06a'},
-  {id:'pr',name:'PR',color:'#8a90a0'}
+  {id:'pr',name:'PR',color:'#8a90a0'},
+  {id:'bi',name:'BI',color:'#0e7c86'}
 ];
 function businessTypeOf(id){return BUSINESS_TYPES.find(b=>b.id===id)||null;}
 let PTIPO_FILTER='';
@@ -959,11 +968,11 @@ function go(screen){
   if(['dash','board','list','timeline'].includes(screen)){
     const statusChip=STATUS_FILTER?`<button onclick="setStatusFilter('')" style="padding:8px 12px;border-radius:9px;border:1px solid var(--line-2);background:#fff;font-size:12px;font-weight:600;color:var(--txt-2);margin-right:8px">Status: ${esc(statusOf(STATUS_FILTER).name)} ✕</button>`:'';
     $('#ctaBox').innerHTML=`${['dash','board','list'].includes(screen)?ptipoFilterHTML():''}${statusChip}<button class="btn-ghost" onclick="openStageGuide()">Stage guide</button><button class="btn-acc" onclick="openProjNew()">+ New project</button>`;
-  } else if(screen==='campaigns'&&['admin','marketing'].includes(PAPEL)&&!viewOnly()){
+  } else if(screen==='campaigns'&&demoWritable(['admin','marketing'].includes(PAPEL))){
     $('#ctaBox').innerHTML='<button class="btn-acc" style="background:var(--po)" onclick="openCampNew()">+ New campaign</button>';
   } else if(screen==='budgets'&&PAPEL==='admin'&&!viewOnly()){
     $('#ctaBox').innerHTML='<button class="btn-acc" style="background:var(--po)" onclick="openOrcNew()">+ New budget</button>';
-  } else if(['pos','mypos','reqpo'].includes(screen)&&PO_ACCESS&&!viewOnly()){
+  } else if(['pos','mypos','reqpo'].includes(screen)&&demoWritable(PO_ACCESS)){
     $('#ctaBox').innerHTML='<button class="btn-acc" style="background:var(--po)" onclick="openReqPO()">+ Request PO</button>';
   } else { $('#ctaBox').innerHTML=''; }
   const v=$('#view');
@@ -1174,7 +1183,7 @@ function renderAprovacoes(){
   const tetoBy={}; DATA.tetos.forEach(t=>tetoBy[t.projeto_id]=(tetoBy[t.projeto_id]||0)+(+t.teto||0)); DATA.rateio.forEach(r=>tetoBy[r.projeto_id]=(tetoBy[r.projeto_id]||0)+(+r.valor||0));
   let posPend=DATA.pos.filter(po=>['SOLICITADA','EM_APROVACAO'].includes(po.status));
   if(effPapel()==='agencia'&&effAgencia()) posPend=posPend.filter(po=>po.agencia===effAgencia());
-  const canAprova=(['admin','marketing','financeiro'].includes(PAPEL)||isManager)&&!viewOnly();
+  const canAprova=demoWritable(['admin','marketing','financeiro'].includes(PAPEL)||isManager);
   const campCol=`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
     <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">Campaigns awaiting approval</b>${projPend.length?`<span style="background:var(--po);color:#fff;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800">${projPend.length}</span>`:''}</div>
     <div style="padding:12px 16px;display:flex;flex-direction:column;gap:10px">${projPend.length?projPend.map(p=>`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;background:#fafbfd">
@@ -1214,6 +1223,12 @@ let CAMP_VIEW=(function(){try{const v=localStorage.getItem('camp_view')||'cat';r
 let CAMP_FILTER_ACT='', CAMP_FILTER_CAT='';
 function campSetView(v){ CAMP_VIEW=v; try{localStorage.setItem('camp_view',v);}catch(e){} go('campaigns'); }
 function campSetFilter(kind,v){ if(kind==='act')CAMP_FILTER_ACT=v; else CAMP_FILTER_CAT=v; const b=document.getElementById('campBody'); if(b){ b.outerHTML=renderCampBody(); } }
+/* Overview's activity-totals rows are a summary — clicking one drills into
+   the itemized Campaigns screen, pre-filtered to that category + activity. */
+function jumpToCampaigns(catKeyStr,actKeyStr){
+  CAMP_FILTER_CAT=catKeyStr||''; CAMP_FILTER_ACT=actKeyStr||'';
+  go('campaigns');
+}
 function campSearch(v){ CAMP_Q=(v||'').toLowerCase(); const b=document.getElementById('campBody'); if(b){ b.outerHTML=renderCampBody(); } }
 function campToggleCat(ck){ CAMP_COLLAPSED[ck]=!CAMP_COLLAPSED[ck]; const b=document.getElementById('campBody'); if(b){ b.outerHTML=renderCampBody(); } }
 function renderCampanhas(){
@@ -1306,7 +1321,12 @@ function renderCampBody(){
 /* ===== Category view: activity columns (fixed, aligned across categories) + compact cards ===== */
 const ACT_COL_ORDER=['Campaign','FEE','KOL','AON','Communication'];
 function actColLabel(a){ return ({Campaign:'Campaign',FEE:'Fee',KOL:'KOL',AON:'AON',Communication:'Comms'})[a]||a||'Other'; }
-function actKey(p){ return (p.activity||'').trim()||'Other'; }
+// "Campaings" is a legacy misspelling that exists in some older records — fold
+// it into "Campaign" so it doesn't show up as a second, visually-identical
+// column (both render the same label via ACT_META, but were never the same
+// grouping key).
+const ACT_KEY_ALIASES={Campaings:'Campaign'};
+function actKey(p){ const raw=(p.activity||'').trim()||'Other'; return ACT_KEY_ALIASES[raw]||raw; }
 function orderActs(keys){
   const set=[...new Set(keys)];
   return set.sort((a,b)=>{ let ia=ACT_COL_ORDER.indexOf(a), ib=ACT_COL_ORDER.indexOf(b); if(ia<0)ia=99; if(ib<0)ib=99; return ia-ib||a.localeCompare(b); });
@@ -1319,77 +1339,40 @@ function campGlobalCats(){
   const {list}=CAMP_CTX||{list:[]};
   return [...new Set(list.map(p=>(String(p.product_category||'').trim())||'Uncategorized'))].sort();
 }
-function campColumnHTML(actLabel,items,m){
-  const {tetoBy}=CAMP_CTX;
-  const sorted=items.slice().sort((a,b)=>(LC_ORDER[campLifecycle(a)]-LC_ORDER[campLifecycle(b)])||((tetoBy[b.id]||0)-(tetoBy[a.id]||0)));
-  const tot=items.reduce((s,p)=>s+(tetoBy[p.id]||0),0);
-  return `<div style="min-width:0;display:flex;flex-direction:column;gap:8px">
-    <div style="display:flex;align-items:center;gap:7px;padding:0 2px">
-      <span style="font-family:var(--mono);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3)">${esc(actLabel)}</span>
-      <span class="mono" style="font-size:9.5px;font-weight:800;color:var(--txt-3);background:#fff;border:1px solid var(--line);border-radius:20px;padding:0 6px">${items.length}</span>
-      <span style="flex:1"></span>
-      ${tot?`<span class="mono" style="font-size:10px;font-weight:700;color:var(--txt-3)">${BRL(tot)}</span>`:''}
-    </div>
-    ${sorted.length?sorted.map(p=>campCardCompactHTML(p)).join(''):'<div style="border:1px dashed var(--line-2);border-radius:10px;padding:12px 8px;text-align:center;font-size:11px;color:var(--txt-3)">—</div>'}
-  </div>`;
-}
-/* Clicking a campaign card opens the SAME drawer as "Month-by-month" (and every
-   other campaign row in the app: List, Kanban, Overview) — the "central card"
-   the user sees on click is just openCampDetail's content, not a separate
-   abbreviated summary. One source of truth for campaign detail. */
-function campCatBody(camps,m){
-  const byAct={}; camps.forEach(p=>{ (byAct[actKey(p)]=byAct[actKey(p)]||[]).push(p); });
-  const acts=campGlobalActs(); // same activity columns in every category, so they line up vertically
-  const cols=acts.map(a=>campColumnHTML(actColLabel(a),byAct[a]||[],m)).join('');
-  return `<div style="padding:14px 16px;border-top:1px solid var(--line);background:var(--paper-2);overflow-x:auto">
-    <div style="display:grid;grid-template-columns:repeat(${acts.length},minmax(176px,1fr));gap:12px;min-width:min-content">${cols}</div>
-  </div>`;
-}
-function campCardCompactHTML(p){
+/* Itemized campaign row — one per campaign, grouped by activity. This is the
+   same look Overview used before its category accordion was simplified down
+   to per-activity totals (item 11): meta line (period dots · agency ·
+   activity) + a single-color progress bar matching the category color, and
+   the row itself opens the shared campaign detail modal (the one source of
+   truth used everywhere: List, Kanban, Overview, Budgets & Fees). */
+function campItemRowHTML(p,m){
   const {tetoBy,consBy,compBy,pendBy}=CAMP_CTX;
-  const teto=tetoBy[p.id]||0, cons=consBy[p.id]||0, comp=compBy[p.id]||0, pend=pendBy[p.id]||0;
-  const saldo=teto-cons-comp-pend, pctTot=teto?((cons+comp+pend)/teto*100):0;
-  const lc=campLifecycle(p), over=lc==='over', near=lc==='near';
-  const pC=teto?Math.min(100,cons/teto*100):0, pCo=teto?Math.min(100-pC,comp/teto*100):0, pPe=teto?Math.min(100-pC-pCo,pend/teto*100):0;
-  const bd=lc==='done'?'var(--line)':over?'#f3c1ba':near?'#ecd9a4':'var(--line)';
-  return `<div onclick="openCampDetail('${esc(p.id)}')" title="${esc(p.nome)} · ${esc(p.agencia||'—')}&#10;Cap ${BRL(teto)} · Balance ${BRL(saldo)}" style="background:#fff;border:1.5px solid ${bd};border-radius:10px;padding:9px 11px;cursor:pointer;${lc==='done'?'opacity:.6;':''}display:flex;flex-direction:column;gap:7px" onmouseover="this.style.boxShadow='0 3px 9px rgba(20,22,28,.09)'" onmouseout="this.style.boxShadow='none'">
-    <div style="display:flex;align-items:center;gap:7px">
-      <b style="flex:1;min-width:0;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</b>
-      ${campBadgeHTML(p)}
-    </div>
-    <div style="display:flex;align-items:center;gap:8px">
-      <span class="pbar" style="flex:1"><span style="width:${pC}%;background:${over?'var(--po)':'var(--blue)'}"></span><span style="width:${pCo}%;background:var(--violet)"></span><span style="width:${pPe}%;background:var(--amber)"></span></span>
-      <span class="pct" style="font-weight:700;color:${over?'#bf0008':near?'#9c6404':'var(--txt-2)'}">${teto?Math.round(pctTot)+'%':'—'}</span>
-    </div>
-  </div>`;
-}
-function campCardHTML(p,m){
-  const {tetoBy,consBy,compBy,pendBy}=CAMP_CTX;
-  const teto=tetoBy[p.id]||0, cons=consBy[p.id]||0, comp=compBy[p.id]||0, pend=pendBy[p.id]||0;
-  const saldo=teto-cons-comp-pend;
-  const pctTot=teto?((cons+comp+pend)/teto*100):0;
-  const over=!!teto&&pctTot>100.5, near=!!teto&&!over&&pctTot>=90, danger=over;
+  const tot=tetoBy[p.id]||0, cons=consBy[p.id]||0, comp=compBy[p.id]||0, pnd=pendBy[p.id]||0;
+  const rawc=tot?(cons+comp+pnd)/tot*100:0, over=rawc>100.5, near=!over&&rawc>=90;
   const lc=campLifecycle(p);
-  const act=actMeta(p.activity);
-  const pC=teto?Math.min(100,cons/teto*100):0, pCo=teto?Math.min(100-pC,comp/teto*100):0, pPe=teto?Math.min(100-pC-pCo,pend/teto*100):0;
-  return `<div onclick="openCampDetail('${esc(p.id)}')" style="background:#fff;border:1px solid ${lc==='done'?'var(--line)':over?'#f3c1ba':near?'#ecd9a4':'var(--line)'};border-radius:12px;padding:13px 14px;cursor:pointer;${lc==='done'?'opacity:.66;':''}display:flex;flex-direction:column;gap:10px;box-shadow:0 1px 2px rgba(20,22,28,.04)" onmouseover="this.style.boxShadow='0 3px 10px rgba(20,22,28,.09)';this.style.transform='translateY(-1px)'" onmouseout="this.style.boxShadow='0 1px 2px rgba(20,22,28,.04)';this.style.transform=''">
-    <div style="display:flex;align-items:flex-start;gap:10px">
-      <span style="min-width:0;flex:1">
-        <b style="font-size:13px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</b>
-        <span style="font-size:11px;color:var(--txt-3);display:flex;align-items:center;gap:5px;margin-top:3px;flex-wrap:wrap">
-          <span style="white-space:nowrap">${esc(act.label)}</span><span style="opacity:.45">·</span><span style="white-space:nowrap">${esc(p.agencia||'—')}</span>${p.rateio?'<span style="opacity:.45">·</span><span title="Split across categories">rateio</span>':''}
-        </span>
-      </span>
+  return `<div onclick="openCampDetail('${esc(p.id)}')" style="padding:10px 6px;cursor:pointer;border-bottom:1px solid ${m.bg};${lc==='done'?'opacity:.62;':''}" onmouseover="this.style.background='${m.bg}'" onmouseout="this.style.background=''">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="flex:1;min-width:0;font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span>
       ${campBadgeHTML(p)}
+      <span class="pct" style="font-weight:700;color:${over?'#bf0008':near?'#9c6404':'var(--txt-2)'}" title="Consumed + committed + awaiting approval, over the cap">${tot?Math.round(rawc)+'%':'—'}</span>
+      <span class="mono" style="font-size:11.5px;color:var(--txt-2);width:170px;text-align:right;flex-shrink:0;white-space:nowrap" title="Consumed + committed / cap">${BRL(cons+comp)} <span style="color:var(--txt-3)">/ ${BRL(tot)}</span></span>
     </div>
-    <div style="display:flex;align-items:center;gap:8px" title="Consumed · committed · awaiting approval">
-      <span class="pbar" style="flex:1"><span style="width:${pC}%;background:${danger?'var(--po)':'var(--blue)'}"></span><span style="width:${pCo}%;background:var(--violet)"></span><span style="width:${pPe}%;background:var(--amber)"></span></span>
-      <span class="pct" style="font-weight:700;color:${over?'#bf0008':near?'#9c6404':'var(--txt-2)'}">${teto?Math.round(pctTot)+'%':'—'}</span>
-    </div>
-    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--txt-3)">
-      <span style="white-space:nowrap">Cap <b class="mono" style="color:var(--txt);font-size:11.5px">${BRL(teto)}</b></span>
-      <span style="white-space:nowrap">Balance <b class="mono" style="color:${saldo<0?'var(--po)':'var(--txt)'};font-size:11.5px">${BRL(saldo)}</b></span>
-    </div>
+    ${campMetaLineHTML(p,m.c)}
+    <span class="pbar"><span style="width:${Math.min(100,rawc)}%;background:${over?'var(--po)':m.c}"></span></span>
+  </div>`;
+}
+function campItemGroupsHTML(camps,m){
+  const {tetoBy}=CAMP_CTX;
+  const byAct={}; camps.forEach(p=>{ (byAct[actKey(p)]=byAct[actKey(p)]||[]).push(p); });
+  const acts=orderActs(Object.keys(byAct));
+  return acts.map(a=>{
+    const grp=byAct[a].slice().sort((x,y)=>(LC_ORDER[campLifecycle(x)]-LC_ORDER[campLifecycle(y)])||((tetoBy[y.id]||0)-(tetoBy[x.id]||0)));
+    return `<div style="padding:9px 10px 5px;font-family:'Hanken Grotesk',sans-serif;font-weight:800;font-size:12px;color:var(--txt-1)">${esc(actColLabel(a))} <span style="font-weight:500;color:var(--txt-3);font-size:11px">· ${grp.length} campaign${grp.length===1?'':'s'}</span></div>${grp.map(p=>campItemRowHTML(p,m)).join('')}`;
+  }).join('');
+}
+function campCatBody(camps,m){
+  return `<div style="padding:2px 16px 10px;border-top:1px solid var(--line);background:var(--paper-2)">
+    <div style="background:#fff;border-radius:10px;overflow:hidden">${campItemGroupsHTML(camps,m)}</div>
   </div>`;
 }
 
@@ -1546,7 +1529,7 @@ function openCampDetail(pid){
       ${months.length>1?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">${chips}</div>`:''}
     </div>
     <div class="modal-b">${summary}<div style="font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin:2px 0 10px">Month by month</div>${blocks}</div>
-    <div class="modal-f"><span></span><div style="display:flex;gap:10px">${(PO_ACCESS&&!viewOnly())?`<button class="btn-acc" style="background:var(--po)" onclick="openReqPO('${esc(p.id)}')">+ Request PO</button>`:''}${((['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly())?`<button class="btn-ghost" onclick="openCampValues('${esc(p.id)}')">Edit monthly values</button><button class="btn-ghost" onclick="openCampEdit('${esc(p.id)}')">Edit category</button>`:''}<button class="btn-ghost" onclick="closeModal()">Close</button></div></div>
+    <div class="modal-f"><span></span><div style="display:flex;gap:10px">${demoWritable(PO_ACCESS)?`<button class="btn-acc" style="background:var(--po)" onclick="openReqPO('${esc(p.id)}')">+ Request PO</button>`:''}${((['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly())?`<button class="btn-ghost" onclick="openCampValues('${esc(p.id)}')">Edit monthly values</button><button class="btn-ghost" onclick="openCampEdit('${esc(p.id)}')">Edit category</button>`:''}<button class="btn-ghost" onclick="closeModal()">Close</button></div></div>
   </div></div>`;
 }
 
@@ -1785,7 +1768,7 @@ function renderPOs(){
   if(effPapel()==='agencia'&&effAgencia()) pos=pos.filter(p=>p.agencia===effAgencia());
   const nomeBy={}; DATA.poProjetos.forEach(p=>nomeBy[p.id]=p.nome);
   pos.sort((a,b)=>String(b.solicitado_em||'').localeCompare(String(a.solicitado_em||'')));
-  const canAprova=(['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly();
+  const canAprova=demoWritable(['admin','marketing'].includes(PAPEL)||isManager);
   const ags=agencyOpts();
   const filt=`<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
     <div style="position:relative;flex:1;max-width:260px;min-width:170px">
@@ -1837,7 +1820,7 @@ function renderPOs(){
   };
   const body=(PHASES.map(f=>phaseGroup(f.t,pos.filter(po=>f.st.includes(po.status)),f.id)).join('')+phaseGroup('Other',restPos,'outros'))||'<div class="empty">No POs found for your access.</div>';
   const projPend=DATA.poProjetos.filter(p=>p.aprovacao_status==='PENDENTE');
-  const canAprovaCamp=(['admin','marketing','financeiro'].includes(PAPEL)||isManager)&&!viewOnly();
+  const canAprovaCamp=demoWritable(['admin','marketing','financeiro'].includes(PAPEL)||isManager);
   const tetoPend={};
   if(projPend.length){ DATA.tetos.forEach(t=>tetoPend[t.projeto_id]=(tetoPend[t.projeto_id]||0)+(+t.teto||0)); DATA.rateio.forEach(r=>tetoPend[r.projeto_id]=(tetoPend[r.projeto_id]||0)+(+r.valor||0)); }
   const campPend=projPend.length?`<div style="background:#fff;border:1px solid #f2c4bf;border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05);margin-bottom:16px">
@@ -1879,23 +1862,27 @@ function renderPOsFilter(){
   });
 }
 async function aprovarPO(id){
+  if(DEMO_MODE){ const po=DATA.pos.find(x=>x.id===id); if(po)po.status='APROVADA'; toast('PO approved ✓ (demo)'); go(SCREEN); return; }
   if(viewOnly()){toast(roMsg());return;}
   try{ const {error}=await SBPO.rpc('aprovar_po',{p_po:id}); if(error)throw error; toast('PO approved ✓'); await reloadPO(); go(SCREEN); }
   catch(e){ toast('Error: '+(e.message||e)); }
 }
 async function rejeitarPO(id){
+  if(DEMO_MODE){ const po=DATA.pos.find(x=>x.id===id); if(po)po.status='REJEITADA'; toast('PO rejected (demo)'); go(SCREEN); return; }
   if(viewOnly()){toast(roMsg());return;}
   try{ const {error}=await SBPO.rpc('rejeitar_po',{p_po:id}); if(error)throw error; toast('PO rejected'); await reloadPO(); go(SCREEN); }
   catch(e){ toast('Error: '+(e.message||e)); }
 }
 async function aprovarCamp(id){
+  if(DEMO_MODE){ const p=DATA.poProjetos.find(x=>x.id===id); if(p)p.aprovacao_status='APROVADO'; toast('Campaign approved ✓ (demo)'); go(SCREEN); return; }
   if(viewOnly()){toast(roMsg());return;}
   try{ const {error}=await SBPO.rpc('aprovar_projeto',{p_projeto:id}); if(error)throw error; toast('Campaign approved ✓'); await reloadPOAll(); go(SCREEN); }
   catch(e){ toast('Error: '+(e.message||e)); }
 }
 async function rejeitarCamp(id){
-  if(viewOnly()){toast(roMsg());return;}
   const motivo=prompt('Reason for rejecting the campaign:'); if(motivo===null)return;
+  if(DEMO_MODE){ DATA.poProjetos=DATA.poProjetos.filter(x=>x.id!==id); toast('Campaign rejected (demo)'); go(SCREEN); return; }
+  if(viewOnly()){toast(roMsg());return;}
   try{ const {error}=await SBPO.rpc('rejeitar_projeto',{p_projeto:id,p_motivo:motivo}); if(error)throw error; toast('Campaign rejected'); await reloadPOAll(); go(SCREEN); }
   catch(e){ toast('Error: '+(e.message||e)); }
 }
@@ -1921,9 +1908,9 @@ function poEstimativaPagamento(po){
   return {date:fmtDateObjBR(calcVencimento(base)),confirmed:false};
 }
 function poScreen(){ const b=currentNav().budget||[]; return ['pos','mypos'].find(id=>b.includes(id))||'pos'; }
-function canGerarPO(){ return ['admin','financeiro'].includes(PAPEL)&&!viewOnly(); }
-function canFaturarPO(po){ return !viewOnly()&&(fullAccess() || (PAPEL==='agencia' && MINHA_AGENCIA && MINHA_AGENCIA===po.agencia)); }
-function canValidarPO(){ return ['admin','financeiro'].includes(PAPEL)&&!viewOnly(); }
+function canGerarPO(){ return demoWritable(['admin','financeiro'].includes(PAPEL)); }
+function canFaturarPO(po){ return demoWritable(fullAccess() || (PAPEL==='agencia' && MINHA_AGENCIA && MINHA_AGENCIA===po.agencia)); }
+function canValidarPO(){ return demoWritable(['admin','financeiro'].includes(PAPEL)); }
 const _poBtn=(bg)=>'padding:6px 12px;border-radius:8px;border:none;color:#fff;font-weight:700;font-size:11.5px;cursor:pointer;background:'+bg;
 
 async function reloadNotif(){
@@ -1994,7 +1981,7 @@ function renderPODetailModal(){
   }
   if(poFieldVisible('numero',po)&&po.numero_po) sections.push(`<div style="margin-bottom:12px">${cell('PO number',esc(po.numero_po)+(po.po_arquivo?` · <a onclick="abrirAnexo('${esc(po.po_arquivo)}')" style="color:#3c7a63;cursor:pointer;text-decoration:underline">view file</a>`:''))}</div>`);
   if(poFieldVisible('fatura',po)&&(po.nf_numero||po.fatura_url||po.evidencia_url)) sections.push(`<div style="margin-bottom:12px">${cell('Invoice (NF)',(po.nf_numero?esc(po.nf_numero):'—')+(po.fatura_url?` · <a onclick="abrirAnexo('${esc(po.fatura_url)}')" style="color:#b5550c;cursor:pointer;text-decoration:underline">NF file</a>`:'')+(po.evidencia_url?` · <a onclick="abrirAnexo('${esc(po.evidencia_url)}')" style="color:#b5550c;cursor:pointer;text-decoration:underline">evidence</a>`:''))}</div>`);
-  if(poFieldVisible('pagamento',po)&&po.vencimento) sections.push(`<div style="margin-bottom:12px">${cell('Payment forecast',icn('coins',13)+' '+fmtDataBR(po.vencimento))}</div>`);
+  if(poFieldVisible('pagamento',po)&&po.vencimento) sections.push(`<div style="display:flex;align-items:center;gap:10px;border:1.5px solid #ecd9a4;border-radius:10px;padding:11px 13px;background:#fbf0d8;margin-bottom:12px"><span style="width:30px;height:30px;border-radius:9px;background:#fff;color:#9c6404;display:grid;place-items:center;flex-shrink:0">${icn('coins',15)}</span><div><div style="font-size:10px;font-weight:800;color:#9c6404;text-transform:uppercase;letter-spacing:.06em">Payment forecast</div><div style="font-size:15.5px;font-weight:800;color:#7a5200;margin-top:2px">${fmtDataBR(po.vencimento)}</div></div></div>`);
   else if(!['REJEITADA','CANCELADA'].includes(po.status)){ const est=poEstimativaPagamento(po); if(est) sections.push(`<div style="margin-bottom:12px">${cell('Estimated payment (based on request date)',icn('calendar',13)+' ~'+est.date)}</div>`); }
   if(po.motivo_rejeicao&&['ATUALIZAR_INFO','REJEITADA'].includes(po.status)) sections.push(`<div style="padding:10px 12px;border-radius:9px;background:#fbe4e1;color:#b32418;font-size:12.5px;font-weight:600;margin-bottom:12px">${icn('alert',12)} ${esc(po.motivo_rejeicao)}</div>`);
   if(poFieldVisible('contabil',po)) sections.push(`<div style="margin-bottom:4px">${cell('Cost center / account / description',esc(proj.cc||'—')+' · '+esc(proj.account||'—')+'<div style="font-weight:500;font-size:12px;color:var(--txt-2);margin-top:2px">'+esc(proj.account_desc||'')+'</div>')}</div>`);
@@ -2006,7 +1993,7 @@ function renderPODetailModal(){
 }
 function poActionsHTML(po){
   const pend=['SOLICITADA','EM_APROVACAO'].includes(po.status);
-  const canAprova=(['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly();
+  const canAprova=demoWritable(['admin','marketing'].includes(PAPEL)||isManager);
   const b=[];
   if(canAprova&&pend){
     b.push(`<button onclick="aprovarPO('${esc(po.id)}')" style="${_poBtn('var(--po)')}">Approve</button>`);
@@ -2045,8 +2032,13 @@ function renderGerarPO(){
   </div></div>`;
 }
 async function submitGerarPO(){
-  if(viewOnly()){toast(roMsg());return;}
   if(!GERAR)return; const num=(GERAR.num||'').trim(); if(!num){toast('Enter the PO number.');return;}
+  if(DEMO_MODE){
+    const po=DATA.pos.find(p=>p.id===GERAR.id); if(po){ po.status='PO_GERADA'; po.numero_po=num; }
+    GERAR=null; closeModal(); go(SCREEN); toast('PO '+num+' issued ✓ (demo) — agency can now post the NF.');
+    return;
+  }
+  if(viewOnly()){toast(roMsg());return;}
   try{
     let path=null; if(GERAR.file){ toast('Uploading…'); path=await uploadEvid(GERAR.id,GERAR.file,'po'); }
     const {error}=await SBPO.rpc('gerar_po',{p_po:GERAR.id,p_numero:num,p_arquivo:path});
@@ -2076,9 +2068,15 @@ function renderFaturarPO(){
   </div></div>`;
 }
 async function submitFaturarPO(){
-  if(viewOnly()){toast(roMsg());return;}
   if(!FAT)return; const nf=(FAT.nf||'').trim(); if(!nf){toast('Enter the NF number.');return;}
   const po=DATA.pos.find(p=>p.id===FAT.id)||{};
+  if(DEMO_MODE){
+    const venc=calcVencimento(new Date().toISOString().slice(0,10));
+    if(po.id){ po.status='FATURADA'; po.nf_numero=nf; po.fatura_url=po.fatura_url||'demo://nf'; po.evidencia_url=po.evidencia_url||'demo://evidence'; po.vencimento=venc?venc.toISOString().slice(0,10):null; }
+    FAT=null; closeModal(); go(SCREEN); toast('NF posted ✓ (demo) — payment forecast '+fmtDateObjBR(venc)+'.');
+    return;
+  }
+  if(viewOnly()){toast(roMsg());return;}
   try{
     toast('Uploading…');
     const fatPath = FAT.nfFile ? await uploadEvid(FAT.id,FAT.nfFile,'nf') : po.fatura_url;
@@ -2116,8 +2114,14 @@ function renderValidarPO(){
   </div></div>`;
 }
 async function submitValidarPO(){
-  if(viewOnly()){toast(roMsg());return;}
   if(!VALID)return;
+  if(DEMO_MODE){
+    const po=DATA.pos.find(p=>p.id===VALID.id); if(po)po.status='VALIDADA';
+    const venc=fmtDataBR(po&&po.vencimento);
+    VALID=null; closeModal(); go(SCREEN); toast('Invoice validated ✓ (demo) — payment scheduled for '+venc+'.');
+    return;
+  }
+  if(viewOnly()){toast(roMsg());return;}
   try{ const {error}=await SBPO.rpc('validar_po',{p_po:VALID.id}); if(error)throw error;
     const po=DATA.pos.find(p=>p.id===VALID.id)||{}; const venc=fmtDataBR(po.vencimento);
     VALID=null; closeModal(); await reloadPO(); await reloadNotif(); go(SCREEN); toast('Invoice validated ✓ — payment scheduled for '+venc+'.');
@@ -2332,7 +2336,34 @@ function pmAddSub(tid){ const t=atv(tid); if(t){ t.subs=t.subs||[]; t.subs.push(
 function pmSubSet(tid,sid,k,v){ const t=atv(tid); if(t){ const s=(t.subs||[]).find(x=>x.id===sid); if(s)s[k]=v; } }
 function pmSubDone(tid,sid){ const t=atv(tid); if(t){ const s=(t.subs||[]).find(x=>x.id===sid); if(s){s.done=!s.done; renderProjModal();} } }
 function pmDelSub(tid,sid){ const t=atv(tid); if(t){ t.subs=(t.subs||[]).filter(x=>x.id!==sid); renderProjModal(); } }
-function pmMentionScan(txt){ const out=[]; (TEAM||[]).forEach(m=>{ const nome=(m.nome||'').trim(); if(nome){ const first=nome.split(/\s+/)[0]; const re=new RegExp('@'+first.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'); if(re.test(txt)) out.push(m); } }); return out; }
+/* Scans real people (DATA.pessoas — the actual roster with emails) for
+   @FirstName mentions in a log update. Was scanning the legacy, largely-empty
+   TEAM roster before, which is why "@mention" never actually notified anyone —
+   TEAM entries rarely carry a usable email. */
+function pmMentionScan(txt){
+  const out=[];
+  (DATA.pessoas||[]).forEach(pe=>{
+    const nome=[pe.nome,pe.sobrenome].filter(Boolean).join(' ').trim();
+    if(!nome||!pe.email)return;
+    const first=(pe.nome||nome).split(/\s+/)[0];
+    const re=new RegExp('@'+first.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i');
+    if(re.test(txt)) out.push({nome,email:pe.email});
+  });
+  return out;
+}
+function pmTogglePessoa(email,nome){
+  if(!EDIT)return;
+  EDIT.envolvidos=EDIT.envolvidos||[];
+  const i=EDIT.envolvidos.findIndex(x=>x.email===email);
+  if(i>=0) EDIT.envolvidos.splice(i,1);
+  else EDIT.envolvidos.push({email,nome});
+  renderProjModal();
+}
+function pmAddPessoa(v){
+  if(!v)return;
+  const i=v.indexOf('|');
+  pmTogglePessoa(v.slice(0,i),v.slice(i+1));
+}
 function pmAddLog(){
   const ta=$('#pmLog'); if(!ta)return; const txt=(ta.value||'').trim(); if(!txt)return;
   const men=pmMentionScan(txt);
@@ -2400,9 +2431,12 @@ function renderProjModal(){
         </div>
         <div style="padding:8px 13px;border-top:1px solid #edeff4;background:var(--paper-2);font-size:10.5px;color:var(--txt-3)">Open status — everyone involved can post status updates and add sub-items after creation.</div>
       </div>
-      <div class="fgrid">
-        <div class="field"><label>Owner <span style="font-weight:600;color:var(--txt-3)">(you — creator)</span></label><div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:var(--paper)"><span class="avatar" style="width:22px;height:22px;background:${avColor(EDIT.owner)};font-size:9.5px">${initials(EDIT.owner||'?')}</span><b style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(EDIT.owner||'—')}</b></div></div>
-        <div class="field"><label>Partner</label><select onchange="pmSet('partner',this.value)" ${dis}><option value="">—</option>${['Internal',...agencyOpts()].filter((v,i,a)=>a.indexOf(v)===i).map(a=>`<option ${EDIT.partner===a?'selected':''}>${esc(a)}</option>`).join('')}</select></div>
+      <div class="field"><label>Owner <span style="font-weight:600;color:var(--txt-3)">(you — creator)</span></label><div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:var(--paper)"><span class="avatar" style="width:22px;height:22px;background:${avColor(EDIT.owner||EDIT.resp)};font-size:9.5px">${initials(EDIT.owner||EDIT.resp||'?')}</span><b style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(EDIT.owner||EDIT.resp||'—')}</b></div></div>
+      <div class="field full" style="margin-top:14px"><label>People tagged on this project</label>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:${ED?'8px':'0'}">
+          ${(EDIT.envolvidos||[]).length?(EDIT.envolvidos||[]).map(pe=>`<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 6px 4px 4px;border-radius:20px;background:var(--paper-2);border:1px solid var(--line-2);font-size:12px;font-weight:600"><span class="avatar" style="width:20px;height:20px;font-size:9px;background:${avColor(pe.nome||pe.email)}">${initials(pe.nome||pe.email)}</span>${esc(pe.nome||pe.email)}${ED?`<button onclick="pmTogglePessoa('${esc(pe.email)}','')" title="Remove" style="border:none;background:none;color:var(--txt-3);cursor:pointer;font-size:11px;padding:0 2px;line-height:1">✕</button>`:''}</span>`).join(''):'<span style="font-size:12px;color:var(--txt-3)">No one tagged yet.</span>'}
+        </div>
+        ${ED?`<select onchange="pmAddPessoa(this.value);this.value=''" style="width:100%;padding:9px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13px"><option value="">+ Tag a person…</option>${(DATA.pessoas||[]).filter(pe=>pe.email&&!(EDIT.envolvidos||[]).some(x=>x.email===pe.email)).map(pe=>{const nm=[pe.nome,pe.sobrenome].filter(Boolean).join(' ')||pe.email; return `<option value="${esc(pe.email)}|${esc(nm)}">${esc(nm)}${pe.agencia?' · '+esc(pe.agencia):''}</option>`;}).join('')}</select>`:''}
       </div>
       <div class="field full"><label>Categories <span style="font-weight:600;color:var(--txt-3)">(product categories — multi-select)</span></label><div style="display:flex;flex-wrap:wrap;gap:6px">${CAT_CHIPS.map(c=>{const on=(EDIT.categorias||[]).includes(c);return `<button ${dis} onclick="pmToggleCat('${esc(c)}')" style="padding:6px 13px;border-radius:18px;border:1px solid ${on?'var(--accent)':'var(--line-2)'};background:${on?'#fff2ee':'#fff'};color:${on?'var(--accent-deep)':'var(--txt-2)'};font-weight:700;font-size:12px;cursor:pointer">${esc(c)}</button>`;}).join('')}</div></div>
       <div class="field full"><label>Brand</label><div style="display:flex;flex-wrap:wrap;gap:6px">${BRAND_CHIPS.map(b=>{const on=EDIT.marca===b;return `<button ${dis} onclick="pmSet('marca','${esc(b)}');renderProjModal()" style="padding:6px 13px;border-radius:18px;border:1px solid ${on?'var(--accent)':'var(--line-2)'};background:${on?'#fff2ee':'#fff'};color:${on?'var(--accent-deep)':'var(--txt-2)'};font-weight:700;font-size:12px;cursor:pointer">${esc(b)}</button>`;}).join('')}</div></div>
@@ -2540,6 +2574,13 @@ function feeSplitGroups(){
 }
 async function mesesDoProjeto(pid){
   const p=DATA.poProjetos.find(x=>x.id===pid);
+  if(DEMO_MODE){
+    if(p&&p.rateio){
+      const byM={}; (DATA.rateio||[]).filter(r=>r.projeto_id===pid).forEach(a=>{const m=String(a.competencia).slice(0,7);byM[m]=(byM[m]||0)+(+a.valor||0);});
+      return Object.keys(byM).sort().map(m=>({competencia:m+'-01',teto:byM[m]}));
+    }
+    return (DATA.tetos||[]).filter(t=>t.projeto_id===pid).map(t=>({competencia:String(t.competencia).slice(0,10),teto:+t.teto})).sort((a,b)=>a.competencia.localeCompare(b.competencia));
+  }
   try{
     if(p&&p.rateio){
       const {data}=await SBPO.from('rateio_alocacao').select('competencia,valor').eq('projeto_id',pid);
@@ -2662,14 +2703,22 @@ function renderReqPO(){
     <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" onclick="submitReqPO()">Submit request</button></div></div>
   </div></div>`;
 }
+function demoAddPO(pid,competencia,agencia,valor,descricao){
+  DATA.pos.push({id:'demo-po-'+uid(),projeto_id:pid,competencia,agencia,valor,descricao:descricao||'',numero_po:'',status:'SOLICITADA',solicitado_em:new Date().toISOString()});
+}
 async function submitReqPO(){
-  if(viewOnly()){toast(roMsg());return;}
   if(!REQ)return;
   if(REQ.mode==='split'){
     if(!REQ.splitAg){ toast('Choose the agency.'); return; }
     if(!REQ.competencia){ toast('Choose the allocation month.'); return; }
     const val=+REQ.valor||0; if(val<=0){ toast('Enter a value.'); return; }
     const rows=reqSplitBreakdown();
+    if(DEMO_MODE){
+      rows.forEach(r=>{ if(r.valor>0) demoAddPO(r.projeto_id,REQ.competencia,REQ.splitAg,r.valor,(REQ.descricao||'')+' — '+r.categoria); });
+      toast('PO split across '+rows.length+' categories for '+fmtMes(REQ.competencia)+' ✓ (demo)'); closeModal(); go('pos');
+      return;
+    }
+    if(viewOnly()){toast(roMsg());return;}
     try{
       for(const r of rows){
         if(r.valor<=0)continue;
@@ -2685,6 +2734,12 @@ async function submitReqPO(){
   if(!REQ.competencia){ toast('Choose the allocation month.'); return; }
   const val=+REQ.valor||0; if(val<=0){ toast('Enter a value.'); return; }
   const ag=(PAPEL==='agencia'&&MINHA_AGENCIA)?MINHA_AGENCIA:(DATA.poProjetos.find(p=>p.id===REQ.projeto_id)||{}).agencia||'';
+  if(DEMO_MODE){
+    demoAddPO(REQ.projeto_id,REQ.competencia,ag,val,REQ.descricao||'');
+    toast('PO requested for '+fmtMes(REQ.competencia)+' ✓ (demo)'); closeModal(); go('pos');
+    return;
+  }
+  if(viewOnly()){toast(roMsg());return;}
   try{
     const {error}=await SBPO.rpc('solicitar_po',{p_projeto:REQ.projeto_id,p_competencia:REQ.competencia,p_agencia:ag,p_valor:val,p_descricao:REQ.descricao||''});
     if(error)throw error;
@@ -2792,6 +2847,8 @@ async function deletarOrcamento(id){
 /* ============================================================
    TELAS ADICIONAIS (espelham o protótipo aprovado)
    ============================================================ */
+let TL_HILITE=null; // highlighted week index, or null — click a week header to toggle
+function tlToggleWeek(w){ TL_HILITE=(TL_HILITE===w)?null:w; go(SCREEN); }
 function renderTimeline(){
   const list=visProjs().filter(p=>p.prazo).slice();
   if(!list.length)return '<div class="empty">No projects with a due date.</div>';
@@ -2803,24 +2860,40 @@ function renderTimeline(){
   const weeks=Math.ceil(totalDays/7); const dayPct=100/(weeks*7);
   const tdy=today0();
   const MM=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  let wkHead=''; for(let w=0;w<weeks;w++){const dd=new Date(min);dd.setDate(dd.getDate()+w*7);const now=tdy>=dd&&tdy<new Date(dd.getFullYear(),dd.getMonth(),dd.getDate()+7);wkHead+=`<div style="flex:1;min-width:0;padding:9px 2px;text-align:center;font-size:10px;font-weight:600;color:${now?'#fff':'#8a90a0'};background:${now?'#10131a':'transparent'};border-right:1px solid #edeff4">${dd.getDate()}/${MM[dd.getMonth()]}</div>`;}
+  const ranges=list.map(p=>({p,s:new Date((p.inicio||p.prazo)+'T00:00:00'),e:new Date(p.prazo+'T00:00:00')}));
+  // highlight stripe for the selected week — same left/width math as a header cell, drawn behind the bars/header text
+  const hiliteStripe=TL_HILITE!=null?`<div style="position:absolute;top:0;bottom:0;left:${TL_HILITE/weeks*100}%;width:${100/weeks}%;background:rgba(214,138,4,.12);pointer-events:none"></div>`:'';
+  let wkHead=''; const wkTotals=[];
+  for(let w=0;w<weeks;w++){
+    const dd=new Date(min); dd.setDate(dd.getDate()+w*7);
+    const dEnd=new Date(dd.getFullYear(),dd.getMonth(),dd.getDate()+7);
+    const now=tdy>=dd&&tdy<dEnd;
+    const sel=TL_HILITE===w;
+    const cnt=ranges.filter(r=>r.s<dEnd&&r.e>=dd).length;
+    wkTotals.push(cnt);
+    wkHead+=`<div onclick="tlToggleWeek(${w})" title="${cnt} project(s) active this week — click to highlight the column" style="flex:1;min-width:0;padding:9px 2px;text-align:center;font-size:10px;font-weight:600;color:${now?'#fff':sel?'#7a5200':'#8a90a0'};background:${now?'#10131a':sel?'#fbf0d8':'transparent'};border-right:1px solid #edeff4;cursor:pointer">${dd.getDate()}/${MM[dd.getMonth()]}</div>`;
+  }
+  const wkTotalsRow=weeks?`<div style="display:flex;position:relative">${hiliteStripe}${wkTotals.map((c,w)=>`<div style="flex:1;min-width:0;padding:6px 2px;text-align:center;font-family:var(--mono);font-size:10px;font-weight:700;color:${TL_HILITE===w?'#9c6404':'var(--txt-3)'};border-right:1px solid #edeff4">${c||'—'}</div>`).join('')}</div>`:'';
   const rows=list.sort((a,b)=>new Date((a.inicio||a.prazo)+'T00:00:00')-new Date((b.inicio||b.prazo)+'T00:00:00')).map(p=>{
     const stg=stageOf(p.etapa); const pr=computeProg(p);
     const s=new Date((p.inicio||p.prazo)+'T00:00:00'), e=new Date(p.prazo+'T00:00:00');
     const left=Math.max(0,((s-min)/864e5)*dayPct), width=Math.max(dayPct*2,(((e-s)/864e5)+1)*dayPct);
     return `<div style="display:flex;border-bottom:1px solid #edeff4;align-items:center">
       <div style="width:230px;flex-shrink:0;padding:11px 16px;border-right:1px solid var(--line);min-width:0"><div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.nome)}</div><div style="font-size:11px;color:var(--txt-3);margin-top:1px">${esc(p.resp||'—')} · ${esc(stg.name)}</div></div>
-      <div style="flex:1;position:relative;height:46px;cursor:pointer" onclick="openProj('${esc(p.id)}')"><div style="position:absolute;left:${left}%;width:${width}%;top:11px;height:24px;border-radius:7px;background:${stg.color};box-shadow:0 3px 8px -3px rgba(0,0,0,.3);display:flex;align-items:center;padding:0 9px;overflow:hidden"><span style="font-size:10.5px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.25);white-space:nowrap">${pr}%</span></div></div>
+      <div style="flex:1;position:relative;height:46px;cursor:pointer" onclick="openProj('${esc(p.id)}')">${hiliteStripe}<div style="position:absolute;left:${left}%;width:${width}%;top:11px;height:24px;border-radius:7px;background:${stg.color};box-shadow:0 3px 8px -3px rgba(0,0,0,.3);display:flex;align-items:center;padding:0 9px;overflow:hidden"><span style="font-size:10.5px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.25);white-space:nowrap">${pr}%</span></div></div>
     </div>`;
   }).join('');
   return `<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
     <div style="display:flex;border-bottom:1px solid var(--line);background:#fafbfd"><div style="width:230px;flex-shrink:0;padding:11px 16px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);border-right:1px solid var(--line)">Project</div><div style="flex:1;display:flex">${wkHead}</div></div>
-    ${rows}</div>
+    ${rows}
+    <div style="display:flex;border-top:1px solid var(--line);background:#fafbfd"><div style="width:230px;flex-shrink:0;padding:6px 16px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);border-right:1px solid var(--line);display:flex;align-items:center">Active/week</div><div style="flex:1">${wkTotalsRow}</div></div>
+    </div>
   <div style="display:flex;gap:16px;margin-top:12px;font-size:11.5px;color:var(--txt-2);font-weight:600;flex-wrap:wrap">
     <span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#1273cf;margin-right:5px;vertical-align:-1px"></span>In production</span>
     <span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#d68a04;margin-right:5px;vertical-align:-1px"></span>Review / approval</span>
     <span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#6d4bd1;margin-right:5px;vertical-align:-1px"></span>Adjustments</span>
     <span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#16a06a;margin-right:5px;vertical-align:-1px"></span>Delivery</span>
+    ${TL_HILITE!=null?`<span style="margin-left:auto;color:#9c6404">Column highlighted — <a onclick="tlToggleWeek(${TL_HILITE})" style="cursor:pointer;text-decoration:underline">clear</a></span>`:''}
   </div>`;
 }
 function renderTeam(){
@@ -3158,34 +3231,35 @@ function renderBudgetOverview(isBalance){
   const HIDE_MONEY=isMkt; // marketing sees campaign progress but not budget values
   // Finance: only the cost-center table (no hero, no campaign accordions)
   if(isFin) return `<div style="margin-bottom:2px">${feeSplitBlock('accounts')}</div>`;
-  /* Campaign row nested inside an expanded category — name+%+money, then a meta
-     line (connected period dots · agency · activity), then the thin consumption
-     bar. No per-campaign toggle: the row opens the full drawer on click. */
-  const campRow=p=>{
-    const tot=tetoBy[p.id]||0, cons=consBy[p.id]||0, comp=compBy[p.id]||0, pnd=pendBy[p.id]||0;
-    const rawc=tot?(cons+comp+pnd)/tot*100:0, over=rawc>100.5, near=!over&&rawc>=90;
-    const pcC=tot?Math.min(100,cons/tot*100):0, pcM=tot?Math.min(100-pcC,comp/tot*100):0, pcP=tot?Math.min(100-pcC-pcM,pnd/tot*100):0;
-    const col=catMeta(String(p.product_category||'').trim()||'Uncategorized').c;
-    return `<div onclick="openCampDetail('${esc(p.id)}')" style="padding:10px 6px;border-bottom:1px solid #edeff4;cursor:pointer" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
-      <div style="display:flex;align-items:center;gap:10px">
-        <span style="flex:1;min-width:0;font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span>
-        <span class="pct" style="font-weight:700;color:${over?'#bf0008':near?'#9c6404':'var(--txt-2)'}" title="Consumed + committed + awaiting approval, over the cap">${Math.round(rawc)}%</span>
-        ${HIDE_MONEY?'':`<span class="mono" style="font-size:11.5px;color:var(--txt-2);width:170px;text-align:right;flex-shrink:0;white-space:nowrap" title="Consumed + committed / cap">${BRL(cons+comp)} <span style="color:var(--txt-3)">/ ${BRL(tot)}</span></span>`}
-      </div>
-      ${campMetaLineHTML(p,col)}
-      <span class="pbar"><span style="width:${pcC}%;background:${over?'var(--po)':'var(--blue)'}"></span><span style="width:${pcM}%;background:var(--violet)"></span><span style="width:${pcP}%;background:var(--amber)"></span></span>
-    </div>`;
+  /* Expanded category shows ONLY per-activity totals (not the itemized
+     campaign list — that now lives on the Campaigns screen, which mirrors
+     this same accordion look). Clicking an activity row jumps to Campaigns
+     pre-filtered to that category + activity for the itemized detail. */
+  const ACT_TOTALS_LABEL={Campaign:'Campaign',FEE:'Fee',KOL:'KOLs',AON:'AON',Communication:'Communication'};
+  const activityTotalsHTML=(list,catKeyStr)=>{
+    const byAct={}; list.forEach(p=>{ (byAct[actKey(p)]=byAct[actKey(p)]||[]).push(p); });
+    const actOrder=Object.keys(byAct).sort((a,b)=>{ let ia=ACT_COL_ORDER.indexOf(a), ib=ACT_COL_ORDER.indexOf(b); if(ia<0)ia=99; if(ib<0)ib=99; return ia-ib||a.localeCompare(b); });
+    return actOrder.map(k=>{
+      const items=byAct[k];
+      const tot=items.reduce((s,p)=>s+(tetoBy[p.id]||0),0), cons=items.reduce((s,p)=>s+(consBy[p.id]||0),0), comp=items.reduce((s,p)=>s+(compBy[p.id]||0),0), pnd=items.reduce((s,p)=>s+(pendBy[p.id]||0),0);
+      const rawc=tot?(cons+comp+pnd)/tot*100:0, over=rawc>100.5, near=!over&&rawc>=90;
+      const pcC=tot?Math.min(100,cons/tot*100):0, pcM=tot?Math.min(100-pcC,comp/tot*100):0, pcP=tot?Math.min(100-pcC-pcM,pnd/tot*100):0;
+      return `<div onclick="jumpToCampaigns('${esc(catKeyStr)}','${esc(k)}')" style="padding:10px 6px;border-bottom:1px solid #edeff4;cursor:pointer" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="flex:1;min-width:0;font-weight:600;font-size:13px">${esc(ACT_TOTALS_LABEL[k]||actColLabel(k))} <span style="font-weight:500;color:var(--txt-3);font-size:11px">· ${items.length} campaign${items.length===1?'':'s'}</span></span>
+          <span class="pct" style="font-weight:700;color:${over?'#bf0008':near?'#9c6404':'var(--txt-2)'}" title="Consumed + committed + awaiting approval, over the cap">${Math.round(rawc)}%</span>
+          ${HIDE_MONEY?'':`<span class="mono" style="font-size:11.5px;color:var(--txt-2);width:170px;text-align:right;flex-shrink:0;white-space:nowrap" title="Consumed + committed / cap">${BRL(cons+comp)} <span style="color:var(--txt-3)">/ ${BRL(tot)}</span></span>`}
+          <span style="color:var(--txt-3);display:flex" title="Open in Campaigns">${icn('chev',13)}</span>
+        </div>
+        <span class="pbar" style="margin-top:6px"><span style="width:${pcC}%;background:${over?'var(--po)':'var(--blue)'}"></span><span style="width:${pcM}%;background:var(--violet)"></span><span style="width:${pcP}%;background:var(--amber)"></span></span>
+      </div>`;
+    }).join('');
   };
   const byCat={}; camps.forEach(p=>{ const k=p.product_category||'Uncategorized'; (byCat[k]=byCat[k]||[]).push(p); });
   const catKeys=Object.keys(byCat).sort();
-  const sortByActivity=list=>list.slice().sort((a,b)=>{
-    let ia=ACT_COL_ORDER.indexOf(actKey(a)), ib=ACT_COL_ORDER.indexOf(actKey(b)); if(ia<0)ia=99; if(ib<0)ib=99;
-    return ia-ib||((tetoBy[b.id]||0)-(tetoBy[a.id]||0));
-  });
   /* Category row: collapsed shows the usual thin bar+%+money; expanded drops the
      %/money summary and shows ONE general bar for the whole category — 3x the
-     usual thickness and full width — with its campaigns (sorted by activity)
-     listed below. */
+     usual thickness and full width — with per-activity totals below. */
   const catRow=key=>{
     const list=byCat[key]; const tot=list.reduce((s,p)=>s+(tetoBy[p.id]||0),0); const cons=list.reduce((s,p)=>s+(consBy[p.id]||0),0); const comp=list.reduce((s,p)=>s+(compBy[p.id]||0),0); const pnd=list.reduce((s,p)=>s+(pendBy[p.id]||0),0);
     const m=catMeta(key);
@@ -3206,7 +3280,7 @@ function renderBudgetOverview(isBalance){
           <div style="flex:1;height:18px;border-radius:7px;background:#e9ebf1;overflow:hidden;display:flex" title="Consumed · committed · awaiting approval — whole category"><span style="height:100%;width:${pcC}%;background:${over?'var(--po)':'var(--blue)'}"></span><span style="height:100%;width:${pcM}%;background:var(--violet)"></span><span style="height:100%;width:${pcP}%;background:var(--amber)"></span></div>
           <span class="mono" style="font-size:14px;font-weight:800;color:${over?'#bf0008':near?'#9c6404':'var(--txt)'};flex-shrink:0;width:44px;text-align:right">${Math.round(rawc)}%</span>
         </div>
-        ${sortByActivity(list).map(campRow).join('')}
+        ${activityTotalsHTML(list,key)}
       </div>`:''}
     </div>`;
   };
@@ -3522,13 +3596,36 @@ function renderCampForm(){
   </div></div>`;
 }
 async function submitCamp(){
-  if(viewOnly()){toast(roMsg());return;}
   if(!CAMP)return;
   if(!CAMP.nome.trim()){ toast('Give the campaign a name.'); return; }
   if(!CAMP.orcamento_id){ toast('Choose a budget.'); return; }
   const rows=CAMP.rows.filter(r=>r.mes&&(+r.valor||0)>0);
   if(!rows.length){ toast('Add at least one month with a value.'); return; }
   const orc=(DATA.orcamentos||[]).find(o=>o.id===CAMP.orcamento_id); const cat=orc?(orc.product_category||orc.nome||''):'';
+  // Same over-budget check the server enforces at approval time (aprovar_projeto),
+  // surfaced here instead so the requester sees the block immediately when trying
+  // to save — not later, as a surprise to whoever approves it.
+  if(orc&&(+orc.valor_total||0)){
+    const pStart=orc.periodo_inicio?String(orc.periodo_inicio).slice(0,10):null;
+    const pEnd=orc.periodo_fim?String(orc.periodo_fim).slice(0,10):null;
+    const inPeriod=mYYYYMM=>{ const d=mYYYYMM+'-01'; return (!pStart||d>=pStart)&&(!pEnd||d<=pEnd); };
+    const vAloc=rows.filter(r=>inPeriod(r.mes)).reduce((s,r)=>s+(+r.valor||0),0);
+    const approvedIds=new Set((DATA.poProjetos||[]).filter(p=>p.orcamento_id===CAMP.orcamento_id&&p.aprovacao_status==='APROVADO').map(p=>p.id));
+    const vUsado=(DATA.tetos||[]).filter(t=>approvedIds.has(t.projeto_id)&&inPeriod(String(t.competencia).slice(0,7))).reduce((s,t)=>s+(+t.teto||0),0);
+    const total=+orc.valor_total||0;
+    if(vAloc+vUsado>total+0.5){
+      toast(`This would exceed the "${esc(orc.nome||cat)}" budget: ${BRL(vAloc)} requested + ${BRL(vUsado)} already committed exceeds the ${BRL(total)} total. Reduce the values or pick a different budget.`);
+      return;
+    }
+  }
+  if(DEMO_MODE){
+    const pid='demo-p-'+uid();
+    DATA.poProjetos.push({id:pid,nome:CAMP.nome.trim(),agencia:CAMP.agencia||null,orcamento_id:CAMP.orcamento_id,product_category:cat,activity:CAMP.activity||null,rateio:false,aprovacao_status:'PENDENTE',dono:(currentUser&&currentUser.email)||''});
+    rows.forEach(r=>DATA.tetos.push({projeto_id:pid,competencia:r.mes+'-01',teto:Math.round(+r.valor)}));
+    toast('Campaign created ✓ (demo — now awaiting approval)'); closeModal(); go('campaigns');
+    return;
+  }
+  if(viewOnly()){toast(roMsg());return;}
   try{
     let cc='',account='',account_desc='';
     try{ const {data:cls}=await SBPO.rpc('classificar',{p_d:cat,p_e:CAMP.activity||'',p_f:''}); const c=(cls&&cls[0])||{}; cc=c.cc||''; account=c.account||''; account_desc=c.descricao||''; }catch(e){}
@@ -3577,6 +3674,20 @@ async function submitOrc(){
   if(!ORC)return;
   const cat=String(ORC.cat||'').trim().toUpperCase();
   const val=+ORC.valor||0; if(val<0){ toast('Enter a valid value.'); return; }
+  // Block lowering an existing budget below what's already allocated to its
+  // approved campaigns — same idea as the campaign-side check in submitCamp():
+  // surface it here, at save time, instead of leaving the budget silently
+  // inconsistent (total < committed).
+  if(ORC.id){
+    const approvedIds=new Set((DATA.poProjetos||[]).filter(p=>p.orcamento_id===ORC.id&&p.aprovacao_status==='APROVADO').map(p=>p.id));
+    const pStart=ORC.ini?ORC.ini+'-01':null, pEnd=ORC.fim?ORC.fim+'-01':null;
+    const inPeriod=comp=>{ const d=String(comp).slice(0,10); return (!pStart||d>=pStart)&&(!pEnd||d<=pEnd); };
+    const vUsado=(DATA.tetos||[]).filter(t=>approvedIds.has(t.projeto_id)&&inPeriod(t.competencia)).reduce((s,t)=>s+(+t.teto||0),0);
+    if(val<vUsado-0.5){
+      toast(`Can't set the total below ${BRL(vUsado)} — that's already allocated to approved campaigns in this budget.`);
+      return;
+    }
+  }
   try{
     if(ORC.id){
       const {error}=await SBPO.from('orcamentos').update({valor_total:val,periodo_inicio:ORC.ini?ORC.ini+'-01':null,periodo_fim:ORC.fim?ORC.fim+'-01':null}).eq('id',ORC.id);
