@@ -296,6 +296,7 @@
       <div class="tl"><span class="barcol" id="barcol"></span><div><h1 id="scrTitle">Dashboard</h1><div class="sub" id="scrSub"></div></div></div>
       <div id="ctaBox"></div>
     </header>
+    <div id="viewAsBar"></div>
     <section class="view" id="view"><div class="loading">Loading…</div></section>
   </main>
 </div>
@@ -312,14 +313,26 @@ const PO_URL='https://uryzzerzmmuwuqxjwwec.supabase.co';
 const PO_KEY='sb_publishable_6DGDsBzRZoT1LQwRr3UCUQ_EHmh-B3J';
 const MANAGER_EMAILS=['lucas.baldim@tclsemp.com.br'];
 
-const SB   = window.supabase.createClient(PANEL_URL, PANEL_KEY, {auth:{storageKey:'sb-ydfocnclwunnskznrhja-auth-token'}});
-const SBPO = window.supabase.createClient(PO_URL,    PO_KEY,    {auth:{storageKey:'sb-uryzzerzmmuwuqxjwwec-auth-token'}});
+let SB   = window.supabase.createClient(PANEL_URL, PANEL_KEY, {auth:{storageKey:'sb-ydfocnclwunnskznrhja-auth-token'}});
+let SBPO = window.supabase.createClient(PO_URL,    PO_KEY,    {auth:{storageKey:'sb-uryzzerzmmuwuqxjwwec-auth-token'}});
 
 /* ============================================================
    STATE
    ============================================================ */
 let currentUser=null, isManager=false, booted=false, _senha='';
 let PO_ACCESS=false, PAPEL='', MINHA_AGENCIA='';
+/* "View as" — admin-only, read-only simulated view of the Budget module.
+   Frontend-only filter/gate: never sent to Supabase, never changes real
+   PAPEL/MINHA_AGENCIA, and every write action checks viewOnly() before
+   doing anything — RLS still enforces the real (admin) permissions
+   underneath, this only narrows what's shown and blocks the UI's own
+   write paths. */
+let VIEW_AS=null; // {type:'agencia', value:'F2F'} or {type:'role', value:'marketing'|'financeiro'}
+function viewOnly(){ return !!VIEW_AS||DEMO_MODE; } // DEMO_MODE declared below; hoisted by var-like function scoping is not needed since this is only called after boot()
+function effPapel(){ return VIEW_AS?(VIEW_AS.type==='agencia'?'agencia':VIEW_AS.value):PAPEL; }
+function effAgencia(){ return (VIEW_AS&&VIEW_AS.type==='agencia')?VIEW_AS.value:MINHA_AGENCIA; }
+function effIsManager(){ return VIEW_AS?false:isManager; }
+function roMsg(){ return DEMO_MODE?'Demo mode — sandbox with fake data, nothing is written anywhere.':'Read-only view — exit "View as" to make changes.'; }
 let DATA={projetos:[], orcamentos:[], poProjetos:[], pos:[], tetos:[], rateio:[], notif:[], mencoes:[], pessoas:[], fee:[]};
 let TEAM=[];
 let SCREEN='dash';
@@ -606,7 +619,143 @@ async function setPassword(){
 }
 async function signOut(){try{sessionStorage.removeItem('__pw');}catch(e){}try{await SB.auth.signOut();}catch(e){}try{await SBPO.auth.signOut();}catch(e){}_senha='';booted=false;location.reload();}
 
+/* ============================================================
+   DEMO MODE — fully functional sandbox with fictitious profiles and
+   values, entered via ?demo=1 in the URL. Never touches Supabase: no
+   auth call, no read, no write. All data lives only in the DATA/TEAM
+   in-memory objects for this tab and is lost on reload/exit — safe to
+   click, edit, delete, approve anything here.
+   ============================================================ */
+let DEMO_MODE=false;
+const DEMO_ROLES=[
+  {v:'admin',label:'Admin — Ana Ramos'},
+  {v:'marketing',label:'Marketing — Bruno Silva'},
+  {v:'financeiro',label:'Finance — Carla Dias'},
+  {v:'agencia:Wavemaker',label:'Agency — Diego Souza (Wavemaker)'},
+  {v:'agencia:Mindshare',label:'Agency — Eva Martins (Mindshare)'},
+  {v:'pendente',label:'Pending — Fábio Rocha'}
+];
+function seedDemoData(){
+  const D=(y,m,d)=>y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+  const stages=['briefing','producao','revisao','ajustes','entrega','concluido'];
+  const projSeed=[
+    {nome:'[DEMO] Summer Launch Campaign',tipo:'campanha',ptipo:'campanha',partner:'Wavemaker',resp:'Bruno Silva',etapa:'producao',status:'no_prazo',prazo:D(2026,8,10)},
+    {nome:'[DEMO] Influencer Series — Gaming',tipo:'campanha',ptipo:'kol',partner:'Mindshare',resp:'Bruno Silva',etapa:'revisao',status:'atencao',prazo:D(2026,7,22)},
+    {nome:'[DEMO] Always-On Social Content',tipo:'conteudo',ptipo:'social',partner:'Vizeu',resp:'Ana Ramos',etapa:'entrega',status:'no_prazo',prazo:D(2026,7,30)},
+    {nome:'[DEMO] Product Launch Event',tipo:'evento',ptipo:'evento',partner:'Wavemaker',resp:'Diego Souza',etapa:'ajustes',status:'atrasado',prazo:D(2026,7,10)},
+    {nome:'[DEMO] Retail POS Materials',tipo:'trade',ptipo:'midia',partner:'Mindshare',resp:'Eva Martins',etapa:'briefing',status:'bloqueado',prazo:D(2026,9,5)},
+    {nome:'[DEMO] PR Media Outreach',tipo:'livre',ptipo:'pr',partner:'Vizeu',resp:'Ana Ramos',etapa:'concluido',status:'concluido',prazo:D(2026,6,15)}
+  ];
+  const projetos=projSeed.map((p,i)=>({id:'demo-proj-'+i,nome:p.nome,tipo:p.tipo,ptipo:p.ptipo,partner:p.partner,marca:p.partner,resp:p.resp,owner:'demo@example.com',prazo:p.prazo,inicio:D(2026,6,1),
+    tasks:typeOf(p.tipo).tasks.map((n,ti)=>({id:'demo-task-'+i+'-'+ti,n,done:ti<(stages.indexOf(p.etapa)+1)*1.4,fim:p.prazo,status:'no_prazo',pct:0,obs:'',subs:[]})),
+    logs:[],envolvidos:[],categorias:[],etapa:p.etapa,etapa_override:p.etapa,status:p.status}));
+
+  const pessoas=[
+    {user_id:'demo-u-admin',nome:'Ana',sobrenome:'Ramos',email:'ana.ramos@demo.tcl',papel:'admin',agencia:''},
+    {user_id:'demo-u-mkt',nome:'Bruno',sobrenome:'Silva',email:'bruno.silva@demo.tcl',papel:'marketing',agencia:''},
+    {user_id:'demo-u-fin',nome:'Carla',sobrenome:'Dias',email:'carla.dias@demo.tcl',papel:'financeiro',agencia:''},
+    {user_id:'demo-u-ag1',nome:'Diego',sobrenome:'Souza',email:'diego.souza@wavemaker.demo',papel:'agencia',agencia:'Wavemaker'},
+    {user_id:'demo-u-ag2',nome:'Eva',sobrenome:'Martins',email:'eva.martins@mindshare.demo',papel:'agencia',agencia:'Mindshare'},
+    {user_id:'demo-u-pend',nome:'Fábio',sobrenome:'Rocha',email:'fabio.rocha@demo.tcl',papel:'pendente',agencia:''}
+  ];
+
+  const orcamentos=[
+    {id:'demo-orc-ac',nome:'Air Conditioning',product_category:'AC',valor_total:1800000,periodo_inicio:D(2026,1,1),periodo_fim:D(2026,12,31)},
+    {id:'demo-orc-gaming',nome:'Gaming',product_category:'Gaming',valor_total:3200000,periodo_inicio:D(2026,1,1),periodo_fim:D(2026,12,31)},
+    {id:'demo-orc-social',nome:'Social Always-On',product_category:'Social',valor_total:900000,periodo_inicio:D(2026,1,1),periodo_fim:D(2026,12,31)}
+  ];
+
+  const campSeed=[
+    {id:'demo-p1',nome:'Fee - Wavemaker',agencia:'Wavemaker',product_category:'AC',activity:'FEE',orcamento_id:'demo-orc-ac',aprovacao_status:'APROVADO'},
+    {id:'demo-p2',nome:'Fee - Mindshare',agencia:'Mindshare',product_category:'AC',activity:'FEE',orcamento_id:'demo-orc-ac',aprovacao_status:'APROVADO'},
+    {id:'demo-p3',nome:'Freshin',agencia:'Mindshare',product_category:'AC',activity:'KOL',orcamento_id:'demo-orc-ac',aprovacao_status:'APROVADO'},
+    {id:'demo-p4',nome:'Gamescom Sponsorship',agencia:'Mindshare',product_category:'Gaming',activity:'KOL',orcamento_id:'demo-orc-gaming',aprovacao_status:'APROVADO'},
+    {id:'demo-p5',nome:'Squad Influencer Program',agencia:'Mindshare',product_category:'Gaming',activity:'KOL',orcamento_id:'demo-orc-gaming',aprovacao_status:'APROVADO'},
+    {id:'demo-p6',nome:'Always On Social',agencia:'Vizeu',product_category:'Social',activity:'AON',orcamento_id:'demo-orc-social',aprovacao_status:'APROVADO'},
+    {id:'demo-p7',nome:'New Product Launch',agencia:'Wavemaker',product_category:'Social',activity:'Campaign',orcamento_id:'demo-orc-social',aprovacao_status:'PENDENTE'}
+  ];
+  const poProjetos=campSeed.map(p=>({id:p.id,nome:p.nome,agencia:p.agencia,product_category:p.product_category,activity:p.activity,orcamento_id:p.orcamento_id,aprovacao_status:p.aprovacao_status,rateio:false,dono:'demo-u-mkt'}));
+
+  const tetos=[]; const addTeto=(pid,vals)=>vals.forEach(([m,v])=>tetos.push({projeto_id:pid,competencia:D(2026,m,1),teto:v}));
+  addTeto('demo-p1',[[6,150000],[7,150000],[8,111155]]);
+  addTeto('demo-p2',[[6,60000],[7,33540]]);
+  addTeto('demo-p3',[[7,1100000]]);
+  addTeto('demo-p4',[[6,600000],[7,550901]]);
+  addTeto('demo-p5',[[6,915895]]);
+  addTeto('demo-p6',[[6,150000],[7,150000],[8,150000]]);
+  addTeto('demo-p7',[[8,1100000]]);
+
+  const pos=[]; let poN=1;
+  const addPO=(pid,mes,valor,status,extra)=>{ pos.push(Object.assign({id:'demo-po-'+(poN++),projeto_id:pid,competencia:D(2026,mes,1),valor,status,descricao:'Demo PO',numero_po:status==='SOLICITADA'||status==='EM_APROVACAO'?'':'PO-'+(1000+poN),agencia:(poProjetos.find(p=>p.id===pid)||{}).agencia,solicitado_em:D(2026,mes,3)},extra||{})); };
+  addPO('demo-p1',6,114296,'CONCLUIDA');
+  addPO('demo-p2',6,76000,'CONCLUIDA');
+  addPO('demo-p3',7,220000,'FATURADA');
+  addPO('demo-p4',6,1805217,'CONCLUIDA');
+  addPO('demo-p4',7,45000,'EM_APROVACAO');
+  addPO('demo-p5',6,313895,'PO_GERADA');
+  addPO('demo-p6',6,98000,'VALIDADA');
+  addPO('demo-p6',7,52000,'SOLICITADA');
+
+  const fee=[
+    {tipo:'AGENCIA',agencia:'Wavemaker',categoria:'AC',percentual:0.6,cc:'CC-100',account:'6001',descricao:'Agency fee — Wavemaker'},
+    {tipo:'AGENCIA',agencia:'Mindshare',categoria:'AC',percentual:0.4,cc:'CC-101',account:'6002',descricao:'Agency fee — Mindshare'},
+    {tipo:'KOL',agencia:'Mindshare',categoria:'Gaming',percentual:1,cc:'CC-200',account:'6100',descricao:'KOL / Influencer spend'}
+  ];
+
+  DATA={projetos,orcamentos,poProjetos,pos,tetos,rateio:[],notif:[],mencoes:[],pessoas,fee};
+  TEAM=[];
+}
+function demoSetRole(v){
+  if(v.startsWith('agencia:')){ PAPEL='agencia'; MINHA_AGENCIA=v.slice(8); isManager=false; }
+  else { PAPEL=v; MINHA_AGENCIA=''; isManager=(v==='admin'); }
+  PO_ACCESS=!!PAPEL&&PAPEL!=='pendente';
+  VIEW_AS=null;
+  const person=(DATA.pessoas||[]).find(pe=>pe.papel===PAPEL&&(PAPEL!=='agencia'||pe.agencia===MINHA_AGENCIA))||{email:'demo@example.com'};
+  currentUser={email:person.email};
+  $('#acctEmail').textContent=person.email;
+  $('#acctAv').textContent=(person.email||'?')[0].toUpperCase();
+  $('#acctAv').style.background=avColor(person.email);
+  buildNav(); const nav=currentNav(); go((nav.work.concat(nav.budget))[0]||'dash');
+  renderDemoBadge();
+}
+function renderDemoBadge(){
+  let el=document.getElementById('demoBadge');
+  if(!el){ el=document.createElement('div'); el.id='demoBadge'; document.body.appendChild(el); }
+  const cur=(PAPEL==='agencia'&&MINHA_AGENCIA)?'agencia:'+MINHA_AGENCIA:PAPEL;
+  el.style.cssText='position:fixed;bottom:16px;right:16px;z-index:400;background:#10131a;color:#fff;border-radius:12px;padding:10px 14px;box-shadow:0 6px 20px rgba(0,0,0,.25);font-size:12px;display:flex;align-items:center;gap:9px;font-family:"Hanken Grotesk",sans-serif';
+  el.innerHTML=`<span style="width:7px;height:7px;border-radius:50%;background:#16a06a;flex-shrink:0"></span><b>DEMO MODE</b><span style="color:#9aa1b0">fake data · nothing is saved</span>
+    <select onchange="demoSetRole(this.value)" style="margin-left:6px;padding:5px 8px;border-radius:7px;border:none;background:#1c2029;color:#fff;font:inherit;font-size:11.5px">${DEMO_ROLES.map(r=>`<option value="${r.v}" ${cur===r.v?'selected':''}>${esc(r.label)}</option>`).join('')}</select>
+    <button onclick="location.href=location.pathname" style="border:none;background:#2a2f3b;color:#fff;border-radius:7px;padding:5px 10px;font-size:11.5px;cursor:pointer">Exit demo</button>`;
+}
+/* Network backstop: even though every write path already checks viewOnly()
+   (true in demo mode) before touching SB/SBPO, swap both clients for an
+   inert stub too — belt and suspenders, so a write path that's missed a
+   viewOnly() check (e.g. something in the Work module) fails safely
+   instead of silently reaching the real Supabase projects. */
+function fakeSupabaseClient(){
+  const err={message:'Demo mode — no backend connected.'};
+  const builder={select(){return builder;},eq(){return builder;},neq(){return builder;},in(){return builder;},not(){return builder;},order(){return builder;},limit(){return builder;},
+    update(){return builder;},upsert(){return builder;},insert(){return builder;},delete(){return builder;},
+    maybeSingle:()=>Promise.resolve({data:null,error:null}),single:()=>Promise.resolve({data:null,error:err}),
+    then(resolve){ resolve({data:null,error:err}); }};
+  return {
+    auth:{ getSession:async()=>({data:{session:null}}), signOut:async()=>({error:null}), signInWithPassword:async()=>({data:null,error:err}), onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}}) },
+    from(){ return builder; },
+    rpc:async()=>({data:null,error:err})
+  };
+}
+function startDemo(){
+  DEMO_MODE=true;
+  SB=fakeSupabaseClient(); SBPO=fakeSupabaseClient();
+  seedDemoData();
+  hideGate();
+  demoSetRole('admin');
+}
+
 async function boot(){
+  try{
+    if(new URLSearchParams(location.search).get('demo')==='1'){ startDemo(); return; }
+  }catch(e){}
   try{
     const {data}=await SB.auth.getSession();
     if(data&&data.session&&data.session.user){onSignedIn(data.session.user);return;}
@@ -765,6 +914,37 @@ const SCREEN_META={
   reqpo:{t:'Request PO',s:'Budget · New request',mod:'budget'},
   balance:{t:'Balance',s:'Budget · Balance per campaign',mod:'budget'}
 };
+/* "View as" selector — lets an admin browse Budget screens as a chosen
+   agency or role, read-only, without a real login/role/RLS change. */
+function viewAsAgencias(){
+  const set=new Set();
+  (DATA.poProjetos||[]).forEach(p=>{ if(p.agencia) set.add(p.agencia); });
+  (DATA.pessoas||[]).forEach(pe=>{ if(pe.agencia) set.add(pe.agencia); });
+  return [...set].sort();
+}
+function setViewAs(v){
+  if(!v) VIEW_AS=null;
+  else if(v.startsWith('ag:')) VIEW_AS={type:'agencia',value:v.slice(3)};
+  else VIEW_AS={type:'role',value:v.slice(2)};
+  go(SCREEN);
+}
+function viewAsBarHTML(screen,meta){
+  if(!(isManager||PAPEL==='admin')||meta.mod!=='budget'||screen==='people') return '';
+  const ags=viewAsAgencias();
+  const cur=VIEW_AS?(VIEW_AS.type==='agencia'?'ag:'+VIEW_AS.value:'r:'+VIEW_AS.value):'';
+  const roleLbl={marketing:'Marketing',financeiro:'Finance'};
+  const opts=`<option value="" ${cur===''?'selected':''}>My view (Admin — full access)</option>
+    <optgroup label="Role (read-only)">
+      <option value="r:marketing" ${cur==='r:marketing'?'selected':''}>Marketing</option>
+      <option value="r:financeiro" ${cur==='r:financeiro'?'selected':''}>Finance</option>
+    </optgroup>
+    ${ags.length?`<optgroup label="Agency (read-only)">${ags.map(a=>`<option value="ag:${esc(a)}" ${cur==='ag:'+a?'selected':''}>${esc(a)}</option>`).join('')}</optgroup>`:''}`;
+  return `<div style="display:flex;align-items:center;gap:10px;padding:9px 24px;background:${VIEW_AS?'#fbf0d8':'var(--paper-2)'};border-bottom:1px solid ${VIEW_AS?'#ecd9a4':'var(--line)'};font-size:12.5px">
+    ${VIEW_AS?`<span style="width:7px;height:7px;border-radius:50%;background:#d68a04;flex-shrink:0"></span><b style="color:#7a5200">Viewing as ${VIEW_AS.type==='agencia'?'agency '+esc(VIEW_AS.value):esc(roleLbl[VIEW_AS.value]||VIEW_AS.value)} — read only, nothing here can be edited</b>`:`<span style="color:var(--txt-3);font-weight:600">View as another profile (read-only) — admin tool</span>`}
+    <select onchange="setViewAs(this.value)" style="margin-left:${VIEW_AS?'auto':'0'};padding:5px 9px;border:1px solid var(--line-2);border-radius:7px;background:#fff;font:inherit;font-size:12px">${opts}</select>
+    ${VIEW_AS?`<button class="chip-btn" onclick="setViewAs('')">Exit</button>`:''}
+  </div>`;
+}
 function go(screen){
   if(screen==='balance')screen='bo';
   if(screen==='approvals')screen='pos';
@@ -774,15 +954,16 @@ function go(screen){
   const meta=SCREEN_META[screen]||{t:'',s:'',mod:'work'};
   const col=meta.mod==='budget'?'#e20613':'#2b4fdd';
   $('#scrTitle').textContent=meta.t; $('#scrSub').textContent=meta.s; $('#barcol').style.background=col;
+  $('#viewAsBar').innerHTML=viewAsBarHTML(screen,meta);
   // CTA per screen (mirrors the prototype)
   if(['dash','board','list','timeline'].includes(screen)){
     const statusChip=STATUS_FILTER?`<button onclick="setStatusFilter('')" style="padding:8px 12px;border-radius:9px;border:1px solid var(--line-2);background:#fff;font-size:12px;font-weight:600;color:var(--txt-2);margin-right:8px">Status: ${esc(statusOf(STATUS_FILTER).name)} ✕</button>`:'';
     $('#ctaBox').innerHTML=`${['dash','board','list'].includes(screen)?ptipoFilterHTML():''}${statusChip}<button class="btn-ghost" onclick="openStageGuide()">Stage guide</button><button class="btn-acc" onclick="openProjNew()">+ New project</button>`;
-  } else if(screen==='campaigns'&&['admin','marketing'].includes(PAPEL)){
+  } else if(screen==='campaigns'&&['admin','marketing'].includes(PAPEL)&&!viewOnly()){
     $('#ctaBox').innerHTML='<button class="btn-acc" style="background:var(--po)" onclick="openCampNew()">+ New campaign</button>';
-  } else if(screen==='budgets'&&PAPEL==='admin'){
+  } else if(screen==='budgets'&&PAPEL==='admin'&&!viewOnly()){
     $('#ctaBox').innerHTML='<button class="btn-acc" style="background:var(--po)" onclick="openOrcNew()">+ New budget</button>';
-  } else if(['pos','mypos','reqpo'].includes(screen)&&PO_ACCESS){
+  } else if(['pos','mypos','reqpo'].includes(screen)&&PO_ACCESS&&!viewOnly()){
     $('#ctaBox').innerHTML='<button class="btn-acc" style="background:var(--po)" onclick="openReqPO()">+ Request PO</button>';
   } else { $('#ctaBox').innerHTML=''; }
   const v=$('#view');
@@ -818,7 +999,7 @@ function buildDashCharts(){
 function buildCampanhaChart(){
   const el=document.getElementById('chartCamp'); if(!el||!window.Chart)return;
   let list=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO');
-  if(PAPEL==='agencia'&&MINHA_AGENCIA) list=list.filter(p=>p.agencia===MINHA_AGENCIA);
+  if(effPapel()==='agencia'&&effAgencia()) list=list.filter(p=>p.agencia===effAgencia());
   const tetoBy={},consBy={},compBy={};
   const inP=c=>SCREEN!=='bo'||boInPeriod(c);
   DATA.tetos.forEach(t=>{if(!inP(t.competencia))return;tetoBy[t.projeto_id]=(tetoBy[t.projeto_id]||0)+(+t.teto||0);});
@@ -992,8 +1173,8 @@ function renderAprovacoes(){
   const nomeBy={}; DATA.poProjetos.forEach(p=>nomeBy[p.id]=p.nome);
   const tetoBy={}; DATA.tetos.forEach(t=>tetoBy[t.projeto_id]=(tetoBy[t.projeto_id]||0)+(+t.teto||0)); DATA.rateio.forEach(r=>tetoBy[r.projeto_id]=(tetoBy[r.projeto_id]||0)+(+r.valor||0));
   let posPend=DATA.pos.filter(po=>['SOLICITADA','EM_APROVACAO'].includes(po.status));
-  if(PAPEL==='agencia'&&MINHA_AGENCIA) posPend=posPend.filter(po=>po.agencia===MINHA_AGENCIA);
-  const canAprova=['admin','marketing','financeiro'].includes(PAPEL)||isManager;
+  if(effPapel()==='agencia'&&effAgencia()) posPend=posPend.filter(po=>po.agencia===effAgencia());
+  const canAprova=(['admin','marketing','financeiro'].includes(PAPEL)||isManager)&&!viewOnly();
   const campCol=`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
     <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">Campaigns awaiting approval</b>${projPend.length?`<span style="background:var(--po);color:#fff;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800">${projPend.length}</span>`:''}</div>
     <div style="padding:12px 16px;display:flex;flex-direction:column;gap:10px">${projPend.length?projPend.map(p=>`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;background:#fafbfd">
@@ -1037,7 +1218,7 @@ function campSearch(v){ CAMP_Q=(v||'').toLowerCase(); const b=document.getElemen
 function campToggleCat(ck){ CAMP_COLLAPSED[ck]=!CAMP_COLLAPSED[ck]; const b=document.getElementById('campBody'); if(b){ b.outerHTML=renderCampBody(); } }
 function renderCampanhas(){
   let list=DATA.poProjetos.slice();
-  if(PAPEL==='agencia'&&MINHA_AGENCIA) list=list.filter(p=>p.agencia===MINHA_AGENCIA);
+  if(effPapel()==='agencia'&&effAgencia()) list=list.filter(p=>p.agencia===effAgencia());
   const tetoBy={}, consBy={}, compBy={}, pendBy={};
   DATA.tetos.forEach(t=>{tetoBy[t.projeto_id]=(tetoBy[t.projeto_id]||0)+(+t.teto||0);});
   DATA.rateio.forEach(r=>{tetoBy[r.projeto_id]=(tetoBy[r.projeto_id]||0)+(+r.valor||0);});
@@ -1307,7 +1488,7 @@ function openCampDetail(pid){
   const posByM={}; DATA.pos.filter(po=>po.projeto_id===pid).forEach(po=>{const m=String(po.competencia).slice(0,7);(posByM[m]=posByM[m]||[]).push(po);});
   const months=[...new Set([...Object.keys(capByM),...Object.keys(posByM)])].sort();
   const nowM=new Date().toISOString().slice(0,7);
-  const canRealloc=(['admin','marketing'].includes(PAPEL)||isManager);
+  const canRealloc=(['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly();
   const blocks=months.map(m=>{
     const cap=capByM[m]||0; const list=posByM[m]||[];
     const sum=st=>list.filter(po=>st.includes(po.status)).reduce((s,po)=>s+(+po.valor||0),0);
@@ -1365,7 +1546,7 @@ function openCampDetail(pid){
       ${months.length>1?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">${chips}</div>`:''}
     </div>
     <div class="modal-b">${summary}<div style="font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin:2px 0 10px">Month by month</div>${blocks}</div>
-    <div class="modal-f"><span></span><div style="display:flex;gap:10px">${PO_ACCESS?`<button class="btn-acc" style="background:var(--po)" onclick="openReqPO('${esc(p.id)}')">+ Request PO</button>`:''}${(['admin','marketing'].includes(PAPEL)||isManager)?`<button class="btn-ghost" onclick="openCampValues('${esc(p.id)}')">Edit monthly values</button><button class="btn-ghost" onclick="openCampEdit('${esc(p.id)}')">Edit category</button>`:''}<button class="btn-ghost" onclick="closeModal()">Close</button></div></div>
+    <div class="modal-f"><span></span><div style="display:flex;gap:10px">${(PO_ACCESS&&!viewOnly())?`<button class="btn-acc" style="background:var(--po)" onclick="openReqPO('${esc(p.id)}')">+ Request PO</button>`:''}${((['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly())?`<button class="btn-ghost" onclick="openCampValues('${esc(p.id)}')">Edit monthly values</button><button class="btn-ghost" onclick="openCampEdit('${esc(p.id)}')">Edit category</button>`:''}<button class="btn-ghost" onclick="closeModal()">Close</button></div></div>
   </div></div>`;
 }
 
@@ -1451,6 +1632,7 @@ function renderReallocModal(){
 }
 function closeRealloc(){ const pid=REALLOC&&REALLOC.pid; REALLOC=null; if(pid) openCampDetail(pid); else closeModal(); }
 async function submitRealloc(){
+  if(viewOnly()){toast(roMsg());return;}
   if(!REALLOC)return;
   const preview=reallocPreviewRows().filter(r=>r.mes&&(+r.valor||0)>0);
   if(!preview.length){ toast('Add at least one month with a value.'); return; }
@@ -1509,6 +1691,7 @@ function renderCampValues(){
   </div></div>`;
 }
 async function submitCampValues(){
+  if(viewOnly()){toast(roMsg());return;}
   if(!CAMPVAL)return; const cv=CAMPVAL;
   const rows=cv.rows.filter(r=>r.mes&&(+r.valor||0)>0);
   if(!rows.length){ toast('Add at least one month with a value.'); return; }
@@ -1575,10 +1758,11 @@ function renderCampEditForm(){
       ${classField}
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">Was: <b>${esc((DATA.poProjetos.find(x=>x.id===ce.id)||{}).product_category||'—')}</b>. Months and total value stay the same.</div>
     </div>
-    <div class="modal-f"><span>${(PAPEL==='admin')?`<button class="btn-del" onclick="deletarCampanha('${esc(ce.id)}')">Delete campaign</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitCampEdit()">Save</button></div></div>
+    <div class="modal-f"><span>${(PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarCampanha('${esc(ce.id)}')">Delete campaign</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitCampEdit()">Save</button></div></div>
   </div></div>`;
 }
 async function submitCampEdit(){
+  if(viewOnly()){toast(roMsg());return;}
   if(!CAMPEDIT)return; const ce=CAMPEDIT; const isFee=ce.activity==='FEE';
   if(!ce.nome.trim()){ toast('Give the campaign a name.'); return; }
   if(!PRODUCT_CATS.includes(ce.cat)){ toast('Pick a product category (TV/AC/MOB/REF/WG/LABG).'); return; }
@@ -1598,10 +1782,10 @@ async function submitCampEdit(){
 
 function renderPOs(){
   let pos=DATA.pos.slice();
-  if(PAPEL==='agencia'&&MINHA_AGENCIA) pos=pos.filter(p=>p.agencia===MINHA_AGENCIA);
+  if(effPapel()==='agencia'&&effAgencia()) pos=pos.filter(p=>p.agencia===effAgencia());
   const nomeBy={}; DATA.poProjetos.forEach(p=>nomeBy[p.id]=p.nome);
   pos.sort((a,b)=>String(b.solicitado_em||'').localeCompare(String(a.solicitado_em||'')));
-  const canAprova=['admin','marketing'].includes(PAPEL)||isManager;
+  const canAprova=(['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly();
   const ags=agencyOpts();
   const filt=`<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
     <div style="position:relative;flex:1;max-width:260px;min-width:170px">
@@ -1653,7 +1837,7 @@ function renderPOs(){
   };
   const body=(PHASES.map(f=>phaseGroup(f.t,pos.filter(po=>f.st.includes(po.status)),f.id)).join('')+phaseGroup('Other',restPos,'outros'))||'<div class="empty">No POs found for your access.</div>';
   const projPend=DATA.poProjetos.filter(p=>p.aprovacao_status==='PENDENTE');
-  const canAprovaCamp=['admin','marketing','financeiro'].includes(PAPEL)||isManager;
+  const canAprovaCamp=(['admin','marketing','financeiro'].includes(PAPEL)||isManager)&&!viewOnly();
   const tetoPend={};
   if(projPend.length){ DATA.tetos.forEach(t=>tetoPend[t.projeto_id]=(tetoPend[t.projeto_id]||0)+(+t.teto||0)); DATA.rateio.forEach(r=>tetoPend[r.projeto_id]=(tetoPend[r.projeto_id]||0)+(+r.valor||0)); }
   const campPend=projPend.length?`<div style="background:#fff;border:1px solid #f2c4bf;border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05);margin-bottom:16px">
@@ -1695,18 +1879,22 @@ function renderPOsFilter(){
   });
 }
 async function aprovarPO(id){
+  if(viewOnly()){toast(roMsg());return;}
   try{ const {error}=await SBPO.rpc('aprovar_po',{p_po:id}); if(error)throw error; toast('PO approved ✓'); await reloadPO(); go(SCREEN); }
   catch(e){ toast('Error: '+(e.message||e)); }
 }
 async function rejeitarPO(id){
+  if(viewOnly()){toast(roMsg());return;}
   try{ const {error}=await SBPO.rpc('rejeitar_po',{p_po:id}); if(error)throw error; toast('PO rejected'); await reloadPO(); go(SCREEN); }
   catch(e){ toast('Error: '+(e.message||e)); }
 }
 async function aprovarCamp(id){
+  if(viewOnly()){toast(roMsg());return;}
   try{ const {error}=await SBPO.rpc('aprovar_projeto',{p_projeto:id}); if(error)throw error; toast('Campaign approved ✓'); await reloadPOAll(); go(SCREEN); }
   catch(e){ toast('Error: '+(e.message||e)); }
 }
 async function rejeitarCamp(id){
+  if(viewOnly()){toast(roMsg());return;}
   const motivo=prompt('Reason for rejecting the campaign:'); if(motivo===null)return;
   try{ const {error}=await SBPO.rpc('rejeitar_projeto',{p_projeto:id,p_motivo:motivo}); if(error)throw error; toast('Campaign rejected'); await reloadPOAll(); go(SCREEN); }
   catch(e){ toast('Error: '+(e.message||e)); }
@@ -1733,9 +1921,9 @@ function poEstimativaPagamento(po){
   return {date:fmtDateObjBR(calcVencimento(base)),confirmed:false};
 }
 function poScreen(){ const b=currentNav().budget||[]; return ['pos','mypos'].find(id=>b.includes(id))||'pos'; }
-function canGerarPO(){ return ['admin','financeiro'].includes(PAPEL); }
-function canFaturarPO(po){ return fullAccess() || (PAPEL==='agencia' && MINHA_AGENCIA && MINHA_AGENCIA===po.agencia); }
-function canValidarPO(){ return ['admin','financeiro'].includes(PAPEL); }
+function canGerarPO(){ return ['admin','financeiro'].includes(PAPEL)&&!viewOnly(); }
+function canFaturarPO(po){ return !viewOnly()&&(fullAccess() || (PAPEL==='agencia' && MINHA_AGENCIA && MINHA_AGENCIA===po.agencia)); }
+function canValidarPO(){ return ['admin','financeiro'].includes(PAPEL)&&!viewOnly(); }
 const _poBtn=(bg)=>'padding:6px 12px;border-radius:8px;border:none;color:#fff;font-weight:700;font-size:11.5px;cursor:pointer;background:'+bg;
 
 async function reloadNotif(){
@@ -1818,7 +2006,7 @@ function renderPODetailModal(){
 }
 function poActionsHTML(po){
   const pend=['SOLICITADA','EM_APROVACAO'].includes(po.status);
-  const canAprova=['admin','marketing'].includes(PAPEL)||isManager;
+  const canAprova=(['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly();
   const b=[];
   if(canAprova&&pend){
     b.push(`<button onclick="aprovarPO('${esc(po.id)}')" style="${_poBtn('var(--po)')}">Approve</button>`);
@@ -1827,7 +2015,7 @@ function poActionsHTML(po){
   if(po.status==='APROVADA'&&canGerarPO()) b.push(`<button onclick="openGerarPO('${esc(po.id)}')" style="${_poBtn('#3c7a63')}">Issue PO nº</button>`);
   if(['PO_GERADA','ATUALIZAR_INFO'].includes(po.status)&&canFaturarPO(po)) b.push(`<button onclick="openFaturarPO('${esc(po.id)}')" style="${_poBtn('#b5550c')}">Post NF</button>`);
   if(po.status==='FATURADA'&&canValidarPO()) b.push(`<button onclick="openValidarPO('${esc(po.id)}')" style="${_poBtn('#1f8a4c')}">Validate</button>`);
-  if(fullAccess()) b.push(`<button class="chip-btn" onclick="editarPO('${esc(po.id)}')">Edit</button>`);
+  if(fullAccess()&&!viewOnly()) b.push(`<button class="chip-btn" onclick="editarPO('${esc(po.id)}')">Edit</button>`);
   return b.length?b.join(''):'<span style="font-size:11.5px;color:var(--txt-3)">—</span>';
 }
 function notifGoPO(poId,tipo){
@@ -1857,6 +2045,7 @@ function renderGerarPO(){
   </div></div>`;
 }
 async function submitGerarPO(){
+  if(viewOnly()){toast(roMsg());return;}
   if(!GERAR)return; const num=(GERAR.num||'').trim(); if(!num){toast('Enter the PO number.');return;}
   try{
     let path=null; if(GERAR.file){ toast('Uploading…'); path=await uploadEvid(GERAR.id,GERAR.file,'po'); }
@@ -1887,6 +2076,7 @@ function renderFaturarPO(){
   </div></div>`;
 }
 async function submitFaturarPO(){
+  if(viewOnly()){toast(roMsg());return;}
   if(!FAT)return; const nf=(FAT.nf||'').trim(); if(!nf){toast('Enter the NF number.');return;}
   const po=DATA.pos.find(p=>p.id===FAT.id)||{};
   try{
@@ -1926,6 +2116,7 @@ function renderValidarPO(){
   </div></div>`;
 }
 async function submitValidarPO(){
+  if(viewOnly()){toast(roMsg());return;}
   if(!VALID)return;
   try{ const {error}=await SBPO.rpc('validar_po',{p_po:VALID.id}); if(error)throw error;
     const po=DATA.pos.find(p=>p.id===VALID.id)||{}; const venc=fmtDataBR(po.vencimento);
@@ -1933,6 +2124,7 @@ async function submitValidarPO(){
   }catch(e){ toast('Error: '+(e.message||e)); }
 }
 async function rejeitarFatPO(){
+  if(viewOnly()){toast(roMsg());return;}
   if(!VALID)return; const motivo=prompt('Reason to send the NF back to the agency:'); if(motivo===null)return; if(!motivo.trim()){toast('Describe the reason.');return;}
   try{ const {error}=await SBPO.rpc('rejeitar_faturamento',{p_po:VALID.id,p_motivo:motivo}); if(error)throw error;
     VALID=null; closeModal(); await reloadPO(); await reloadNotif(); go(SCREEN); toast('Sent back to the agency for update.');
@@ -2471,6 +2663,7 @@ function renderReqPO(){
   </div></div>`;
 }
 async function submitReqPO(){
+  if(viewOnly()){toast(roMsg());return;}
   if(!REQ)return;
   if(REQ.mode==='split'){
     if(!REQ.splitAg){ toast('Choose the agency.'); return; }
@@ -2507,6 +2700,7 @@ async function reloadPO(){
 }
 /* admin realoca o mês de uma PO */
 async function realocarPO(poId){
+  if(viewOnly()){toast(roMsg());return;}
   if(!isManager&&PAPEL!=='admin'){ toast('Only admin can reallocate.'); return; }
   const po=DATA.pos.find(p=>p.id===poId); if(!po)return;
   const meses=await mesesDoProjeto(po.projeto_id);
@@ -2550,10 +2744,11 @@ async function renderPOEdit(){
       <div class="field full" style="margin-top:14px"><label>Description</label><input value="${esc(pe.descricao)}" onchange="poeSet('descricao',this.value)" placeholder="—" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:10px">Changing status here is a direct override — use Approve/Reject on the row for the normal lifecycle.</div>
     </div>
-    <div class="modal-f"><span>${(PAPEL==='admin')?`<button class="btn-del" onclick="deletarPO('${esc(pe.id)}')">Delete PO</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitPOEdit()">Save</button></div></div>
+    <div class="modal-f"><span>${(PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarPO('${esc(pe.id)}')">Delete PO</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitPOEdit()">Save</button></div></div>
   </div></div>`;
 }
 async function submitPOEdit(){
+  if(viewOnly()){toast(roMsg());return;}
   if(!POEDIT)return; const pe=POEDIT;
   const val=+pe.valor||0; if(val<=0){ toast('Enter a value greater than 0.'); return; }
   const comp=/^\d{4}-\d{2}$/.test(pe.mes)?pe.mes+'-01':pe.mes;
@@ -2566,6 +2761,7 @@ async function submitPOEdit(){
 
 /* ===== DELETE (admin only) — POs, campaigns, budgets ===== */
 async function deletarPO(id){
+  if(viewOnly()){toast(roMsg());return;}
   if(PAPEL!=='admin'){ toast('Only admin can delete.'); return; }
   const po=DATA.pos.find(p=>p.id===id)||{};
   if(!confirm('Delete this PO permanently?\n\n'+(poNome(po.projeto_id)||'')+' · '+BRL(po.valor)+(po.numero_po?' · PO '+po.numero_po:'')+'\n\nThis cannot be undone.'))return;
@@ -2574,6 +2770,7 @@ async function deletarPO(id){
   }catch(e){ toast('Error: '+(e.message||e)); }
 }
 async function deletarCampanha(id){
+  if(viewOnly()){toast(roMsg());return;}
   if(PAPEL!=='admin'){ toast('Only admin can delete.'); return; }
   const p=DATA.poProjetos.find(x=>x.id===id)||{};
   const nPos=DATA.pos.filter(x=>x.projeto_id===id).length;
@@ -2583,6 +2780,7 @@ async function deletarCampanha(id){
   }catch(e){ toast('Error: '+(e.message||e)); }
 }
 async function deletarOrcamento(id){
+  if(viewOnly()){toast(roMsg());return;}
   if(PAPEL!=='admin'){ toast('Only admin can delete.'); return; }
   const o=(DATA.orcamentos||[]).find(x=>x.id===id)||{};
   if(!confirm('Delete budget "'+(o.nome||o.product_category||'')+'"?\n\nOnly possible if no campaign is linked to it.\n\nThis cannot be undone.'))return;
@@ -2716,7 +2914,7 @@ let RATEIO_ACC_OPEN={};
 function toggleRateioAcc(key){ RATEIO_ACC_OPEN[key]=!RATEIO_ACC_OPEN[key]; go(SCREEN); }
 function feeSplitBlock(only){
   const fee=DATA.fee||[];
-  const canFee=isManager||PAPEL==='admin';
+  const canFee=(isManager||PAPEL==='admin')&&!viewOnly();
   const groups={}; fee.forEach(f=>{ const k=f.tipo||'(sem tipo)'; (groups[k]=groups[k]||[]).push(f); });
   const tipoKeys=Object.keys(groups).sort();
   const rateioRow=k=>{
@@ -2934,7 +3132,7 @@ function campPOsListHTML(p){
 }
 function renderBudgetOverview(isBalance){
   let camps=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO');
-  if(PAPEL==='agencia'&&MINHA_AGENCIA) camps=camps.filter(p=>p.agencia===MINHA_AGENCIA);
+  if(effPapel()==='agencia'&&effAgencia()) camps=camps.filter(p=>p.agencia===effAgencia());
   const tetoBy={},consBy={},compBy={},pendBy={};
   DATA.tetos.forEach(t=>{if(!boInPeriod(t.competencia))return;tetoBy[t.projeto_id]=(tetoBy[t.projeto_id]||0)+(+t.teto||0);});
   DATA.rateio.forEach(r=>{if(!boInPeriod(r.competencia))return;tetoBy[r.projeto_id]=(tetoBy[r.projeto_id]||0)+(+r.valor||0);});
@@ -2955,8 +3153,8 @@ function renderBudgetOverview(isBalance){
   DATA.tetos.forEach(t=>{ if(!campIds.has(t.projeto_id)||!boInPeriod(t.competencia))return; const c=catOf[t.projeto_id]; if(c) catUsed[c]=(catUsed[c]||0)+(+t.teto||0); });
   DATA.rateio.forEach(r=>{ if(!campIds.has(r.projeto_id)||!boInPeriod(r.competencia))return; const c=r.categoria; if(c) catUsed[c]=(catUsed[c]||0)+(+r.valor||0); });
   const cats=(DATA.orcamentos||[]).map(o=>{const tot=+o.valor_total||0,cat=o.product_category||'',rel=catUsed[cat]||0;const raw=tot?rel/tot*100:0;return {name:o.nome||cat||'—',n:cat,used:rel,total:tot,pct:Math.min(100,raw),raw};});
-  const isMkt=PAPEL==='marketing'&&!isManager;
-  const isFin=PAPEL==='financeiro'&&!isManager;
+  const isMkt=effPapel()==='marketing'&&!effIsManager();
+  const isFin=effPapel()==='financeiro'&&!effIsManager();
   const HIDE_MONEY=isMkt; // marketing sees campaign progress but not budget values
   // Finance: only the cost-center table (no hero, no campaign accordions)
   if(isFin) return `<div style="margin-bottom:2px">${feeSplitBlock('accounts')}</div>`;
@@ -3077,7 +3275,7 @@ function renderBudgetOverview(isBalance){
 function buildOverviewMonthlyChart(isBalance){
   const el=document.getElementById('chartMonthly'); if(!el||!window.Chart)return;
   let camps=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO');
-  if(PAPEL==='agencia'&&MINHA_AGENCIA) camps=camps.filter(p=>p.agencia===MINHA_AGENCIA);
+  if(effPapel()==='agencia'&&effAgencia()) camps=camps.filter(p=>p.agencia===effAgencia());
   const campIds=new Set(camps.map(c=>c.id));
   const months=new Set();
   DATA.tetos.forEach(t=>{if(campIds.has(t.projeto_id))months.add(String(t.competencia).slice(0,7));});
@@ -3103,10 +3301,10 @@ function toggleCampPO(id){ CAMP_PO_OPEN[id]=!CAMP_PO_OPEN[id]; go(SCREEN); }
    its related POs (with status) right there in the dropdown. */
 function renderBudgets(){
   const orcs=DATA.orcamentos||[];
-  const canBudget=isManager||PAPEL==='admin';
-  const canSensitive=isManager||['admin','financeiro'].includes(PAPEL);
+  const canBudget=(isManager||PAPEL==='admin')&&!viewOnly();
+  const canSensitive=effIsManager()||['admin','financeiro'].includes(effPapel());
   let camps=(DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO');
-  if(PAPEL==='agencia'&&MINHA_AGENCIA) camps=camps.filter(p=>p.agencia===MINHA_AGENCIA);
+  if(effPapel()==='agencia'&&effAgencia()) camps=camps.filter(p=>p.agencia===effAgencia());
   const tetoBy={},consBy={},compBy={},pendBy={};
   DATA.tetos.forEach(t=>{tetoBy[t.projeto_id]=(tetoBy[t.projeto_id]||0)+(+t.teto||0);});
   DATA.rateio.forEach(r=>{tetoBy[r.projeto_id]=(tetoBy[r.projeto_id]||0)+(+r.valor||0);});
@@ -3324,6 +3522,7 @@ function renderCampForm(){
   </div></div>`;
 }
 async function submitCamp(){
+  if(viewOnly()){toast(roMsg());return;}
   if(!CAMP)return;
   if(!CAMP.nome.trim()){ toast('Give the campaign a name.'); return; }
   if(!CAMP.orcamento_id){ toast('Choose a budget.'); return; }
@@ -3370,10 +3569,11 @@ function renderOrcForm(){
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:480px">
     <div class="modal-h"><h3>${editing?'Edit budget — '+esc(ORC.cat):'New budget'}</h3><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">${body}</div>
-    <div class="modal-f"><span>${(editing&&PAPEL==='admin')?`<button class="btn-del" onclick="deletarOrcamento('${esc(ORC.id)}')">Delete budget</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button>${(editing||free.length)?`<button class="btn-acc" style="background:var(--po)" onclick="submitOrc()">${editing?'Save':'Create budget'}</button>`:''}</div></div>
+    <div class="modal-f"><span>${(editing&&PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarOrcamento('${esc(ORC.id)}')">Delete budget</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button>${(editing||free.length)?`<button class="btn-acc" style="background:var(--po)" onclick="submitOrc()">${editing?'Save':'Create budget'}</button>`:''}</div></div>
   </div></div>`;
 }
 async function submitOrc(){
+  if(viewOnly()){toast(roMsg());return;}
   if(!ORC)return;
   const cat=String(ORC.cat||'').trim().toUpperCase();
   const val=+ORC.valor||0; if(val<0){ toast('Enter a valid value.'); return; }
@@ -3425,6 +3625,7 @@ function renderFeeEditor(){
   </div></div>`;
 }
 async function saveFee(){
+  if(viewOnly()){toast(roMsg());return;}
   if(!FEE)return;
   const rows=FEE.filter(f=>(f.agencia||'').trim()&&FEE_TIPOS.some(([v])=>v===f.tipo)).map(f=>({agencia:f.agencia.trim(),tipo:f.tipo,categoria:(f.categoria||'').trim(),percentual:(+f.percentual||0)/100,cc:(f.cc||'').trim(),account:(f.account||'').trim(),descricao:(f.descricao||'').trim()}));
   try{
