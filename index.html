@@ -157,6 +157,7 @@
   @keyframes fadeIn{from{opacity:0}}
   .modal{background:var(--card);border-radius:16px;width:100%;max-width:840px;box-shadow:var(--sh-3);animation:modalIn .2s var(--ease)}
   @keyframes modalIn{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
+  .overlay.no-anim,.modal.no-anim{animation:none}
   .modal-h{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
   .modal-h h3{font-size:16.5px;letter-spacing:-.02em}
   .modal-h .x{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;color:var(--txt-3);font-size:18px}
@@ -231,7 +232,9 @@
   @keyframes numIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
   .kpi .num,.stat-num{animation:numIn .28s var(--ease) both}
   @keyframes barIn{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-  .pbar span,.prog i,.meter span{transform-origin:left;animation:barIn .5s var(--ease) both}
+  .pbar span,.prog i,.meter span,.seg-fill{transform-origin:left;animation:barIn .5s var(--ease) both}
+  @keyframes dotLightUp{from{background:#edeff4;color:#8a90a0;border-color:#edeff4;transform:scale(.7)}}
+  .step-dot{animation:dotLightUp .35s var(--ease) both}
 
   /* ===== RESPONSIVE ===== */
   @media (max-width:1500px){ .kpis{grid-template-columns:repeat(3,1fr)} }
@@ -387,8 +390,8 @@ function poStepperHTML(st){
   let dots='';
   for(let i=1;i<=4;i++){
     const dst=i<=done?'background:#16a06a;color:#fff':(i===cur?'background:#fff;border:2.5px solid #cf8a16;color:#cf8a16':'background:#edeff4;color:#8a90a0');
-    dots+=`<span style="width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:800;flex-shrink:0;${dst}">${i<=done?icn('check',10,2.4):i}</span>`;
-    if(i<4)dots+=`<span style="flex:1;height:3px;background:${i<=done?'#16a06a':'#edeff4'}"></span>`;
+    dots+=`<span class="step-dot" style="width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:800;flex-shrink:0;animation-delay:${(i-1)*140}ms;${dst}">${i<=done?icn('check',10,2.4):i}</span>`;
+    if(i<4)dots+=`<span class="seg-fill" style="flex:1;height:3px;background:${i<=done?'#16a06a':'#edeff4'};animation-delay:${(i-1)*140+70}ms"></span>`;
   }
   const labs=PO_PHASES.map((l,ix)=>{const i=ix+1;const c=i<=done?'#16a06a':(i===cur?'#cf8a16':'#8a90a0');return `<span style="color:${c}">${l}</span>`;}).join('');
   return `<div style="display:flex;align-items:center;margin-top:10px">${dots}</div><div style="display:flex;justify-content:space-between;font-size:10px;font-weight:700;margin-top:5px">${labs}</div>`;
@@ -478,7 +481,7 @@ function initials(n){if(!n)return'?';const p=String(n).trim().split(/\s+/);retur
 function respName(r){if(!r)return r;const pe=(DATA.pessoas||[]).find(x=>x.email&&x.email.toLowerCase()===String(r).toLowerCase());if(pe){const full=[pe.nome,pe.sobrenome].filter(Boolean).join(' ');if(full)return full;}return r;}
 function today0(){const d=new Date();d.setHours(0,0,0,0);return d;}
 function daysTo(s){if(!s)return null;const d=new Date(s+'T00:00:00');return Math.round((d-today0())/864e5);}
-function fmtDate(s){if(!s)return'—';const d=new Date(s+'T00:00:00');return d.toLocaleDateString('en-US',{day:'2-digit',month:'short'});}
+function fmtDate(s){if(!s)return'—';const d=new Date(String(s).includes('T')?s:s+'T00:00:00');return d.toLocaleDateString('en-US',{day:'2-digit',month:'short'});}
 function fmtMes(s){if(!s)return'—';const [y,m]=String(s).slice(0,7).split('-');const MM=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return (MM[(+m)-1]||m)+'/'+String(y).slice(2);}
 function stageOf(i){return STAGES.find(s=>s.id===i)||STAGES[0];}
 function statusOf(i){return STATUS.find(s=>s.id===i)||STATUS[0];}
@@ -1514,7 +1517,7 @@ function openCampDetail(pid){
     const showRealloc=canRealloc&&m<nowM&&saldo>0.5;
     return `<div id="cd-${m}" style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;margin-bottom:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:13.5px">${fmtMes(m+'-01')}</b><span class="mono" style="font-size:12px;color:${saldo<0?'var(--po)':'var(--txt-2)'}">balance ${BRL(saldo)} · cap ${BRL(cap)}</span></div>
-      <div style="height:8px;border-radius:5px;background:#edeff4;overflow:hidden;margin-bottom:10px;display:flex" title="Consumed · committed · awaiting approval"><span style="width:${w1}%;background:${overM?'var(--po)':'var(--blue)'}"></span><span style="width:${w2}%;background:var(--violet)"></span><span style="width:${w3}%;background:var(--amber)"></span></div>
+      <div style="height:8px;border-radius:5px;background:#edeff4;overflow:hidden;margin-bottom:10px;display:flex" title="Consumed · committed · awaiting approval"><span class="seg-fill" style="width:${w1}%;background:${overM?'var(--po)':'var(--blue)'}"></span><span class="seg-fill" style="width:${w2}%;background:var(--violet)"></span><span class="seg-fill" style="width:${w3}%;background:var(--amber)"></span></div>
       ${list.length?list.map(po=>`<div style="padding:9px 0;border-top:1px dashed var(--line)"><div style="display:flex;align-items:center;gap:10px"><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.descricao||'—')}</div><div style="font-size:11px;color:var(--txt-3)">${esc(po.agencia||'')} · ${esc(po.numero_po||'no number')}</div></div><span class="mono" style="font-weight:700;font-size:12.5px;flex-shrink:0">${BRL(po.valor)}</span></div>${poStepperHTML(po.status)}</div>`).join(''):'<div style="font-size:12px;color:var(--txt-3)">No POs this month.</div>'}
       ${showRealloc?`<button onclick="openReallocModal('${esc(pid)}','${m}',${saldo})" style="margin-top:10px;display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;border:1px solid #bcd9f5;background:var(--blue-bg);color:#0e5ba6;font-weight:700;font-size:12px;cursor:pointer">${icn('calendar',12)} Reallocate ${BRL(saldo)} balance →</button>`:''}
     </div>`;
@@ -1536,7 +1539,7 @@ function openCampDetail(pid){
     </div>
     ${(p.rateio&&catKeys.length)?`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;margin-bottom:14px">
       <div style="font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:9px">Rateio — allocation by budget</div>
-      ${(function(){const tot=catKeys.reduce((s,k)=>s+catAlloc[k],0);return catKeys.map((k,i)=>{const pc=tot?catAlloc[k]/tot*100:0;return `<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><b>${esc(k)}</b><span class="mono">${BRL(catAlloc[k])} · ${Math.round(pc)}%</span></div><div style="height:8px;border-radius:5px;background:#edeff4;overflow:hidden"><span style="display:block;height:100%;width:${pc}%;background:${palette[i%palette.length]}"></span></div></div>`;}).join('');})()}
+      ${(function(){const tot=catKeys.reduce((s,k)=>s+catAlloc[k],0);return catKeys.map((k,i)=>{const pc=tot?catAlloc[k]/tot*100:0;return `<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><b>${esc(k)}</b><span class="mono">${BRL(catAlloc[k])} · ${Math.round(pc)}%</span></div><div style="height:8px;border-radius:5px;background:#edeff4;overflow:hidden"><span class="seg-fill" style="display:block;height:100%;width:${pc}%;background:${palette[i%palette.length]}"></span></div></div>`;}).join('');})()}
     </div>`:''}`;
   const mNowD=new Date().toISOString().slice(0,7);
   const chips=months.map(m=>{
@@ -1553,9 +1556,9 @@ function openCampDetail(pid){
         <div style="flex:1;min-width:0"><h3 style="font-size:16px">${esc(p.nome)}</h3><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px">${metaTagHTML('building',p.agencia,'#5535ad','#ece6fa')}${metaTagHTML(actMeta(p.activity).icon,actMeta(p.activity).label,'#0e5ba6','#e0eefb')}${(function(){const cm=catMeta(String(p.product_category||'').trim()||'Uncategorized');return metaTagHTML(cm.icon,cm.label,cm.c,cm.bg);})()}${p.rateio?metaTagHTML('scale','rateio','#8a6a1f','#f6efe0'):''}</div></div>
         <button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button>
       </div>
-      <div style="display:flex;height:12px;border-radius:6px;overflow:hidden;background:#edeff4;margin-top:13px" title="Consumed · committed · awaiting approval"><span style="width:${totCap?Math.min(100,totConsu/totCap*100):0}%;background:${overT?'var(--po)':'var(--blue)'}"></span><span style="width:${totCap?Math.min(100,totComp/totCap*100):0}%;background:var(--violet)"></span><span style="width:${totCap?Math.min(100,totPend/totCap*100):0}%;background:var(--amber)"></span></div>
+      <div style="display:flex;height:12px;border-radius:6px;overflow:hidden;background:#edeff4;margin-top:13px" title="Consumed · committed · awaiting approval"><span class="seg-fill" style="width:${totCap?Math.min(100,totConsu/totCap*100):0}%;background:${overT?'var(--po)':'var(--blue)'}"></span><span class="seg-fill" style="width:${totCap?Math.min(100,totComp/totCap*100):0}%;background:var(--violet)"></span><span class="seg-fill" style="width:${totCap?Math.min(100,totPend/totCap*100):0}%;background:var(--amber)"></span></div>
       <div style="display:flex;justify-content:space-between;margin-top:7px;font-size:12px" class="mono">
-        <span style="font-weight:700;color:${overT?'#bf0008':nearT?'#9c6404':'var(--txt-1)'}">${Math.round(rawTot)}% committed</span>
+        <span class="stat-num" style="font-weight:700;color:${overT?'#bf0008':nearT?'#9c6404':'var(--txt-1)'}">${Math.round(rawTot)}% committed</span>
         <span style="color:var(--txt-2)">balance <b>${BRL(saldoTot)}</b> of ${BRL(totCap)}</span>
       </div>
       ${alertHTML}
@@ -2169,7 +2172,7 @@ async function rejeitarFatPO(){
    ESTÁGIO 2 — CRIAR/EDITAR PROJETO (salva no painel)
    ============================================================ */
 let EDIT=null;
-function closeModal(){ $('#modalMount').innerHTML=''; EDIT=null; PODETAIL=null; }
+function closeModal(){ $('#modalMount').innerHTML=''; EDIT=null; PODETAIL=null; PM_OPEN=false; }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&$('#modalMount').firstElementChild) closeModal(); });
 function tasksKey(){ return 'po_ptasks_'+((currentUser&&currentUser.email)||'anon'); }
 /* Personal tasks live in Supabase (painel · tarefas_pessoais, RLS per email).
@@ -2362,10 +2365,23 @@ function renderTLModal(){
 }
 function pmAddAtv(){ EDIT.tasks=EDIT.tasks||[]; EDIT.tasks.push({id:uid(),n:'Nova atividade',done:false,fim:'',status:'no_prazo',pct:0,obs:'',subs:[]}); renderProjModal(); }
 function pmDelAtv(tid){ EDIT.tasks=(EDIT.tasks||[]).filter(t=>t.id!==tid); renderProjModal(); }
-function pmAddSub(tid){ const t=atv(tid); if(t){ t.subs=t.subs||[]; t.subs.push({id:uid(),n:'',done:false,inicio:'',fim:'',resp:''}); renderProjModal(); } }
+/* Sub-items count toward their parent activity's % — auto-computed from
+   how many sub-items are done, replacing the activity's manual % input
+   whenever the activity has sub-items registered. */
+function subPersonOpts(sel){
+  const names=[...new Set((DATA.pessoas||[]).map(pe=>[pe.nome,pe.sobrenome].filter(Boolean).join(' ')).filter(Boolean))].sort();
+  return '<option value="">— tag someone —</option>'+names.map(n=>`<option ${n===sel?'selected':''}>${esc(n)}</option>`).join('');
+}
+function pmRecalcPctFromSubs(t){
+  if(!t.subs||!t.subs.length)return;
+  const doneN=t.subs.filter(s=>s.done).length;
+  t.pct=Math.round(doneN/t.subs.length*100);
+  t.done=t.pct>=100;
+}
+function pmAddSub(tid){ const t=atv(tid); if(t){ t.subs=t.subs||[]; t.subs.push({id:uid(),n:'',done:false,inicio:'',fim:'',resp:'',obs:''}); pmRecalcPctFromSubs(t); renderProjModal(); } }
 function pmSubSet(tid,sid,k,v){ const t=atv(tid); if(t){ const s=(t.subs||[]).find(x=>x.id===sid); if(s)s[k]=v; } }
-function pmSubDone(tid,sid){ const t=atv(tid); if(t){ const s=(t.subs||[]).find(x=>x.id===sid); if(s){s.done=!s.done; renderProjModal();} } }
-function pmDelSub(tid,sid){ const t=atv(tid); if(t){ t.subs=(t.subs||[]).filter(x=>x.id!==sid); renderProjModal(); } }
+function pmSubDone(tid,sid){ const t=atv(tid); if(t){ const s=(t.subs||[]).find(x=>x.id===sid); if(s){s.done=!s.done; pmRecalcPctFromSubs(t); renderProjModal();} } }
+function pmDelSub(tid,sid){ const t=atv(tid); if(t){ t.subs=(t.subs||[]).filter(x=>x.id!==sid); pmRecalcPctFromSubs(t); renderProjModal(); } }
 /* Scans real people (DATA.pessoas — the actual roster with emails) for
    @mentions in a log update. Was scanning the legacy, largely-empty TEAM
    roster before, which is why "@mention" never actually notified anyone —
@@ -2502,7 +2518,8 @@ function pmPTipo(v){
   if(EDIT._new){ const tt=typeOf(t); EDIT.tasks=tt.tasks.map(n=>({id:uid(),n,done:false,fim:'',status:'no_prazo',pct:0,obs:'',subs:[]})); }
   renderProjModal();
 }
-function openProjModal(proj,isNew){ EDIT=proj; EDIT._new=isNew; renderProjModal(); }
+let PM_OPEN=false;
+function openProjModal(proj,isNew){ EDIT=proj; EDIT._new=isNew; PM_OPEN=false; renderProjModal(); }
 function renderProjModal(){
   if(!EDIT)return; const ED=canEdit(EDIT); const dis=ED?'':'disabled';
   // Every small edit (toggling a category chip, checking off an activity...)
@@ -2511,6 +2528,7 @@ function renderProjModal(){
   // keystroke-adjacent click, reading as "the screen flashes and jumps back
   // to the top." Carry the old scroll position over to the new node instead.
   const prevScroll=$('.modal-b')?$('.modal-b').scrollTop:0;
+  const reopen=PM_OPEN; PM_OPEN=true;
   const tasks=EDIT.tasks||[];
   const done=tasks.filter(t=>t.done).length, prog=tasks.length?Math.round(done/tasks.length*100):0;
   const tName=typeOf(EDIT.tipo).name;
@@ -2528,15 +2546,26 @@ function renderProjModal(){
       ${t._open?`<div style="margin:8px 0 2px 26px;padding:10px 12px;background:var(--paper-2);border:1px solid var(--line);border-radius:9px">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px;flex-wrap:wrap">
           <span style="font-size:10.5px;color:var(--txt-3);font-weight:700">STATUS</span><select onchange="pmAtvSet('${t.id}','status',this.value)" style="padding:5px 8px;border:1px solid var(--line-2);border-radius:7px;font:inherit;font-size:12px">${STATUS.map(s=>`<option value="${s.id}" ${t.status===s.id?'selected':''}>${s.name}</option>`).join('')}</select>
-          <span style="font-size:10.5px;color:var(--txt-3);font-weight:700">%</span><input type="number" min="0" max="100" value="${t.pct||0}" onchange="pmAtvSet('${t.id}','pct',this.value)" style="width:60px;padding:5px 8px;border:1px solid var(--line-2);border-radius:7px;font:inherit;font-size:12px">
+          <span style="font-size:10.5px;color:var(--txt-3);font-weight:700">%</span>${(t.subs&&t.subs.length)?`<span class="mono" style="font-weight:700;font-size:12px;color:var(--txt-2)">${t.pct||0}%</span><span style="font-size:10.5px;color:var(--txt-3)">auto from ${t.subs.length} sub-item${t.subs.length===1?'':'s'}</span>`:`<input type="number" min="0" max="100" value="${t.pct||0}" onchange="pmAtvSet('${t.id}','pct',this.value)" style="width:60px;padding:5px 8px;border:1px solid var(--line-2);border-radius:7px;font:inherit;font-size:12px">`}
         </div>
-        ${(t.subs||[]).map(s=>`<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap"><span style="width:5px;height:5px;border-radius:50%;background:var(--line-2);flex-shrink:0"></span><input value="${esc(s.n)}" onchange="pmSubSet('${t.id}','${s.id}','n',this.value)" placeholder="sub-item…" style="flex:1;min-width:110px;padding:5px 9px;border:1px solid var(--line-2);border-radius:6px;background:#fff;font:inherit;font-size:12px"><input type="date" value="${esc(s.inicio||'')}" onchange="pmSubSet('${t.id}','${s.id}','inicio',this.value)" title="Start" style="width:118px;padding:5px 7px;border:1px solid var(--line-2);border-radius:6px;background:#fff;font:inherit;font-size:11px;color:var(--txt-2)"><input type="date" value="${esc(s.fim||'')}" onchange="pmSubSet('${t.id}','${s.id}','fim',this.value)" title="End" style="width:118px;padding:5px 7px;border:1px solid var(--line-2);border-radius:6px;background:#fff;font:inherit;font-size:11px;color:var(--txt-2)"><input value="${esc(s.resp||'')}" onchange="pmSubSet('${t.id}','${s.id}','resp',this.value)" placeholder="who…" style="width:96px;padding:5px 7px;border:1px solid var(--line-2);border-radius:6px;background:#fff;font:inherit;font-size:11.5px"><button onclick="pmDelSub('${t.id}','${s.id}')" style="width:20px;height:20px;border-radius:5px;border:none;background:transparent;color:var(--txt-3);font-size:10px;cursor:pointer">✕</button></div>`).join('')}
+        ${(t.subs||[]).map(s=>`<div style="border:1px solid var(--line-2);border-radius:8px;padding:7px 9px;margin-bottom:6px;background:#fff">
+          <div style="display:flex;align-items:center;gap:7px">
+            <button onclick="pmSubDone('${t.id}','${s.id}')" title="Mark done" style="width:16px;height:16px;border-radius:4px;border:2px solid ${s.done?'#16a06a':'var(--line-2)'};background:${s.done?'#16a06a':'#fff'};color:#fff;font-size:9px;font-weight:800;cursor:pointer;flex-shrink:0;padding:0;line-height:1">${s.done?'✓':''}</button>
+            <input value="${esc(s.n)}" onchange="pmSubSet('${t.id}','${s.id}','n',this.value)" placeholder="sub-item…" style="flex:1;min-width:110px;padding:5px 9px;border:1px solid var(--line-2);border-radius:6px;background:var(--paper-2);font:inherit;font-size:12px;font-weight:600;text-decoration:${s.done?'line-through':'none'};color:${s.done?'var(--txt-3)':'inherit'}">
+            <input type="date" value="${esc(s.fim||'')}" onchange="pmSubSet('${t.id}','${s.id}','fim',this.value)" title="Due date" style="width:130px;padding:5px 7px;border:1px solid var(--line-2);border-radius:6px;background:#fff;font:inherit;font-size:11px;color:var(--txt-2);flex-shrink:0">
+            <button onclick="pmDelSub('${t.id}','${s.id}')" style="width:20px;height:20px;border-radius:5px;border:none;background:transparent;color:var(--txt-3);font-size:10px;cursor:pointer;flex-shrink:0">✕</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:7px;margin-top:5px;margin-left:23px">
+            <input value="${esc(s.obs||'')}" onchange="pmSubSet('${t.id}','${s.id}','obs',this.value)" placeholder="Description…" style="flex:1;min-width:110px;padding:5px 9px;border:1px dashed var(--line-2);border-radius:6px;background:transparent;font:inherit;font-size:11.5px">
+            <select onchange="pmSubSet('${t.id}','${s.id}','resp',this.value)" style="width:150px;padding:5px 7px;border:1px solid var(--line-2);border-radius:6px;background:#fff;font:inherit;font-size:11.5px;flex-shrink:0">${subPersonOpts(s.resp)}</select>
+          </div>
+        </div>`).join('')}
         <button class="chip-btn" onclick="pmAddSub('${t.id}')" style="margin-top:4px">+ Add sub-item</button>
         <input value="${esc(t.obs||'')}" onchange="pmAtvSet('${t.id}','obs',this.value)" placeholder="Note…" style="width:100%;margin-top:8px;padding:6px 10px;border:1px dashed var(--line-2);border-radius:8px;background:transparent;font:inherit;font-size:12px">
       </div>`:''}
     </div>`).join('');
   const logsHTML=(EDIT.logs||[]).slice().reverse().map(l=>`<div style="background:var(--paper-2);border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-bottom:7px"><div style="font-size:11px;color:var(--txt-3);font-weight:600;margin-bottom:4px">${esc(l.autor)} · ${fmtDate(l.t)}</div><div style="font-size:13px">${fmtLogTxt(l.txt)}</div></div>`).join('')||'<div style="font-size:12.5px;color:var(--txt-3)">No updates yet.</div>';
-  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal">
+  $('#modalMount').innerHTML=`<div class="overlay${reopen?' no-anim':''}" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal${reopen?' no-anim':''}">
     <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--accent);flex-shrink:0;margin-right:2px"></span><div style="flex:1;min-width:0"><h3>${EDIT._new?'New project':esc(EDIT.nome||'Project')}</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Everything below stays open for editing by the creator and admins</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">
       ${ED?'':'<div class="banner">You are not the owner or admin: you can update status, check activities/sub-items and post to the log, but not edit the main fields.</div>'}
@@ -2620,30 +2649,60 @@ async function notifMarkRead(id,val){
   try{ await SBPO.from('notificacoes').update({lida:val}).eq('id',id); const n=DATA.notif.find(x=>x.id===id); if(n)n.lida=val; go(SCREEN); }
   catch(e){ toast('Error: '+(e.message||e)); }
 }
-async function notifMarkAllRead(){
-  const ids=DATA.notif.filter(n=>!n.lida).map(n=>n.id); if(!ids.length)return;
-  try{ await SBPO.from('notificacoes').update({lida:true}).in('id',ids); DATA.notif.forEach(n=>n.lida=true); go(SCREEN); toast('All marked as read ✓'); }
-  catch(e){ toast('Error: '+(e.message||e)); }
-}
 async function notifDelete(id){
   try{ await SBPO.from('notificacoes').delete().eq('id',id); DATA.notif=DATA.notif.filter(n=>n.id!==id); go(SCREEN); }
   catch(e){ toast('Error: '+(e.message||e)); }
 }
+/* Work-origin notifications (project @mentions) are computed live from
+   project logs — there's no DB row to mark read/delete against, unlike
+   Budget's "notificacoes" table. Persist read/dismissed state client-side
+   per notification, keyed the same way buildNotifList already dedupes
+   (proj+txt+t) — mirrors the existing dismissRec() localStorage pattern. */
+function wnKey(x){ return x.proj+'|'+x.txt+'|'+x.t; }
+function wnState(){ try{ return JSON.parse(localStorage.getItem('wn_state')||'{}')||{}; }catch(e){ return {}; } }
+function wnSave(s){ try{ localStorage.setItem('wn_state',JSON.stringify(s)); }catch(e){} }
+function notifMarkReadWork(key,val){ const s=wnState(); s[key]=val?'read':'unread'; wnSave(s); go(SCREEN); }
+function notifDeleteWork(key){ const s=wnState(); s[key]='dismissed'; wnSave(s); go(SCREEN); }
+async function notifMarkAllRead(){
+  const wn=wnState();
+  buildNotifList().filter(x=>x.origin==='work'&&!x.lida).forEach(x=>{ wn[x.key]='read'; });
+  wnSave(wn);
+  const ids=DATA.notif.filter(n=>!n.lida).map(n=>n.id);
+  if(ids.length){
+    try{ await SBPO.from('notificacoes').update({lida:true}).in('id',ids); DATA.notif.forEach(n=>n.lida=true); }
+    catch(e){ toast('Error: '+(e.message||e)); return; }
+  }
+  go(SCREEN); toast('All marked as read ✓');
+}
 async function notifClearAll(){
-  if(!DATA.notif.length)return;
+  const all=buildNotifList(); if(!all.length)return;
   if(!confirm('Delete all notifications? This cannot be undone.'))return;
+  const wn=wnState();
+  all.filter(x=>x.origin==='work').forEach(x=>{ wn[x.key]='dismissed'; });
+  wnSave(wn);
   const ids=DATA.notif.map(n=>n.id);
-  try{ await SBPO.from('notificacoes').delete().in('id',ids); DATA.notif=[]; go(SCREEN); toast('Notifications cleared'); }
-  catch(e){ toast('Error: '+(e.message||e)); }
+  if(ids.length){
+    try{ await SBPO.from('notificacoes').delete().in('id',ids); DATA.notif=[]; }
+    catch(e){ toast('Error: '+(e.message||e)); return; }
+  }
+  go(SCREEN); toast('Notifications cleared');
 }
 function buildNotifList(){
+  const wn=wnState();
   const ms=myMentions().map(m=>({...m,origin:'work'}));
   const tbl=(DATA.mencoes||[]).map(m=>({proj:m.projeto_nome,pid:'',txt:m.mensagem,autor:m.autor,t:String(m.criado_em||'').slice(0,10),origin:'work'}));
   const budget=(DATA.notif||[]).map(n=>({proj:'Budget · PO',pid:'',poId:n.po_id||'',projId:n.projeto_id||'',tipo:n.tipo||'',txt:n.mensagem||'PO update requiring your attention',autor:'PO',t:String(n.criada_em||'').slice(0,10),origin:'budget',id:n.id,lida:!!n.lida}));
   const seen=new Set();
-  return [...tbl,...ms,...budget].filter(x=>{const k=x.proj+'|'+x.txt+'|'+x.t;if(seen.has(k))return false;seen.add(k);return true;}).sort((a,b)=>String(b.t).localeCompare(String(a.t)));
+  return [...tbl,...ms,...budget].filter(x=>{const k=x.proj+'|'+x.txt+'|'+x.t;if(seen.has(k))return false;seen.add(k);return true;})
+    .map(x=>{
+      if(x.origin!=='work')return x;
+      const key=wnKey(x), st=wn[key];
+      if(st==='dismissed')return null;
+      return {...x,key,lida:st==='read'};
+    }).filter(Boolean)
+    .sort((a,b)=>String(b.t).localeCompare(String(a.t)));
 }
-function notifUnreadCount(){ return buildNotifList().filter(x=>x.origin==='budget'?!x.lida:true).length; }
+function notifUnreadCount(){ return buildNotifList().filter(x=>!x.lida).length; }
 function approvalsPendingCount(){
   const projPend=DATA.poProjetos.filter(p=>p.aprovacao_status==='PENDENTE').length;
   let posPend=DATA.pos.filter(po=>['SOLICITADA','EM_APROVACAO'].includes(po.status));
@@ -2657,7 +2716,7 @@ function notifGoProjeto(projId,tipo){
 }
 function renderNotif(){
   const all=buildNotifList();
-  const unreadCount=all.filter(x=>x.origin==='budget'?!x.lida:true).length;
+  const unreadCount=all.filter(x=>!x.lida).length;
   return `<div class="panel"><div class="panel-h"><h3>Notifications</h3>
       <div style="display:flex;align-items:center;gap:10px">
         <span class="tag">${unreadCount} unread</span>
@@ -2666,19 +2725,21 @@ function renderNotif(){
       </div>
     </div>
     <div class="panel-b">${all.length?all.map(m=>{
-      const unread=m.origin==='budget'?!m.lida:true;
+      const unread=!m.lida;
       const clickable=(m.origin==='budget'&&(m.poId||m.projId))||m.pid;
       const onclick=(m.origin==='budget'&&m.poId)?`notifGoPO('${esc(m.poId)}','${esc(m.tipo)}')`:(m.origin==='budget'&&m.projId)?`notifGoProjeto('${esc(m.projId)}','${esc(m.tipo)}')`:(m.pid?`openProj('${esc(m.pid)}')`:'');
+      const readToggle=m.origin==='budget'?`notifMarkRead(${m.id},${!unread})`:`notifMarkReadWork('${esc(m.key)}',${!unread})`;
+      const del=m.origin==='budget'?`notifDelete(${m.id})`:`notifDeleteWork('${esc(m.key)}')`;
       return `<div class="row-item" style="${unread?'':'opacity:.62'};${clickable?'cursor:pointer':'cursor:default'}" ${clickable?`onclick="${onclick}"`:''}>
         <span class="pin" style="background:${unread?(m.origin==='budget'?'var(--po)':'var(--accent)'):'var(--line-2)'}"></span>
         <div style="flex:1;min-width:0"><div style="font-weight:${unread?700:600};font-size:13.5px">${esc(m.proj)}${(m.origin==='budget'&&(m.poId||m.projId))?' <span style=\'color:var(--po);font-weight:700\'>· open →</span>':''}</div><div style="font-size:12.5px;color:var(--txt-2);margin-top:1px">${fmtLogTxt(m.txt)}</div><span class="who">${esc(m.autor)} · ${fmtDate(m.t)}</span></div>
-        ${m.origin==='budget'?`<div style="display:flex;gap:4px;flex-shrink:0" onclick="event.stopPropagation()">
-          <button title="${unread?'Mark as read':'Mark as unread'}" onclick="notifMarkRead(${m.id},${!unread})" style="border:none;background:none;color:var(--txt-3);cursor:pointer;font-size:13px;padding:4px">${unread?'●':'○'}</button>
-          <button title="Delete" onclick="notifDelete(${m.id})" style="border:none;background:none;color:var(--txt-3);cursor:pointer;font-size:13px;padding:4px">✕</button>
-        </div>`:''}
+        <div style="display:flex;gap:4px;flex-shrink:0" onclick="event.stopPropagation()">
+          <button title="${unread?'Mark as read':'Mark as unread'}" onclick="${readToggle}" style="border:none;background:none;color:var(--txt-3);cursor:pointer;font-size:13px;padding:4px">${unread?'●':'○'}</button>
+          <button title="Delete" onclick="${del}" style="border:none;background:none;color:var(--txt-3);cursor:pointer;font-size:13px;padding:4px">✕</button>
+        </div>
       </div>`;
     }).join(''):'<div class="empty">No notifications.</div>'}</div>
-    <div style="padding:12px 20px;border-top:1px solid var(--line);font-size:11px;color:var(--txt-3)">One bell for both modules — dots show origin (blue = Work, red = Budget). Read/delete controls apply to Budget notifications.</div></div>`;
+    <div style="padding:12px 20px;border-top:1px solid var(--line);font-size:11px;color:var(--txt-3)">One bell for both modules — dots show origin (blue = Work, red = Budget). Mark-read and delete work for both.</div></div>`;
 }
 
 /* ============================================================
@@ -2795,6 +2856,7 @@ function renderReqPO(){
     const val=+REQ.valor||0;
     const estoura=rows.some(r=>r.saldo<-0.001);
     body=`
+      <div class="field"><label>Description</label><input value="${esc(REQ.descricao)}" onchange="reqSet('descricao',this.value)" placeholder="e.g. Agency fee — July"></div>
       ${campField}
       <div class="field"><label>Month to allocate</label><select onchange="reqSet('competencia',this.value)">${REQ.meses.length?REQ.meses.map(m=>`<option value="${m.competencia}" ${REQ.competencia===m.competencia?'selected':''}>${fmtMes(m.competencia)}</option>`).join(''):'<option value="">No common month across TV/AC/LABG</option>'}</select></div>
       <div class="field"><label>Total value (R$)</label><input type="number" min="0" step="100" value="${esc(REQ.valor)}" onchange="reqSet('valor',this.value)" placeholder="0,00"></div>
@@ -2809,7 +2871,6 @@ function renderReqPO(){
           </div>`).join('')}
         </div>
       </div>
-      <div class="field"><label>Description</label><input value="${esc(REQ.descricao)}" onchange="reqSet('descricao',this.value)" placeholder="e.g. Agency fee — July"></div>
       <div style="font-size:11.5px;color:var(--txt-3);background:var(--paper-2);border:1px solid var(--line);border-radius:9px;padding:9px 12px;margin-bottom:14px">${icn('calendar',12)} Estimated payment if requested today: <b style="color:var(--txt-2)">~${fmtDateObjBR(calcVencimento(new Date().toISOString().slice(0,10)))}</b> <span style="color:var(--txt-3)">(final date is confirmed once the invoice is posted)</span></div>
       ${estoura?'<div class="banner" style="background:var(--red-bg);border-color:#f0b8b2;color:#b32418">One or more categories exceed the balance of the selected month.</div>':''}
     `;
@@ -2818,12 +2879,12 @@ function renderReqPO(){
     const teto=mSel?mSel.teto:0, cons=REQ.competencia?consumoMes(REQ.projeto_id,REQ.competencia):0, saldo=teto-cons;
     const val=+REQ.valor||0, estoura=val>saldo+0.001;
     body=`
+      <div class="field"><label>Description</label><input value="${esc(REQ.descricao)}" onchange="reqSet('descricao',this.value)" placeholder="e.g. Video production, paid media…"></div>
       ${campField}
       <div class="field"><label>Month to allocate (as opened in the project)</label>
         <select onchange="reqSet('competencia',this.value)">${REQ.meses.length?REQ.meses.map(m=>`<option value="${m.competencia}" ${REQ.competencia===m.competencia?'selected':''}>${fmtMes(m.competencia)} — cap ${BRL(m.teto)}</option>`).join(''):'<option value="">Project has no months registered</option>'}</select>
         ${REQ.competencia?`<div style="font-size:11.5px;color:${estoura?'var(--red)':'var(--txt-3)'};margin-top:5px">Month balance: <b class="mono">${BRL(saldo)}</b> (cap ${BRL(teto)} − consumed ${BRL(cons)})</div>`:''}</div>
       <div class="field"><label>Value (R$)</label><input type="number" min="0" step="100" value="${esc(REQ.valor)}" onchange="reqSet('valor',this.value)" placeholder="0,00"></div>
-      <div class="field"><label>Description</label><input value="${esc(REQ.descricao)}" onchange="reqSet('descricao',this.value)" placeholder="e.g. Video production, paid media…"></div>
       <div style="font-size:11.5px;color:var(--txt-3);background:var(--paper-2);border:1px solid var(--line);border-radius:9px;padding:9px 12px;margin-bottom:14px">${icn('calendar',12)} Estimated payment if requested today: <b style="color:var(--txt-2)">~${fmtDateObjBR(calcVencimento(new Date().toISOString().slice(0,10)))}</b> <span style="color:var(--txt-3)">(final date is confirmed once the invoice is posted)</span></div>
       ${estoura?'<div class="banner" style="background:var(--red-bg);border-color:#f0b8b2;color:#b32418">The value exceeds the balance of the selected month. Pick another month or reduce the value.</div>':''}
     `;
