@@ -222,17 +222,16 @@
   .cc-tbl tfoot td{background:var(--paper-2);border-top:1px solid var(--line);border-bottom:none;font-weight:700}
   .cc-tbl tfoot .s1,.cc-tbl tfoot .s2,.cc-tbl tfoot .s3{background:var(--paper-2)}
 
-  /* ===== ENTRANCE ANIMATIONS ===== */
-  .view.screen-in{animation:viewIn .22s var(--ease) both}
-  @keyframes viewIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-  @keyframes cardIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-  .kpi,.row-item,.kcard,.proj-row,.cat-card,.camp-item{animation:cardIn .3s var(--ease) both}
-  .kpi:nth-child(2),.row-item:nth-child(2),.kcard:nth-child(2),.proj-row:nth-child(2),.cat-card:nth-child(2),.camp-item:nth-child(2){animation-delay:35ms}
-  .kpi:nth-child(3),.row-item:nth-child(3),.kcard:nth-child(3),.proj-row:nth-child(3),.cat-card:nth-child(3),.camp-item:nth-child(3){animation-delay:70ms}
-  .kpi:nth-child(4),.row-item:nth-child(4),.kcard:nth-child(4),.proj-row:nth-child(4),.cat-card:nth-child(4),.camp-item:nth-child(4){animation-delay:105ms}
-  .kpi:nth-child(5),.row-item:nth-child(5),.kcard:nth-child(5),.proj-row:nth-child(5),.cat-card:nth-child(5),.camp-item:nth-child(5){animation-delay:140ms}
-  .kpi:nth-child(6),.row-item:nth-child(6),.kcard:nth-child(6),.proj-row:nth-child(6),.cat-card:nth-child(6),.camp-item:nth-child(6){animation-delay:175ms}
-  .kpi:nth-child(n+7),.row-item:nth-child(n+7),.kcard:nth-child(n+7),.proj-row:nth-child(n+7),.cat-card:nth-child(n+7),.camp-item:nth-child(n+7){animation-delay:210ms}
+  /* ===== PO PHASE TABS ===== */
+  .po-tabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px}
+  .po-tab{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:11px;border:1.5px solid var(--line);background:#fff;flex-shrink:0;box-shadow:0 1px 2px rgba(20,22,28,.04)}
+  .po-tab:hover{border-color:var(--line-2)}
+
+  /* ===== ENTRANCE ANIMATIONS (subtle: numbers, bars, charts only — no card/screen motion) ===== */
+  @keyframes numIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+  .kpi .num,.stat-num{animation:numIn .28s var(--ease) both}
+  @keyframes barIn{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+  .pbar span,.prog i,.meter span{transform-origin:left;animation:barIn .5s var(--ease) both}
 
   /* ===== RESPONSIVE ===== */
   @media (max-width:1500px){ .kpis{grid-template-columns:repeat(3,1fr)} }
@@ -476,6 +475,7 @@ const ICONS={
 function icn(n,s,st){const d=ICONS[n]||ICONS.folder;return `<svg class="icn" width="${s||14}" height="${s||14}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${st||1.8}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;}
 function avColor(n){let h=0;for(const c of(n||'?'))h=c.charCodeAt(0)+((h<<5)-h);return AV_COLORS[Math.abs(h)%AV_COLORS.length];}
 function initials(n){if(!n)return'?';const p=String(n).trim().split(/\s+/);return((p[0]||'')[0]||'').toUpperCase()+((p[1]||'')[0]||'').toUpperCase();}
+function respName(r){if(!r)return r;const pe=(DATA.pessoas||[]).find(x=>x.email&&x.email.toLowerCase()===String(r).toLowerCase());if(pe){const full=[pe.nome,pe.sobrenome].filter(Boolean).join(' ');if(full)return full;}return r;}
 function today0(){const d=new Date();d.setHours(0,0,0,0);return d;}
 function daysTo(s){if(!s)return null;const d=new Date(s+'T00:00:00');return Math.round((d-today0())/864e5);}
 function fmtDate(s){if(!s)return'—';const d=new Date(s+'T00:00:00');return d.toLocaleDateString('en-US',{day:'2-digit',month:'short'});}
@@ -1005,7 +1005,6 @@ function go(screen){
   else if(screen==='podesk') v.innerHTML=renderAprovacoes();
   else if(screen==='people') v.innerHTML=renderPeople();
   else if(screen==='reqpo'){ v.innerHTML=renderPOs(); openReqPO(); }
-  v.classList.remove('screen-in'); void v.offsetWidth; v.classList.add('screen-in');
 }
 
 /* charts */
@@ -1067,7 +1066,7 @@ function renderDash(){
     </div>
     <div class="panel"><div class="panel-h"><h3>Upcoming deadlines</h3><span class="tag">by urgency</span></div>
       <div class="panel-b">${up.length?up.map(p=>{const di=deadlineInfo(p);
-        return `<div class="row-item" onclick="openProj('${esc(p.id)}')"><div class="avatar" style="background:${avColor(p.resp)};margin-top:1px">${initials(p.resp)}</div>
+        return `<div class="row-item" onclick="openProj('${esc(p.id)}')"><div class="avatar" style="background:${avColor(respName(p.resp))};margin-top:1px">${initials(respName(p.resp))}</div>
           <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">${esc(p.nome)}</div><div style="font-size:11px;color:var(--txt-3);margin-top:1px">${esc(stageOf(p.etapa).name)}</div></div>
           <div class="rt"><div style="font-weight:600;font-size:12px;color:${di.color}">${di.txt}</div><div style="font-size:11px;color:var(--txt-3)">${di.sub}</div></div></div>`;
       }).join(''):'<div class="empty">No upcoming deadlines.</div>'}</div>
@@ -1092,7 +1091,7 @@ function renderProjetos(){
     ${list.map(p=>{const stg=stageOf(p.etapa);const hp=healthPill(p.status);const di=deadlineInfo(p);const pr=computeProg(p);const bt=businessTypeOf(p.ptipo);
       return `<div class="proj-row" onclick="openProj('${esc(p.id)}')" style="display:grid;grid-template-columns:1.7fr 1fr 1.1fr 1fr 1.2fr .7fr;gap:10px;padding:13px 17px;border-bottom:1px solid #edeff4;align-items:center;font-size:13px;cursor:pointer" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
         <span style="min-width:0"><span style="font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span><span style="font-size:11px;color:var(--txt-3);display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${bt?`<span style="font-weight:800;color:${bt.color}">${esc(bt.name)}</span> · `:''}${esc(p.partner||p.marca||'')}${(p.categorias||[]).length?` · ${esc((p.categorias||[]).join(', '))}`:''}</span></span>
-        <span style="display:flex;align-items:center;gap:7px;min-width:0"><span class="avatar" style="background:${avColor(p.resp)};width:22px;height:22px;font-size:9.5px">${initials(p.resp)}</span><span style="color:var(--txt-2);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.resp||'—')}</span></span>
+        <span style="display:flex;align-items:center;gap:7px;min-width:0"><span class="avatar" style="background:${avColor(respName(p.resp))};width:22px;height:22px;font-size:9.5px">${initials(respName(p.resp))}</span><span style="color:var(--txt-2);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(respName(p.resp)||'—')}</span></span>
         <span style="color:var(--txt-2);font-size:12.5px">${stg.name}</span>
         <span><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;background:${hp.bg};color:${hp.fg}"><span style="width:6px;height:6px;border-radius:50%;background:${hp.dot}"></span>${hp.name}</span></span>
         <span style="display:flex;align-items:center;gap:8px"><span class="pbar" style="flex:1;min-width:40px"><span style="width:${pr}%;background:${hp.dot}"></span></span><span class="pct">${pr}%</span></span>
@@ -1182,7 +1181,7 @@ function renderKanban(){
           <div style="font-weight:600;font-size:13px;line-height:1.3">${esc(p.nome)}</div>
           <div style="font-size:11px;color:var(--txt-3);margin-top:5px">${esc(p.partner||p.marca||'')}</div>
           ${cats.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${cats.slice(0,3).map(c=>`<span style="font-size:9.5px;font-weight:700;color:var(--txt-2);background:var(--paper);border:1px solid var(--line-2);border-radius:20px;padding:2px 7px">${esc(c)}</span>`).join('')}${cats.length>3?`<span style="font-size:9.5px;font-weight:700;color:var(--txt-3);padding:2px 4px">+${cats.length-3}</span>`:''}</div>`:''}
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px"><span style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:20px;background:${hp.bg};color:${hp.fg}"><span style="width:6px;height:6px;border-radius:50%;background:${hp.dot}"></span>${hp.name}</span><span class="avatar" style="width:22px;height:22px;background:${avColor(p.resp)};font-size:9.5px" title="${esc(p.resp||'')}">${initials(p.resp)}</span></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px"><span style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:20px;background:${hp.bg};color:${hp.fg}"><span style="width:6px;height:6px;border-radius:50%;background:${hp.dot}"></span>${hp.name}</span><span class="avatar" style="width:22px;height:22px;background:${avColor(respName(p.resp))};font-size:9.5px" title="${esc(respName(p.resp)||'')}">${initials(respName(p.resp))}</span></div>
           <div class="pbar" style="margin-top:9px"><span style="width:${pr}%;background:${hp.dot}"></span></div>
           <div style="font-size:10.5px;color:var(--txt-3);font-weight:600;margin-top:6px">${tt} task(s) · due ${di.txt}</div></div>`;
       }).join('')||'<div style="padding:16px 8px;font-size:12px;color:var(--txt-3);text-align:center">Empty</div>'}</div></div>`;
@@ -1530,7 +1529,7 @@ function openCampDetail(pid){
   const catAlloc={}; DATA.rateio.filter(r=>r.projeto_id===pid).forEach(r=>{catAlloc[r.categoria]=(catAlloc[r.categoria]||0)+(+r.valor||0);});
   const catKeys=Object.keys(catAlloc).sort((a,b)=>catAlloc[b]-catAlloc[a]);
   const palette=['#e20613','#2a6fdb','#1f8a4c','#b5550c','#7a5cc4','#0e7c86'];
-  const kpi=(lbl,val,c)=>`<div style="flex:1;min-width:118px;border:1px solid var(--line);border-radius:11px;padding:11px 13px;background:var(--paper-2)"><div style="font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">${lbl}</div><div class="mono" style="font-size:16px;font-weight:800;margin-top:3px;color:${c||'var(--txt-1)'}">${val}</div></div>`;
+  const kpi=(lbl,val,c)=>`<div style="flex:1;min-width:118px;border:1px solid var(--line);border-radius:11px;padding:11px 13px;background:var(--paper-2)"><div style="font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">${lbl}</div><div class="mono stat-num" style="font-size:16px;font-weight:800;margin-top:3px;color:${c||'var(--txt-1)'}">${val}</div></div>`;
   const summary=`
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
       ${kpi('Total cap',BRL(totCap))}${kpi('Consumed',BRL(totConsu),'var(--blue)')}${kpi('Committed',BRL(totComp),'var(--violet)')}${kpi('Awaiting approval',BRL(totPend),'var(--amber-ink)')}${kpi('Balance',BRL(saldoTot),saldoTot<0?'var(--po)':'var(--txt-1)')}
@@ -1843,22 +1842,27 @@ function renderPOs(){
   const OUTROS_META={id:'outros',t:'Other',icon:'folder',c:'#494c54',bg:'var(--slate-bg)'};
   const knownSt=new Set(); PHASES.forEach(f=>f.st.forEach(x=>knownSt.add(x)));
   const restPos=pos.filter(po=>!knownSt.has(po.status));
-  const phaseGroup=(f,list)=>{
-    if(!list.length)return '';
-    const open=f.id in PO_PHASE_OPEN?PO_PHASE_OPEN[f.id]:!['concluida','encerrada'].includes(f.id);
-    return `<div class="po-phase" data-phase="${f.id}" style="border:1.5px solid ${f.c}30;border-radius:13px;overflow:hidden;margin-bottom:12px;box-shadow:0 1px 2px rgba(20,22,28,.04)">
-    <div onclick="togglePOPhase('${f.id}')" style="padding:10px 16px;background:${f.bg};display:flex;align-items:center;gap:10px;cursor:pointer">
-      <span class="ich" style="width:26px;height:26px;background:#fff;color:${f.c};flex-shrink:0">${icn(f.icon,13)}</span>
-      <b style="font-family:'Hanken Grotesk',sans-serif;font-size:12.5px;letter-spacing:.02em;color:${f.c}">${f.t}</b>
-      <span class="mono" style="font-size:10.5px;font-weight:800;background:#fff;border:1px solid ${f.c}40;border-radius:20px;padding:1px 8px;color:${f.c}">${list.length}</span>
+  const groups=PHASES.concat([OUTROS_META]).map(f=>({...f,list:f.id==='outros'?restPos:pos.filter(po=>f.st.includes(po.status))})).filter(g=>g.list.length);
+  if(!groups.some(g=>g.id===PO_TAB)) PO_TAB=groups.length?(groups.find(g=>!['concluida','encerrada'].includes(g.id))||groups[0]).id:null;
+  const active=groups.find(g=>g.id===PO_TAB);
+  const tabsHTML=groups.length?`<div class="po-tabs">${groups.map(f=>{const on=f.id===PO_TAB;
+    return `<button class="po-tab${on?' on':''}" onclick="poSetTab('${f.id}')" style="${on?`border-color:${f.c};background:${f.bg}`:''}">
+      <span class="ich" style="width:24px;height:24px;background:${on?'#fff':f.bg};color:${f.c};flex-shrink:0">${icn(f.icon,12)}</span>
+      <span style="font-weight:700;font-size:12px;color:${on?f.c:'var(--txt-2)'};white-space:nowrap">${f.t}</span>
+      <span class="mono" style="font-size:10px;font-weight:800;background:${on?'#fff':'var(--paper)'};border:1px solid ${f.c}40;border-radius:20px;padding:1px 7px;color:${f.c};flex-shrink:0">${f.list.length}</span>
+    </button>`;
+  }).join('')}</div>`:'';
+  const body=active?`<div class="po-phase" style="border:1.5px solid ${active.c}30;border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.04)">
+    <div style="padding:10px 16px;background:${active.bg};display:flex;align-items:center;gap:10px">
+      <span class="ich" style="width:26px;height:26px;background:#fff;color:${active.c};flex-shrink:0">${icn(active.icon,13)}</span>
+      <b style="font-family:'Hanken Grotesk',sans-serif;font-size:12.5px;letter-spacing:.02em;color:${active.c}">${active.t}</b>
       <span style="flex:1"></span>
-      <span class="mono" style="font-size:11.5px;font-weight:700;color:${f.c}">${BRL(list.reduce((sum,po)=>sum+(+po.valor||0),0))}</span>
-      <span class="po-chev" style="color:${f.c};display:flex;transform:rotate(${open?'180deg':'0deg'});transition:transform .15s">${icn('chev',12)}</span>
+      <span class="mono" style="font-size:11.5px;font-weight:700;color:${active.c}">${BRL(active.list.reduce((sum,po)=>sum+(+po.valor||0),0))}</span>
     </div>
-    <div class="po-rows" style="display:${open?'':'none'};background:#fff">${list.map(rowHTML).join('')}</div>
-  </div>`;
-  };
-  const body=(PHASES.map(f=>phaseGroup(f,pos.filter(po=>f.st.includes(po.status)))).join('')+phaseGroup(OUTROS_META,restPos))||'<div class="empty">No POs found for your access.</div>';
+    <div style="background:#fafbfd;border-top:1px solid var(--line);border-bottom:1px solid var(--line)">${head}</div>
+    <div class="po-rows">${active.list.map(rowHTML).join('')}</div>
+    <div class="po-empty-filter" style="display:none;padding:30px 16px;text-align:center;color:var(--txt-3);font-size:12.5px">No POs match your filters in this phase — try another tab above.</div>
+  </div>`:'<div class="empty">No POs found for your access.</div>';
   const projPend=DATA.poProjetos.filter(p=>p.aprovacao_status==='PENDENTE');
   const canAprovaCamp=demoWritable(['admin','marketing','financeiro'].includes(PAPEL)||isManager);
   const tetoPend={};
@@ -1870,37 +1874,22 @@ function renderPOs(){
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">${esc(p.agencia||'')} · ${esc(p.product_category||'')} · ${esc(p.activity||'')}</div>
       ${canAprovaCamp?`<div style="display:flex;gap:7px;margin-top:10px"><button onclick="aprovarCamp('${esc(p.id)}')" style="padding:7px 14px;border-radius:8px;border:none;background:var(--po);color:#fff;font-weight:700;font-size:12px;cursor:pointer">Approve</button><button onclick="rejeitarCamp('${esc(p.id)}')" style="padding:7px 14px;border-radius:8px;border:1px solid var(--line-2);background:#fff;color:var(--txt-2);font-weight:700;font-size:12px;cursor:pointer">Reject</button></div>`:''}
     </div>`).join('')}</div></div>`:'';
-  return campPend+filt+`<div style="background:#fff;border:1px solid var(--line);border-radius:11px;overflow:hidden;margin-bottom:12px">${head}</div>
-    <div id="poBody">${body}</div>
+  return campPend+filt+tabsHTML+`<div id="poBody">${body}</div>
     <div style="font-size:11.5px;color:var(--txt-3);margin-top:10px">Lifecycle: request → approve → issue nº → invoice (NF + evidence) → validate. Approve/Reject is live for admin and marketing.</div>`;
 }
-let PO_PHASE_OPEN={};
-function togglePOPhase(id){
-  const g=document.querySelector(`.po-phase[data-phase="${id}"]`); if(!g)return;
-  const rows=g.querySelector('.po-rows'), chev=g.querySelector('.po-chev'); if(!rows)return;
-  const open=rows.style.display==='none';
-  PO_PHASE_OPEN[id]=open;
-  rows.style.display=open?'':'none';
-  if(chev)chev.style.transform=`rotate(${open?'180deg':'0deg'})`;
-}
+let PO_TAB=null;
+function poSetTab(id){ PO_TAB=id; go(SCREEN); }
 function renderPOsFilter(){
   const c=($('#poFcamp')||{}).value||'', a=($('#poFag')||{}).value||'', s=($('#poFst')||{}).value||'';
   const q=(($('#poFq')||{}).value||'').trim().toLowerCase();
-  const filtering=!!(c||a||s||q);
+  let anyVisible=false;
   document.querySelectorAll('.po-row').forEach(r=>{
     const ok=(!c||r.dataset.camp===c)&&(!a||r.dataset.ag===a)&&(!s||r.dataset.st===s)&&(!q||(r.dataset.q||'').includes(q));
     r.style.display=ok?'grid':'none';
+    if(ok)anyVisible=true;
   });
-  document.querySelectorAll('.po-phase').forEach(g=>{
-    const id=g.dataset.phase;
-    const vis=Array.from(g.querySelectorAll('.po-row')).some(r=>r.style.display!=='none');
-    g.style.display=vis?'':'none';
-    const rows=g.querySelector('.po-rows'), chev=g.querySelector('.po-chev'); if(!rows)return;
-    // while filtering, force every matching phase open so results aren't hidden behind a collapsed section
-    const shouldOpen=filtering?true:(id in PO_PHASE_OPEN?PO_PHASE_OPEN[id]:!['concluida','encerrada'].includes(id));
-    rows.style.display=shouldOpen?'':'none';
-    if(chev)chev.style.transform=`rotate(${shouldOpen?'180deg':'0deg'})`;
-  });
+  const emptyMsg=document.querySelector('.po-empty-filter');
+  if(emptyMsg)emptyMsg.style.display=anyVisible?'none':'block';
 }
 async function aprovarPO(id){
   if(DEMO_MODE){ const po=DATA.pos.find(x=>x.id===id); if(po)po.status='APROVADA'; toast('PO approved ✓ (demo)'); go(SCREEN); return; }
@@ -3057,7 +3046,7 @@ function renderTimeline(){
     <div onclick="tlToggleProjRow('${esc(p.id)}')" style="display:flex;border-bottom:1px solid #edeff4;align-items:center;cursor:pointer;background:${open?'var(--paper-2)':''}">
       <div style="width:230px;flex-shrink:0;padding:11px 16px;border-right:1px solid var(--line);min-width:0;display:flex;align-items:center;gap:7px">
         <span style="color:var(--txt-3);display:flex;flex-shrink:0;transform:rotate(${open?'0deg':'-90deg'});transition:transform .15s">${icn('chev',11)}</span>
-        <span style="min-width:0"><div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.nome)}</div><div style="font-size:11px;color:var(--txt-3);margin-top:1px">${esc(p.resp||'—')} · ${esc(stg.name)}</div></span>
+        <span style="min-width:0"><div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.nome)}</div><div style="font-size:11px;color:var(--txt-3);margin-top:1px">${esc(respName(p.resp)||'—')} · ${esc(stg.name)}</div></span>
         <button onclick="event.stopPropagation();openProj('${esc(p.id)}')" title="Open project" style="margin-left:auto;flex-shrink:0;border:none;background:none;color:var(--txt-3);cursor:pointer;padding:2px;display:inline-flex">${icn('pencil',12)}</button>
       </div>
       <div style="flex:1;position:relative;height:46px">${hiliteStripe}<div style="position:absolute;left:${left}%;width:${width}%;top:11px;height:24px;border-radius:7px;background:${stg.color};box-shadow:0 3px 8px -3px rgba(0,0,0,.3);display:flex;align-items:center;padding:0 9px;overflow:hidden"><span style="font-size:10.5px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.25);white-space:nowrap">${pr}%</span></div></div>
@@ -3081,7 +3070,7 @@ function renderTimeline(){
 function renderTeam(){
   const active=visProjs().filter(p=>p.status!=='concluido');
   const load={};
-  active.forEach(p=>{const r=p.resp||'—';(load[r]=load[r]||[]).push(p);});
+  active.forEach(p=>{const r=respName(p.resp)||'—';(load[r]=load[r]||[]).push(p);});
   const names=Object.keys(load).sort((a,b)=>load[b].length-load[a].length);
   if(!names.length)return '<div class="empty">No active projects assigned.</div>';
   const max=Math.max(1,...names.map(n=>load[n].length));
@@ -3091,7 +3080,7 @@ function renderTeam(){
     <div style="display:flex;flex-direction:column;gap:4px;margin-top:12px">${(function(){const totalActive=names.reduce((s,n)=>s+load[n].length,0);return names.map(n=>{const items=load[n];const late=items.filter(p=>p.status==='atrasado'||p.status==='bloqueado').length;const shareOfTeam=totalActive?Math.round(items.length/totalActive*100):0;const capPct=Math.round(items.length/max*100);
       return `<div style="display:flex;align-items:center;gap:14px;padding:7px 0"><span style="width:190px;flex-shrink:0;display:flex;align-items:center;gap:9px;font-weight:600;font-size:13px"><span class="avatar" style="width:24px;height:24px;background:${avColor(n)};font-size:10px">${initials(n)}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n)}</span>${late?`<span style="font-size:9.5px;font-weight:800;color:#b32418;background:var(--red-bg);border-radius:20px;padding:2px 7px;flex-shrink:0;display:inline-flex;align-items:center;gap:3px">${icn('alert',9)} CRITICAL</span>`:''}</span><span style="flex:1;height:13px;background:#f3f4f8;border:1px solid var(--line);border-radius:8px;overflow:hidden"><span style="display:block;height:100%;width:${capPct}%;background:${barColor(n)};border-radius:8px"></span></span><span style="width:210px;flex-shrink:0;text-align:right;font-size:11.5px;color:var(--txt-2)"><b>${items.length}</b> project(s) · <b class="mono">${shareOfTeam}%</b> of team load${late?` · <span style="color:var(--red);font-weight:700">${late} critical</span>`:''}</span></div>`;
     }).join('');})()}</div></div>`;
-  const cards=names.slice(0,4).map(n=>{const items=load[n];const late=items.filter(p=>p.status==='atrasado'||p.status==='bloqueado').length;const done=DATA.projetos.filter(p=>p.resp===n&&p.status==='concluido').length;const tasks=items.reduce((s,p)=>s+((p.tasks||[]).filter(t=>!t.done).length),0);
+  const cards=names.slice(0,4).map(n=>{const items=load[n];const late=items.filter(p=>p.status==='atrasado'||p.status==='bloqueado').length;const done=DATA.projetos.filter(p=>respName(p.resp)===n&&p.status==='concluido').length;const tasks=items.reduce((s,p)=>s+((p.tasks||[]).filter(t=>!t.done).length),0);
     return `<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
       <div style="padding:14px 17px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line)"><span class="avatar" style="width:38px;height:38px;border-radius:11px;background:${avColor(n)};font-size:14px">${initials(n)}</span><span style="flex:1"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px;display:block">${esc(n)}</b><span style="font-size:11px;color:var(--txt-3)">Owner</span></span>${late?`<span style="font-size:10px;font-weight:800;color:#b32418;background:var(--red-bg);border-radius:20px;padding:3px 9px;display:inline-flex;align-items:center;gap:4px">${icn('alert',10)} ${late} CRITICAL</span>`:''}</div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--line)">
@@ -3111,7 +3100,7 @@ function renderWeekly(){
   const tasksDone=list.reduce((s,p)=>s+((p.tasks||[]).filter(t=>t.done).length),0);
   const now=new Date().toLocaleDateString('en-US',{day:'2-digit',month:'long',year:'numeric'});
   const st=(n,l,col)=>`<span><b style="font-family:'Hanken Grotesk',sans-serif;font-size:24px;display:block${col?';color:'+col:''}">${n}</b><span style="font-size:11.5px;color:var(--txt-2);font-weight:600">${l}</span></span>`;
-  const line=(p,extra)=>`<div style="padding:9px 0;border-bottom:1px dashed var(--line);font-size:13px;cursor:pointer" onclick="openProj('${esc(p.id)}')"><b>${esc(p.nome)}</b>${extra?' — '+extra:''} <span style="color:var(--txt-2)">· ${esc(p.resp||'—')}</span></div>`;
+  const line=(p,extra)=>`<div style="padding:9px 0;border-bottom:1px dashed var(--line);font-size:13px;cursor:pointer" onclick="openProj('${esc(p.id)}')"><b>${esc(p.nome)}</b>${extra?' — '+extra:''} <span style="color:var(--txt-2)">· ${esc(respName(p.resp)||'—')}</span></div>`;
   const sec=(label,col,items,extraFn)=>`<div style="padding:16px 22px;border-bottom:1px solid var(--line)"><div style="font-size:11.5px;font-weight:800;letter-spacing:.06em;color:${col};margin-bottom:9px;display:flex;align-items:center;gap:7px"><span style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></span>${label}</div>${items.length?items.map(p=>line(p,extraFn(p))).join(''):'<div style="font-size:12.5px;color:var(--txt-3)">Nothing here.</div>'}</div>`;
   const luTxt=p=>{const lu=latestLog(p);return lu?esc(lu.txt):'';};
   return `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;gap:16px;flex-wrap:wrap">
@@ -3127,7 +3116,7 @@ function renderWeekly(){
 }
 function copyWeekly(){
   const list=DATA.projetos;
-  const grp=(lbl,arr)=>lbl+'\n'+(arr.length?arr.map(p=>'- '+p.nome+' ('+(p.resp||'—')+')').join('\n'):'- —')+'\n';
+  const grp=(lbl,arr)=>lbl+'\n'+(arr.length?arr.map(p=>'- '+p.nome+' ('+(respName(p.resp)||'—')+')').join('\n'):'- —')+'\n';
   const txt=grp('DELIVERED',list.filter(p=>p.status==='concluido'))+grp('AT RISK',list.filter(p=>p.status==='atrasado'||p.status==='bloqueado'))+grp('IN PROGRESS',list.filter(p=>p.status==='no_prazo'||p.status==='atencao'));
   try{ navigator.clipboard.writeText(txt); toast('Report copied ✓'); }catch(e){ toast('Could not copy.'); }
 }
@@ -3410,7 +3399,7 @@ function renderBudgetOverview(isBalance){
   let consMes=0,compMes=0,penMes=0; DATA.pos.forEach(po=>{if(!campIds.has(po.projeto_id)||String(po.competencia).slice(0,7)!==mNow)return;const v=+po.valor||0;if(CONS.includes(po.status))consMes+=v;else if(COMP.includes(po.status))compMes+=v;else if(PEND.includes(po.status))penMes+=v;});
   const balMes=capMes-consMes-compMes-penMes;
   const consPctM=capMes?Math.min(100,consMes/capMes*100):0, compPctM=capMes?Math.min(100-consPctM,compMes/capMes*100):0, penPctM=capMes?Math.min(100-consPctM-compPctM,penMes/capMes*100):0;
-  const stat=(l,v,col)=>`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;padding:14px 16px;box-shadow:0 1px 2px rgba(20,22,28,.05)"><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-2);font-weight:700">${l}</div><div class="mono" style="font-size:19px;font-weight:700;margin-top:7px;color:${col}">${v}</div></div>`;
+  const stat=(l,v,col)=>`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;padding:14px 16px;box-shadow:0 1px 2px rgba(20,22,28,.05)"><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-2);font-weight:700">${l}</div><div class="mono stat-num" style="font-size:19px;font-weight:700;margin-top:7px;color:${col}">${v}</div></div>`;
   // consumo alocado por categoria: tetos (campanha de categoria única) + rateio_alocacao (fees rateados)
   const catUsed={}, catOf={}; DATA.poProjetos.forEach(p=>catOf[p.id]=p.product_category);
   DATA.tetos.forEach(t=>{ if(!campIds.has(t.projeto_id)||!boInPeriod(t.competencia))return; const c=catOf[t.projeto_id]; if(c) catUsed[c]=(catUsed[c]||0)+(+t.teto||0); });
@@ -3492,10 +3481,10 @@ function renderBudgetOverview(isBalance){
   });
   const ALERT_SEV={over:{bg:'#fbe4e1',bd:'#f2c4bf',dot:'#bf0008',fg:'#7d1a14',btn:'#bf0008'},near:{bg:'#fbf0d8',bd:'#ecd9a4',dot:'#d68a04',fg:'#7a5200',btn:'#9c6404'},realloc:{bg:'var(--blue-bg)',bd:'#bcd9f5',dot:'#0e5ba6',fg:'#0e5ba6',btn:'#0e5ba6'}};
   const alertsHTML=alerts.length?`<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px">${alerts.slice(0,4).map(a=>{const s=ALERT_SEV[a.sev]||ALERT_SEV.near;const action=a.sev==='realloc'?`openReallocModal('${esc(a.id)}','${a.mes}',${a.saldo})`:`openCampDetail('${esc(a.id)}')`;return `<div style="display:flex;align-items:center;gap:12px;background:${s.bg};border:1px solid ${s.bd};border-radius:12px;padding:11px 16px"><span style="width:8px;height:8px;border-radius:50%;background:${s.dot};flex-shrink:0"></span><span style="flex:1;font-size:13px;color:${s.fg}">${a.html}</span><button style="font-size:12px;font-weight:700;color:${s.btn};white-space:nowrap" onclick="${action}">${a.sev==='realloc'?'Reallocate →':'View campaign →'}</button></div>`;}).join('')}</div>`:'';
-  const heroStat=(l,v,c,tt)=>`<div title="${tt||''}"><div style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3)">${l}</div><div class="mono" style="font-size:17px;font-weight:700;margin-top:2px;color:${c||'var(--txt)'}">${v}</div></div>`;
+  const heroStat=(l,v,c,tt)=>`<div title="${tt||''}"><div style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3)">${l}</div><div class="mono stat-num" style="font-size:17px;font-weight:700;margin-top:2px;color:${c||'var(--txt)'}">${v}</div></div>`;
   const hero=`<div style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px 24px;box-shadow:0 1px 2px rgba(20,22,28,.05);margin-bottom:18px">
       <div style="display:flex;align-items:flex-end;gap:36px;flex-wrap:wrap">
-        <div title="Cap minus consumed, committed and awaiting approval"><div style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3)">Available</div><div class="mono" style="font-size:32px;font-weight:700;letter-spacing:-.02em;margin-top:2px;color:${saldo<0?'var(--po)':'#16a06a'}">${BRL(saldo)}</div></div>
+        <div title="Cap minus consumed, committed and awaiting approval"><div style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3)">Available</div><div class="mono stat-num" style="font-size:32px;font-weight:700;letter-spacing:-.02em;margin-top:2px;color:${saldo<0?'var(--po)':'#16a06a'}">${BRL(saldo)}</div></div>
         <div style="display:flex;gap:28px;padding-bottom:5px;flex-wrap:wrap">
           ${heroStat(isBalance?'Allocated':'Budgeted',BRL(orcado),null,'Sum of the monthly caps of approved campaigns in the period')}
           ${heroStat('Consumed',BRL(consumido)+` <span style="font-size:12px;color:var(--txt-3);font-weight:500">· ${Math.round(pctCons)}%</span>`,null,'POs invoiced, validated or completed')}
