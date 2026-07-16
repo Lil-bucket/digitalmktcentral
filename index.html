@@ -1365,9 +1365,13 @@ function campItemGroupsHTML(camps,m){
   const {tetoBy}=CAMP_CTX;
   const byAct={}; camps.forEach(p=>{ (byAct[actKey(p)]=byAct[actKey(p)]||[]).push(p); });
   const acts=orderActs(Object.keys(byAct));
-  return acts.map(a=>{
+  return acts.map((a,i)=>{
     const grp=byAct[a].slice().sort((x,y)=>(LC_ORDER[campLifecycle(x)]-LC_ORDER[campLifecycle(y)])||((tetoBy[y.id]||0)-(tetoBy[x.id]||0)));
-    return `<div style="padding:9px 10px 5px;font-family:'Hanken Grotesk',sans-serif;font-weight:800;font-size:12px;color:var(--txt-1)">${esc(actColLabel(a))} <span style="font-weight:500;color:var(--txt-3);font-size:11px">· ${grp.length} campaign${grp.length===1?'':'s'}</span></div>${grp.map(p=>campItemRowHTML(p,m)).join('')}`;
+    const am=actMeta(a);
+    return `<div style="padding:10px 12px 7px;background:var(--paper-2);${i>0?'border-top:1px solid var(--line);':''}display:flex;align-items:center;gap:8px">
+      <span style="display:inline-flex;align-items:center;gap:5px;font-family:'Hanken Grotesk',sans-serif;font-weight:800;font-size:11.5px;color:${am.color||'var(--txt-1)'};background:#fff;border:1px solid var(--line-2);border-radius:20px;padding:3px 10px 3px 8px">${icn(am.icon,12)}${esc(actColLabel(a))}</span>
+      <span style="font-weight:500;color:var(--txt-3);font-size:11px">${grp.length} campaign${grp.length===1?'':'s'}</span>
+    </div>${grp.map(p=>campItemRowHTML(p,m)).join('')}`;
   }).join('');
 }
 function campCatBody(camps,m){
@@ -1451,6 +1455,17 @@ function campTimelineHTML(fl,q){
       <div class="mono" style="width:112px;flex-shrink:0;padding:8px 14px;font-size:11.5px;font-weight:700;border-left:1px solid var(--line);display:flex;align-items:center;justify-content:flex-end">${BRL(r.teto)}</div>
     </div>`;
   }).join('');
+  const grandTotal=rows.reduce((s,r)=>s+r.teto,0);
+  const totCells=axis.map(mm=>{
+    const tot=rows.reduce((s,r)=>s+(+r.mt[mm]||0),0);
+    const isNow=mm===nowM;
+    return `<div style="flex:1;min-width:0;padding:7px 2px;text-align:center;font-family:var(--mono);font-size:9.5px;font-weight:800;color:var(--txt-2);background:${isNow?'rgba(18,115,207,.09)':'transparent'};border-right:1px solid #edeff4;white-space:nowrap;overflow:hidden">${tot?fmtCompactBRL(tot):'—'}</div>`;
+  }).join('');
+  const totalsRow=`<div style="display:flex;border-top:2px solid var(--line);background:var(--paper-2)">
+    <div style="width:230px;flex-shrink:0;padding:8px 14px;${th};border-right:1px solid var(--line);display:flex;align-items:center">Total by month</div>
+    <div style="flex:1;display:flex;min-width:0">${totCells}</div>
+    <div class="mono" style="width:112px;flex-shrink:0;padding:8px 14px;font-size:11.5px;font-weight:800;border-left:1px solid var(--line);display:flex;align-items:center;justify-content:flex-end">${BRL(grandTotal)}</div>
+  </div>`;
   return `<div id="campBody" style="background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
     <div style="display:flex;border-bottom:1px solid var(--line);background:var(--paper-2)">
       <div style="width:230px;flex-shrink:0;padding:9px 14px;${th};border-right:1px solid var(--line);display:flex;align-items:center">Campaign</div>
@@ -1458,6 +1473,7 @@ function campTimelineHTML(fl,q){
       <div style="width:112px;flex-shrink:0;padding:9px 14px;${th};border-left:1px solid var(--line);display:flex;align-items:center;justify-content:flex-end">Investment</div>
     </div>
     ${trs}
+    ${totalsRow}
     <div style="padding:9px 14px;border-top:1px solid var(--line);font-size:11px;color:var(--txt-3);display:flex;gap:16px;flex-wrap:wrap;align-items:center">
       <span>Cell shade = investment in that month (darker = higher)</span>
       <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:12px;height:8px;background:var(--ink);border-radius:2px;display:inline-block"></span>current month</span>
@@ -1522,7 +1538,7 @@ function openCampDetail(pid){
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:820px">
     <div style="padding:18px 22px 16px;border-bottom:1px solid var(--line)">
       <div style="display:flex;align-items:flex-start;gap:10px">
-        <div style="flex:1;min-width:0"><h3 style="font-size:16px">${esc(p.nome)}</h3><div style="font-size:11.5px;color:var(--txt-3);margin-top:2px">${esc(p.agencia||'')} · ${esc(p.product_category||'')}${p.rateio?' · rateio':''}</div></div>
+        <div style="flex:1;min-width:0"><h3 style="font-size:16px">${esc(p.nome)}</h3><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px">${metaTagHTML('building',p.agencia,'#5535ad','#ece6fa')}${metaTagHTML(actMeta(p.activity).icon,actMeta(p.activity).label,'#0e5ba6','#e0eefb')}${(function(){const cm=catMeta(String(p.product_category||'').trim()||'Uncategorized');return metaTagHTML(cm.icon,cm.label,cm.c,cm.bg);})()}${p.rateio?metaTagHTML('scale','rateio','#8a6a1f','#f6efe0'):''}</div></div>
         <button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button>
       </div>
       <div style="display:flex;height:12px;border-radius:6px;overflow:hidden;background:#edeff4;margin-top:13px" title="Consumed · committed · awaiting approval"><span style="width:${totCap?Math.min(100,totConsu/totCap*100):0}%;background:${overT?'var(--po)':'var(--blue)'}"></span><span style="width:${totCap?Math.min(100,totComp/totCap*100):0}%;background:var(--violet)"></span><span style="width:${totCap?Math.min(100,totPend/totCap*100):0}%;background:var(--amber)"></span></div>
@@ -2957,15 +2973,33 @@ let TL_HILITE=null; // highlighted week index, or null — click a week header t
 function tlToggleWeek(w){ TL_HILITE=(TL_HILITE===w)?null:w; go(SCREEN); }
 let TL_EXPANDED={}; // project id -> inline activities-timeline dropdown open?
 function tlToggleProjRow(pid){ TL_EXPANDED[pid]=!TL_EXPANDED[pid]; go(SCREEN); }
-function tlProjActivitiesHTML(p){
+/* Gantt-style, not a plain list — each activity gets its own bar positioned
+   on the SAME week scale (min/dayPct) as the parent project row above it, so
+   the bars line up under the shared week header instead of needing one of
+   their own. Tasks only carry a due date (no individual start), so each
+   bar's start is chained from the previous activity's due date (or the
+   project's own start for the first one) — a simple, readable approximation
+   of sequencing rather than true independent start dates. */
+function tlProjActivitiesHTML(p,min,dayPct){
   const tasks=(p.tasks||[]).slice().sort((a,b)=>String(a.fim||'9999').localeCompare(String(b.fim||'9999')));
-  if(!tasks.length) return '<div style="font-size:12px;color:var(--txt-3);padding:8px 4px">No activities.</div>';
-  return tasks.map(t=>{const st=statusOf(t.status),hp=healthPill(t.status);
-    return `<div style="display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px dashed var(--line-2)">
-      <span class="badge ${st.cls}" style="flex-shrink:0;font-size:10px"><span class="d"></span>${st.name}</span>
-      <span style="flex:1;min-width:0;font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.n)}</span>
-      <span class="pbar" style="width:80px;flex-shrink:0"><span style="width:${t.pct||0}%;background:${hp.dot}"></span></span>
-      <span class="mono" style="font-size:11px;color:var(--txt-3);width:74px;text-align:right;flex-shrink:0">${t.fim?fmtDate(t.fim):'no date'}</span>
+  if(!tasks.length) return '<div style="font-size:12px;color:var(--txt-3);padding:8px 16px 8px 45px">No activities.</div>';
+  let prevEnd=p.inicio||p.prazo;
+  return tasks.map(t=>{
+    const st=statusOf(t.status), hp=healthPill(t.status);
+    const endStr=t.fim||prevEnd;
+    const s=new Date(prevEnd+'T00:00:00'), e=new Date(endStr+'T00:00:00');
+    prevEnd=endStr;
+    const left=Math.max(0,((s-min)/864e5)*dayPct), width=Math.max(dayPct*1.3,(((e-s)/864e5)+1)*dayPct);
+    return `<div style="display:flex;align-items:center;border-bottom:1px dashed var(--line-2)">
+      <div style="width:230px;flex-shrink:0;padding:7px 16px 7px 45px;border-right:1px solid var(--line);min-width:0;display:flex;align-items:center;gap:7px">
+        <span class="badge ${st.cls}" style="flex-shrink:0;font-size:9px;padding:1px 6px"><span class="d"></span>${st.name}</span>
+        <span style="flex:1;min-width:0;font-size:11.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.n)}</span>
+      </div>
+      <div style="flex:1;position:relative;height:32px">
+        <div title="${esc(t.n)} · ${t.fim?fmtDate(t.fim):'no due date'} · ${t.pct||0}%" style="position:absolute;left:${left}%;width:${width}%;top:6px;height:18px;border-radius:5px;background:${hp.dot};display:flex;align-items:center;padding:0 7px;overflow:hidden">
+          <span style="font-size:9px;font-weight:700;color:#fff;white-space:nowrap">${t.pct||0}%</span>
+        </div>
+      </div>
     </div>`;
   }).join('');
 }
@@ -3008,7 +3042,7 @@ function renderTimeline(){
       </div>
       <div style="flex:1;position:relative;height:46px">${hiliteStripe}<div style="position:absolute;left:${left}%;width:${width}%;top:11px;height:24px;border-radius:7px;background:${stg.color};box-shadow:0 3px 8px -3px rgba(0,0,0,.3);display:flex;align-items:center;padding:0 9px;overflow:hidden"><span style="font-size:10.5px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.25);white-space:nowrap">${pr}%</span></div></div>
     </div>
-    ${open?`<div style="padding:6px 16px 12px 45px;background:var(--paper-2);border-bottom:1px solid var(--line)">${tlProjActivitiesHTML(p)}</div>`:''}
+    ${open?`<div style="background:var(--paper-2);border-bottom:1px solid var(--line)">${tlProjActivitiesHTML(p,min,dayPct)}</div>`:''}
     </div>`;
   }).join('');
   return `<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
@@ -3308,13 +3342,21 @@ function campPeriodDotsConnectedHTML(pid,col){
 }
 /* Meta line: connected period dots · agency · activity — between a campaign's
    name and its consumption bar (Overview + Budgets & Fees campaign rows). */
+/* Small colored pill — used to turn agency/activity/category from plain
+   "· text ·" separators into scannable tags (each keeps its own color so
+   the three kinds of info stay visually distinct at a glance). */
+function metaTagHTML(icon,label,fg,bg){
+  if(!label)return'';
+  return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;color:${fg};background:${bg};border-radius:20px;padding:3px 9px 3px 7px;white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis;flex-shrink:0">${icon?icn(icon,10):''}${esc(label)}</span>`;
+}
 function campMetaLineHTML(p,col){
-  return `<div style="display:flex;align-items:center;gap:8px;margin:6px 0;flex-wrap:wrap">
+  const am=actMeta(p.activity);
+  const cm=catMeta(String(p.product_category||'').trim()||'Uncategorized');
+  return `<div style="display:flex;align-items:center;gap:6px;margin:6px 0;flex-wrap:wrap">
     ${campPeriodDotsConnectedHTML(p.id,col)}
-    <span style="color:var(--line-2)">·</span>
-    <span style="font-size:11.5px;color:var(--txt-2);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.agencia||'—')}</span>
-    <span style="color:var(--line-2)">·</span>
-    <span style="font-size:11.5px;color:var(--txt-2);font-weight:600;display:inline-flex;align-items:center;gap:4px;white-space:nowrap">${icn(actMeta(p.activity).icon,11)} ${esc(actMeta(p.activity).label)}</span>
+    ${metaTagHTML('building',p.agencia,'#5535ad','#ece6fa')}
+    ${metaTagHTML(am.icon,am.label,'#0e5ba6','#e0eefb')}
+    ${metaTagHTML(cm.icon,cm.label,cm.c,cm.bg)}
   </div>`;
 }
 /* Purchase orders for one campaign, with status badges — shared by the
@@ -3397,7 +3439,7 @@ function renderBudgetOverview(isBalance){
     return `<div style="border-bottom:1px solid #edeff4">
       <div style="display:flex;align-items:center;gap:10px;padding:11px 10px;cursor:pointer;background:${open?'var(--paper-2)':''}" onclick="toggleCatAcc('${esc(key)}')" onmouseover="this.style.background='var(--paper-2)'" onmouseout="this.style.background='${open?'var(--paper-2)':''}'">
         <span class="ich" style="width:28px;height:28px;background:${m.bg};color:${m.c}">${icn(m.icon,14)}</span>
-        <span style="flex:0 1 230px;min-width:0"><span style="font-weight:700;font-size:13.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(key)}</span><span style="font-size:10.5px;color:var(--txt-3);font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.label)} · ${list.length} campaign(s)</span></span>
+        <span style="flex:0 1 230px;min-width:150px"><span style="font-weight:700;font-size:13.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(key)}</span><span style="font-size:10.5px;color:var(--txt-3);font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.label)} · ${list.length} campaign(s)</span></span>
         ${open?'':`<span class="pbar" style="flex:1;min-width:60px"><span style="width:${pcC}%;background:${over?'var(--po)':'var(--blue)'}"></span><span style="width:${pcM}%;background:var(--violet)"></span><span style="width:${pcP}%;background:var(--amber)"></span></span>
         <span class="pct" style="font-weight:700;color:${over?'#bf0008':near?'#9c6404':'var(--txt-2)'}" title="Consumed + committed + awaiting approval, over the cap">${Math.round(rawc)}%</span>
         ${HIDE_MONEY?'':`<span class="mono" style="font-size:11.5px;color:var(--txt-2);width:200px;text-align:right;flex-shrink:0;white-space:nowrap" title="Consumed + committed / cap">${BRL(cons+comp)} <span style="color:var(--txt-3)">/ ${BRL(tot)}</span></span>`}`}
@@ -3552,7 +3594,7 @@ function renderBudgets(){
     return `<div style="border:1.5px solid ${open?m.c+'55':'var(--line)'};border-radius:12px;overflow:hidden;margin-bottom:10px">
       <div style="display:flex;align-items:center;gap:10px;padding:11px 10px;cursor:pointer;background:${open?m.bg:'#fff'}" onclick="toggleCatAcc('${esc(o.id)}')" onmouseover="this.style.background='${m.bg}'" onmouseout="this.style.background='${open?m.bg:'#fff'}'">
         <span class="ich" style="width:28px;height:28px;background:${m.bg};color:${m.c}">${icn(m.icon,14)}</span>
-        <span style="flex:0 1 230px;min-width:0"><span style="font-weight:700;font-size:13.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(key)}</span><span style="font-size:10.5px;color:var(--txt-3);font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.periodo_inicio?fmtMes(o.periodo_inicio):'—'}${o.periodo_fim?' → '+fmtMes(o.periodo_fim):''} · ${list.length} campaign(s) · budget ${BRL(o.valor_total)}</span></span>
+        <span style="flex:0 1 230px;min-width:150px"><span style="font-weight:700;font-size:13.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(key)}</span><span style="font-size:10.5px;color:var(--txt-3);font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.periodo_inicio?fmtMes(o.periodo_inicio):'—'}${o.periodo_fim?' → '+fmtMes(o.periodo_fim):''} · ${list.length} campaign(s) · budget ${BRL(o.valor_total)}</span></span>
         ${open?'':`<span class="pbar" style="flex:1;min-width:60px"><span style="width:${Math.min(100,rawc)}%;background:${over?'var(--po)':m.c}"></span></span>
         <span class="pct" style="font-weight:700;color:${over?'#bf0008':near?'#9c6404':'var(--txt-2)'}" title="Consumed + committed + awaiting approval, over the cap">${Math.round(rawc)}%</span>
         <span class="mono" style="font-size:11.5px;color:var(--txt-2);width:170px;text-align:right;flex-shrink:0;white-space:nowrap" title="Consumed + committed / cap">${BRL(cons+comp)} <span style="color:var(--txt-3)">/ ${BRL(tot)}</span></span>`}
