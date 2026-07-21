@@ -436,17 +436,10 @@ const uid=()=>'x'+Math.random().toString(36).slice(2,9);
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
 function fullAccess(){return isManager||PAPEL==='admin';}
 function canEdit(p){return fullAccess()||!p||!p.owner||p.owner===(currentUser&&currentUser.email);}
-/* Anyone already inside the project — owner, assignee, or already tagged —
-   not just the owner/admin canEdit() covers. Used to open the "tag people"
-   UI to the whole project, not just whoever can edit the main fields. */
-function isInvolved(p){
-  if(!p)return false;
-  const me=((currentUser&&currentUser.email)||'').toLowerCase(); if(!me)return false;
-  if((p.owner||'').toLowerCase()===me)return true;
-  if((p.resp||'').toLowerCase()===me)return true;
-  return (p.envolvidos||[]).some(x=>(x.email||'').toLowerCase()===me);
-}
-function canTagPeople(p){return canEdit(p)||isInvolved(p);}
+/* Tagging people (via the "+ tag someone" field or an @mention in a comment)
+   is open to every profile, regardless of role or involvement in the
+   project — only the main project fields stay gated behind canEdit(). */
+function canTagPeople(p){return true;}
 function visProjs(){
   if(PAPEL==='agencia'&&MINHA_AGENCIA){
     const meEmail=((currentUser&&currentUser.email)||'').toLowerCase();
@@ -2690,7 +2683,7 @@ function renderProjModal(){
         <div style="padding:8px 13px;border-top:1px solid #edeff4;background:var(--paper-2);font-size:10.5px;color:var(--txt-3)">Open status — everyone involved can post status updates and add sub-items after creation.</div>
       </div>
       <div class="field"><label>Owner <span style="font-weight:600;color:var(--txt-3)">(you — creator)</span></label><div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:var(--paper)"><span class="avatar" style="width:22px;height:22px;background:${avColor(EDIT.owner||EDIT.resp)};font-size:9.5px">${initials(EDIT.owner||EDIT.resp||'?')}</span><b style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(EDIT.owner||EDIT.resp||'—')}</b></div></div>
-      <div class="field full" style="margin-top:14px"><label>People tagged on this project <span style="font-weight:600;color:var(--txt-3)">(anyone tagged here can tag others too)</span></label>
+      <div class="field full" style="margin-top:14px"><label>People tagged on this project <span style="font-weight:600;color:var(--txt-3)">(anyone can tag people here)</span></label>
         <div id="pmTaggedChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:${canTag?'8px':'0'}">${pmTaggedChipsHTML()}</div>
         ${canTag?`<div style="position:relative">
           <input id="pmPeopleQ" oninput="pmPeopleFilter(this.value)" onfocus="pmPeopleFilter(this.value)" onblur="pmPeopleBlur()" placeholder="+ Search a person to tag… (type a name)" autocomplete="off" style="width:100%;padding:9px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13px">
