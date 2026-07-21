@@ -3835,13 +3835,99 @@ function budgetExportRows(){
   });
   return rows;
 }
+/* Mirrors feeSplitBlock()'s own "Cost center / account — monthly budget,
+   consumption & balance" table verbatim (same accMap aggregation, same
+   admin/finance-only gate) — one row per cost center/account/description,
+   one Orçado/Consumido/Saldo triplet per month, plus the grand-total row. */
+function costCenterExportRows(){
+  const canSensitive=effIsManager()||['admin','financeiro'].includes(effPapel());
+  if(!canSensitive) return null;
+  const fee=DATA.fee||[];
+  const campsAll=(DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO');
+  const CONS_ST=['FATURADA','VALIDADA','CONCLUIDA','APROVADA','PO_GERADA','ATUALIZAR_INFO'];
+  const accKey=(cc,acc,desc)=>`${cc||''}|${acc||''}|${desc||''}`;
+  const accMap={};
+  campsAll.forEach(p=>{
+    const consByMonth={};
+    DATA.pos.filter(po=>po.projeto_id===p.id&&CONS_ST.includes(po.status)).forEach(po=>{
+      const m=String(po.competencia).slice(0,7); consByMonth[m]=(consByMonth[m]||0)+(+po.valor||0);
+    });
+    if(p.rateio){
+      const monthCat={};
+      (DATA.rateio||[]).filter(r=>r.projeto_id===p.id).forEach(r=>{
+        const m=String(r.competencia).slice(0,7);
+        monthCat[m]=monthCat[m]||{}; monthCat[m][r.categoria]=(monthCat[m][r.categoria]||0)+(+r.valor||0);
+      });
+      Object.keys(monthCat).forEach(m=>{
+        const cats=monthCat[m]; const totalM=Object.values(cats).reduce((s,v)=>s+v,0)||1; const consM=consByMonth[m]||0;
+        Object.keys(cats).forEach(cat=>{
+          const f=fee.find(x=>x.tipo===p.rateio_tipo&&x.categoria===cat);
+          const cc=f?f.cc:'', acc=f?f.account:'', desc=f?f.descricao:'';
+          if(!cc&&!acc&&!desc)return;
+          const key=accKey(cc,acc,desc);
+          accMap[key]=accMap[key]||{cc,acc,desc,months:{},cons:{}};
+          accMap[key].months[m]=(accMap[key].months[m]||0)+cats[cat];
+          accMap[key].cons[m]=(accMap[key].cons[m]||0)+consM*(cats[cat]/totalM);
+        });
+      });
+    } else {
+      if(!p.cc&&!p.account&&!p.account_desc)return;
+      const key=accKey(p.cc,p.account,p.account_desc);
+      (DATA.tetos||[]).filter(t=>t.projeto_id===p.id).forEach(t=>{
+        const m=String(t.competencia).slice(0,7);
+        accMap[key]=accMap[key]||{cc:p.cc,acc:p.account,desc:p.account_desc,months:{},cons:{}};
+        accMap[key].months[m]=(accMap[key].months[m]||0)+(+t.teto||0);
+      });
+      Object.keys(consByMonth).forEach(m=>{
+        accMap[key]=accMap[key]||{cc:p.cc,acc:p.account,desc:p.account_desc,months:{},cons:{}};
+        accMap[key].cons[m]=(accMap[key].cons[m]||0)+consByMonth[m];
+      });
+    }
+  });
+  const allMonths=new Set(); Object.values(accMap).forEach(a=>{Object.keys(a.months).forEach(m=>allMonths.add(m));Object.keys(a.cons).forEach(m=>allMonths.add(m));});
+  const monthList=Array.from(allMonths).sort();
+  const accRows=Object.values(accMap);
+  const rows=accRows.map(a=>{
+    const row={'Centro de custo':a.cc||'—','Conta':a.acc||'—','Descrição':a.desc||'—'};
+    let totB=0,totC=0;
+    monthList.forEach(m=>{
+      const b=a.months[m]||0, c=a.cons[m]||0, label=fmtMes(m+'-01');
+      totB+=b; totC+=c;
+      row[`${label} - Orçado`]=Math.round(b*100)/100;
+      row[`${label} - Consumido`]=Math.round(c*100)/100;
+      row[`${label} - Saldo`]=Math.round((b-c)*100)/100;
+    });
+    row['Total - Orçado']=Math.round(totB*100)/100;
+    row['Total - Consumido']=Math.round(totC*100)/100;
+    row['Total - Saldo']=Math.round((totB-totC)*100)/100;
+    return row;
+  });
+  if(rows.length){
+    const totalRow={'Centro de custo':'Total','Conta':'','Descrição':''};
+    let gB=0,gC=0;
+    monthList.forEach(m=>{
+      let b=0,c=0; accRows.forEach(a=>{b+=a.months[m]||0;c+=a.cons[m]||0;});
+      const label=fmtMes(m+'-01');
+      gB+=b; gC+=c;
+      totalRow[`${label} - Orçado`]=Math.round(b*100)/100;
+      totalRow[`${label} - Consumido`]=Math.round(c*100)/100;
+      totalRow[`${label} - Saldo`]=Math.round((b-c)*100)/100;
+    });
+    totalRow['Total - Orçado']=Math.round(gB*100)/100;
+    totalRow['Total - Consumido']=Math.round(gC*100)/100;
+    totalRow['Total - Saldo']=Math.round((gB-gC)*100)/100;
+    rows.push(totalRow);
+  }
+  return rows;
+}
 function exportBudgetXLSX(){
   if(!window.XLSX){ toast('Exportação indisponível — script não carregado.'); return; }
   const rows=budgetExportRows();
   if(!rows.length){ toast('Nenhum dado para exportar.'); return; }
-  const ws=XLSX.utils.json_to_sheet(rows);
   const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'Orçamento');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'Orçamento');
+  const ccRows=costCenterExportRows();
+  if(ccRows&&ccRows.length) XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(ccRows),'Centros de Custo');
   XLSX.writeFile(wb,`orcamento_TCL_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 function renderPeople(){
