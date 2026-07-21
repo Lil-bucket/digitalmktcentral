@@ -309,7 +309,10 @@
   <main class="main">
     <header class="top">
       <div class="tl"><span class="barcol" id="barcol"></span><div><h1 id="scrTitle">Dashboard</h1><div class="sub" id="scrSub"></div></div></div>
-      <div id="ctaBox"></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div id="ctaBox"></div>
+        <button class="btn-ghost" onclick="location.reload()" title="Reload page" aria-label="Reload page" style="display:inline-flex;align-items:center;gap:6px"><svg class="icn" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4"/></svg> Reload</button>
+      </div>
     </header>
     <div id="viewAsBar"></div>
     <section class="view" id="view"><div class="loading">Loading…</div></section>
@@ -485,7 +488,8 @@ const ICONS={
   megaphone:'<path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',
   tag:'<path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4Z"/><circle cx="7.5" cy="7.5" r=".5"/>',
   chev:'<path d="m6 9 6 6 6-6"/>',
-  grip:'<circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/>'
+  grip:'<circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/>',
+  refresh:'<path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4"/>'
 };
 function icn(n,s,st){const d=ICONS[n]||ICONS.folder;return `<svg class="icn" width="${s||14}" height="${s||14}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${st||1.8}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;}
 function avColor(n){let h=0;for(const c of(n||'?'))h=c.charCodeAt(0)+((h<<5)-h);return AV_COLORS[Math.abs(h)%AV_COLORS.length];}
@@ -2548,10 +2552,21 @@ function pmPeopleFilter(q){
   dd.style.display='block';
 }
 function pmPeopleBlur(){ const dd=document.getElementById('pmPeopleDD'); if(dd)dd.style.display='none'; }
+/* Fire-and-forget email to whoever just got tagged — never blocks the UI or
+   surfaces an error to the tagger, mirrors the existing best-effort mencoes
+   insert right below. Edge function: notifica-marcacao (Panel project). */
+async function notifyMarcacao(to,projeto,comentario){
+  if(!to)return;
+  try{
+    await fetch(PANEL_URL+'/functions/v1/notifica-marcacao',{method:'POST',headers:{'Content-Type':'application/json','apikey':PANEL_KEY,'Authorization':'Bearer '+PANEL_KEY},
+      body:JSON.stringify({to,autor:(currentUser&&currentUser.email)||'Alguém',projeto:projeto||'',comentario:comentario||null})});
+  }catch(e){ console.warn('notifica-marcacao:',e); }
+}
 function pmPickPerson(email,nome){
   const inp=document.getElementById('pmPeopleQ'); if(inp)inp.value='';
   const dd=document.getElementById('pmPeopleDD'); if(dd){dd.style.display='none';dd.innerHTML='';}
   pmTogglePessoa(email,nome);
+  notifyMarcacao(email,EDIT&&EDIT.nome,null);
 }
 /* Live "@" autocomplete inside the comment box — shows matches as you type
    so people who share a first name (Lucas's original complaint) can be told
@@ -2601,6 +2616,7 @@ function pmAddLog(){
   // grava menções na tabela real do painel (notifica os destinatários)
   const autor=(currentUser&&currentUser.email)||'Someone';
   men.forEach(async m=>{ if(m.email){ try{ await SB.from('mencoes').insert({projeto_nome:EDIT.nome||'Projeto',autor,destinatario_email:m.email,destinatario_nome:m.nome,mensagem:txt,criado_em:new Date().toISOString()}); }catch(e){console.warn('mencao:',e);} } });
+  men.forEach(m=>{ if(m.email) notifyMarcacao(m.email,EDIT.nome,txt); });
   if(men.length) toast('Log saved · @mention to '+men.map(m=>m.nome.split(/\s+/)[0]).join(', '));
 }
 function respOpts(sel){ const g={}; (TEAM||[]).forEach(p=>{const k=p.empresa||'Team';(g[k]=g[k]||[]).push(p);}); let h='<option value="">—</option>'; Object.keys(g).sort().forEach(k=>{h+=`<optgroup label="${esc(k)}">`+g[k].map(p=>`<option ${p.nome===sel?'selected':''}>${esc(p.nome)}</option>`).join('')+'</optgroup>';}); return h; }
@@ -2824,10 +2840,15 @@ function renderNotif(){
     <div class="panel-b">${all.length?all.map(m=>{
       const unread=!m.lida;
       const clickable=(m.origin==='budget'&&(m.poId||m.projId))||m.pid;
-      const onclick=(m.origin==='budget'&&m.poId)?`notifGoPO('${esc(m.poId)}','${esc(m.tipo)}')`:(m.origin==='budget'&&m.projId)?`notifGoProjeto('${esc(m.projId)}','${esc(m.tipo)}')`:(m.pid?`openProj('${esc(m.pid)}')`:'');
+      const navigate=(m.origin==='budget'&&m.poId)?`notifGoPO('${esc(m.poId)}','${esc(m.tipo)}')`:(m.origin==='budget'&&m.projId)?`notifGoProjeto('${esc(m.projId)}','${esc(m.tipo)}')`:(m.pid?`openProj('${esc(m.pid)}')`:'');
       const readToggle=m.origin==='budget'?`notifMarkRead(${m.id},${!unread})`:`notifMarkReadWork('${esc(m.key)}',${!unread})`;
       const del=m.origin==='budget'?`notifDelete(${m.id})`:`notifDeleteWork('${esc(m.key)}')`;
-      return `<div class="row-item" style="${unread?'':'opacity:.62'};${clickable?'cursor:pointer':'cursor:default'}" ${clickable?`onclick="${onclick}"`:''}>
+      // Clicking anywhere on the row marks it read, in addition to whatever
+      // navigation the row already supported — separate from the explicit
+      // ●/○ toggle button, which still lets you flip it back to unread.
+      const markRead=m.origin==='budget'?`notifMarkRead(${m.id},true)`:`notifMarkReadWork('${esc(m.key)}',true)`;
+      const rowClick=[unread?markRead:'',navigate].filter(Boolean).join(';');
+      return `<div class="row-item" style="${unread?'':'opacity:.62'};${(clickable||unread)?'cursor:pointer':'cursor:default'}" ${rowClick?`onclick="${rowClick}"`:''}>
         <span class="pin" style="background:${unread?(m.origin==='budget'?'var(--po)':'var(--accent)'):'var(--line-2)'}"></span>
         <div style="flex:1;min-width:0"><div style="font-weight:${unread?700:600};font-size:13.5px">${esc(m.proj)}${(m.origin==='budget'&&(m.poId||m.projId))?' <span style=\'color:var(--po);font-weight:700\'>· open →</span>':''}</div><div style="font-size:12.5px;color:var(--txt-2);margin-top:1px">${fmtLogTxt(m.txt)}</div><span class="who">${esc(m.autor)} · ${fmtDate(m.t)}</span></div>
         <div style="display:flex;gap:4px;flex-shrink:0" onclick="event.stopPropagation()">
