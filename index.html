@@ -435,6 +435,17 @@ const uid=()=>'x'+Math.random().toString(36).slice(2,9);
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
 function fullAccess(){return isManager||PAPEL==='admin';}
 function canEdit(p){return fullAccess()||!p||!p.owner||p.owner===(currentUser&&currentUser.email);}
+/* Anyone already inside the project — owner, assignee, or already tagged —
+   not just the owner/admin canEdit() covers. Used to open the "tag people"
+   UI to the whole project, not just whoever can edit the main fields. */
+function isInvolved(p){
+  if(!p)return false;
+  const me=((currentUser&&currentUser.email)||'').toLowerCase(); if(!me)return false;
+  if((p.owner||'').toLowerCase()===me)return true;
+  if((p.resp||'').toLowerCase()===me)return true;
+  return (p.envolvidos||[]).some(x=>(x.email||'').toLowerCase()===me);
+}
+function canTagPeople(p){return canEdit(p)||isInvolved(p);}
 function visProjs(){
   if(PAPEL==='agencia'&&MINHA_AGENCIA){
     const meEmail=((currentUser&&currentUser.email)||'').toLowerCase();
@@ -479,7 +490,8 @@ const ICONS={
   radio:'<circle cx="12" cy="12" r="2"/><path d="M4.9 19.1a10 10 0 0 1 0-14.2M19.1 4.9a10 10 0 0 1 0 14.2M7.8 16.2a6 6 0 0 1 0-8.4M16.2 7.8a6 6 0 0 1 0 8.4"/>',
   megaphone:'<path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',
   tag:'<path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4Z"/><circle cx="7.5" cy="7.5" r=".5"/>',
-  chev:'<path d="m6 9 6 6 6-6"/>'
+  chev:'<path d="m6 9 6 6 6-6"/>',
+  grip:'<circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/>'
 };
 function icn(n,s,st){const d=ICONS[n]||ICONS.folder;return `<svg class="icn" width="${s||14}" height="${s||14}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${st||1.8}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;}
 function avColor(n){let h=0;for(const c of(n||'?'))h=c.charCodeAt(0)+((h<<5)-h);return AV_COLORS[Math.abs(h)%AV_COLORS.length];}
@@ -677,7 +689,7 @@ function seedDemoData(){
     {nome:'[DEMO] PR Media Outreach',tipo:'livre',ptipo:'pr',partner:'Vizeu',resp:'Ana Ramos',etapa:'concluido',status:'concluido',prazo:D(2026,6,15)}
   ];
   const projetos=projSeed.map((p,i)=>({id:'demo-proj-'+i,nome:p.nome,tipo:p.tipo,ptipo:p.ptipo,partner:p.partner,marca:p.partner,resp:p.resp,owner:'demo@example.com',prazo:p.prazo,inicio:D(2026,6,1),
-    tasks:typeOf(p.tipo).tasks.map((n,ti)=>({id:'demo-task-'+i+'-'+ti,n,done:ti<(stages.indexOf(p.etapa)+1)*1.4,fim:p.prazo,status:'no_prazo',pct:0,obs:'',subs:[]})),
+    tasks:typeOf(p.tipo).tasks.map((n,ti)=>({id:'demo-task-'+i+'-'+ti,n,done:ti<(stages.indexOf(p.etapa)+1)*1.4,fim:p.prazo,status:'no_prazo',pct:0,obs:'',resp:'',subs:[]})),
     logs:[],envolvidos:[],categorias:[],etapa:p.etapa,etapa_override:p.etapa,status:p.status}));
 
   const pessoas=[
@@ -1132,7 +1144,7 @@ function openProj(id){ const p=DATA.projetos.find(x=>x.id===id); if(p) openProjM
 function openProjNew(){
   const t=TYPES[0];
   const proj={id:uid(),nome:'',tipo:t.id,ptipo:'',partner:'',resp:(currentUser&&currentUser.email)||'',owner:(currentUser&&currentUser.email)||'',prazo:'',inicio:'',
-    tasks:t.tasks.map(n=>({id:uid(),n,done:false,fim:'',status:'no_prazo',pct:0,obs:'',subs:[]})),
+    tasks:t.tasks.map(n=>({id:uid(),n,done:false,fim:'',status:'no_prazo',pct:0,obs:'',resp:'',subs:[]})),
     logs:[],envolvidos:[],categorias:[],marca:''};
   openProjModal(proj, true);
 }
@@ -2329,7 +2341,7 @@ function ptToProject(id){
   const tp=TYPES[0];
   const descTxt=(t.desc||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
   const proj={id:uid(),nome:t.title||'',tipo:tp.id,ptipo:'',partner:'',resp:(currentUser&&currentUser.email)||'',owner:(currentUser&&currentUser.email)||'',prazo:t.due||'',inicio:'',
-    tasks:tp.tasks.map(n=>({id:uid(),n,done:false,fim:'',status:'no_prazo',pct:0,obs:'',subs:[]})),
+    tasks:tp.tasks.map(n=>({id:uid(),n,done:false,fim:'',status:'no_prazo',pct:0,obs:'',resp:'',subs:[]})),
     logs:descTxt?[{id:uid(),txt:'From task: '+descTxt,autor:(currentUser&&currentUser.email)||'you',t:new Date().toISOString().slice(0,10),mencoes:[]}]:[],
     envolvidos:[],categorias:[],marca:'',_fromTask:id};
   openProjModal(proj, true);
@@ -2342,7 +2354,7 @@ function renderNotes(){
   </div>`;
 }
 function pmSet(k,v){ if(EDIT)EDIT[k]=v; }
-function pmType(v){ if(!EDIT)return; EDIT.tipo=v; if(EDIT._new){ const t=typeOf(v); EDIT.tasks=t.tasks.map(n=>({id:uid(),n,done:false,fim:'',status:'no_prazo',pct:0,obs:'',subs:[]})); } renderProjModal(); }
+function pmType(v){ if(!EDIT)return; EDIT.tipo=v; if(EDIT._new){ const t=typeOf(v); EDIT.tasks=t.tasks.map(n=>({id:uid(),n,done:false,fim:'',status:'no_prazo',pct:0,obs:'',resp:'',subs:[]})); } renderProjModal(); }
 function pmToggleCat(c){ if(!EDIT)return; EDIT.categorias=EDIT.categorias||[]; const i=EDIT.categorias.indexOf(c); if(i<0)EDIT.categorias.push(c); else EDIT.categorias.splice(i,1); renderProjModal(); }
 function atv(tid){ return (EDIT.tasks||[]).find(t=>t.id===tid); }
 function pmAtvSet(tid,k,v){ const t=atv(tid); if(t){ t[k]=(k==='pct')?Math.max(0,Math.min(100,+v||0)):v; } }
@@ -2389,8 +2401,24 @@ function renderTLModal(){
     <div class="modal-f"><span></span><button class="btn-ghost" onclick="closeModal()">Close</button></div>
   </div></div>`;
 }
-function pmAddAtv(){ EDIT.tasks=EDIT.tasks||[]; EDIT.tasks.push({id:uid(),n:'Nova atividade',done:false,fim:'',status:'no_prazo',pct:0,obs:'',subs:[]}); renderProjModal(); }
+function pmAddAtv(){ EDIT.tasks=EDIT.tasks||[]; EDIT.tasks.push({id:uid(),n:'Nova atividade',done:false,fim:'',status:'no_prazo',pct:0,obs:'',resp:'',subs:[]}); renderProjModal(); }
 function pmDelAtv(tid){ EDIT.tasks=(EDIT.tasks||[]).filter(t=>t.id!==tid); renderProjModal(); }
+/* Drag-to-reorder activities — same DRAG-id + dataTransfer pattern as the
+   Kanban card drag (dragStartCard/dropOnStage), scoped to EDIT.tasks. */
+let DRAG_ATV=null;
+function atvDragStart(ev,tid){ DRAG_ATV=tid; ev.dataTransfer.effectAllowed='move'; try{ev.dataTransfer.setData('text/plain',tid);}catch(e){} }
+function atvDragOver(ev){ ev.preventDefault(); ev.dataTransfer.dropEffect='move'; }
+function atvDrop(ev,tid){
+  ev.preventDefault();
+  const from=DRAG_ATV||ev.dataTransfer.getData('text/plain'); DRAG_ATV=null;
+  if(!from||from===tid||!EDIT)return;
+  const tasks=EDIT.tasks||[];
+  const fi=tasks.findIndex(t=>t.id===from), ti=tasks.findIndex(t=>t.id===tid);
+  if(fi<0||ti<0)return;
+  const [moved]=tasks.splice(fi,1);
+  tasks.splice(ti,0,moved);
+  renderProjModal();
+}
 /* Sub-items count toward their parent activity's % — auto-computed from
    how many sub-items are done, replacing the activity's manual % input
    whenever the activity has sub-items registered. */
@@ -2447,10 +2475,10 @@ function pmTogglePessoa(email,nome){
 }
 function pmTaggedChipsHTML(){
   if(!EDIT)return'';
-  const ED=canEdit(EDIT);
+  const canTag=canTagPeople(EDIT);
   const list=EDIT.envolvidos||[];
   if(!list.length) return '<span style="font-size:12px;color:var(--txt-3)">No one tagged yet.</span>';
-  return list.map(pe=>`<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 6px 4px 4px;border-radius:20px;background:var(--paper-2);border:1px solid var(--line-2);font-size:12px;font-weight:600"><span class="avatar" style="width:20px;height:20px;font-size:9px;background:${avColor(pe.nome||pe.email)}">${initials(pe.nome||pe.email)}</span>${esc(pe.nome||pe.email)}${ED?`<button onclick="pmTogglePessoa('${esc(pe.email)}','')" title="Remove" style="border:none;background:none;color:var(--txt-3);cursor:pointer;font-size:11px;padding:0 2px;line-height:1">✕</button>`:''}</span>`).join('');
+  return list.map(pe=>`<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 6px 4px 4px;border-radius:20px;background:var(--paper-2);border:1px solid var(--line-2);font-size:12px;font-weight:600"><span class="avatar" style="width:20px;height:20px;font-size:9px;background:${avColor(pe.nome||pe.email)}">${initials(pe.nome||pe.email)}</span>${esc(pe.nome||pe.email)}${canTag?`<button onclick="pmTogglePessoa('${esc(pe.email)}','')" title="Remove" style="border:none;background:none;color:var(--txt-3);cursor:pointer;font-size:11px;padding:0 2px;line-height:1">✕</button>`:''}</span>`).join('');
 }
 /* Adds a person straight from a comment mention, WITHOUT the usual full
    renderProjModal() — a full re-render would wipe whatever the user is still
@@ -2541,13 +2569,13 @@ const PTIPO_TEMPLATE={campanha:'campanha',midia:'campanha',social:'conteudo',kol
 function pmPTipo(v){
   pmSet('ptipo',v);
   const t=PTIPO_TEMPLATE[v]||'livre'; EDIT.tipo=t;
-  if(EDIT._new){ const tt=typeOf(t); EDIT.tasks=tt.tasks.map(n=>({id:uid(),n,done:false,fim:'',status:'no_prazo',pct:0,obs:'',subs:[]})); }
+  if(EDIT._new){ const tt=typeOf(t); EDIT.tasks=tt.tasks.map(n=>({id:uid(),n,done:false,fim:'',status:'no_prazo',pct:0,obs:'',resp:'',subs:[]})); }
   renderProjModal();
 }
 let PM_OPEN=false;
 function openProjModal(proj,isNew){ EDIT=proj; EDIT._new=isNew; PM_OPEN=false; renderProjModal(); }
 function renderProjModal(){
-  if(!EDIT)return; const ED=canEdit(EDIT); const dis=ED?'':'disabled';
+  if(!EDIT)return; const ED=canEdit(EDIT); const dis=ED?'':'disabled'; const canTag=canTagPeople(EDIT);
   // Every small edit (toggling a category chip, checking off an activity...)
   // re-renders this whole modal by replacing #modalMount's innerHTML, which
   // swaps in a brand-new .modal-b node — that reset its scroll to 0 on every
@@ -2559,11 +2587,13 @@ function renderProjModal(){
   const done=tasks.filter(t=>t.done).length, prog=tasks.length?Math.round(done/tasks.length*100):0;
   const tName=typeOf(EDIT.tipo).name;
   const atvHTML=tasks.map((t,i)=>`
-    <div style="border:1px solid ${t.done?'#bfe4d0':'var(--line-2)'};border-radius:10px;padding:9px 11px;margin-bottom:7px;background:${t.done?'#eef8f1':'#fff'}">
+    <div ondragover="atvDragOver(event)" ondrop="atvDrop(event,'${t.id}')" style="border:1px solid ${t.done?'#bfe4d0':'var(--line-2)'};border-radius:10px;padding:9px 11px;margin-bottom:7px;background:${t.done?'#eef8f1':'#fff'}">
       <div style="display:flex;align-items:center;gap:8px">
+        ${(ED&&tasks.length>1)?`<span draggable="true" ondragstart="atvDragStart(event,'${t.id}')" title="Drag to reorder" style="display:flex;align-items:center;color:var(--txt-3);cursor:grab;flex-shrink:0">${icn('grip',14)}</span>`:''}
         <button onclick="pmAtvDone('${t.id}')" title="Mark done" style="width:18px;height:18px;border-radius:5px;border:2px solid ${t.done?'#16a06a':'var(--line-2)'};background:${t.done?'#16a06a':'#fff'};color:#fff;font-size:11px;font-weight:800;cursor:pointer;flex-shrink:0;padding:0;line-height:1">${t.done?'✓':''}</button>
         <span class="mono" style="font-size:10px;color:var(--txt-3);width:18px;text-align:right;flex-shrink:0">${String(i+1).padStart(2,'0')}</span>
         <input class="nm" value="${esc(t.n)}" onchange="pmAtvSet('${t.id}','n',this.value)" ${dis} placeholder="Activity name…" style="flex:1;padding:7px 10px;border:1px solid var(--line-2);border-radius:8px;background:var(--paper-2);font:inherit;font-size:12.5px;font-weight:600;min-width:0">
+        <select onchange="pmAtvSet('${t.id}','resp',this.value)" title="Assigned to" style="width:132px;padding:7px 8px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font:inherit;font-size:11px;color:var(--txt-2);flex-shrink:0">${subPersonOpts(t.resp)}</select>
         <input type="date" value="${esc(t.fim||'')}" onchange="pmAtvSet('${t.id}','fim',this.value)" title="Due date" style="width:150px;padding:7px 8px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font:inherit;font-size:11.5px;color:var(--txt-2);flex-shrink:0">
         ${!EDIT._new?`<span class="badge ${statusOf(t.status).cls}" style="flex-shrink:0;font-size:10px;padding:2px 8px"><span class="d"></span>${statusOf(t.status).name}</span><span class="mono" style="font-size:10.5px;font-weight:700;color:var(--txt-2);width:34px;text-align:right;flex-shrink:0">${t.pct||0}%</span>`:''}
         <button class="chip-btn" onclick="pmToggleOpen('${t.id}')" style="flex-shrink:0">${t._open?'– close':'+ subs'}</button>
@@ -2612,9 +2642,9 @@ function renderProjModal(){
         <div style="padding:8px 13px;border-top:1px solid #edeff4;background:var(--paper-2);font-size:10.5px;color:var(--txt-3)">Open status — everyone involved can post status updates and add sub-items after creation.</div>
       </div>
       <div class="field"><label>Owner <span style="font-weight:600;color:var(--txt-3)">(you — creator)</span></label><div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:var(--paper)"><span class="avatar" style="width:22px;height:22px;background:${avColor(EDIT.owner||EDIT.resp)};font-size:9.5px">${initials(EDIT.owner||EDIT.resp||'?')}</span><b style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(EDIT.owner||EDIT.resp||'—')}</b></div></div>
-      <div class="field full" style="margin-top:14px"><label>People tagged on this project</label>
-        <div id="pmTaggedChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:${ED?'8px':'0'}">${pmTaggedChipsHTML()}</div>
-        ${ED?`<div style="position:relative">
+      <div class="field full" style="margin-top:14px"><label>People tagged on this project <span style="font-weight:600;color:var(--txt-3)">(anyone tagged here can tag others too)</span></label>
+        <div id="pmTaggedChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:${canTag?'8px':'0'}">${pmTaggedChipsHTML()}</div>
+        ${canTag?`<div style="position:relative">
           <input id="pmPeopleQ" oninput="pmPeopleFilter(this.value)" onfocus="pmPeopleFilter(this.value)" onblur="pmPeopleBlur()" placeholder="+ Search a person to tag… (type a name)" autocomplete="off" style="width:100%;padding:9px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13px">
           <div id="pmPeopleDD" style="position:absolute;left:0;right:0;top:100%;margin-top:4px;background:#fff;border:1px solid var(--line);border-radius:9px;box-shadow:0 6px 18px rgba(20,22,28,.14);max-height:190px;overflow-y:auto;z-index:20;display:none"></div>
         </div>`:''}
