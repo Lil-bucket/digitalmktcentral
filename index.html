@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   :root{
     /* neutrals — cool graphite scale */
@@ -1020,11 +1021,13 @@ function go(screen){
   // CTA per screen (mirrors the prototype)
   if(['dash','board','list','timeline'].includes(screen)){
     const statusChip=STATUS_FILTER?`<button onclick="setStatusFilter('')" style="padding:8px 12px;border-radius:9px;border:1px solid var(--line-2);background:#fff;font-size:12px;font-weight:600;color:var(--txt-2);margin-right:8px">Status: ${esc(statusOf(STATUS_FILTER).name)} ✕</button>`:'';
-    $('#ctaBox').innerHTML=`${['dash','board','list'].includes(screen)?ptipoFilterHTML():''}${statusChip}<button class="btn-ghost" onclick="openStageGuide()">Stage guide</button><button class="btn-acc" onclick="openProjNew()">+ New project</button>`;
+    const exportBtn=screen==='list'?'<button class="btn-ghost" onclick="exportWorkXLSX()">Exportar Excel</button>':'';
+    $('#ctaBox').innerHTML=`${['dash','board','list'].includes(screen)?ptipoFilterHTML():''}${statusChip}${exportBtn}<button class="btn-ghost" onclick="openStageGuide()">Stage guide</button><button class="btn-acc" onclick="openProjNew()">+ New project</button>`;
   } else if(screen==='campaigns'&&demoWritable(['admin','marketing'].includes(PAPEL))){
     $('#ctaBox').innerHTML='<button class="btn-acc" style="background:var(--po)" onclick="openCampNew()">+ New campaign</button>';
-  } else if(screen==='budgets'&&PAPEL==='admin'&&!viewOnly()){
-    $('#ctaBox').innerHTML='<button class="btn-acc" style="background:var(--po)" onclick="openOrcNew()">+ New budget</button>';
+  } else if(screen==='budgets'){
+    const canBudget=PAPEL==='admin'&&!viewOnly();
+    $('#ctaBox').innerHTML=`<button class="btn-ghost" onclick="exportBudgetXLSX()">Exportar Excel</button>${canBudget?'<button class="btn-acc" style="background:var(--po)" onclick="openOrcNew()">+ New budget</button>':''}`;
   } else if(['pos','mypos','reqpo'].includes(screen)&&demoWritable(PO_ACCESS)){
     $('#ctaBox').innerHTML='<button class="btn-acc" style="background:var(--po)" onclick="openReqPO()">+ Request PO</button>';
   } else { $('#ctaBox').innerHTML=''; }
@@ -1147,6 +1150,51 @@ function openProjNew(){
     tasks:t.tasks.map(n=>({id:uid(),n,done:false,fim:'',status:'no_prazo',pct:0,obs:'',resp:'',subs:[]})),
     logs:[],envolvidos:[],categorias:[],marca:''};
   openProjModal(proj, true);
+}
+/* Export (read-only) — one row per project already in projList() (respects the
+   active business-type/status filters), plus one activities sheet per project. */
+function sanitizeSheetName(name){
+  return (name||'').replace(/[:\\\/\?\*\[\]]/g,'').trim().slice(0,31)||'Projeto';
+}
+function exportWorkXLSX(){
+  if(!window.XLSX){ toast('Exportação indisponível — script não carregado.'); return; }
+  const list=projList();
+  if(!list.length){ toast('Nenhum projeto para exportar.'); return; }
+  const wb=XLSX.utils.book_new();
+  const resumo=list.map(p=>({
+    'Projeto': p.nome||'',
+    'Responsável': respName(p.resp)||'',
+    'Início': p.inicio||'',
+    'Fim': p.prazo||'',
+    'Status': statusOf(p.status).name
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumo), 'Resumo');
+  const usedNames={};
+  list.forEach(p=>{
+    const base=sanitizeSheetName(p.nome);
+    let name=base, n=2;
+    while(usedNames[name]){ name=base.slice(0,28)+'_'+n; n++; }
+    usedNames[name]=true;
+    const ws=XLSX.utils.aoa_to_sheet([
+      ['Projeto', p.nome||''],
+      ['Responsável', respName(p.resp)||''],
+      ['Início', p.inicio||''],
+      ['Fim', p.prazo||''],
+      ['Status', statusOf(p.status).name],
+      []
+    ]);
+    const grid=(p.tasks||[]).map(t=>({
+      'Atividade': t.n||'',
+      'Responsável': respName(t.resp)||'',
+      'Início': t.inicio||'',
+      'Fim': t.fim||'',
+      'Status': statusOf(t.status).name,
+      'Observações': t.obs||''
+    }));
+    if(grid.length) XLSX.utils.sheet_add_json(ws, grid, {origin:-1});
+    XLSX.utils.book_append_sheet(wb, ws, name);
+  });
+  XLSX.writeFile(wb, `projetos_TCL_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 /* Quadro (kanban) por etapa */
@@ -3745,6 +3793,56 @@ function renderBudgets(){
     <div style="padding:12px 17px;display:flex;justify-content:space-between;align-items:center;font-size:13px;background:var(--paper-2);border:1px solid var(--line);border-radius:11px"><span style="font-weight:800">Total</span><span class="mono" style="font-weight:800">${BRL(orcs.reduce((s,o)=>s+(+o.valor_total||0),0))}</span></div>
   </div>`:'<div class="banner">No budgets registered.</div>';
   return catTable+(canSensitive?feeSplitBlock():'<div class="banner">Cost center / account / description splits are restricted to Admin and Finance.</div>');
+}
+/* Export (read-only) — mirrors renderBudgets' own aggregation exactly, transcribes
+   what that screen already displays per campaign, never recomputes new business values. */
+function budgetExportRows(){
+  const canSensitive=effIsManager()||['admin','financeiro'].includes(effPapel());
+  const fee=DATA.fee||[];
+  let camps=(DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO');
+  if(effPapel()==='agencia'&&effAgencia()) camps=camps.filter(p=>p.agencia===effAgencia());
+  const tetoBy={},consBy={},compBy={},pendBy={};
+  DATA.tetos.forEach(t=>{tetoBy[t.projeto_id]=(tetoBy[t.projeto_id]||0)+(+t.teto||0);});
+  DATA.rateio.forEach(r=>{tetoBy[r.projeto_id]=(tetoBy[r.projeto_id]||0)+(+r.valor||0);});
+  DATA.pos.forEach(po=>{const v=+po.valor||0;if(CONS.includes(po.status))consBy[po.projeto_id]=(consBy[po.projeto_id]||0)+v;else if(COMP.includes(po.status))compBy[po.projeto_id]=(compBy[po.projeto_id]||0)+v;else if(PEND.includes(po.status))pendBy[po.projeto_id]=(pendBy[po.projeto_id]||0)+v;});
+  const orcs=DATA.orcamentos||[];
+  const byOrc={}; camps.forEach(p=>{ const k=p.orcamento_id||'—'; (byOrc[k]=byOrc[k]||[]).push(p); });
+  const rows=[];
+  orcs.forEach(o=>{
+    (byOrc[o.id]||[]).forEach(p=>{
+      const tot=tetoBy[p.id]||0, cons=consBy[p.id]||0, comp=compBy[p.id]||0, pnd=pendBy[p.id]||0;
+      const rawc=tot?(cons+comp+pnd)/tot*100:0;
+      const status=rawc>100.5?'Estourado':rawc>=90?'Próximo do limite':'Dentro do orçamento';
+      const row={
+        'Categoria': o.nome||o.product_category||'—',
+        'Projeto': p.nome||'',
+        'Fornecedor': p.agencia||'',
+        'Atividade': actColLabel(actKey(p)),
+        'Orçado (R$)': Math.round(tot*100)/100,
+        'Consumido (R$)': Math.round(cons*100)/100,
+        'Comprometido (R$)': Math.round(comp*100)/100,
+        'Aguardando aprovação (R$)': Math.round(pnd*100)/100,
+        '% Utilizado': Math.round(rawc),
+        'Status': status
+      };
+      if(canSensitive){
+        row['Tipo Rateio']=p.rateio?(p.rateio_tipo||''):'';
+        const f=p.rateio?fee.find(x=>x.tipo===p.rateio_tipo&&x.categoria===o.product_category):null;
+        row['Rateio %']=(f&&f.percentual!=null)?Math.round(f.percentual*1000)/10:'';
+      }
+      rows.push(row);
+    });
+  });
+  return rows;
+}
+function exportBudgetXLSX(){
+  if(!window.XLSX){ toast('Exportação indisponível — script não carregado.'); return; }
+  const rows=budgetExportRows();
+  if(!rows.length){ toast('Nenhum dado para exportar.'); return; }
+  const ws=XLSX.utils.json_to_sheet(rows);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Orçamento');
+  XLSX.writeFile(wb,`orcamento_TCL_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 function renderPeople(){
   const ROLE={admin:{t:'Admin',bg:'#fbe4e1',fg:'#bf0008'},marketing:{t:'Marketing',bg:'#ffe9e3',fg:'#c4421f'},financeiro:{t:'Finance',bg:'#f6efe0',fg:'#8a6a1f'},agencia:{t:'Agency',bg:'#ece6fa',fg:'#5535ad'},pendente:{t:'Pending',bg:'#e9ecf2',fg:'#59606e'}};
