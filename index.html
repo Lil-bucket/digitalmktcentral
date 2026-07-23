@@ -456,7 +456,9 @@ function visProjs(){
    ============================================================ */
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const BRL=n=>'R$ '+Math.round(+n||0).toLocaleString('pt-BR');
+const BRL=n=>'R$ '+(+n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+/* Whole-real variant — only for chart axis ticks, where cents are noise. */
+const BRL0=n=>'R$ '+Math.round(+n||0).toLocaleString('pt-BR');
 /* inline SVG icon set — single stroke family, inherits currentColor (replaces emojis) */
 const ICONS={
   search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/>',
@@ -3880,7 +3882,7 @@ function buildOverviewMonthlyChart(isBalance){
     {label:'Consumed',data:cons,backgroundColor:'#1273cf',borderRadius:5},
     {label:'Committed',data:comp,backgroundColor:'#6d4bd1',borderRadius:5},
     {label:'Awaiting approval',data:reqd,backgroundColor:'#d68a04',borderRadius:5}
-  ]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,ticks:{callback:v=>BRL(v)}}},plugins:{legend:{position:'bottom'}}}}));
+  ]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,ticks:{callback:v=>BRL0(v)}}},plugins:{legend:{position:'bottom'}}}}));
 }
 let CAMP_PO_OPEN={};
 function toggleCampPO(id){ CAMP_PO_OPEN[id]=!CAMP_PO_OPEN[id]; go(SCREEN); }
