@@ -459,6 +459,8 @@ const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;',
 const BRL=n=>'R$ '+(+n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 /* Whole-real variant — only for chart axis ticks, where cents are noise. */
 const BRL0=n=>'R$ '+Math.round(+n||0).toLocaleString('pt-BR');
+/* Round to cents for stored money values (avoids float noise like 12.340000001). */
+const r2=n=>Math.round((+n||0)*100)/100;
 /* inline SVG icon set — single stroke family, inherits currentColor (replaces emojis) */
 const ICONS={
   search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/>',
@@ -1674,7 +1676,7 @@ function campFutureRegisteredMonths(pid,afterM){ return Object.keys(campMonthlyT
 function openReallocModal(pid,fromMonth,balance){
   const p=DATA.poProjetos.find(x=>x.id===pid); if(!p)return;
   const future=campFutureRegisteredMonths(pid,fromMonth);
-  REALLOC={pid,fromMonth,balance:+balance,mode:'next',splitCount:Math.max(future.length,3),rows:[{id:uid(),mes:campNextCalMonth(fromMonth),valor:Math.round(balance)}]};
+  REALLOC={pid,fromMonth,balance:+balance,mode:'next',splitCount:Math.max(future.length,3),rows:[{id:uid(),mes:campNextCalMonth(fromMonth),valor:r2(balance)}]};
   renderReallocModal();
 }
 function reallocSetMode(mode){ if(!REALLOC)return; REALLOC.mode=mode; renderReallocModal(); }
@@ -1685,13 +1687,13 @@ function reallocManualDel(id){ if(!REALLOC)return; REALLOC.rows=REALLOC.rows.fil
 function reallocPreviewRows(){
   if(!REALLOC)return [];
   const {mode,fromMonth,balance,splitCount,pid}=REALLOC;
-  if(mode==='next') return [{mes:campNextCalMonth(fromMonth),valor:Math.round(balance)}];
+  if(mode==='next') return [{mes:campNextCalMonth(fromMonth),valor:r2(balance)}];
   if(mode==='split'){
     const future=campFutureRegisteredMonths(pid,fromMonth);
     let months=future;
     if(!months.length){ months=[]; let m=fromMonth; for(let i=0;i<splitCount;i++){ m=campNextCalMonth(m); months.push(m); } }
-    const n=months.length||1, each=Math.floor(balance/n);
-    return months.map((m,i)=>({mes:m,valor:i===n-1?Math.round(balance)-each*(n-1):each}));
+    const n=months.length||1, each=r2(Math.floor(balance/n*100)/100);
+    return months.map((m,i)=>({mes:m,valor:i===n-1?r2(balance-each*(n-1)):each}));
   }
   return REALLOC.rows.map(r=>({mes:r.mes,valor:+r.valor||0}));
 }
@@ -1700,7 +1702,7 @@ function renderReallocModal(){
   const {fromMonth,balance,mode}=REALLOC;
   const preview=reallocPreviewRows();
   const sum=preview.reduce((s,r)=>s+(+r.valor||0),0);
-  const mismatch=mode==='manual'&&Math.round(sum)!==Math.round(balance);
+  const mismatch=mode==='manual'&&r2(sum)!==r2(balance);
   const future=campFutureRegisteredMonths(REALLOC.pid,fromMonth);
   const modeCard=(id,title,desc)=>`<label style="display:flex;align-items:flex-start;gap:10px;border:1.5px solid ${mode===id?'var(--po)':'var(--line)'};background:${mode===id?'#fff8f7':'#fff'};border-radius:11px;padding:11px 13px;cursor:pointer">
     <input type="radio" name="reallocMode" ${mode===id?'checked':''} onchange="reallocSetMode('${id}')" style="margin-top:2px;accent-color:var(--po);flex-shrink:0">
@@ -1743,8 +1745,8 @@ async function reallocCreditTetos(pid,targets){
     const {data,error}=await SBPO.from('tetos').select('id,teto').eq('projeto_id',pid).eq('competencia',comp).limit(1);
     if(error)throw error;
     const cur=(data||[])[0];
-    if(cur){ const {error:e2}=await SBPO.from('tetos').update({teto:Math.round((+cur.teto||0)+(+t.valor||0))}).eq('id',cur.id); if(e2)throw e2; }
-    else{ const {error:e3}=await SBPO.from('tetos').insert({projeto_id:pid,competencia:comp,teto:Math.round(+t.valor||0),definido_por:'realocacao'}); if(e3)throw e3; }
+    if(cur){ const {error:e2}=await SBPO.from('tetos').update({teto:r2((+cur.teto||0)+(+t.valor||0))}).eq('id',cur.id); if(e2)throw e2; }
+    else{ const {error:e3}=await SBPO.from('tetos').insert({projeto_id:pid,competencia:comp,teto:r2(+t.valor||0),definido_por:'realocacao'}); if(e3)throw e3; }
   }
 }
 /* Reallocation MOVES money: the source month's cap must drop by the same amount,
@@ -1754,7 +1756,7 @@ async function reallocDebitTetos(pid,fromMonth,amount){
   const {data,error}=await SBPO.from('tetos').select('id,teto').eq('projeto_id',pid).eq('competencia',comp).limit(1);
   if(error)throw error;
   const cur=(data||[])[0]; if(!cur)return;
-  const {error:e2}=await SBPO.from('tetos').update({teto:Math.max(0,Math.round((+cur.teto||0)-(+amount||0)))}).eq('id',cur.id);
+  const {error:e2}=await SBPO.from('tetos').update({teto:Math.max(0,r2((+cur.teto||0)-(+amount||0)))}).eq('id',cur.id);
   if(e2)throw e2;
 }
 /* rateio_alocacao has no unique key (rows are summed), but the source month's
@@ -1765,7 +1767,7 @@ async function reallocDebitRateio(pid,fromMonth,amount){
   if(error)throw error;
   const rows=data||[]; const tot=rows.reduce((s,r)=>s+(+r.valor||0),0); if(!tot)return;
   for(const r of rows){
-    const nv=Math.max(0,Math.round((+r.valor||0)-(+amount||0)*((+r.valor||0)/tot)));
+    const nv=Math.max(0,r2((+r.valor||0)-(+amount||0)*((+r.valor||0)/tot)));
     const {error:e2}=await SBPO.from('rateio_alocacao').update({valor:nv}).eq('id',r.id); if(e2)throw e2;
   }
 }
@@ -1775,9 +1777,9 @@ async function submitRealloc(){
   const preview=reallocPreviewRows().filter(r=>r.mes&&(+r.valor||0)>0);
   if(!preview.length){ toast('Add at least one month with a value.'); return; }
   const sum=preview.reduce((s,r)=>s+(+r.valor||0),0);
-  if(REALLOC.mode==='manual'&&Math.round(sum)!==Math.round(REALLOC.balance)){ toast('Total must match the available balance.'); return; }
+  if(REALLOC.mode==='manual'&&r2(sum)!==r2(REALLOC.balance)){ toast('Total must match the available balance.'); return; }
   const p=DATA.poProjetos.find(x=>x.id===REALLOC.pid); if(!p)return;
-  const moved=Math.round(sum);
+  const moved=r2(sum);
   try{
     if(p.rateio){
       const cats=[...new Set((DATA.rateio||[]).filter(r=>r.projeto_id===p.id).map(r=>r.categoria))];
@@ -1785,7 +1787,7 @@ async function submitRealloc(){
       const totalByCat={}; (DATA.rateio||[]).filter(r=>r.projeto_id===p.id&&r.competencia&&String(r.competencia).slice(0,7)===REALLOC.fromMonth).forEach(r=>{ totalByCat[r.categoria]=(totalByCat[r.categoria]||0)+(+r.valor||0); });
       const totAll=Object.values(totalByCat).reduce((a,b)=>a+b,0)||1;
       const rows=[];
-      preview.forEach(pr=>{ cats.forEach(cat=>{ const share=(totalByCat[cat]||(totAll/cats.length))/totAll; rows.push({projeto_id:p.id,categoria:cat,competencia:pr.mes+'-01',valor:Math.round(pr.valor*share)}); }); });
+      preview.forEach(pr=>{ cats.forEach(cat=>{ const share=(totalByCat[cat]||(totAll/cats.length))/totAll; rows.push({projeto_id:p.id,categoria:cat,competencia:pr.mes+'-01',valor:r2(pr.valor*share)}); }); });
       const {error}=await SBPO.from('rateio_alocacao').insert(rows); if(error)throw error;
       await reallocDebitRateio(p.id,REALLOC.fromMonth,moved);
     } else {
@@ -1841,12 +1843,12 @@ async function submitCampValues(){
       if(!splits.length && cv.qual){ splits=(DATA.fee||[]).filter(f=>String(f.tipo||'').toUpperCase()===String(cv.qual||'').toUpperCase()); }
       if(!splits.length){ toast('Cannot resolve the rateio categories. Re-pick the rateio in "Edit category / budget".'); return; }
       const alloc=[];
-      rows.forEach(r=>{ const v=+r.valor||0; splits.forEach(s=>{ alloc.push({projeto_id:cv.id,categoria:s.categoria||null,competencia:r.mes+'-01',valor:Math.round(v*(+s.percentual||0))}); }); });
+      rows.forEach(r=>{ const v=+r.valor||0; splits.forEach(s=>{ alloc.push({projeto_id:cv.id,categoria:s.categoria||null,competencia:r.mes+'-01',valor:r2(v*(+s.percentual||0))}); }); });
       await SBPO.from('rateio_alocacao').delete().eq('projeto_id',cv.id);
       const {error}=await SBPO.from('rateio_alocacao').insert(alloc); if(error)throw error;
     }else{
       await SBPO.from('tetos').delete().eq('projeto_id',cv.id);
-      const tetos=rows.map(r=>({projeto_id:cv.id,competencia:r.mes+'-01',teto:Math.round(+r.valor),definido_por:'portal'}));
+      const tetos=rows.map(r=>({projeto_id:cv.id,competencia:r.mes+'-01',teto:r2(+r.valor),definido_por:'portal'}));
       const {error}=await SBPO.from('tetos').insert(tetos); if(error)throw error;
     }
     CAMPVAL=null; toast('Values updated ✓'); closeModal(); await reloadPOAll(); go('campaigns');
@@ -2992,8 +2994,8 @@ function reqSplitBreakdown(){
   const total=+REQ.valor||0; const comp=REQ.competencia;
   let running=0;
   return group.splits.map((s,i)=>{
-    let valor=Math.round(total*s.percentual);
-    if(i===group.splits.length-1) valor=Math.round(total)-running; else running+=valor;
+    let valor=r2(total*s.percentual);
+    if(i===group.splits.length-1) valor=r2(total-running); else running+=valor;
     const teto=comp?(projMonths(s.projeto_id).find(m=>m.competencia===comp)||{}).teto||0:0;
     const cons=comp?consumoMes(s.projeto_id,comp):0;
     const saldo=teto-cons-valor;
@@ -3156,7 +3158,7 @@ async function submitPOEdit(){
   const val=+pe.valor||0; if(val<=0){ toast('Enter a value greater than 0.'); return; }
   const comp=/^\d{4}-\d{2}$/.test(pe.mes)?pe.mes+'-01':pe.mes;
   try{
-    const {error}=await SBPO.from('pos').update({valor:Math.round(val),descricao:pe.descricao||null,numero_po:pe.numero_po||null,competencia:comp,status:pe.status}).eq('id',pe.id);
+    const {error}=await SBPO.from('pos').update({valor:r2(val),descricao:pe.descricao||null,numero_po:pe.numero_po||null,competencia:comp,status:pe.status}).eq('id',pe.id);
     if(error)throw error;
     POEDIT=null; toast('PO updated ✓'); closeModal(); await reloadPO(); go('pos');
   }catch(e){ toast('Error: '+(e.message||e)); }
@@ -4306,7 +4308,7 @@ async function submitCamp(){
   if(DEMO_MODE){
     const pid='demo-p-'+uid();
     DATA.poProjetos.push({id:pid,nome:CAMP.nome.trim(),agencia:CAMP.agencia||null,orcamento_id:CAMP.orcamento_id,product_category:cat,activity:CAMP.activity||null,rateio:false,aprovacao_status:'PENDENTE',dono:(currentUser&&currentUser.email)||''});
-    rows.forEach(r=>DATA.tetos.push({projeto_id:pid,competencia:r.mes+'-01',teto:Math.round(+r.valor)}));
+    rows.forEach(r=>DATA.tetos.push({projeto_id:pid,competencia:r.mes+'-01',teto:r2(+r.valor)}));
     toast('Campaign created ✓ (demo — now awaiting approval)'); closeModal(); go('campaigns');
     return;
   }
@@ -4319,7 +4321,7 @@ async function submitCamp(){
     if(error)throw error;
     const pid=proj.id;
     {
-      const tetos=rows.map(r=>({projeto_id:pid,competencia:r.mes+'-01',teto:Math.round(+r.valor),definido_por:'portal'}));
+      const tetos=rows.map(r=>({projeto_id:pid,competencia:r.mes+'-01',teto:r2(+r.valor),definido_por:'portal'}));
       const {error:e2}=await SBPO.from('tetos').upsert(tetos,{onConflict:'projeto_id,competencia'}); if(e2)throw e2;
     }
     toast('Campaign created ✓'); closeModal(); await reloadPOAll(); go('campaigns');
