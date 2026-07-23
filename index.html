@@ -28,6 +28,10 @@
     /* type */
     --sans:'Hanken Grotesk',system-ui,-apple-system,sans-serif;
     --mono:'JetBrains Mono',ui-monospace,monospace;
+    /* type scale — 6 steps, use these instead of ad-hoc px sizes */
+    --fs-eyebrow:10.5px; --fs-xs:11.5px; --fs-sm:12.5px; --fs-base:14px; --fs-lg:16px; --fs-xl:20px; --fs-hero:32px;
+    /* radius scale — field / card / pill */
+    --r-xs:8px; --r-sm:10px; --r-md:13px; --r-lg:16px; --r-pill:20px;
     /* elevation */
     --sh-1:0 1px 2px rgba(16,19,26,.05),0 1px 3px rgba(16,19,26,.04);
     --sh-2:0 2px 6px -1px rgba(16,19,26,.07),0 6px 16px -6px rgba(16,19,26,.08);
@@ -63,8 +67,8 @@
   .gate-inp{width:100%;background:var(--paper);border:1px solid var(--line);color:var(--txt);border-radius:11px;padding:12px 14px;font:inherit;font-size:14px;margin-bottom:10px;outline:none;transition:border-color var(--fast),box-shadow var(--fast),background var(--fast)}
   .gate-inp::placeholder{color:var(--txt-3)}
   .gate-inp:focus{border-color:var(--accent);background:#fff;box-shadow:var(--ring)}
-  .gate-btn{width:100%;justify-content:center;display:inline-flex;align-items:center;gap:10px;background:var(--ink);color:#fff;padding:13px 22px;border-radius:11px;font-weight:700;font-size:14px;cursor:pointer;margin-top:2px}
-  .gate-btn:hover{background:var(--accent)}
+  .gate-btn{width:100%;justify-content:center;display:inline-flex;align-items:center;gap:10px;background:var(--accent);color:#fff;padding:13px 22px;border-radius:11px;font-weight:700;font-size:14px;cursor:pointer;margin-top:2px;box-shadow:var(--sh-1)}
+  .gate-btn:hover{background:var(--accent-deep)}
   .gate-btn:active{transform:scale(.985)}
   .gate-btn:disabled{opacity:.55;cursor:default;transform:none}
   .gate-links{display:flex;justify-content:space-between;gap:10px;margin-top:16px}
@@ -437,6 +441,28 @@ const CAT_CHIPS=PRODUCT_CATS; // project categories = same product categories us
 const BRAND_CHIPS=['TCL','SEMP','TCL + SEMP'];
 const uid=()=>'x'+Math.random().toString(36).slice(2,9);
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
+/* Turn a raw Supabase/Postgres error into a sentence a user can act on,
+   instead of dumping the constraint name in a toast. */
+function humanErr(e){
+  const raw=(e&&(e.message||e.error_description||e.details))||String(e||'');
+  const s=raw.toLowerCase();
+  if(s.includes('duplicate key')||s.includes('unique constraint')) return 'This month already has a value — edit the existing entry instead of adding a new one.';
+  if(s.includes('violates check constraint')&&s.includes('teto')) return 'A monthly cap can\'t be negative. Adjust the amount and try again.';
+  if(s.includes('foreign key')) return 'A linked record is missing or was removed. Refresh the page and try again.';
+  if(s.includes('row-level security')||s.includes('permission denied')||s.includes('not authorized')) return 'You don\'t have permission to do this.';
+  if(s.includes('network')||s.includes('failed to fetch')||s.includes('timeout')) return 'Connection problem. Check your internet and try again.';
+  return raw.length>140?'Something went wrong. Please try again or contact support.':raw;
+}
+function toastErr(e){ toast(humanErr(e)); }
+/* Consistent empty-state block: icon bubble + short line + optional action. */
+function emptyState(icon,title,sub,actionHTML){
+  return `<div style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;padding:26px 18px;color:var(--txt-3)">
+    <span class="ich" style="width:40px;height:40px;background:var(--paper);color:var(--txt-3)">${icn(icon||'folder',20)}</span>
+    <div style="font-family:var(--sans);font-weight:700;font-size:var(--fs-sm);color:var(--txt-2)">${esc(title||'Nothing here yet')}</div>
+    ${sub?`<div style="font-size:var(--fs-xs);max-width:280px">${esc(sub)}</div>`:''}
+    ${actionHTML||''}
+  </div>`;
+}
 function fullAccess(){return isManager||PAPEL==='admin';}
 function canEdit(p){return fullAccess()||!p||!p.owner||p.owner===(currentUser&&currentUser.email);}
 /* Tagging people (via the "+ tag someone" field or an @mention in a comment)
@@ -1213,7 +1239,7 @@ async function editStageDesc(stageId){
     s.stageDescs=Object.assign({},s.stageDescs||{},STAGE_DESCS);
     await SB.from('config').upsert({id:'app',data:s});
     toast('Column description updated ✓');
-  }catch(e){ toast('Error saving: '+(e.message||e)); }
+  }catch(e){ toastErr(e); }
   go(SCREEN);
 }
 function openStageGuide(){
@@ -1308,14 +1334,17 @@ function renderAprovacoes(){
    ============================================================ */
 const CONS=['FATURADA','VALIDADA','CONCLUIDA'], COMP=['APROVADA','PO_GERADA','ATUALIZAR_INFO'], PEND=['SOLICITADA','EM_APROVACAO'];
 /* Campaigns screen — visual meta + UI state */
+/* Category colors deliberately avoid the status hues (blue=consumed,
+   violet=committed, amber=pending, green=balance) so a category chip never
+   reads as a status next to a progress bar. */
 const CAT_META={
-  TV:  {c:'#1273cf', bg:'#eaf1fc', icon:'tv', label:'TV'},
-  AC:  {c:'#0e9888', bg:'#e5f6f3', icon:'snow', label:'Air Conditioning'},
-  MOB: {c:'#6d4bd1', bg:'#efeafa', icon:'phone', label:'Mobile & Devices'},
-  REF: {c:'#d68a04', bg:'#fdf3e2', icon:'fridge', label:'Refrigerators'},
-  WG:  {c:'#c2417c', bg:'#fceaf3', icon:'washer', label:'Washer & Dryer'},
-  LABG:{c:'#5b7a1f', bg:'#f0f5e3', icon:'building', label:'Matriz (Corporate)'},
-  MON: {c:'#3a7bb5', bg:'#e9f2fa', icon:'monitor', label:'Monitors'}
+  TV:  {c:'#3949ab', bg:'#e8eaf6', icon:'tv', label:'TV'},
+  AC:  {c:'#0d9488', bg:'#e2f5f2', icon:'snow', label:'Air Conditioning'},
+  MOB: {c:'#c026d3', bg:'#f9e6fb', icon:'phone', label:'Mobile & Devices'},
+  REF: {c:'#ea580c', bg:'#fdece1', icon:'fridge', label:'Refrigerators'},
+  WG:  {c:'#0891b2', bg:'#e0f3f8', icon:'washer', label:'Washer & Dryer'},
+  LABG:{c:'#475569', bg:'#eaedf2', icon:'building', label:'Matriz (Corporate)'},
+  MON: {c:'#7c3aed', bg:'#efe9fd', icon:'monitor', label:'Monitors'}
 };
 const catMeta=k=>CAT_META[k]||{c:'#59606e',bg:'#edeff4',icon:'folder',label:k};
 const ACT_META={KOL:{icon:'mic',label:'KOL / Influencer'},FEE:{icon:'clipboard',label:'Agency fee'},AON:{icon:'radio',label:'Always On'},Campaings:{icon:'megaphone',label:'Campaign'},Campaign:{icon:'megaphone',label:'Campaign'}};
@@ -1795,7 +1824,7 @@ async function submitRealloc(){
       await reallocDebitTetos(p.id,REALLOC.fromMonth,moved);
     }
     toast('Balance reallocated ✓'); REALLOC=null; await reloadPOAll(); openCampDetail(p.id);
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toastErr(e); }
 }
 
 /* Edit the campaign's month-by-month values. For a normal / integral campaign
@@ -1852,7 +1881,7 @@ async function submitCampValues(){
       const {error}=await SBPO.from('tetos').insert(tetos); if(error)throw error;
     }
     CAMPVAL=null; toast('Values updated ✓'); closeModal(); await reloadPOAll(); go('campaigns');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toastErr(e); }
 }
 
 /* Edit an existing campaign — reassign it to the correct PRODUCT CATEGORY
@@ -1919,7 +1948,7 @@ async function submitCampEdit(){
       if(error)throw error;
     }
     CAMPEDIT=null; toast('Campaign updated ✓'); closeModal(); await reloadPOAll(); go('campaigns');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toastErr(e); }
 }
 
 function renderPOs(){
@@ -2021,26 +2050,26 @@ async function aprovarPO(id){
   if(DEMO_MODE){ const po=DATA.pos.find(x=>x.id===id); if(po)po.status='APROVADA'; toast('PO approved ✓ (demo)'); go(SCREEN); return; }
   if(viewOnly()){toast(roMsg());return;}
   try{ const {error}=await SBPO.rpc('aprovar_po',{p_po:id}); if(error)throw error; toast('PO approved ✓'); await reloadPO(); go(SCREEN); }
-  catch(e){ toast('Error: '+(e.message||e)); }
+  catch(e){ toastErr(e); }
 }
 async function rejeitarPO(id){
   if(DEMO_MODE){ const po=DATA.pos.find(x=>x.id===id); if(po)po.status='REJEITADA'; toast('PO rejected (demo)'); go(SCREEN); return; }
   if(viewOnly()){toast(roMsg());return;}
   try{ const {error}=await SBPO.rpc('rejeitar_po',{p_po:id}); if(error)throw error; toast('PO rejected'); await reloadPO(); go(SCREEN); }
-  catch(e){ toast('Error: '+(e.message||e)); }
+  catch(e){ toastErr(e); }
 }
 async function aprovarCamp(id){
   if(DEMO_MODE){ const p=DATA.poProjetos.find(x=>x.id===id); if(p)p.aprovacao_status='APROVADO'; toast('Campaign approved ✓ (demo)'); go(SCREEN); return; }
   if(viewOnly()){toast(roMsg());return;}
   try{ const {error}=await SBPO.rpc('aprovar_projeto',{p_projeto:id}); if(error)throw error; toast('Campaign approved ✓'); await reloadPOAll(); go(SCREEN); }
-  catch(e){ toast('Error: '+(e.message||e)); }
+  catch(e){ toastErr(e); }
 }
 async function rejeitarCamp(id){
   const motivo=prompt('Reason for rejecting the campaign:'); if(motivo===null)return;
   if(DEMO_MODE){ DATA.poProjetos=DATA.poProjetos.filter(x=>x.id!==id); toast('Campaign rejected (demo)'); go(SCREEN); return; }
   if(viewOnly()){toast(roMsg());return;}
   try{ const {error}=await SBPO.rpc('rejeitar_projeto',{p_projeto:id,p_motivo:motivo}); if(error)throw error; toast('Campaign rejected'); await reloadPOAll(); go(SCREEN); }
-  catch(e){ toast('Error: '+(e.message||e)); }
+  catch(e){ toastErr(e); }
 }
 
 /* ============================================================
@@ -2200,7 +2229,7 @@ async function submitGerarPO(){
     const {error}=await SBPO.rpc('gerar_po',{p_po:GERAR.id,p_numero:num,p_arquivo:path});
     if(error)throw error;
     GERAR=null; closeModal(); await reloadPO(); await reloadNotif(); go(SCREEN); toast('PO '+num+' issued ✓ — agency can now post the NF.');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toastErr(e); }
 }
 
 /* ---- Invoice / NF (agency, admin) ---- */
@@ -2242,7 +2271,7 @@ async function submitFaturarPO(){
     if(error)throw error;
     const venc=(data&&data.vencimento)?fmtDataBR(data.vencimento):'—';
     FAT=null; closeModal(); await reloadPO(); await reloadNotif(); go(SCREEN); toast('NF posted ✓ — payment forecast '+venc+'.');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toastErr(e); }
 }
 
 /* ---- Validate NF (finance/admin) ---- */
@@ -2281,14 +2310,14 @@ async function submitValidarPO(){
   try{ const {error}=await SBPO.rpc('validar_po',{p_po:VALID.id}); if(error)throw error;
     const po=DATA.pos.find(p=>p.id===VALID.id)||{}; const venc=fmtDataBR(po.vencimento);
     VALID=null; closeModal(); await reloadPO(); await reloadNotif(); go(SCREEN); toast('Invoice validated ✓ — payment scheduled for '+venc+'.');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toastErr(e); }
 }
 async function rejeitarFatPO(){
   if(viewOnly()){toast(roMsg());return;}
   if(!VALID)return; const motivo=prompt('Reason to send the NF back to the agency:'); if(motivo===null)return; if(!motivo.trim()){toast('Describe the reason.');return;}
   try{ const {error}=await SBPO.rpc('rejeitar_faturamento',{p_po:VALID.id,p_motivo:motivo}); if(error)throw error;
     VALID=null; closeModal(); await reloadPO(); await reloadNotif(); go(SCREEN); toast('Sent back to the agency for update.');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toastErr(e); }
 }
 
 /* ============================================================
@@ -2778,12 +2807,12 @@ async function saveProj(){
     if(i>=0)DATA.projetos[i]=clean; else DATA.projetos.push(clean);
     if(fromTask){ const l=loadPTasks(); const t=l.find(x=>x.id===fromTask); if(t&&!t.done){ t.done=true; t.updatedAt=Date.now(); savePTasks(l); } }
     toast('Project saved ✓'); closeModal(); go(SCREEN);
-  }catch(e){ toast('Error saving: '+(e.message||e)); }
+  }catch(e){ toastErr(e); }
 }
 async function delProj(id){
   if(!confirm('Delete this project? This action cannot be undone.'))return;
   try{ await SB.from('projetos').delete().eq('id',id); DATA.projetos=DATA.projetos.filter(p=>p.id!==id); toast('Project deleted'); closeModal(); go(SCREEN); }
-  catch(e){ toast('Error: '+(e.message||e)); }
+  catch(e){ toastErr(e); }
 }
 
 /* Notificações in-app (menções a mim) */
@@ -2800,11 +2829,11 @@ function myMentions(){
 }
 async function notifMarkRead(id,val){
   try{ await SBPO.from('notificacoes').update({lida:val}).eq('id',id); const n=DATA.notif.find(x=>x.id===id); if(n)n.lida=val; go(SCREEN); }
-  catch(e){ toast('Error: '+(e.message||e)); }
+  catch(e){ toastErr(e); }
 }
 async function notifDelete(id){
   try{ await SBPO.from('notificacoes').delete().eq('id',id); DATA.notif=DATA.notif.filter(n=>n.id!==id); go(SCREEN); }
-  catch(e){ toast('Error: '+(e.message||e)); }
+  catch(e){ toastErr(e); }
 }
 /* Work-origin notifications (project @mentions) are computed live from
    project logs — there's no DB row to mark read/delete against, unlike
@@ -2823,7 +2852,7 @@ async function notifMarkAllRead(){
   const ids=DATA.notif.filter(n=>!n.lida).map(n=>n.id);
   if(ids.length){
     try{ await SBPO.from('notificacoes').update({lida:true}).in('id',ids); DATA.notif.forEach(n=>n.lida=true); }
-    catch(e){ toast('Error: '+(e.message||e)); return; }
+    catch(e){ toastErr(e); return; }
   }
   go(SCREEN); toast('All marked as read ✓');
 }
@@ -2836,7 +2865,7 @@ async function notifClearAll(){
   const ids=DATA.notif.map(n=>n.id);
   if(ids.length){
     try{ await SBPO.from('notificacoes').delete().in('id',ids); DATA.notif=[]; }
-    catch(e){ toast('Error: '+(e.message||e)); return; }
+    catch(e){ toastErr(e); return; }
   }
   go(SCREEN); toast('Notifications cleared');
 }
@@ -3077,7 +3106,7 @@ async function submitReqPO(){
       }
       toast('PO split across '+rows.length+' categories for '+fmtMes(REQ.competencia)+' ✓'); closeModal();
       await reloadPO(); go('pos');
-    }catch(e){ toast('Error: '+(e.message||e)); }
+    }catch(e){ toastErr(e); }
     return;
   }
   if(!REQ.projeto_id){ toast('Choose the campaign.'); return; }
@@ -3095,7 +3124,7 @@ async function submitReqPO(){
     if(error)throw error;
     toast('PO requested for '+fmtMes(REQ.competencia)+' ✓'); closeModal();
     await reloadPO(); go('pos');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toastErr(e); }
 }
 async function reloadPO(){
   try{
@@ -3117,7 +3146,7 @@ async function realocarPO(poId){
     const {error}=await SBPO.from('pos').update({competencia:comp}).eq('id',poId);
     if(error)throw error;
     po.competencia=comp; toast('PO reallocated to '+fmtMes(comp)+' ✓'); go('pos');
-  }catch(e){ toast('Error reallocating: '+(e.message||e)); }
+  }catch(e){ toastErr(e); }
 }
 
 /* admin edita uma PO por completo (valor, descrição, nº, mês, status) */
@@ -3161,7 +3190,7 @@ async function submitPOEdit(){
     const {error}=await SBPO.from('pos').update({valor:r2(val),descricao:pe.descricao||null,numero_po:pe.numero_po||null,competencia:comp,status:pe.status}).eq('id',pe.id);
     if(error)throw error;
     POEDIT=null; toast('PO updated ✓'); closeModal(); await reloadPO(); go('pos');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toastErr(e); }
 }
 
 /* ===== DELETE (admin only) — POs, campaigns, budgets ===== */
@@ -3172,7 +3201,7 @@ async function deletarPO(id){
   if(!confirm('Delete this PO permanently?\n\n'+(poNome(po.projeto_id)||'')+' · '+BRL(po.valor)+(po.numero_po?' · PO '+po.numero_po:'')+'\n\nThis cannot be undone.'))return;
   try{ const {error}=await SBPO.rpc('excluir_po',{p_po:id}); if(error)throw error;
     POEDIT=null; closeModal(); await reloadPO(); await reloadNotif(); go(SCREEN); toast('PO deleted.');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toastErr(e); }
 }
 async function deletarCampanha(id){
   if(viewOnly()){toast(roMsg());return;}
@@ -3182,7 +3211,7 @@ async function deletarCampanha(id){
   if(!confirm('Delete campaign "'+(p.nome||'')+'"?\n\nThis also deletes its '+nPos+' PO(s) and all monthly caps/rateio.\n\nThis cannot be undone.'))return;
   try{ const {error}=await SBPO.rpc('excluir_projeto',{p_projeto:id}); if(error)throw error;
     CAMPEDIT=null; closeModal(); await reloadPOAll(); go('campaigns'); toast('Campaign deleted.');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toastErr(e); }
 }
 async function deletarOrcamento(id){
   if(viewOnly()){toast(roMsg());return;}
@@ -3191,7 +3220,7 @@ async function deletarOrcamento(id){
   if(!confirm('Delete budget "'+(o.nome||o.product_category||'')+'"?\n\nOnly possible if no campaign is linked to it.\n\nThis cannot be undone.'))return;
   try{ const {error}=await SBPO.rpc('excluir_orcamento',{p_orc:id}); if(error)throw error;
     ORC=null; closeModal(); await reloadPOAll(); go('budgets'); toast('Budget deleted.');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toastErr(e); }
 }
 
 /* ============================================================
@@ -3509,19 +3538,19 @@ function boPeriodBar(){
   const months=boDataMonths();
   const years=Array.from(new Set(months.map(m=>m.slice(0,4)))).sort();
   const quarters=Array.from(new Set(months.map(m=>m.slice(0,4)+'-Q'+Math.ceil(+m.slice(5,7)/3)))).sort();
-  const seg=(id,l)=>`<button onclick="boSetMode('${id}')" style="padding:7px 14px;border-radius:8px;border:1px solid ${BO_PER.mode===id?'var(--po)':'var(--line-2)'};background:${BO_PER.mode===id?'#fbe4e1':'#fff'};color:${BO_PER.mode===id?'#bf0008':'var(--txt-2)'};font-size:12px;font-weight:700;cursor:pointer">${l}</button>`;
-  const scopeSeg=(id,l)=>`<button onclick="boSetScope('${id}')" style="padding:7px 14px;border-radius:8px;border:1px solid ${BO_SCOPE===id?'var(--po)':'var(--line-2)'};background:${BO_SCOPE===id?'#fbe4e1':'#fff'};color:${BO_SCOPE===id?'#bf0008':'var(--txt-2)'};font-size:12px;font-weight:700;cursor:pointer" title="${id==='nolabg'?'Hide Matriz (LABG) campaigns from every number on this screen':'Every category, including Matriz (LABG)'}">${l}</button>`;
+  /* Segmented control: one pill container, active tab filled white with a
+     soft shadow (classic iOS-style). onc = onclick expr, on = is-active. */
+  const segBtn=(onc,on,l,title)=>`<button onclick="${onc}"${title?` title="${title}"`:''} style="padding:6px 13px;border-radius:7px;border:none;background:${on?'#fff':'transparent'};color:${on?'var(--accent-deep)':'var(--txt-2)'};font-size:var(--fs-sm);font-weight:700;cursor:pointer;box-shadow:${on?'var(--sh-1)':'none'}">${l}</button>`;
+  const segGroup=(label,inner)=>`<span style="display:inline-flex;flex-direction:column;gap:5px"><span style="font-size:var(--fs-eyebrow);font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3)">${label}</span><span style="display:inline-flex;gap:3px;background:var(--paper);border:1px solid var(--line);border-radius:var(--r-sm);padding:3px">${inner}</span></span>`;
+  const seg=(id,l)=>segBtn(`boSetMode('${id}')`,BO_PER.mode===id,l);
+  const scopeSeg=(id,l,title)=>segBtn(`boSetScope('${id}')`,BO_SCOPE===id,l,title);
   const opts=BO_PER.mode==='year'?years:BO_PER.mode==='quarter'?quarters:BO_PER.mode==='month'?months:[];
   const lbl=v=>BO_PER.mode==='month'?fmtMes(v+'-01'):BO_PER.mode==='quarter'?v.replace('-Q',' · Q'):v;
-  const sel=opts.length?`<select onchange="boSetVal(this.value)" style="padding:7px 12px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font-size:12.5px;font-weight:600;color:var(--txt-2)">${opts.map(o=>`<option value="${o}" ${BO_PER.val===o?'selected':''}>${lbl(o)}</option>`).join('')}</select>`:'';
-  return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap">
-    <span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--txt-3)">Period</span>
-    <div style="display:flex;gap:6px">${seg('all','All')}${seg('year','Year')}${seg('quarter','Quarter')}${seg('month','Month')}</div>
+  const sel=opts.length?`<span style="display:inline-flex;flex-direction:column;gap:5px"><span style="font-size:var(--fs-eyebrow);font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3)">${BO_PER.mode==='year'?'Year':BO_PER.mode==='quarter'?'Quarter':'Month'}</span><select onchange="boSetVal(this.value)" style="padding:7px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:#fff;font-size:var(--fs-sm);font-weight:600;color:var(--txt-2)">${opts.map(o=>`<option value="${o}" ${BO_PER.val===o?'selected':''}>${lbl(o)}</option>`).join('')}</select></span>`:'';
+  return `<div style="display:flex;align-items:flex-end;gap:14px;margin-bottom:18px;flex-wrap:wrap">
+    ${segGroup('Period',seg('all','All')+seg('year','Year')+seg('quarter','Quarter')+seg('month','Month'))}
     ${sel}
-    <span style="width:1px;height:22px;background:var(--line-2)"></span>
-    <span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--txt-3)">Scope</span>
-    <div style="display:flex;gap:6px">${scopeSeg('all','Total')}${scopeSeg('nolabg','Excluding LABG')}</div>
-    ${BO_PER.mode!=='all'?'<span style="font-size:11.5px;color:var(--txt-3)">caps, rateios and POs filtered by month</span>':''}
+    ${segGroup('Scope',scopeSeg('all','Total','Every category, including Matriz (LABG)')+scopeSeg('nolabg','Excl. LABG','Hide Matriz (LABG) from every number on this screen'))}
   </div>`;
 }
 let CAT_ACC_OPEN={};
@@ -3603,7 +3632,7 @@ function campPOsListHTML(p){
     <span class="badge ${s.c}" style="font-size:10.5px;flex-shrink:0"><span class="d"></span>${s.t}</span>
     <span class="mono" style="font-size:12px;font-weight:700;width:96px;text-align:right;flex-shrink:0">${BRL(po.valor)}</span>
   </div>`;};
-  return pos.length?pos.map(poRow).join(''):'<div style="font-size:11.5px;color:var(--txt-3)">No POs requested yet.</div>';
+  return pos.length?pos.map(poRow).join(''):emptyState('receipt','No purchase orders yet','POs requested for this campaign will show up here.');
 }
 /* ============================================================
    OVERVIEW — BY ACCOUNT (32202171 / 32202169)
@@ -3619,6 +3648,10 @@ function campPOsListHTML(p){
 const CAT_CC={TV:'1109123014',AC:'1406122014',REF:'1603122014',WG:'1603122014',MOB:'1607122049',LABG:'1109123033'};
 const ACC_ORDER=['32202171','32202169'];
 const ACC_LABEL={'32202171':'Media & production','32202169':'Agency fees'};
+/* Distinct accent + icon per account so the two blocks read apart at a glance
+   (neutral slate/indigo — kept off the status hues). */
+const ACC_META={'32202171':{c:'#334155',bg:'#eef1f6',icon:'megaphone'},'32202169':{c:'#4338ca',bg:'#eaeafb',icon:'clipboard'}};
+const accMetaOf=a=>ACC_META[a]||{c:'#475569',bg:'#eef1f6',icon:'folder'};
 let ACC_OV_OPEN={};
 function toggleAccOv(k){ ACC_OV_OPEN[k]=!ACC_OV_OPEN[k]; go(SCREEN); }
 /* Overview scope: everything, or everything except LABG (Matriz/Corporate) —
@@ -3686,16 +3719,27 @@ function accountsOverviewBlock(){
     const legend=rows.length?`<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px">
       ${rows.map(r=>{const m=catMeta(r.cat);return `<span style="display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:var(--txt-2)"><span style="width:9px;height:9px;border-radius:3px;background:${m.c}"></span>${esc(m.label)} <span class="mono" style="font-weight:800;color:var(--txt)">${share(r).toFixed(1)}%</span></span>`;}).join('')}
     </div>`:'';
-    return `<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05);margin-bottom:12px">
-      <div style="padding:15px 18px 16px;border-bottom:${open?'1px solid var(--line)':'none'}">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <span class="mono" style="font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:var(--paper-2);color:var(--txt-2)">${esc(acc)}</span>
-          <b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px;flex:1;min-width:120px">${esc(ACC_LABEL[acc]||('Account '+acc))}</b>
-          <span class="mono" style="font-size:11.5px;color:var(--txt-2);white-space:nowrap" title="Consumed + committed / budget">${BRL(tot.cons+tot.comp)} <span style="color:var(--txt-3)">/ ${BRL(tot.b)}</span></span>
-          <span class="mono" style="font-size:12.5px;font-weight:800;white-space:nowrap;color:${totSaldo<0?'var(--po)':'#16a06a'}" title="Balance">${BRL(totSaldo)}</span>
+    const am=accMetaOf(acc);
+    return `<div style="background:#fff;border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;box-shadow:var(--sh-1)">
+      <div style="padding:16px 18px;border-bottom:${open?'1px solid var(--line)':'none'}">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <span class="ich" style="width:34px;height:34px;background:${am.bg};color:${am.c};flex-shrink:0">${icn(am.icon,17)}</span>
+          <span style="flex:1;min-width:140px">
+            <b style="font-family:var(--sans);font-size:var(--fs-lg);display:block;line-height:1.15">${esc(ACC_LABEL[acc]||('Account '+acc))}</b>
+            <span class="mono" style="font-size:var(--fs-eyebrow);font-weight:700;color:var(--txt-3);letter-spacing:.02em">Account ${esc(acc)}</span>
+          </span>
+          <span style="text-align:right;flex-shrink:0">
+            <span class="mono" style="font-size:var(--fs-xl);font-weight:800;display:block;line-height:1.1;color:var(--txt)" title="Total budget in the period">${BRL(tot.b)}</span>
+            <span class="mono" style="font-size:var(--fs-eyebrow);color:var(--txt-3)">total budget</span>
+          </span>
+          <span style="width:1px;height:34px;background:var(--line);flex-shrink:0"></span>
+          <span style="text-align:right;flex-shrink:0;min-width:120px">
+            <span class="mono" style="font-size:var(--fs-base);font-weight:800;display:block;line-height:1.1;color:${totSaldo<0?'var(--po)':'var(--green)'}" title="Balance = budget − consumed − committed − pending">${BRL(totSaldo)}</span>
+            <span class="mono" style="font-size:var(--fs-eyebrow);color:var(--txt-3)">balance · ${BRL(tot.cons+tot.comp)} used</span>
+          </span>
           <button class="chip-btn" onclick="toggleAccOv('${esc(acc)}')">${open?'Hide values':'Values by CC'}</button>
         </div>
-        ${rows.length?shareBar+legend:'<div style="margin-top:12px;font-size:12.5px;color:var(--txt-3)">No amounts in this account for the selected period.</div>'}
+        ${rows.length?shareBar+legend:'<div style="margin-top:12px;font-size:var(--fs-sm);color:var(--txt-3)">No amounts in this account for the selected period.</div>'}
       </div>
       ${(open&&rows.length)?`<div style="padding:6px 18px 12px">
         ${rows.map(r=>{const m=catMeta(r.cat),s=r.b-r.cons-r.comp-r.pend,pc=share(r);
@@ -3713,9 +3757,9 @@ function accountsOverviewBlock(){
       </div>`:''}
     </div>`;
   };
-  return `<div style="margin:18px 0">
-    <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 10px"><h3 style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">By account</h3><span style="font-size:11.5px;color:var(--txt-3)">share of each account's budget by cost center / category${BO_PER.mode!=='all'?' — filtered by the selected period':''}${BO_SCOPE==='nolabg'?' · LABG excluded':''}</span></div>
-    ${ACC_ORDER.map(card).join('')}
+  return `<div>
+    <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 12px"><h3 style="font-family:var(--sans);font-size:var(--fs-base)">By account</h3><span style="font-size:var(--fs-xs);color:var(--txt-3)">share of each account's budget by cost center / category${BO_PER.mode!=='all'?' — filtered by the selected period':''}${BO_SCOPE==='nolabg'?' · LABG excluded':''}</span></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:14px;align-items:start">${ACC_ORDER.map(card).join('')}</div>
   </div>`;
 }
 function renderBudgetOverview(isBalance){
@@ -3774,6 +3818,7 @@ function renderBudgetOverview(isBalance){
   };
   const byCat={}; camps.forEach(p=>{ const k=p.product_category||'Uncategorized'; (byCat[k]=byCat[k]||[]).push(p); });
   const catKeys=Object.keys(byCat).sort();
+  const catByN={}; cats.forEach(c=>catByN[c.n]=c); // registered-budget context per category
   /* Category row: collapsed shows the usual thin bar+%+money; expanded drops the
      %/money summary and shows ONE general bar for the whole category — 3x the
      usual thickness and full width — with per-activity totals below. */
@@ -3783,26 +3828,32 @@ function renderBudgetOverview(isBalance){
     const rawc=tot?(cons+comp+pnd)/tot*100:0, over=rawc>100.5, near=!over&&rawc>=90;
     const pcC=tot?Math.min(100,cons/tot*100):0, pcM=tot?Math.min(100-pcC,comp/tot*100):0, pcP=tot?Math.min(100-pcC-pcM,pnd/tot*100):0;
     const open=!!CAT_ACC_OPEN[key];
+    const cb=catByN[key]; // registered-budget context (allocated of budget)
+    const budgetLine=(cb&&!HIDE_MONEY)?`<span class="mono" style="font-size:10.5px;color:var(--txt-3)">${BRL(cb.used)} <span style="opacity:.8">allocated of</span> ${BRL(cb.total)} budget · ${Math.round(cb.raw)}%</span>`:'';
     return `<div style="border-bottom:1px solid #edeff4">
       <div style="display:flex;align-items:center;gap:10px;padding:11px 10px;cursor:pointer;background:${open?'var(--paper-2)':''}" onclick="toggleCatAcc('${esc(key)}')" onmouseover="this.style.background='var(--paper-2)'" onmouseout="this.style.background='${open?'var(--paper-2)':''}'">
         <span class="ich" style="width:28px;height:28px;background:${m.bg};color:${m.c}">${icn(m.icon,14)}</span>
-        <span style="flex:0 1 230px;min-width:150px"><span style="font-weight:700;font-size:13.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(key)}</span><span style="font-size:10.5px;color:var(--txt-3);font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.label)} · ${list.length} campaign(s)</span></span>
-        ${open?'':`<span class="pbar" style="flex:1;min-width:60px"><span style="width:${pcC}%;background:${over?'var(--po)':'var(--blue)'}"></span><span style="width:${pcM}%;background:var(--violet)"></span><span style="width:${pcP}%;background:var(--amber)"></span></span>
+        <span style="flex:0 1 250px;min-width:160px"><span style="font-weight:700;font-size:13.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(key)}</span><span style="font-size:10.5px;color:var(--txt-3);font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.label)} · ${list.length} campaign(s)</span></span>
+        ${open?'':`<span style="flex:1;min-width:60px;display:flex;flex-direction:column;gap:3px">
+          <span class="pbar"><span style="width:${pcC}%;background:${over?'var(--po)':'var(--blue)'}"></span><span style="width:${pcM}%;background:var(--violet)"></span><span style="width:${pcP}%;background:var(--amber)"></span></span>
+          ${budgetLine}
+        </span>
         <span class="pct" style="font-weight:700;color:${over?'#bf0008':near?'#9c6404':'var(--txt-2)'}" title="Consumed + committed + awaiting approval, over the cap">${Math.round(rawc)}%</span>
         ${HIDE_MONEY?'':`<span class="mono" style="font-size:11.5px;color:var(--txt-2);width:200px;text-align:right;flex-shrink:0;white-space:nowrap" title="Consumed + committed / cap">${BRL(cons+comp)} <span style="color:var(--txt-3)">/ ${BRL(tot)}</span></span>`}`}
         <span style="color:var(--txt-3);display:flex;transform:rotate(${open?'180deg':'0deg'});transition:transform .15s">${icn('chev',13)}</span>
       </div>
       ${open?`<div style="padding:2px 10px 10px 16px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
           <div style="flex:1;height:18px;border-radius:7px;background:#e9ebf1;overflow:hidden;display:flex" title="Consumed · committed · awaiting approval — whole category"><span style="height:100%;width:${pcC}%;background:${over?'var(--po)':'var(--blue)'}"></span><span style="height:100%;width:${pcM}%;background:var(--violet)"></span><span style="height:100%;width:${pcP}%;background:var(--amber)"></span></div>
           <span class="mono" style="font-size:14px;font-weight:800;color:${over?'#bf0008':near?'#9c6404':'var(--txt)'};flex-shrink:0;width:44px;text-align:right">${Math.round(rawc)}%</span>
         </div>
+        ${budgetLine?`<div style="margin:0 0 10px">${budgetLine}</div>`:''}
         ${activityTotalsHTML(list,key)}
       </div>`:''}
     </div>`;
   };
-  const categoriaAccordion=`<div class="panel" style="margin-top:18px"><div class="panel-h"><h3>Campaigns by category</h3><span class="tag">${catKeys.length} categor${catKeys.length===1?'y':'ies'}</span></div>
-    <div class="panel-b" style="padding:2px 12px">${catKeys.length?catKeys.map(catRow).join(''):'<div class="empty">No campaigns.</div>'}</div></div>`;
+  const categoriaAccordion=`<div class="panel"><div class="panel-h"><h3>By category</h3><span class="tag">${catKeys.length} categor${catKeys.length===1?'y':'ies'} · budget, allocation &amp; campaigns</span></div>
+    <div class="panel-b" style="padding:2px 12px">${catKeys.length?catKeys.map(catRow).join(''):emptyState('folder','No campaigns yet','Approved campaigns will appear here grouped by product category.')}</div></div>`;
   const pctCons=orcado?Math.min(100,consumido/orcado*100):0;
   const pctComp=orcado?Math.min(100-pctCons,compTot/orcado*100):0;
   const pctPend=orcado?Math.min(100-pctCons-pctComp,pend/orcado*100):0;
@@ -3846,22 +3897,36 @@ function renderBudgetOverview(isBalance){
     const mktAlerts=alerts.length?`<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px">${alerts.slice(0,4).map(a=>{const s=ALERT_SEV[a.sev]||ALERT_SEV.near;const p=camps.find(x=>x.id===a.id)||{};const txt=a.sev==='over'?`<b>${esc(p.nome)}</b> is over its cap.`:`<b>${esc(p.nome)}</b> is close to its cap and has no completed PO yet.`;return `<div style="display:flex;align-items:center;gap:12px;background:${s.bg};border:1px solid ${s.bd};border-radius:12px;padding:11px 16px"><span style="width:8px;height:8px;border-radius:50%;background:${s.dot};flex-shrink:0"></span><span style="flex:1;font-size:13px;color:${s.fg}">${txt}</span><button style="font-size:12px;font-weight:700;color:${s.btn};white-space:nowrap" onclick="openCampDetail('${esc(a.id)}')">View campaign →</button></div>`;}).join('')}</div>`:'';
     return boPeriodBar()+mktAlerts+categoriaAccordion;
   }
-  return boPeriodBar()+`${hero}${alertsHTML}
-    <div style="background:#fff;border:1px solid var(--line);border-radius:13px;padding:17px 18px;margin-bottom:18px;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">${fmtMes(mNow+'-01')} — month balance</b><span class="mono" style="font-size:12px;color:var(--txt-2)">cap ${BRL(capMes)}</span></div>
+  const chartPanel=`<div class="panel" style="margin-bottom:18px"><div class="panel-h"><h3>Monthly evolution</h3><span class="tag">cap · consumed · committed · awaiting approval</span></div>
+      <div style="padding:18px;height:280px"><canvas id="chartMonthly"></canvas></div>
+    </div>`;
+  const monthBalance=`<div style="background:#fff;border:1px solid var(--line);border-radius:var(--r-md);padding:17px 18px;box-shadow:var(--sh-1)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><b style="font-family:var(--sans);font-size:var(--fs-base)">${fmtMes(mNow+'-01')} — month balance</b><span class="mono" style="font-size:var(--fs-sm);color:var(--txt-2)">cap ${BRL(capMes)} · balance ${BRL(balMes)}</span></div>
       <div style="display:flex;height:24px;border-radius:7px;overflow:hidden;border:1px solid var(--line);background:#f3f4f6"><span style="width:${consPctM}%;background:var(--blue)"></span><span style="width:${compPctM}%;background:var(--violet)"></span><span style="width:${penPctM}%;background:var(--amber)"></span></div>
-      <div style="display:flex;gap:18px;font-size:12px;color:var(--txt-2);margin-top:9px;font-weight:600;flex-wrap:wrap">
+      <div style="display:flex;gap:18px;font-size:var(--fs-sm);color:var(--txt-2);margin-top:9px;font-weight:600;flex-wrap:wrap">
         <span title="POs invoiced, validated or completed"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--blue);margin-right:5px"></span>Consumed ${BRL(consMes)}</span>
         <span title="POs approved / issued, not yet invoiced"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--violet);margin-right:5px"></span>Committed ${BRL(compMes)}</span>
         <span title="POs requested, pending decision"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--amber);margin-right:5px"></span>Awaiting approval ${BRL(penMes)}</span>
         <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#d9d6cc;margin-right:5px"></span>Balance ${BRL(balMes)}</span>
       </div>
-    </div>
-    ${(effIsManager()||['admin','financeiro'].includes(effPapel()))?accountsOverviewBlock():''}
-    ${(cats.length&&!isAg)?`<div style="display:flex;align-items:baseline;gap:10px;margin:0 0 10px"><h3 style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">By product category</h3><span style="font-size:11.5px;color:var(--txt-3)">allocated to campaigns vs. registered budget${BO_PER.mode!=='all'?' — note: period allocation compared against the FULL budget total':''} — click to open the campaigns</span></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">${cats.map(c=>{const m=catMeta(c.n);const nC=camps.filter(p=>(p.product_category||'')===c.n).length;const over=c.raw>100.5,near=!over&&c.raw>=90;const barCol=over?'var(--po)':near?'var(--amber)':m.c;const pctCol=over?'#bf0008':near?'#9c6404':m.c;const pctBg=over?'#fbe4e1':near?'var(--amber-bg)':m.bg;return `<div class="cat-card" style="background:#fff;border:1px solid ${over?'#f2c4bf':'var(--line)'};border-radius:13px;padding:14px 16px;box-shadow:0 1px 2px rgba(20,22,28,.05);cursor:pointer" onclick="toggleCatAcc('${esc(c.n)}')"><div style="display:flex;align-items:center;gap:9px"><span class="ich" style="background:${m.bg};color:${m.c}">${icn(m.icon,15)}</span><span style="min-width:0;flex:1"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</b><span style="font-size:10.5px;color:var(--txt-3);font-weight:600">${esc(m.label)} · ${nC} campaign${nC===1?'':'s'}</span></span><span class="mono" style="font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:20px;background:${pctBg};color:${pctCol}">${Math.round(c.raw)}%</span></div><div style="display:flex;height:8px;border-radius:5px;overflow:hidden;background:#edeff4;margin-top:12px"><span style="width:${c.pct}%;background:${barCol}"></span></div><div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt-2);margin-top:8px" class="mono"><span>${BRL(c.used)} allocated</span><span style="color:var(--txt-3)">of ${BRL(c.total)} budget</span></div></div>`;}).join('')}</div>`:''}
-    <div class="panel" style="margin-top:18px"><div class="panel-h"><h3>Monthly evolution</h3><span class="tag">cap · consumed · committed · awaiting approval</span></div>
-      <div style="padding:18px;height:280px"><canvas id="chartMonthly"></canvas></div>
-    </div>
+    </div>`;
+  const showAccounts=effIsManager()||['admin','financeiro'].includes(effPapel());
+  /* Distinct "This month & accounts" band — a stronger visual break (tinted
+     inset panel) that separates the current-month snapshot + per-account
+     breakdown from the hero and the category list. Accounts render side by
+     side inside it. */
+  const monthAccountsBand=`<section style="background:var(--paper-2);border:1px solid var(--line);border-radius:var(--r-lg);padding:18px;margin-bottom:22px">
+      <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 14px">
+        <h3 style="font-family:var(--sans);font-size:var(--fs-lg)">This month &amp; accounts</h3>
+        <span style="font-size:var(--fs-xs);color:var(--txt-3)">current-month snapshot and per-account breakdown</span>
+      </div>
+      <div style="margin-bottom:${showAccounts?'16px':'0'}">${monthBalance}</div>
+      ${showAccounts?accountsOverviewBlock():''}
+    </section>`;
+  return boPeriodBar()+`${hero}
+    ${chartPanel}
+    ${alertsHTML}
+    ${monthAccountsBand}
     ${categoriaAccordion}`;
 }
 function buildOverviewMonthlyChart(isBalance){
@@ -4194,7 +4259,7 @@ async function savePerson(){
       if(!j||j.error) throw new Error((j&&j.error)||'invite failed');
       const {data:pes}=await SBPO.rpc('listar_pessoas'); DATA.pessoas=pes||[];
       toast('Invite sent ✓'); closeModal(); go(SCREEN);
-    }catch(e){ toast('Error: '+(e.message||e)); }
+    }catch(e){ toastErr(e); }
     return;
   }
   try{
@@ -4203,7 +4268,7 @@ async function savePerson(){
     try{ await SBPO.from('perfis').update({nome:PERSON.nome,sobrenome:PERSON.sobrenome,email:PERSON.email}).eq('user_id',PERSON.user_id); }catch(e){ console.warn('name update:',e); }
     const {data:pes}=await SBPO.rpc('listar_pessoas'); DATA.pessoas=pes||[];
     toast('Person updated ✓'); closeModal(); go(SCREEN);
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toastErr(e); }
 }
 async function deletarPessoa(userId){
   if(PAPEL!=='admin'){ toast('Only admin can delete.'); return; }
@@ -4219,7 +4284,7 @@ async function deletarPessoa(userId){
     if(!j||j.error) throw new Error((j&&j.error)||'delete failed');
     const {data:pes}=await SBPO.rpc('listar_pessoas'); DATA.pessoas=pes||[];
     PERSON=null; closeModal(); go(SCREEN); toast('User deleted.');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toastErr(e); }
 }
 
 /* ============================================================
@@ -4325,7 +4390,7 @@ async function submitCamp(){
       const {error:e2}=await SBPO.from('tetos').upsert(tetos,{onConflict:'projeto_id,competencia'}); if(e2)throw e2;
     }
     toast('Campaign created ✓'); closeModal(); await reloadPOAll(); go('campaigns');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toastErr(e); }
 }
 
 let ORC=null;
@@ -4389,7 +4454,7 @@ async function submitOrc(){
       toast('Budget created ✓');
     }
     closeModal(); await reloadPOAll(); go('budgets');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toastErr(e); }
 }
 
 let FEE=null;
@@ -4431,7 +4496,7 @@ async function saveFee(){
     if(rows.length){ const {error}=await SBPO.from('fee_rateio').insert(rows); if(error)throw error; }
     const {data:fee}=await SBPO.from('fee_rateio').select('agencia,tipo,categoria,percentual,cc,account,descricao'); DATA.fee=fee||[];
     toast('Fee splits saved ✓'); closeModal(); go('budgets');
-  }catch(e){ toast('Error: '+(e.message||e)); }
+  }catch(e){ toastErr(e); }
 }
 
 /* ============================================================
