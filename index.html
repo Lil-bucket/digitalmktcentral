@@ -2008,7 +2008,7 @@ function renderPOs(){
       <span class="mono" style="font-size:10px;font-weight:800;background:${on?'#fff':'var(--paper)'};border:1px solid ${f.c}40;border-radius:20px;padding:1px 7px;color:${f.c};flex-shrink:0">${f.list.length}</span>
     </button>`;
   }).join('')}</div>`:'';
-  const body=active?`<div class="po-phase" style="border:1.5px solid ${active.c}30;border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.04)">
+  const body=active?`<div class="po-phase" style="border:1.5px solid ${active.c}30;border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.04);background:#fff">
     <div style="padding:10px 16px;background:${active.bg};display:flex;align-items:center;gap:10px">
       <span class="ich" style="width:26px;height:26px;background:#fff;color:${active.c};flex-shrink:0">${icn(active.icon,13)}</span>
       <b style="font-family:'Hanken Grotesk',sans-serif;font-size:12.5px;letter-spacing:.02em;color:${active.c}">${active.t}</b>
