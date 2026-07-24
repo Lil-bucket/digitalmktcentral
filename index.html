@@ -1071,7 +1071,7 @@ function go(screen){
   else if(screen==='agencywork') v.innerHTML=renderAgencyWork();
   else if(screen==='notif') v.innerHTML=renderNotif();
   else if(screen==='bo'){ v.innerHTML=renderBudgetOverview(false); buildCampanhaChart(); buildOverviewMonthlyChart(false); }
-  else if(screen==='budgets') v.innerHTML=renderBudgets();
+  else if(screen==='budgets'){ v.innerHTML=renderBudgets(); buildBudgetActivityChart(); }
   else if(screen==='campaigns'){ v.innerHTML=renderCampanhas(); buildCampanhaChart(); }
   else if(screen==='pos'||screen==='mypos') v.innerHTML=renderPOs();
   else if(screen==='podesk') v.innerHTML=renderAprovacoes();
@@ -3977,6 +3977,31 @@ function toggleCampPO(id){ CAMP_PO_OPEN[id]=!CAMP_PO_OPEN[id]; go(SCREEN); }
    (icon+name+bar+%+money, thick category bar when expanded, campaign rows
    sorted by activity), but each campaign row is itself expandable and opens
    its related POs (with status) right there in the dropdown. */
+let BUDGET_CAT='';
+function budgetSetCat(c){ BUDGET_CAT=c; go('budgets'); }
+/* Bar chart of the active category's activities (cap vs consumed vs committed).
+   Clicking a bar jumps to the Campaigns screen filtered by that activity. */
+function buildBudgetActivityChart(){
+  const el=document.getElementById('chartBudgetAct'); if(!el||!window.Chart)return;
+  let camps=(DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO');
+  if(effPapel()==='agencia'&&effAgencia()) camps=camps.filter(p=>p.agencia===effAgencia());
+  camps=camps.filter(p=>(String(p.product_category||'').trim()||'Uncategorized')===BUDGET_CAT);
+  const tetoBy={},consBy={},compBy={};
+  DATA.tetos.forEach(t=>{tetoBy[t.projeto_id]=(tetoBy[t.projeto_id]||0)+(+t.teto||0);});
+  DATA.rateio.forEach(r=>{tetoBy[r.projeto_id]=(tetoBy[r.projeto_id]||0)+(+r.valor||0);});
+  DATA.pos.forEach(po=>{const v=+po.valor||0;if(CONS.includes(po.status))consBy[po.projeto_id]=(consBy[po.projeto_id]||0)+v;else if(COMP.includes(po.status))compBy[po.projeto_id]=(compBy[po.projeto_id]||0)+v;});
+  const byAct={}; camps.forEach(p=>{const k=actKey(p);(byAct[k]=byAct[k]||[]).push(p);});
+  const order=Object.keys(byAct).sort((a,b)=>{let ia=ACT_COL_ORDER.indexOf(a),ib=ACT_COL_ORDER.indexOf(b);if(ia<0)ia=99;if(ib<0)ib=99;return ia-ib||a.localeCompare(b);});
+  if(!order.length)return;
+  const cap=order.map(k=>byAct[k].reduce((s,p)=>s+(tetoBy[p.id]||0),0));
+  const cons=order.map(k=>byAct[k].reduce((s,p)=>s+(consBy[p.id]||0),0));
+  const comp=order.map(k=>byAct[k].reduce((s,p)=>s+(compBy[p.id]||0),0));
+  _charts.push(new Chart(el,{type:'bar',data:{labels:order.map(k=>actColLabel(k)),datasets:[
+    {label:'Cap',data:cap,backgroundColor:'#d9d6cc',borderRadius:5},
+    {label:'Consumed',data:cons,backgroundColor:'#1273cf',borderRadius:5},
+    {label:'Committed',data:comp,backgroundColor:'#6d4bd1',borderRadius:5}
+  ]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,ticks:{callback:v=>BRL0(v)}}},plugins:{legend:{position:'bottom'}},onClick:(e,els)=>{if(els&&els.length){jumpToCampaigns(BUDGET_CAT,order[els[0].index]);}}}}));
+}
 function renderBudgets(){
   const orcs=DATA.orcamentos||[];
   const canBudget=(isManager||PAPEL==='admin')&&!viewOnly();
@@ -3987,71 +4012,56 @@ function renderBudgets(){
   DATA.tetos.forEach(t=>{tetoBy[t.projeto_id]=(tetoBy[t.projeto_id]||0)+(+t.teto||0);});
   DATA.rateio.forEach(r=>{tetoBy[r.projeto_id]=(tetoBy[r.projeto_id]||0)+(+r.valor||0);});
   DATA.pos.forEach(po=>{const v=+po.valor||0;if(CONS.includes(po.status))consBy[po.projeto_id]=(consBy[po.projeto_id]||0)+v;else if(COMP.includes(po.status))compBy[po.projeto_id]=(compBy[po.projeto_id]||0)+v;else if(PEND.includes(po.status))pendBy[po.projeto_id]=(pendBy[po.projeto_id]||0)+v;});
-  const campRow=(p,m)=>{
-    const tot=tetoBy[p.id]||0, cons=consBy[p.id]||0, comp=compBy[p.id]||0, pnd=pendBy[p.id]||0;
-    const rawc=tot?(cons+comp+pnd)/tot*100:0, over=rawc>100.5, near=!over&&rawc>=90;
-    const open=!!CAMP_PO_OPEN[p.id];
-    return `<div style="border-bottom:1px solid ${m.bg}">
-      <div onclick="toggleCampPO('${esc(p.id)}')" style="padding:10px 6px;cursor:pointer" onmouseover="this.style.background='${m.bg}'" onmouseout="this.style.background=''">
-        <div style="display:flex;align-items:center;gap:10px">
-          <span style="flex:1;min-width:0;font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span>
-          <span class="pct" style="font-weight:700;color:${over?'#bf0008':near?'#9c6404':'var(--txt-2)'}" title="Consumed + committed + awaiting approval, over the cap">${Math.round(rawc)}%</span>
-          <span class="mono" style="font-size:11.5px;color:var(--txt-2);width:170px;text-align:right;flex-shrink:0;white-space:nowrap" title="Consumed + committed / cap">${BRL(cons+comp)} <span style="color:var(--txt-3)">/ ${BRL(tot)}</span></span>
-          <span style="color:var(--txt-3);display:flex;transform:rotate(${open?'180deg':'0deg'});transition:transform .15s">${icn('chev',13)}</span>
-        </div>
-        ${campMetaLineHTML(p,m.c)}
-        <span class="pbar"><span style="width:${Math.min(100,rawc)}%;background:${over?'var(--po)':m.c}"></span></span>
+  // Group approved campaigns by product category and tie each to its budget (orc).
+  const byCat={}; camps.forEach(p=>{ const k=(String(p.product_category||'').trim()||'Uncategorized'); (byCat[k]=byCat[k]||[]).push(p); });
+  const orcByCat={}; orcs.forEach(o=>{ if(o.product_category) orcByCat[o.product_category]=o; });
+  const catSet=new Set([...Object.keys(byCat),...orcs.map(o=>o.product_category).filter(Boolean)]);
+  const catKeys=Array.from(catSet).sort((a,b)=>{let ia=PRODUCT_CATS.indexOf(a),ib=PRODUCT_CATS.indexOf(b);if(ia<0)ia=99;if(ib<0)ib=99;return ia-ib||a.localeCompare(b);});
+  const header=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><b style="font-family:var(--sans);font-size:var(--fs-base)">Budget categories</b>${canBudget?'<button class="chip-btn" onclick="openOrcNew()">+ New budget</button>':''}</div>`;
+  const fee=canSensitive?feeSplitBlock():'<div class="banner">Cost center / account / description splits are restricted to Admin and Finance.</div>';
+  if(!catKeys.length) return header+'<div class="banner">No budgets registered.</div>'+fee;
+  if(!catKeys.includes(BUDGET_CAT)) BUDGET_CAT=catKeys[0];
+  const sums=l=>({tot:l.reduce((s,p)=>s+(tetoBy[p.id]||0),0),cons:l.reduce((s,p)=>s+(consBy[p.id]||0),0),comp:l.reduce((s,p)=>s+(compBy[p.id]||0),0),pnd:l.reduce((s,p)=>s+(pendBy[p.id]||0),0)});
+  // Horizontal category tabs (same pattern as the POs screen).
+  const tabsHTML=`<div class="po-tabs" style="margin-bottom:16px">${catKeys.map(k=>{const mm=catMeta(k);const on=k===BUDGET_CAT;const s=sums(byCat[k]||[]);const rw=s.tot?(s.cons+s.comp+s.pnd)/s.tot*100:0;return `<button class="po-tab${on?' on':''}" onclick="budgetSetCat('${esc(k)}')" style="${on?`border-color:${mm.c};background:${mm.bg}`:''}">
+      <span class="ich" style="width:24px;height:24px;background:${on?'#fff':mm.bg};color:${mm.c};flex-shrink:0">${icn(mm.icon,12)}</span>
+      <span style="font-weight:700;font-size:12px;color:${on?mm.c:'var(--txt-2)'};white-space:nowrap">${esc(mm.label)}</span>
+      <span class="mono" style="font-size:10px;font-weight:800;background:${on?'#fff':'var(--paper)'};border:1px solid ${mm.c}40;border-radius:20px;padding:1px 7px;color:${mm.c};flex-shrink:0">${Math.round(rw)}%</span>
+    </button>`;}).join('')}</div>`;
+  // Active category: bar chart of its activities + one separated card per activity group.
+  const m=catMeta(BUDGET_CAT);
+  const list=byCat[BUDGET_CAT]||[];
+  const orc=orcByCat[BUDGET_CAT];
+  const t=sums(list); const raw=t.tot?(t.cons+t.comp+t.pnd)/t.tot*100:0; const over=raw>100.5,near=!over&&raw>=90;
+  const budgetTot=orc?(+orc.valor_total||0):t.tot;
+  const byAct={}; list.forEach(p=>{const k=actKey(p);(byAct[k]=byAct[k]||[]).push(p);});
+  const actOrder=Object.keys(byAct).sort((a,b)=>{let ia=ACT_COL_ORDER.indexOf(a),ib=ACT_COL_ORDER.indexOf(b);if(ia<0)ia=99;if(ib<0)ib=99;return ia-ib||a.localeCompare(b);});
+  const ACT_LBL={Campaign:'Campaign',FEE:'Fee',KOL:'KOLs',AON:'AON',Communication:'Communication'};
+  const actCard=k=>{const items=byAct[k];const a=sums(items);const rc=a.tot?(a.cons+a.comp+a.pnd)/a.tot*100:0;const ov=rc>100.5,nr=!ov&&rc>=90;const cC=a.tot?Math.min(100,a.cons/a.tot*100):0,cM=a.tot?Math.min(100-cC,a.comp/a.tot*100):0,cP=a.tot?Math.min(100-cC-cM,a.pnd/a.tot*100):0;
+    return `<div onclick="jumpToCampaigns('${esc(BUDGET_CAT)}','${esc(k)}')" title="Open ${esc(ACT_LBL[k]||actColLabel(k))} campaigns in this category" style="background:#fff;border:1px solid var(--line);border-radius:var(--r-md);padding:14px 16px;cursor:pointer;box-shadow:var(--sh-1);transition:box-shadow var(--fast) var(--ease),transform var(--fast) var(--ease)" onmouseover="this.style.boxShadow='var(--sh-2)';this.style.transform='translateY(-1px)'" onmouseout="this.style.boxShadow='var(--sh-1)';this.style.transform=''">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="ich" style="width:26px;height:26px;background:${m.bg};color:${m.c};flex-shrink:0">${icn(actMeta(k).icon,13)}</span>
+        <span style="flex:1;min-width:0"><b style="font-size:13.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ACT_LBL[k]||actColLabel(k))}</b><span style="font-size:10.5px;color:var(--txt-3);font-weight:600">${items.length} campaign${items.length===1?'':'s'}</span></span>
+        <span class="pct" style="font-weight:800;color:${ov?'#bf0008':nr?'#9c6404':'var(--txt-2)'}">${Math.round(rc)}%</span>
+        <span style="color:var(--txt-3);display:flex">${icn('chev',14)}</span>
       </div>
-      ${open?`<div style="padding:0 6px 12px 6px">
-        <div style="font-family:var(--mono);font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);margin-bottom:8px">Purchase orders</div>
-        ${campPOsListHTML(p)}
-      </div>`:''}
-    </div>`;
-  };
-  const ACT_GROUP_LABEL={Campaign:'Campaign',FEE:'Fee',KOL:'KOLs',AON:'AON',Communication:'Communication'};
-  const campGroupsHTML=(list,m)=>{
-    const byAct={}; list.forEach(p=>{ const k=actKey(p); (byAct[k]=byAct[k]||[]).push(p); });
-    const actOrder=Object.keys(byAct).sort((a,b)=>{ let ia=ACT_COL_ORDER.indexOf(a), ib=ACT_COL_ORDER.indexOf(b); if(ia<0)ia=99; if(ib<0)ib=99; return ia-ib||a.localeCompare(b); });
-    return actOrder.map(k=>{
-      const grp=byAct[k].slice().sort((a,b)=>(tetoBy[b.id]||0)-(tetoBy[a.id]||0));
-      return `<div style="padding:9px 10px 5px;font-family:'Hanken Grotesk',sans-serif;font-weight:800;font-size:12px;color:var(--txt-1);background:var(--paper-2)">${esc(ACT_GROUP_LABEL[k]||actColLabel(k))}</div>${grp.map(p=>campRow(p,m)).join('')}`;
-    }).join('');
-  };
-  const byOrc={}; camps.forEach(p=>{ const k=p.orcamento_id||'—'; (byOrc[k]=byOrc[k]||[]).push(p); });
-  const catRow=o=>{
-    const list=byOrc[o.id]||[];
-    const key=o.nome||o.product_category||'—';
-    const tot=list.reduce((s,p)=>s+(tetoBy[p.id]||0),0), cons=list.reduce((s,p)=>s+(consBy[p.id]||0),0), comp=list.reduce((s,p)=>s+(compBy[p.id]||0),0), pnd=list.reduce((s,p)=>s+(pendBy[p.id]||0),0);
-    const m=catMeta(o.product_category||'');
-    const rawc=tot?(cons+comp+pnd)/tot*100:0, over=rawc>100.5, near=!over&&rawc>=90;
-    const open=!!CAT_ACC_OPEN[o.id];
-    return `<div style="border:1.5px solid ${open?m.c+'55':'var(--line)'};border-radius:12px;overflow:hidden;margin-bottom:10px">
-      <div style="display:flex;align-items:center;gap:10px;padding:11px 10px;cursor:pointer;background:${open?m.bg:'#fff'}" onclick="toggleCatAcc('${esc(o.id)}')" onmouseover="this.style.background='${m.bg}'" onmouseout="this.style.background='${open?m.bg:'#fff'}'">
-        <span class="ich" style="width:28px;height:28px;background:${m.bg};color:${m.c}">${icn(m.icon,14)}</span>
-        <span style="flex:0 1 230px;min-width:150px"><span style="font-weight:700;font-size:13.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(key)}</span><span style="font-size:10.5px;color:var(--txt-3);font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.periodo_inicio?fmtMes(o.periodo_inicio):'—'}${o.periodo_fim?' → '+fmtMes(o.periodo_fim):''} · ${list.length} campaign(s) · budget ${BRL(o.valor_total)}</span></span>
-        ${open?'':`<span class="pbar" style="flex:1;min-width:60px"><span style="width:${Math.min(100,rawc)}%;background:${over?'var(--po)':m.c}"></span></span>
-        <span class="pct" style="font-weight:700;color:${over?'#bf0008':near?'#9c6404':'var(--txt-2)'}" title="Consumed + committed + awaiting approval, over the cap">${Math.round(rawc)}%</span>
-        <span class="mono" style="font-size:11.5px;color:var(--txt-2);width:170px;text-align:right;flex-shrink:0;white-space:nowrap" title="Consumed + committed / cap">${BRL(cons+comp)} <span style="color:var(--txt-3)">/ ${BRL(tot)}</span></span>`}
-        ${canBudget?`<button class="chip-btn" onclick="event.stopPropagation();openOrcEdit('${esc(o.id)}')">Edit</button>`:''}
-        <span style="color:var(--txt-3);display:flex;transform:rotate(${open?'180deg':'0deg'});transition:transform .15s">${icn('chev',13)}</span>
+      <span class="pbar" style="margin-top:10px"><span style="width:${cC}%;background:${ov?'var(--po)':'var(--blue)'}"></span><span style="width:${cM}%;background:var(--violet)"></span><span style="width:${cP}%;background:var(--amber)"></span></span>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--txt-2);margin-top:8px" class="mono"><span>${BRL(a.cons+a.comp)} used</span><span style="color:var(--txt-3)">cap ${BRL(a.tot)}</span></div>
+    </div>`;};
+  const activeHTML=`<div style="background:#fff;border:1px solid var(--line);border-radius:var(--r-md);padding:16px 18px;box-shadow:var(--sh-1);margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+        <span class="ich" style="width:34px;height:34px;background:${m.bg};color:${m.c};flex-shrink:0">${icn(m.icon,17)}</span>
+        <span style="flex:1;min-width:150px"><b style="font-family:var(--sans);font-size:var(--fs-lg);display:block">${esc(orc?(orc.nome||m.label):m.label)}</b><span style="font-size:var(--fs-eyebrow);color:var(--txt-3);font-weight:600">${list.length} campaign${list.length===1?'':'s'} · budget ${BRL(budgetTot)}</span></span>
+        <span class="mono" style="font-size:var(--fs-sm);color:var(--txt-2);text-align:right;white-space:nowrap" title="Consumed + committed / cap">${BRL(t.cons+t.comp)} <span style="color:var(--txt-3)">/ ${BRL(t.tot)}</span></span>
+        <span class="pct" style="font-weight:800;font-size:var(--fs-base);color:${over?'#bf0008':near?'#9c6404':'var(--txt)'}">${Math.round(raw)}%</span>
+        ${canBudget&&orc?`<button class="chip-btn" onclick="event.stopPropagation();openOrcEdit('${esc(orc.id)}')">Edit budget</button>`:''}
+        <button onclick="jumpToCampaigns('${esc(BUDGET_CAT)}','')" style="background:${m.c};padding:8px 14px;border-radius:9px;color:#fff;font-weight:700;font-size:12px;cursor:pointer;border:none">View campaigns →</button>
       </div>
-      ${open?`<div style="padding:12px 10px 4px 16px;background:${m.bg}66">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-          <div style="flex:1;height:18px;border-radius:7px;background:#fff;overflow:hidden;display:flex" title="Consumed · committed · awaiting approval — whole budget"><span style="height:100%;width:${Math.min(100,rawc)}%;background:${over?'var(--po)':m.c}"></span></div>
-          <span class="mono" style="font-size:14px;font-weight:800;color:${over?'#bf0008':near?'#9c6404':'var(--txt)'};flex-shrink:0;width:44px;text-align:right">${Math.round(rawc)}%</span>
-        </div>
-        <div style="background:#fff;border-radius:10px;overflow:hidden">
-        ${list.length?campGroupsHTML(list,m):'<div style="font-size:11.5px;color:var(--txt-3);padding:12px 8px">No campaigns linked yet.</div>'}
-        </div>
-      </div>`:''}
-    </div>`;
-  };
-  const catTable=orcs.length?`<div style="background:transparent;margin-bottom:18px">
-    <div style="padding:0 2px 12px;display:flex;align-items:center;justify-content:space-between"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">Budget categories</b>${canBudget?'<button class="chip-btn" onclick="openOrcNew()">+ New budget</button>':''}</div>
-    ${orcs.map(catRow).join('')}
-    <div style="padding:12px 17px;display:flex;justify-content:space-between;align-items:center;font-size:13px;background:var(--paper-2);border:1px solid var(--line);border-radius:11px"><span style="font-weight:800">Total</span><span class="mono" style="font-weight:800">${BRL(orcs.reduce((s,o)=>s+(+o.valor_total||0),0))}</span></div>
-  </div>`:'<div class="banner">No budgets registered.</div>';
-  return catTable+(canSensitive?feeSplitBlock():'<div class="banner">Cost center / account / description splits are restricted to Admin and Finance.</div>');
+      <div style="font-size:var(--fs-eyebrow);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--txt-3);margin-bottom:6px">Main activities — consumed vs committed vs cap</div>
+      <div style="height:280px">${actOrder.length?'<canvas id="chartBudgetAct"></canvas>':'<div class="banner">No campaigns in this category yet.</div>'}</div>
+    </div>
+    ${actOrder.length?`<div style="font-size:var(--fs-eyebrow);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--txt-3);margin:0 2px 10px">Activity groups · tap to open in Campaigns</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px">${actOrder.map(actCard).join('')}</div>`:''}`;
+  return header+tabsHTML+activeHTML+`<div style="margin-top:24px">${fee}</div>`;
 }
 /* Export (read-only) — mirrors renderBudgets' own aggregation exactly, transcribes
    what that screen already displays per campaign, never recomputes new business values. */
