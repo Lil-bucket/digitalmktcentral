@@ -16,6 +16,7 @@
     /* neutrals — cool graphite scale */
     --ink:#10131a; --ink-2:#1a1e27; --ink-3:#252b3a;
     --paper:#f3f4f8; --paper-2:#fafbfd; --card:#fff;
+    --band:#e4e8f1; /* grouped-info band — darker than the page so white cards pop */
     --line:#e4e7ee; --line-2:#d2d6e0;
     --txt:#171a21; --txt-2:#59606e; --txt-3:#6f7684;
     /* brand duality — Work (cobalt) + Budget (TCL red) */
@@ -3913,7 +3914,7 @@ function renderBudgetOverview(isBalance){
   const showAccounts=effIsManager()||['admin','financeiro'].includes(effPapel());
   /* GROUP 1 — Budget overview: hero total, monthly chart and the current-month
      balance live together in one tinted band. */
-  const budgetGroup=`<section style="background:var(--paper-2);border:1px solid var(--line);border-radius:var(--r-lg);padding:18px;margin-bottom:22px">
+  const budgetGroup=`<section style="background:var(--band);border:1px solid var(--line-2);border-radius:var(--r-lg);padding:18px;margin-bottom:22px">
       <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 14px">
         <h3 style="font-family:var(--sans);font-size:var(--fs-lg)">Budget overview</h3>
         <span style="font-size:var(--fs-xs);color:var(--txt-3)">totals, monthly evolution and this month's balance</span>
@@ -3921,7 +3922,7 @@ function renderBudgetOverview(isBalance){
       <div style="display:flex;flex-direction:column;gap:14px">${hero}${chartPanel}${monthBalance}</div>
     </section>`;
   /* GROUP 2 — By account: its own band, the two account blocks equal-sized side by side. */
-  const accountsGroup=showAccounts?`<section style="background:var(--paper-2);border:1px solid var(--line);border-radius:var(--r-lg);padding:18px;margin-bottom:22px">${accountsOverviewBlock()}</section>`:'';
+  const accountsGroup=showAccounts?`<section style="background:var(--band);border:1px solid var(--line-2);border-radius:var(--r-lg);padding:18px;margin-bottom:22px">${accountsOverviewBlock()}</section>`:'';
   /* GROUP 3 — By category: the unified category+campaigns panel. */
   return boPeriodBar()+`${alertsHTML}
     ${budgetGroup}
