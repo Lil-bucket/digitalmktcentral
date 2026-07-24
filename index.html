@@ -3577,12 +3577,20 @@ function campPastUnallocatedBalance(pid){
   });
   return out;
 }
+/* The 12 calendar months of the campaign's year — the dots strip is always a
+   full year; only months with an allocated cap are shown, the rest are kept
+   as invisible placeholders so the strip stays 12 wide and aligned. */
+function campYearMonths(pid){
+  const keys=Object.keys(campMonthlyTotals(pid)).sort();
+  const yr=keys.length?keys[0].slice(0,4):String(new Date().getFullYear());
+  return Array.from({length:12},(_,i)=>yr+'-'+String(i+1).padStart(2,'0'));
+}
 /* Labeled dots (bigger, month name underneath) — used in the Campaigns-screen detail panel. */
 function campPeriodDotsHTML(pid,col){
-  const months=Object.keys(campMonthlyTotals(pid)).sort();
-  if(!months.length) return '<span style="font-size:11px;color:var(--txt-3)">No months registered</span>';
-  return months.map(m=>{
-    const cap=campMonthCap(pid,m), cons=campMonthCons(pid,m);
+  return campYearMonths(pid).map(m=>{
+    const cap=campMonthCap(pid,m);
+    if(!cap) return `<span style="display:inline-flex;flex-direction:column;align-items:center;gap:4px" title="${fmtMes(m+'-01')} · no budget allocated"><span style="width:17px;height:17px;border-radius:50%;background:#c7cdd8;border:1.5px solid #a7aec0"></span><span style="font-size:9px;color:var(--txt-3);font-family:var(--mono);font-weight:600">${fmtMes(m+'-01')}</span></span>`;
+    const cons=campMonthCons(pid,m);
     const done=cap>0&&cons>=cap-0.5, partial=!done&&cons>0;
     const bg=done?col:(partial?'#cf8a16':'#fff'), bd=done?col:(partial?'#cf8a16':'var(--line-2)');
     return `<span style="display:inline-flex;flex-direction:column;align-items:center;gap:4px"><span title="${fmtMes(m+'-01')} · ${done?'completed':partial?'in progress':'not started'}" style="width:17px;height:17px;border-radius:50%;background:${bg};border:1.5px solid ${bd};display:grid;place-items:center;color:#fff">${done?icn('check',10,2.6):''}</span><span style="font-size:9px;color:${done?'var(--txt-2)':'var(--txt-3)'};font-family:var(--mono);font-weight:600">${fmtMes(m+'-01')}</span></span>`;
@@ -3591,14 +3599,26 @@ function campPeriodDotsHTML(pid,col){
 /* Compact CONNECTED dots (small circles joined by a line segment, no labels)
    — used inline in campaign meta rows (Overview, Budgets & Fees). */
 function campPeriodDotsConnectedHTML(pid,col){
-  const months=Object.keys(campMonthlyTotals(pid)).sort();
-  if(!months.length) return '<span style="font-size:11px;color:var(--txt-3)">No months</span>';
-  return `<span style="display:inline-flex;align-items:center" title="Period">${months.map((m,i)=>{
-    const cap=campMonthCap(pid,m), cons=campMonthCons(pid,m);
-    const done=cap>0&&cons>=cap-0.5, partial=!done&&cons>0;
-    const bg=done?col:(partial?'#cf8a16':'#fff'), bd=done?col:(partial?'#cf8a16':'var(--line-2)');
-    const dot=`<span title="${fmtMes(m+'-01')} · ${done?'completed':partial?'in progress':'not started'}" style="width:12px;height:12px;border-radius:50%;background:${bg};border:1.5px solid ${bd};display:inline-flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0">${done?icn('check',7,3):''}</span>`;
-    const connector=i<months.length-1?`<span style="width:9px;height:2px;background:${done?col:'var(--line-2)'};flex-shrink:0"></span>`:'';
+  const months=campYearMonths(pid);
+  return `<span style="display:inline-flex;align-items:center" title="Period (full year — allocated months highlighted)">${months.map((m,i)=>{
+    const cap=campMonthCap(pid,m);
+    const last=i===months.length-1;
+    const nextCap=last?0:campMonthCap(pid,months[i+1]);
+    let dot;
+    if(!cap){ // gray dot — month with no budget allocated
+      dot=`<span title="${fmtMes(m+'-01')} · no budget allocated" style="width:12px;height:12px;border-radius:50%;background:#c7cdd8;border:1.5px solid #a7aec0;flex-shrink:0"></span>`;
+    }else{
+      const cons=campMonthCons(pid,m);
+      const done=cap>0&&cons>=cap-0.5, partial=!done&&cons>0;
+      const bg=done?col:(partial?'#cf8a16':'#fff'), bd=done?col:(partial?'#cf8a16':'var(--line-2)');
+      dot=`<span title="${fmtMes(m+'-01')} · ${done?'completed':partial?'in progress':'not started'}" style="width:12px;height:12px;border-radius:50%;background:${bg};border:1.5px solid ${bd};display:inline-flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0">${done?icn('check',7,3):''}</span>`;
+    }
+    // Colored connector only between two allocated months; any link touching a
+    // gray (no-budget) month stays neutral gray.
+    const bothAllocated=cap>0&&nextCap>0;
+    const cons=cap>0?campMonthCons(pid,m):0;
+    const doneCol=bothAllocated&&cons>=cap-0.5;
+    const connector=last?'':`<span style="width:9px;height:2px;background:${doneCol?col:'var(--line-2)'};flex-shrink:0"></span>`;
     return dot+connector;
   }).join('')}</span>`;
 }
