@@ -3720,7 +3720,7 @@ function accountsOverviewBlock(){
       ${rows.map(r=>{const m=catMeta(r.cat);return `<span style="display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:var(--txt-2)"><span style="width:9px;height:9px;border-radius:3px;background:${m.c}"></span>${esc(m.label)} <span class="mono" style="font-weight:800;color:var(--txt)">${share(r).toFixed(1)}%</span></span>`;}).join('')}
     </div>`:'';
     const am=accMetaOf(acc);
-    return `<div style="background:#fff;border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;box-shadow:var(--sh-1)">
+    return `<div style="background:#fff;border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;box-shadow:var(--sh-1);height:100%;display:flex;flex-direction:column">
       <div style="padding:16px 18px;border-bottom:${open?'1px solid var(--line)':'none'}">
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
           <span class="ich" style="width:34px;height:34px;background:${am.bg};color:${am.c};flex-shrink:0">${icn(am.icon,17)}</span>
@@ -3759,7 +3759,7 @@ function accountsOverviewBlock(){
   };
   return `<div>
     <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 12px"><h3 style="font-family:var(--sans);font-size:var(--fs-base)">By account</h3><span style="font-size:var(--fs-xs);color:var(--txt-3)">share of each account's budget by cost center / category${BO_PER.mode!=='all'?' — filtered by the selected period':''}${BO_SCOPE==='nolabg'?' · LABG excluded':''}</span></div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:14px;align-items:start">${ACC_ORDER.map(card).join('')}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:14px;align-items:stretch">${ACC_ORDER.map(card).join('')}</div>
   </div>`;
 }
 function renderBudgetOverview(isBalance){
@@ -3871,7 +3871,7 @@ function renderBudgetOverview(isBalance){
   const ALERT_SEV={over:{bg:'#fbe4e1',bd:'#f2c4bf',dot:'#bf0008',fg:'#7d1a14',btn:'#bf0008'},near:{bg:'#fbf0d8',bd:'#ecd9a4',dot:'#d68a04',fg:'#7a5200',btn:'#9c6404'},realloc:{bg:'var(--blue-bg)',bd:'#bcd9f5',dot:'#0e5ba6',fg:'#0e5ba6',btn:'#0e5ba6'}};
   const alertsHTML=alerts.length?`<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px">${alerts.slice(0,4).map(a=>{const s=ALERT_SEV[a.sev]||ALERT_SEV.near;const action=a.sev==='realloc'?`openReallocModal('${esc(a.id)}','${a.mes}',${a.saldo})`:`openCampDetail('${esc(a.id)}')`;return `<div style="display:flex;align-items:center;gap:12px;background:${s.bg};border:1px solid ${s.bd};border-radius:12px;padding:11px 16px"><span style="width:8px;height:8px;border-radius:50%;background:${s.dot};flex-shrink:0"></span><span style="flex:1;font-size:13px;color:${s.fg}">${a.html}</span><button style="font-size:12px;font-weight:700;color:${s.btn};white-space:nowrap" onclick="${action}">${a.sev==='realloc'?'Reallocate →':'View campaign →'}</button></div>`;}).join('')}</div>`:'';
   const heroStat=(l,v,c,tt)=>`<div title="${tt||''}"><div style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3)">${l}</div><div class="mono stat-num" style="font-size:17px;font-weight:700;margin-top:2px;color:${c||'var(--txt)'}">${v}</div></div>`;
-  const hero=`<div style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px 24px;box-shadow:0 1px 2px rgba(20,22,28,.05);margin-bottom:18px">
+  const hero=`<div style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px 24px;box-shadow:0 1px 2px rgba(20,22,28,.05)">
       <div style="display:flex;align-items:flex-end;gap:36px;flex-wrap:wrap">
         <div title="Cap minus consumed, committed and awaiting approval"><div style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3)">Available</div><div class="mono stat-num" style="font-size:32px;font-weight:700;letter-spacing:-.02em;margin-top:2px;color:${saldo<0?'var(--po)':'#16a06a'}">${BRL(saldo)}</div></div>
         <div style="display:flex;gap:28px;padding-bottom:5px;flex-wrap:wrap">
@@ -3897,7 +3897,7 @@ function renderBudgetOverview(isBalance){
     const mktAlerts=alerts.length?`<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px">${alerts.slice(0,4).map(a=>{const s=ALERT_SEV[a.sev]||ALERT_SEV.near;const p=camps.find(x=>x.id===a.id)||{};const txt=a.sev==='over'?`<b>${esc(p.nome)}</b> is over its cap.`:`<b>${esc(p.nome)}</b> is close to its cap and has no completed PO yet.`;return `<div style="display:flex;align-items:center;gap:12px;background:${s.bg};border:1px solid ${s.bd};border-radius:12px;padding:11px 16px"><span style="width:8px;height:8px;border-radius:50%;background:${s.dot};flex-shrink:0"></span><span style="flex:1;font-size:13px;color:${s.fg}">${txt}</span><button style="font-size:12px;font-weight:700;color:${s.btn};white-space:nowrap" onclick="openCampDetail('${esc(a.id)}')">View campaign →</button></div>`;}).join('')}</div>`:'';
     return boPeriodBar()+mktAlerts+categoriaAccordion;
   }
-  const chartPanel=`<div class="panel" style="margin-bottom:18px"><div class="panel-h"><h3>Monthly evolution</h3><span class="tag">cap · consumed · committed · awaiting approval</span></div>
+  const chartPanel=`<div class="panel"><div class="panel-h"><h3>Monthly evolution</h3><span class="tag">cap · consumed · committed · awaiting approval</span></div>
       <div style="padding:18px;height:280px"><canvas id="chartMonthly"></canvas></div>
     </div>`;
   const monthBalance=`<div style="background:#fff;border:1px solid var(--line);border-radius:var(--r-md);padding:17px 18px;box-shadow:var(--sh-1)">
@@ -3911,22 +3911,21 @@ function renderBudgetOverview(isBalance){
       </div>
     </div>`;
   const showAccounts=effIsManager()||['admin','financeiro'].includes(effPapel());
-  /* Distinct "This month & accounts" band — a stronger visual break (tinted
-     inset panel) that separates the current-month snapshot + per-account
-     breakdown from the hero and the category list. Accounts render side by
-     side inside it. */
-  const monthAccountsBand=`<section style="background:var(--paper-2);border:1px solid var(--line);border-radius:var(--r-lg);padding:18px;margin-bottom:22px">
+  /* GROUP 1 — Budget overview: hero total, monthly chart and the current-month
+     balance live together in one tinted band. */
+  const budgetGroup=`<section style="background:var(--paper-2);border:1px solid var(--line);border-radius:var(--r-lg);padding:18px;margin-bottom:22px">
       <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 14px">
-        <h3 style="font-family:var(--sans);font-size:var(--fs-lg)">This month &amp; accounts</h3>
-        <span style="font-size:var(--fs-xs);color:var(--txt-3)">current-month snapshot and per-account breakdown</span>
+        <h3 style="font-family:var(--sans);font-size:var(--fs-lg)">Budget overview</h3>
+        <span style="font-size:var(--fs-xs);color:var(--txt-3)">totals, monthly evolution and this month's balance</span>
       </div>
-      <div style="margin-bottom:${showAccounts?'16px':'0'}">${monthBalance}</div>
-      ${showAccounts?accountsOverviewBlock():''}
+      <div style="display:flex;flex-direction:column;gap:14px">${hero}${chartPanel}${monthBalance}</div>
     </section>`;
-  return boPeriodBar()+`${hero}
-    ${chartPanel}
-    ${alertsHTML}
-    ${monthAccountsBand}
+  /* GROUP 2 — By account: its own band, the two account blocks equal-sized side by side. */
+  const accountsGroup=showAccounts?`<section style="background:var(--paper-2);border:1px solid var(--line);border-radius:var(--r-lg);padding:18px;margin-bottom:22px">${accountsOverviewBlock()}</section>`:'';
+  /* GROUP 3 — By category: the unified category+campaigns panel. */
+  return boPeriodBar()+`${alertsHTML}
+    ${budgetGroup}
+    ${accountsGroup}
     ${categoriaAccordion}`;
 }
 function buildOverviewMonthlyChart(isBalance){
