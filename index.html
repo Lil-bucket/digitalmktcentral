@@ -15,7 +15,8 @@
   :root{
     /* neutrals — cool graphite scale */
     --ink:#10131a; --ink-2:#1a1e27; --ink-3:#252b3a;
-    --paper:#e7ebf3; --paper-2:#fafbfd; --card:#fff;
+    --paper:#f3f4f8; --paper-2:#fafbfd; --card:#fff;
+    --bg:#c4cad6; /* page canvas — medium gray so white cards pop; surfaces stay on --paper */
     --line:#e4e7ee; --line-2:#d2d6e0;
     --txt:#171a21; --txt-2:#59606e; --txt-3:#6f7684;
     /* brand duality — Work (cobalt) + Budget (TCL red) */
@@ -43,7 +44,7 @@
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%}
-  body{font-family:var(--sans);background:var(--paper);color:var(--txt);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  body{font-family:var(--sans);background:var(--bg);color:var(--txt);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
   h1,h2,h3,h4{font-family:var(--sans);letter-spacing:-.02em;font-weight:700;text-wrap:balance}
   .mono{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
   button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;transition:background var(--fast) var(--ease),color var(--fast) var(--ease),border-color var(--fast) var(--ease),box-shadow var(--fast) var(--ease),filter var(--fast) var(--ease),transform var(--fast) var(--ease)}
