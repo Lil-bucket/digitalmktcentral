@@ -328,21 +328,19 @@
 
 <script>
 /* ============================================================
-   CONFIG — dois Supabase (reaproveitado dos apps existentes)
+   CONFIG — um único Supabase (Budget-Control), consolidado do
+   antigo modelo de dois projetos (Panel + Budget-Control)
    ============================================================ */
-const PANEL_URL='https://ydfocnclwunnskznrhja.supabase.co';
-const PANEL_KEY='sb_publishable_ZqcFVrOwKhfipKbFSNaGlg_YYo6tv81';
 const PO_URL='https://uryzzerzmmuwuqxjwwec.supabase.co';
 const PO_KEY='sb_publishable_6DGDsBzRZoT1LQwRr3UCUQ_EHmh-B3J';
 const MANAGER_EMAILS=['lucas.baldim@tclsemp.com.br'];
 
-let SB   = window.supabase.createClient(PANEL_URL, PANEL_KEY, {auth:{storageKey:'sb-ydfocnclwunnskznrhja-auth-token'}});
-let SBPO = window.supabase.createClient(PO_URL,    PO_KEY,    {auth:{storageKey:'sb-uryzzerzmmuwuqxjwwec-auth-token'}});
+let SBPO = window.supabase.createClient(PO_URL, PO_KEY, {auth:{storageKey:'sb-uryzzerzmmuwuqxjwwec-auth-token'}});
 
 /* ============================================================
    STATE
    ============================================================ */
-let currentUser=null, isManager=false, booted=false, _senha='';
+let currentUser=null, isManager=false, booted=false;
 let PO_ACCESS=false, PAPEL='', MINHA_AGENCIA='';
 /* "View as" — admin-only, read-only simulated view of the Budget module.
    Frontend-only filter/gate: never sent to Supabase, never changes real
@@ -660,17 +658,16 @@ function showGate(msg){$('#gate').classList.add('show');$('#app').style.display=
 function hideGate(){$('#gate').classList.remove('show');$('#app').style.display='flex';}
 async function fnCall(action,payload){
   try{
-    const r=await fetch(PANEL_URL+'/functions/v1/acesso',{method:'POST',headers:{'Content-Type':'application/json','apikey':PANEL_KEY,'Authorization':'Bearer '+PANEL_KEY},body:JSON.stringify({action,...payload})});
+    const r=await fetch(PO_URL+'/functions/v1/acesso',{method:'POST',headers:{'Content-Type':'application/json','apikey':PO_KEY,'Authorization':'Bearer '+PO_KEY},body:JSON.stringify({action,...payload})});
     return await r.json();
   }catch(e){return {ok:false,error:'Connection failed.'};}
 }
 async function doLogin(){
   const email=($('#liEmail').value||'').trim().toLowerCase(),senha=$('#liSenha').value||'';
   if(!email||!senha){showGate('Enter email and password.');return;}
-  _senha=senha;showGate('Signing in…');
-  try{sessionStorage.setItem('__pw',senha);}catch(e){}
-  const {error}=await SB.auth.signInWithPassword({email,password:senha});
-  if(error){_senha='';showGate('Invalid email or password.');}
+  showGate('Signing in…');
+  const {error}=await SBPO.auth.signInWithPassword({email,password:senha});
+  if(error){showGate('Invalid email or password.');}
 }
 async function sendCode(){
   const email=($('#caEmail').value||'').trim().toLowerCase();
@@ -685,10 +682,10 @@ async function setPassword(){
   const email=($('#caEmail').value||'').trim().toLowerCase(),codigo=($('#caCode').value||'').trim(),senha=$('#caSenha').value||'';
   if(!codigo||senha.length<6){showGate('Enter the code and a password of at least 6 characters.');return;}
   const j=await fnCall('definir',{email,codigo,senha});
-  if(j&&j.ok){_senha=senha;try{sessionStorage.setItem('__pw',senha);}catch(e){}showGate('Password set! Signing in…');const {error}=await SB.auth.signInWithPassword({email,password:senha});if(error){_senha='';showGate('Password created, but sign-in failed — try signing in manually.');}}
+  if(j&&j.ok){showGate('Password set! Signing in…');const {error}=await SBPO.auth.signInWithPassword({email,password:senha});if(error){showGate('Password created, but sign-in failed — try signing in manually.');}}
   else showGate((j&&j.error)||'Invalid or expired code.');
 }
-async function signOut(){try{sessionStorage.removeItem('__pw');}catch(e){}try{await SB.auth.signOut();}catch(e){}try{await SBPO.auth.signOut();}catch(e){}_senha='';booted=false;location.reload();}
+async function signOut(){try{await SBPO.auth.signOut();}catch(e){}booted=false;location.reload();}
 
 /* ============================================================
    DEMO MODE — fully functional sandbox with fictitious profiles and
@@ -799,10 +796,10 @@ function renderDemoBadge(){
     <button onclick="location.href=location.pathname" style="border:none;background:#2a2f3b;color:#fff;border-radius:7px;padding:5px 10px;font-size:11.5px;cursor:pointer">Exit demo</button>`;
 }
 /* Network backstop: even though every write path already checks viewOnly()
-   (true in demo mode) before touching SB/SBPO, swap both clients for an
-   inert stub too — belt and suspenders, so a write path that's missed a
-   viewOnly() check (e.g. something in the Work module) fails safely
-   instead of silently reaching the real Supabase projects. */
+   (true in demo mode) before touching SBPO, swap it for an inert stub too —
+   belt and suspenders, so a write path that's missed a viewOnly() check
+   (e.g. something in the Work module) fails safely instead of silently
+   reaching the real Supabase project. */
 function fakeSupabaseClient(){
   const err={message:'Demo mode — no backend connected.'};
   const builder={select(){return builder;},eq(){return builder;},neq(){return builder;},in(){return builder;},not(){return builder;},order(){return builder;},limit(){return builder;},
@@ -817,7 +814,7 @@ function fakeSupabaseClient(){
 }
 function startDemo(){
   DEMO_MODE=true;
-  SB=fakeSupabaseClient(); SBPO=fakeSupabaseClient();
+  SBPO=fakeSupabaseClient();
   seedDemoData();
   hideGate();
   demoSetRole('admin');
@@ -828,13 +825,13 @@ async function boot(){
     if(new URLSearchParams(location.search).get('demo')==='1'){ startDemo(); return; }
   }catch(e){}
   try{
-    const {data}=await SB.auth.getSession();
+    const {data}=await SBPO.auth.getSession();
     if(data&&data.session&&data.session.user){onSignedIn(data.session.user);return;}
   }catch(e){}
   showGate();
-  SB.auth.onAuthStateChange((ev,sess)=>{
+  SBPO.auth.onAuthStateChange((ev,sess)=>{
     if(sess&&sess.user){if(!booted)setTimeout(()=>onSignedIn(sess.user),0);}
-    else if(ev==='SIGNED_OUT'){booted=false;_senha='';showGate('Session ended. Sign in again.');}
+    else if(ev==='SIGNED_OUT'){booted=false;showGate('Session ended. Sign in again.');}
   });
 }
 async function onSignedIn(user){
@@ -844,7 +841,7 @@ async function onSignedIn(user){
   $('#acctEmail').textContent=user.email||'';
   $('#acctAv').textContent=(user.email||'?')[0].toUpperCase();
   $('#acctAv').style.background=avColor(user.email);
-  try{ await ssoPO(user.email); }catch(e){ console.warn('PO SSO:',e); window.__poErr=(e&&e.message)||String(e); }
+  try{ await loadPapel(); }catch(e){ console.warn('papel_atual:',e); window.__poErr=(e&&e.message)||String(e); }
   try{ await loadAll(); }catch(e){ console.error('load:',e); }
   try{ await loadPTasksRemote(); }catch(e){}
   // diagnostic line in sidebar footer
@@ -852,60 +849,33 @@ async function onSignedIn(user){
   buildNav(); const nav=currentNav(); go((nav.work.concat(nav.budget))[0]||'dash');
 }
 
-/* Last-known role cache — a failed Budget SSO (wrong/expired password, e-mail
-   mismatch between the Work and Budget accounts, etc.) must not blank out
-   who this person IS in the Work module. Budget access itself still requires
-   a live, successfully-authenticated Budget session (PO_ACCESS), but the
-   Work module's own nav/visibility can safely fall back to the last role we
-   confirmed for this e-mail, instead of defaulting to "no restriction". */
-function roleCacheKey(email){ return 'role_cache_'+(email||'').toLowerCase(); }
-function cacheRole(email,papel,agencia){ try{ localStorage.setItem(roleCacheKey(email),JSON.stringify({papel,agencia,t:Date.now()})); }catch(e){} }
-function cachedRole(email){ try{ const raw=localStorage.getItem(roleCacheKey(email)); return raw?JSON.parse(raw):null; }catch(e){ return null; } }
-function useCachedRole(em){
-  const c=cachedRole(em);
-  if(c&&c.papel){ PAPEL=c.papel; MINHA_AGENCIA=c.agencia||''; window.__poErr=(window.__poErr||'')+' (using last-known role, offline from Budget)'; }
-}
-/* SSO silencioso com o PO (mesma senha) — acesso derivado do papel real */
-async function ssoPO(email){
-  const em=(email||'').toLowerCase();
+/* Resolves the signed-in user's role directly against the single Supabase
+   project (Budget-Control) — replaces the old two-project ssoPO() dance
+   (a separate sign-in re-using the just-typed password, plus a password-sync
+   fallback edge function) that existed only because Work and Budget used to
+   live in different Supabase projects. Now there is one session, so there is
+   nothing left to synchronize. */
+async function loadPapel(){
   window.__poErr='';
-  let pw=_senha; if(!pw){ try{ pw=sessionStorage.getItem('__pw')||''; }catch(e){} }
-  let {data:sPO}=await SBPO.auth.getSession();
-  if(!(sPO&&sPO.session)){
-    if(!pw){ window.__poErr='sign out and sign in typing your password'; PO_ACCESS=false; useCachedRole(em); return; }
-    const {error}=await SBPO.auth.signInWithPassword({email:em,password:pw});
-    if(error){
-      // senha divergente entre painel e PO — sincroniza via função unify e tenta de novo
-      try{
-        const r=await fetch(PO_URL+'/functions/v1/unify',{method:'POST',headers:{'Content-Type':'application/json','apikey':PO_KEY,'Authorization':'Bearer '+PO_KEY},body:JSON.stringify({email:em,password:pw})});
-        const j=await r.json();
-        if(j&&j.ok){ const {error:e2}=await SBPO.auth.signInWithPassword({email:em,password:pw}); if(e2){ window.__poErr='after unify: '+e2.message; PO_ACCESS=false;_senha='';useCachedRole(em);return; } }
-        else { window.__poErr='unify: '+((j&&j.error)||'failed'); PO_ACCESS=false;_senha='';useCachedRole(em);return; }
-      }catch(ue){ window.__poErr=error.message; PO_ACCESS=false;_senha='';useCachedRole(em);return; }
-    }
-    ({data:sPO}=await SBPO.auth.getSession());
-  }
-  _senha='';
   try{
     const {data:p,error}=await SBPO.rpc('papel_atual');
     if(error){ window.__poErr='papel_atual: '+error.message; }
     PAPEL=p||'';
     PO_ACCESS=!!PAPEL && PAPEL!=='pendente';
-    if(!PAPEL){ if(!window.__poErr) window.__poErr='no role for '+em+' in PO'; useCachedRole(em); }
-  }catch(e){ PO_ACCESS=false; window.__poErr=(e&&e.message)||'papel_atual failed'; useCachedRole(em); }
+    if(!PAPEL && !window.__poErr) window.__poErr='no role for this user';
+  }catch(e){ PO_ACCESS=false; window.__poErr=(e&&e.message)||'papel_atual failed'; }
   if(PAPEL==='agencia'){ try{ const {data:a}=await SBPO.rpc('agencia_atual'); MINHA_AGENCIA=a||''; }catch(e){} }
-  if(PO_ACCESS&&PAPEL) cacheRole(em,PAPEL,MINHA_AGENCIA);
 }
 
 /* ============================================================
-   DATA LOADING (leitura real dos dois bancos)
+   DATA LOADING (leitura real do banco único, Budget-Control)
    ============================================================ */
 async function loadAll(){
-  // painel de projetos
+  // painel de projetos (Work module — tabelas act_*)
   try{
     const [pr,cf]=await Promise.all([
-      SB.from('projetos').select('id,data'),
-      SB.from('config').select('data').eq('id','app').maybeSingle()
+      SBPO.from('act_projects').select('id,data'),
+      SBPO.from('act_config').select('data').eq('id','app').maybeSingle()
     ]);
     DATA.projetos=(pr.data||[]).map(r=>r.data).filter(Boolean);
     DATA.projetos.forEach(p=>{ p.tasks=(p.tasks||p.atividades||p.activities||p.checklist||[]).map(t=>({...t, n:t.n||t.nome||t.titulo||t.title||'', done:!!t.done, fim:t.fim||t.due||'', status:t.status||(t.done?'concluido':'no_prazo'), pct:t.pct!=null?t.pct:(t.done?100:0), obs:t.obs||t.nota||'', subs:t.subs||t.subitens||[]})); p.logs=(p.logs||p.updates||[]).map(l=>({...l, txt:l.txt||l.texto||l.mensagem||l.msg||'', autor:l.autor||l.author||l.by||'', t:l.t||l.data||l.date||''})); p.etapa=effectiveEtapa(p);p.status=autoStatus(p);});
@@ -913,12 +883,6 @@ async function loadAll(){
     TEAM=(s.team||[]).map(p=>typeof p==='string'?{nome:p,empresa:''}:p);
     STAGE_DESCS=Object.assign({},STAGE_DESCS_DEFAULT,s.stageDescs||{});
   }catch(e){console.error('projetos painel:',e);}
-  // menções para mim (tabela real do painel)
-  try{
-    const me=((currentUser&&currentUser.email)||'').toLowerCase();
-    const {data:mc}=await SB.from('mencoes').select('projeto_nome,autor,mensagem,criado_em').eq('destinatario_email',me).order('criado_em',{ascending:false}).limit(50);
-    DATA.mencoes=mc||[];
-  }catch(e){ DATA.mencoes=[]; }
   if(!PO_ACCESS)return;
   // PO / orçamento
   try{
@@ -952,11 +916,9 @@ const ROLE_NAV={
 const PANEL_ONLY_WORK=['dash','board','list','timeline','weekly','mytasks'];
 const GLOBAL_NAV=['notif'];
 function currentNav(){
-  // Work-module screens follow PAPEL whenever it's known (live from Budget
-  // SSO, or the last-known-role cache if that SSO just failed) — a Budget
-  // hiccup must not widen what Work shows. Budget screens still require a
-  // genuinely live, successfully-authenticated PO_ACCESS; a cached role is
-  // never enough to show real financial data.
+  // Work-module screens follow PAPEL; Budget screens additionally require
+  // PO_ACCESS (PAPEL resolved and not 'pendente') — both come from the same
+  // single Supabase session/papel_atual() call now, see loadPapel().
   const role=ROLE_NAV[PAPEL];
   if(!role) return {global:GLOBAL_NAV, work:PANEL_ONLY_WORK, budget:[]};
   return {global:GLOBAL_NAV, work:role.work, budget:(PO_ACCESS?role.budget:[])};
@@ -1235,10 +1197,10 @@ async function editStageDesc(stageId){
   if(val===null)return;
   STAGE_DESCS[stageId]=val;
   try{
-    const {data:cf}=await SB.from('config').select('data').eq('id','app').maybeSingle();
+    const {data:cf}=await SBPO.from('act_config').select('data').eq('id','app').maybeSingle();
     const s=(cf&&cf.data)?cf.data:{};
     s.stageDescs=Object.assign({},s.stageDescs||{},STAGE_DESCS);
-    await SB.from('config').upsert({id:'app',data:s});
+    await SBPO.from('act_config').upsert({id:'app',data:s});
     toast('Column description updated ✓');
   }catch(e){ toastErr(e); }
   go(SCREEN);
@@ -1273,7 +1235,7 @@ async function dropOnStage(ev,stageId){
   go(SCREEN);
   try{
     const clean=JSON.parse(JSON.stringify(p)); delete clean._new;
-    const {error}=await SB.from('projetos').upsert({id:clean.id,data:clean});
+    const {error}=await SBPO.from('act_projects').upsert({id:clean.id,data:clean});
     if(error)throw error;
   }catch(e){
     p.etapa=prevEtapa; p.etapa_override=prevOverride; p.status=prevStatus; p.logs=prevLogs;
@@ -2340,19 +2302,19 @@ function savePTasks(list){
   clearTimeout(_ptTimer);
   _ptTimer=setTimeout(async()=>{
     const email=((currentUser&&currentUser.email)||'').toLowerCase(); if(!email)return;
-    try{ const {error}=await SB.from('tarefas_pessoais').upsert({email,data:list,atualizado_em:new Date().toISOString()}); if(error)throw error; }
+    try{ const {error}=await SBPO.from('act_tarefas_pessoais').upsert({email,data:list,atualizado_em:new Date().toISOString()}); if(error)throw error; }
     catch(e){ console.warn('tasks sync:',(e&&e.message)||e); toast('Task saved on this device — cloud sync failed.'); }
   },600);
 }
 async function loadPTasksRemote(){
   const email=((currentUser&&currentUser.email)||'').toLowerCase(); if(!email)return;
   try{
-    const {data,error}=await SB.from('tarefas_pessoais').select('data').eq('email',email).maybeSingle();
+    const {data,error}=await SBPO.from('act_tarefas_pessoais').select('data').eq('email',email).maybeSingle();
     if(error)throw error;
     if(data&&Array.isArray(data.data)){ PTASKS=data.data; try{localStorage.setItem(tasksKey(),JSON.stringify(PTASKS));}catch(e){} }
     else{
       const local=loadPTasksLocal(); PTASKS=local;
-      if(local.length){ await SB.from('tarefas_pessoais').upsert({email,data:local,atualizado_em:new Date().toISOString()}); }
+      if(local.length){ await SBPO.from('act_tarefas_pessoais').upsert({email,data:local,atualizado_em:new Date().toISOString()}); }
     }
   }catch(e){ console.warn('tasks load:',(e&&e.message)||e); }
 }
@@ -2623,12 +2585,11 @@ function pmPeopleFilter(q){
 }
 function pmPeopleBlur(){ const dd=document.getElementById('pmPeopleDD'); if(dd)dd.style.display='none'; }
 /* Fire-and-forget email to whoever just got tagged — never blocks the UI or
-   surfaces an error to the tagger, mirrors the existing best-effort mencoes
-   insert right below. Edge function: notifica-marcacao (Panel project). */
+   surfaces an error to the tagger. Edge function: notifica-marcacao. */
 async function notifyMarcacao(to,projeto,comentario){
   if(!to)return;
   try{
-    await fetch(PANEL_URL+'/functions/v1/notifica-marcacao',{method:'POST',headers:{'Content-Type':'application/json','apikey':PANEL_KEY,'Authorization':'Bearer '+PANEL_KEY},
+    await fetch(PO_URL+'/functions/v1/notifica-marcacao',{method:'POST',headers:{'Content-Type':'application/json','apikey':PO_KEY,'Authorization':'Bearer '+PO_KEY},
       body:JSON.stringify({to,autor:(currentUser&&currentUser.email)||'Alguém',projeto:projeto||'',comentario:comentario||null})});
   }catch(e){ console.warn('notifica-marcacao:',e); }
 }
@@ -2683,9 +2644,7 @@ function pmAddLog(){
   EDIT.envolvidos=EDIT.envolvidos||[];
   men.forEach(m=>{ if(m.email&&!EDIT.envolvidos.some(x=>x.email===m.email)) EDIT.envolvidos.push({email:m.email,nome:m.nome}); });
   ta.value=''; renderProjModal();
-  // grava menções na tabela real do painel (notifica os destinatários)
-  const autor=(currentUser&&currentUser.email)||'Someone';
-  men.forEach(async m=>{ if(m.email){ try{ await SB.from('mencoes').insert({projeto_nome:EDIT.nome||'Projeto',autor,destinatario_email:m.email,destinatario_nome:m.nome,mensagem:txt,criado_em:new Date().toISOString()}); }catch(e){console.warn('mencao:',e);} } });
+  // notifica os destinatários mencionados por e-mail
   men.forEach(m=>{ if(m.email) notifyMarcacao(m.email,EDIT.nome,txt); });
   if(men.length) toast('Log saved · @mention to '+men.map(m=>m.nome.split(/\s+/)[0]).join(', '));
 }
@@ -2802,7 +2761,7 @@ async function saveProj(){
   const fromTask=clean._fromTask; delete clean._fromTask;
   clean.etapa=effectiveEtapa(clean); clean.status=autoStatus(clean);
   try{
-    const {error}=await SB.from('projetos').upsert({id:clean.id,data:clean});
+    const {error}=await SBPO.from('act_projects').upsert({id:clean.id,data:clean});
     if(error)throw error;
     const i=DATA.projetos.findIndex(p=>p.id===clean.id);
     if(i>=0)DATA.projetos[i]=clean; else DATA.projetos.push(clean);
@@ -2812,7 +2771,7 @@ async function saveProj(){
 }
 async function delProj(id){
   if(!confirm('Delete this project? This action cannot be undone.'))return;
-  try{ await SB.from('projetos').delete().eq('id',id); DATA.projetos=DATA.projetos.filter(p=>p.id!==id); toast('Project deleted'); closeModal(); go(SCREEN); }
+  try{ await SBPO.from('act_projects').delete().eq('id',id); DATA.projetos=DATA.projetos.filter(p=>p.id!==id); toast('Project deleted'); closeModal(); go(SCREEN); }
   catch(e){ toastErr(e); }
 }
 
@@ -3392,7 +3351,7 @@ async function toggleMyTask(pid,tid){
   const t=(p.tasks||[]).find(x=>x.id===tid); if(!t)return;
   t.done=!t.done; if(t.done)t.pct=100;
   p.etapa=effectiveEtapa(p); p.status=autoStatus(p);
-  try{ await SB.from('projetos').upsert({id:p.id,data:p}); toast('Activity updated ✓'); }catch(e){ toast('Error saving.'); }
+  try{ await SBPO.from('act_projects').upsert({id:p.id,data:p}); toast('Activity updated ✓'); }catch(e){ toast('Error saving.'); }
   go(SCREEN);
 }
 function renderAgencyWork(){
