@@ -518,7 +518,8 @@ const ICONS={
   tag:'<path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4Z"/><circle cx="7.5" cy="7.5" r=".5"/>',
   chev:'<path d="m6 9 6 6 6-6"/>',
   grip:'<circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/>',
-  refresh:'<path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4"/>'
+  refresh:'<path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4"/>',
+  download:'<path d="M12 3v11"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>'
 };
 function icn(n,s,st){const d=ICONS[n]||ICONS.folder;return `<svg class="icn" width="${s||14}" height="${s||14}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${st||1.8}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;}
 function avColor(n){let h=0;for(const c of(n||'?'))h=c.charCodeAt(0)+((h<<5)-h);return AV_COLORS[Math.abs(h)%AV_COLORS.length];}
@@ -2475,8 +2476,101 @@ function renderTLModal(){
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:720px">
     <div class="modal-h"><h3>Timeline — ${esc(p.nome)}</h3><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">${body}</div>
-    <div class="modal-f"><span></span><button class="btn-ghost" onclick="closeModal()">Close</button></div>
+    <div class="modal-f"><button class="btn-ghost" onclick="exportProjTimeline('${esc(p.id)}')" style="display:inline-flex;align-items:center;gap:6px">${icn('download',13)} Export PDF</button><button class="btn-ghost" onclick="closeModal()">Close</button></div>
   </div></div>`;
+}
+/* Per-project printable timeline export — opens a standalone print-ready page
+   (save as PDF via the browser print dialog). Project bar + chained activity
+   bars (same due-date-chaining approximation as the Timeline screen) + each
+   activity's dated sub-items on their real start/end dates, followed by a
+   detail table of every activity and sub-item. */
+function exportProjTimeline(pid){
+  const p=DATA.projetos.find(x=>x.id===pid); if(!p){toast('Project not found.');return;}
+  const tasks=(p.tasks||[]).slice().sort((a,b)=>String(a.fim||'9999').localeCompare(String(b.fim||'9999')));
+  const ds=[]; const pushD=d=>{ if(d) ds.push(new Date(String(d).slice(0,10)+'T00:00:00')); };
+  pushD(p.inicio); pushD(p.prazo);
+  tasks.forEach(t=>{ pushD(t.inicio); pushD(t.fim); (t.subs||[]).forEach(s2=>{ pushD(s2.inicio); pushD(s2.fim); }); });
+  if(!ds.length){ toast('This project has no dates to plot yet.'); return; }
+  let min=new Date(Math.min(...ds)), max=new Date(Math.max(...ds));
+  min.setDate(min.getDate()-min.getDay());
+  const weeks=Math.max(1,Math.ceil((Math.round((max-min)/864e5)+7)/7));
+  const dayPct=100/(weeks*7);
+  const MM=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  let wkHead='';
+  for(let w=0;w<weeks;w++){const dd=new Date(min);dd.setDate(dd.getDate()+w*7);wkHead+=`<div style="flex:1;min-width:0;padding:6px 2px;text-align:center;font-size:9px;font-weight:600;color:#8a90a0;border-right:1px solid #edeff4">${dd.getDate()}/${MM[dd.getMonth()]}</div>`;}
+  const barRow=(label,sub,s,e,color,txt,indent)=>{
+    let barCell='';
+    if(s&&e){
+      const left=Math.max(0,((s-min)/864e5)*dayPct);
+      const width=Math.min(Math.max(dayPct*1.2,(((e-min)/864e5)+1)*dayPct-left),100-left);
+      barCell=`<div style="position:absolute;left:${left}%;width:${width}%;top:${indent?5:6}px;height:${indent?14:18}px;border-radius:5px;background:${color};display:flex;align-items:center;padding:0 6px;overflow:hidden">${txt?`<span style="font-size:8.5px;font-weight:700;color:#fff;white-space:nowrap">${txt}</span>`:''}</div>`;
+    }
+    return `<div style="display:flex;align-items:center;border-bottom:1px solid #edeff4;page-break-inside:avoid">
+      <div style="width:220px;flex-shrink:0;padding:6px 10px 6px ${10+(indent||0)}px;border-right:1px solid #e4e6ec;min-width:0">
+        <div style="font-weight:${indent?500:700};font-size:${indent?10.5:11.5}px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${label}</div>
+        ${sub?`<div style="font-size:9.5px;color:#8a90a0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sub}</div>`:''}
+      </div>
+      <div style="flex:1;position:relative;height:${indent?24:30}px">${barCell}</div>
+    </div>`;
+  };
+  const stg=stageOf(p.etapa), st=statusOf(p.status), pr=computeProg(p);
+  let gantt='';
+  if(p.inicio||p.prazo){
+    const s=new Date((p.inicio||p.prazo)+'T00:00:00'), e=new Date((p.prazo||p.inicio)+'T00:00:00');
+    gantt+=barRow(esc(p.nome),'Project · '+esc(stg.name),s,e,stg.color,pr+'%',0);
+  }
+  let prevEnd=p.inicio||p.prazo;
+  tasks.forEach(t=>{
+    const hp=healthPill(t.status);
+    const endStr=t.fim||prevEnd;
+    const subLine=[respName(t.resp)?esc(respName(t.resp)):'',t.fim?'due '+fmtDate(t.fim):''].filter(Boolean).join(' · ');
+    if(endStr){
+      const s=new Date((t.inicio||prevEnd||endStr)+'T00:00:00'), e=new Date(endStr+'T00:00:00');
+      gantt+=barRow(esc(t.n),subLine,s,e,hp.dot,(t.pct||0)+'%',14);
+      prevEnd=endStr;
+    }else{
+      gantt+=barRow(esc(t.n),subLine||'no dates',null,null,'','',14);
+    }
+    (t.subs||[]).forEach(s2=>{
+      if(!(s2.inicio||s2.fim))return;
+      const ss=new Date((s2.inicio||s2.fim)+'T00:00:00'), se=new Date((s2.fim||s2.inicio)+'T00:00:00');
+      gantt+=barRow('↳ '+esc(s2.n||'(untitled)'),s2.resp?esc(s2.resp):'',ss,se,s2.done?'#16a06a':'#1273cf',s2.done?'✓':'',28);
+    });
+  });
+  const rowsTbl=[];
+  tasks.forEach(t=>{
+    rowsTbl.push(`<tr style="background:#fafbfd"><td style="font-weight:700">${esc(t.n)}</td><td>${esc(respName(t.resp)||'—')}</td><td>${t.inicio?fmtDate(t.inicio):'—'}</td><td>${t.fim?fmtDate(t.fim):'—'}</td><td>${statusOf(t.status).name}</td><td style="text-align:right">${t.pct||0}%</td><td>${esc(t.obs||'')}</td></tr>`);
+    (t.subs||[]).forEach(s2=>{
+      rowsTbl.push(`<tr><td style="padding-left:22px;color:#3c3f46">↳ ${esc(s2.n||'(untitled)')}</td><td>${esc(s2.resp||'—')}</td><td>${s2.inicio?fmtDate(s2.inicio):'—'}</td><td>${s2.fim?fmtDate(s2.fim):'—'}</td><td>${s2.done?'Done':'Pending'}</td><td style="text-align:right">${s2.done?'100%':'—'}</td><td>${esc(s2.obs||'')}</td></tr>`);
+    });
+  });
+  const html=`<!doctype html><html><head><meta charset="utf-8"><title>Timeline — ${esc(p.nome)}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    @page{size:A4 landscape;margin:12mm}
+    *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    :root{color-scheme:light}
+    body{font-family:'Hanken Grotesk',Arial,sans-serif;color:#14161c;background:#fff;margin:0;padding:26px;font-size:12px}
+    table{border-collapse:collapse;width:100%;margin-top:18px;font-size:10.5px}
+    th{background:#f3f4f8;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#5b5f6b}
+    th,td{border:1px solid #e4e6ec;padding:5px 8px;vertical-align:top}
+    .noprint{position:fixed;top:10px;right:10px}
+    @media print{.noprint{display:none}}
+  </style></head><body>
+  <button class="noprint" onclick="window.print()" style="padding:8px 14px;border-radius:8px;border:none;background:#10131a;color:#fff;font-weight:700;cursor:pointer">Print / Save PDF</button>
+  <div style="font-size:20px;font-weight:800">${esc(p.nome)}</div>
+  <div style="font-size:11px;color:#5b5f6b;margin:4px 0 16px">${esc(respName(p.resp)||'—')} · ${esc(stg.name)} · ${st.name} · ${p.inicio?fmtDate(p.inicio):'—'} → ${p.prazo?fmtDate(p.prazo):'—'} · ${pr}% complete</div>
+  <div style="border:1px solid #e4e6ec;border-radius:10px;overflow:hidden">
+    <div style="display:flex;border-bottom:1px solid #e4e6ec;background:#fafbfd"><div style="width:220px;flex-shrink:0;padding:6px 10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#8a90a0;border-right:1px solid #e4e6ec">Project / activity / sub-item</div><div style="flex:1;display:flex">${wkHead}</div></div>
+    ${gantt}
+  </div>
+  <table><thead><tr><th>Activity / sub-item</th><th>Assignee</th><th>Start</th><th>Due</th><th>Status</th><th style="text-align:right">%</th><th>Notes</th></tr></thead><tbody>${rowsTbl.join('')||'<tr><td colspan="7">No activities.</td></tr>'}</tbody></table>
+  <div style="margin-top:14px;font-size:9.5px;color:#8a90a0">Exported from TCL Platform · ${new Date().toLocaleDateString('en-US',{day:'2-digit',month:'short',year:'numeric'})}</div>
+  <script>window.onload=function(){setTimeout(function(){window.print()},400)}<\/script>
+  </body></html>`;
+  const w=window.open('','_blank');
+  if(!w){ toast('Popup blocked — allow popups to export.'); return; }
+  w.document.write(html); w.document.close();
 }
 function pmAddAtv(){ EDIT.tasks=EDIT.tasks||[]; EDIT.tasks.push({id:uid(),n:'Nova atividade',done:false,fim:'',status:'no_prazo',pct:0,obs:'',resp:'',subs:[]}); renderProjModal(); }
 function pmDelAtv(tid){ EDIT.tasks=(EDIT.tasks||[]).filter(t=>t.id!==tid); renderProjModal(); }
@@ -3188,6 +3282,13 @@ async function deletarOrcamento(id){
    ============================================================ */
 let TL_HILITE=null; // highlighted week index, or null — click a week header to toggle
 function tlToggleWeek(w){ TL_HILITE=(TL_HILITE===w)?null:w; go(SCREEN); }
+/* Windowed navigation — TL_OFF is a week offset from "one week before today's
+   week" (so Today lands near the left edge with a little past context);
+   TL_FIT=true restores the original fit-everything scale. Week indices shift
+   when the window moves, so any highlighted column is cleared on navigation. */
+let TL_FIT=false, TL_OFF=0; const TL_SPAN=10;
+function tlNav(d){ if(d===0)TL_OFF=0; else TL_OFF+=d; TL_FIT=false; TL_HILITE=null; go(SCREEN); }
+function tlFitToggle(){ TL_FIT=!TL_FIT; TL_HILITE=null; go(SCREEN); }
 let TL_EXPANDED={}; // project id -> inline activities-timeline dropdown open?
 function tlToggleProjRow(pid){ TL_EXPANDED[pid]=!TL_EXPANDED[pid]; go(SCREEN); }
 /* Gantt-style, not a plain list — each activity gets its own bar positioned
@@ -3197,39 +3298,56 @@ function tlToggleProjRow(pid){ TL_EXPANDED[pid]=!TL_EXPANDED[pid]; go(SCREEN); }
    bar's start is chained from the previous activity's due date (or the
    project's own start for the first one) — a simple, readable approximation
    of sequencing rather than true independent start dates. */
-function tlProjActivitiesHTML(p,min,dayPct){
+function tlProjActivitiesHTML(p,min,dayPct,weeks){
   const tasks=(p.tasks||[]).slice().sort((a,b)=>String(a.fim||'9999').localeCompare(String(b.fim||'9999')));
   if(!tasks.length) return '<div style="font-size:12px;color:var(--txt-3);padding:8px 16px 8px 45px">No activities.</div>';
+  const winEnd=new Date(min); winEnd.setDate(winEnd.getDate()+(weeks||1)*7);
   let prevEnd=p.inicio||p.prazo;
   return tasks.map(t=>{
     const st=statusOf(t.status), hp=healthPill(t.status);
     const endStr=t.fim||prevEnd;
     const s=new Date(prevEnd+'T00:00:00'), e=new Date(endStr+'T00:00:00');
     prevEnd=endStr;
-    const left=Math.max(0,((s-min)/864e5)*dayPct), width=Math.max(dayPct*1.3,(((e-s)/864e5)+1)*dayPct);
+    let bar;
+    if(e<min){
+      bar=`<span style="position:absolute;left:8px;top:9px;font-size:9.5px;font-weight:700;color:var(--txt-3)">◀ ${t.fim?fmtDate(t.fim):'—'}</span>`;
+    }else if(s>=winEnd){
+      bar=`<span style="position:absolute;right:8px;top:9px;font-size:9.5px;font-weight:700;color:var(--txt-3)">${t.fim?fmtDate(t.fim):'—'} ▶</span>`;
+    }else{
+      const left=Math.max(0,((s-min)/864e5)*dayPct);
+      const rawR=(((e-min)/864e5)+1)*dayPct;
+      const width=Math.min(Math.max(dayPct*1.3,Math.min(rawR,100)-left),100-left);
+      bar=`<div title="${esc(t.n)} · ${t.fim?fmtDate(t.fim):'no due date'} · ${t.pct||0}%" style="position:absolute;left:${left}%;width:${width}%;top:6px;height:18px;border-radius:5px;background:${hp.dot};display:flex;align-items:center;padding:0 7px;overflow:hidden">
+          <span style="font-size:9px;font-weight:700;color:#fff;white-space:nowrap">${t.pct||0}%</span>
+        </div>`;
+    }
     return `<div style="display:flex;align-items:center;border-bottom:1px dashed var(--line-2)">
       <div style="width:230px;flex-shrink:0;padding:7px 16px 7px 45px;border-right:1px solid var(--line);min-width:0;display:flex;align-items:center;gap:7px">
         <span class="badge ${st.cls}" style="flex-shrink:0;font-size:9px;padding:1px 6px"><span class="d"></span>${st.name}</span>
         <span style="flex:1;min-width:0;font-size:11.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.n)}</span>
       </div>
-      <div style="flex:1;position:relative;height:32px">
-        <div title="${esc(t.n)} · ${t.fim?fmtDate(t.fim):'no due date'} · ${t.pct||0}%" style="position:absolute;left:${left}%;width:${width}%;top:6px;height:18px;border-radius:5px;background:${hp.dot};display:flex;align-items:center;padding:0 7px;overflow:hidden">
-          <span style="font-size:9px;font-weight:700;color:#fff;white-space:nowrap">${t.pct||0}%</span>
-        </div>
-      </div>
+      <div style="flex:1;position:relative;height:32px">${bar}</div>
     </div>`;
   }).join('');
 }
 function renderTimeline(){
   const list=visProjs().filter(p=>p.prazo).slice();
   if(!list.length)return '<div class="empty">No projects with a due date.</div>';
-  // range de semanas
+  // range de semanas — fit-all (escala original) ou janela navegável de TL_SPAN semanas
   const dates=[]; list.forEach(p=>{if(p.inicio)dates.push(new Date(p.inicio+'T00:00:00'));if(p.prazo)dates.push(new Date(p.prazo+'T00:00:00'));});
-  let min=new Date(Math.min(...dates)), max=new Date(Math.max(...dates));
-  min.setDate(min.getDate()-min.getDay()); // início da semana
-  const totalDays=Math.max(7,Math.round((max-min)/864e5)+7);
-  const weeks=Math.ceil(totalDays/7); const dayPct=100/(weeks*7);
   const tdy=today0();
+  let min,weeks;
+  if(TL_FIT){
+    min=new Date(Math.min(...dates)); const max=new Date(Math.max(...dates));
+    min.setDate(min.getDate()-min.getDay()); // início da semana
+    const totalDays=Math.max(7,Math.round((max-min)/864e5)+7);
+    weeks=Math.ceil(totalDays/7);
+  }else{
+    min=new Date(tdy); min.setDate(min.getDate()-min.getDay()-7+TL_OFF*7);
+    weeks=TL_SPAN;
+  }
+  const dayPct=100/(weeks*7);
+  const winEnd=new Date(min); winEnd.setDate(winEnd.getDate()+weeks*7);
   const MM=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const ranges=list.map(p=>({p,s:new Date((p.inicio||p.prazo)+'T00:00:00'),e:new Date(p.prazo+'T00:00:00')}));
   // highlight stripe for the selected week — same left/width math as a header cell, drawn behind the bars/header text
@@ -3248,7 +3366,17 @@ function renderTimeline(){
   const rows=list.sort((a,b)=>new Date((a.inicio||a.prazo)+'T00:00:00')-new Date((b.inicio||b.prazo)+'T00:00:00')).map(p=>{
     const stg=stageOf(p.etapa); const pr=computeProg(p);
     const s=new Date((p.inicio||p.prazo)+'T00:00:00'), e=new Date(p.prazo+'T00:00:00');
-    const left=Math.max(0,((s-min)/864e5)*dayPct), width=Math.max(dayPct*2,(((e-s)/864e5)+1)*dayPct);
+    let bar;
+    if(e<min){
+      bar=`<span style="position:absolute;left:8px;top:15px;font-size:10px;font-weight:700;color:var(--txt-3)">◀ ended ${fmtDate(p.prazo)}</span>`;
+    }else if(s>=winEnd){
+      bar=`<span style="position:absolute;right:8px;top:15px;font-size:10px;font-weight:700;color:var(--txt-3)">starts ${fmtDate(p.inicio||p.prazo)} ▶</span>`;
+    }else{
+      const left=Math.max(0,((s-min)/864e5)*dayPct);
+      const rawR=(((e-min)/864e5)+1)*dayPct;
+      const width=Math.max(dayPct*2,Math.min(rawR,100)-left);
+      bar=`<div style="position:absolute;left:${left}%;width:${Math.min(width,100-left)}%;top:11px;height:24px;border-radius:7px;background:${stg.color};box-shadow:0 3px 8px -3px rgba(0,0,0,.3);display:flex;align-items:center;padding:0 9px;overflow:hidden"><span style="font-size:10.5px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.25);white-space:nowrap">${pr}%</span></div>`;
+    }
     const open=!!TL_EXPANDED[p.id];
     return `<div>
     <div onclick="tlToggleProjRow('${esc(p.id)}')" style="display:flex;border-bottom:1px solid #edeff4;align-items:center;cursor:pointer;background:${open?'var(--paper-2)':''}">
@@ -3256,13 +3384,23 @@ function renderTimeline(){
         <span style="color:var(--txt-3);display:flex;flex-shrink:0;transform:rotate(${open?'0deg':'-90deg'});transition:transform .15s">${icn('chev',11)}</span>
         <span style="min-width:0"><div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.nome)}</div><div style="font-size:11px;color:var(--txt-3);margin-top:1px">${esc(respName(p.resp)||'—')} · ${esc(stg.name)}</div></span>
         <button onclick="event.stopPropagation();openProj('${esc(p.id)}')" title="Open project" style="margin-left:auto;flex-shrink:0;border:none;background:none;color:var(--txt-3);cursor:pointer;padding:2px;display:inline-flex">${icn('pencil',12)}</button>
+        <button onclick="event.stopPropagation();exportProjTimeline('${esc(p.id)}')" title="Export timeline (PDF)" style="flex-shrink:0;border:none;background:none;color:var(--txt-3);cursor:pointer;padding:2px;display:inline-flex">${icn('download',12)}</button>
       </div>
-      <div style="flex:1;position:relative;height:46px">${hiliteStripe}<div style="position:absolute;left:${left}%;width:${width}%;top:11px;height:24px;border-radius:7px;background:${stg.color};box-shadow:0 3px 8px -3px rgba(0,0,0,.3);display:flex;align-items:center;padding:0 9px;overflow:hidden"><span style="font-size:10.5px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.25);white-space:nowrap">${pr}%</span></div></div>
+      <div style="flex:1;position:relative;height:46px">${hiliteStripe}${bar}</div>
     </div>
-    ${open?`<div style="background:var(--paper-2);border-bottom:1px solid var(--line)">${tlProjActivitiesHTML(p,min,dayPct)}</div>`:''}
+    ${open?`<div style="background:var(--paper-2);border-bottom:1px solid var(--line)">${tlProjActivitiesHTML(p,min,dayPct,weeks)}</div>`:''}
     </div>`;
   }).join('');
-  return `<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
+  const lastDay=new Date(winEnd); lastDay.setDate(lastDay.getDate()-1);
+  const rangeLbl=`${min.getDate()}/${MM[min.getMonth()]} – ${lastDay.getDate()}/${MM[lastDay.getMonth()]}`;
+  const navBar=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+    <button class="chip-btn" onclick="tlNav(-1)" title="Back one week">◀ Prev</button>
+    <button class="chip-btn" onclick="tlNav(0)" title="Back to the current week" style="${!TL_FIT&&TL_OFF===0?'opacity:.5;cursor:default':''}">Today</button>
+    <button class="chip-btn" onclick="tlNav(1)" title="Forward one week">Next ▶</button>
+    <span style="font-size:12px;font-weight:700;color:var(--txt-2);font-family:var(--mono)">${TL_FIT?'Full range':rangeLbl}</span>
+    <button class="chip-btn" onclick="tlFitToggle()" style="margin-left:auto">${TL_FIT?`${TL_SPAN}-week view`:'Fit all'}</button>
+  </div>`;
+  return navBar+`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
     <div style="display:flex;border-bottom:1px solid var(--line);background:#fafbfd"><div style="width:230px;flex-shrink:0;padding:11px 16px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);border-right:1px solid var(--line)">Project</div><div style="flex:1;display:flex">${wkHead}</div></div>
     ${rows}
     <div style="display:flex;border-top:1px solid var(--line);background:#fafbfd"><div style="width:230px;flex-shrink:0;padding:6px 16px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);border-right:1px solid var(--line);display:flex;align-items:center">Active/week</div><div style="flex:1">${wkTotalsRow}</div></div>
