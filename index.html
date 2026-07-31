@@ -2596,9 +2596,15 @@ async function exportProjTimeline(pid){
   </body></html>`;
   toast('Generating shareable link…');
   try{
-    const {data,error}=await SBPO.from('act_timeline_shares').insert({html}).select('id').single();
+    /* id generated client-side and inserted WITHOUT .select() — an
+       INSERT ... RETURNING is blocked by RLS unless the role also has a
+       SELECT policy, and act_timeline_shares deliberately has none (so it
+       can't be listed/enumerated). Knowing the id upfront sidesteps that
+       entirely: no RETURNING is ever requested. */
+    const shareId=crypto.randomUUID();
+    const {error}=await SBPO.from('act_timeline_shares').insert({id:shareId,html});
     if(error) throw error;
-    const url=location.origin+location.pathname+'?share='+data.id;
+    const url=location.origin+location.pathname+'?share='+shareId;
     openShareLinkModal(url,p.nome);
   }catch(e){ toast('Could not generate the link: '+((e&&e.message)||e)); }
 }
