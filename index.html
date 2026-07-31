@@ -519,7 +519,7 @@ const ICONS={
   chev:'<path d="m6 9 6 6 6-6"/>',
   grip:'<circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/>',
   refresh:'<path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4"/>',
-  download:'<path d="M12 3v11"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>'
+  link:'<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'
 };
 function icn(n,s,st){const d=ICONS[n]||ICONS.folder;return `<svg class="icn" width="${s||14}" height="${s||14}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${st||1.8}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;}
 function avColor(n){let h=0;for(const c of(n||'?'))h=c.charCodeAt(0)+((h<<5)-h);return AV_COLORS[Math.abs(h)%AV_COLORS.length];}
@@ -2476,18 +2476,20 @@ function renderTLModal(){
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:720px">
     <div class="modal-h"><h3>Timeline — ${esc(p.nome)}</h3><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">${body}</div>
-    <div class="modal-f"><button class="btn-ghost" onclick="exportProjTimeline('${esc(p.id)}')" style="display:inline-flex;align-items:center;gap:6px">${icn('download',13)} Export HTML</button><button class="btn-ghost" onclick="closeModal()">Close</button></div>
+    <div class="modal-f"><button class="btn-ghost" onclick="exportProjTimeline('${esc(p.id)}')" style="display:inline-flex;align-items:center;gap:6px">${icn('link',13)} Share link</button><button class="btn-ghost" onclick="closeModal()">Close</button></div>
   </div></div>`;
 }
-/* Per-project timeline export — downloads a standalone .html file (a "Print /
-   Save PDF" button is included inside it for whoever opens it, but the export
-   itself is a plain HTML download, not an auto-triggered print flow). Project
-   bar + chained activity bars (same due-date-chaining approximation as the
-   Timeline screen) + each activity's dated sub-items on their real start/end
-   dates, followed by a detail table of every activity and sub-item. The
-   project's own period is NOT used here — the plotted/reported range always
-   spans from the earliest to the latest dated task/sub-item. */
-function exportProjTimeline(pid){
+/* Per-project timeline share — uploads a standalone .html snapshot (a "Print /
+   Save PDF" button is included inside it for whoever opens it) to the public
+   'timelines' storage bucket and shows the resulting permanent public link in
+   a small modal, ready to copy. Project bar + chained activity bars (same
+   due-date-chaining approximation as the Timeline screen) + each activity's
+   dated sub-items on their real start/end dates, followed by a detail table
+   of every activity and sub-item. The project's own period is NOT used here —
+   the plotted/reported range always spans from the earliest to the latest
+   dated task/sub-item. */
+async function exportProjTimeline(pid){
+  if(DEMO_MODE){ toast('Demo mode — sharing is disabled.'); return; }
   const p=DATA.projetos.find(x=>x.id===pid); if(!p){toast('Project not found.');return;}
   const tasks=(p.tasks||[]).slice().sort((a,b)=>String(a.fim||'9999').localeCompare(String(b.fim||'9999')));
   let minStr=null,maxStr=null;
@@ -2567,13 +2569,32 @@ function exportProjTimeline(pid){
   <table><thead><tr><th>Activity / sub-item</th><th>Assignee</th><th>Start</th><th>Due</th><th>Status</th><th style="text-align:right">%</th><th>Notes</th></tr></thead><tbody>${rowsTbl.join('')||'<tr><td colspan="7">No activities.</td></tr>'}</tbody></table>
   <div style="margin-top:14px;font-size:9.5px;color:#8a90a0">Exported from TCL Platform · ${new Date().toLocaleDateString('en-US',{day:'2-digit',month:'short',year:'numeric'})}</div>
   </body></html>`;
-  const fname='timeline_'+(p.nome||'projeto').replace(/[^a-z0-9]+/gi,'_').replace(/^_+|_+$/g,'').slice(0,60)+'.html';
-  const blob=new Blob([html],{type:'text/html'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a'); a.href=url; a.download=fname;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  toast('Timeline exported ✓');
+  const rid=(crypto.randomUUID?crypto.randomUUID():(Date.now()+'-'+Math.random().toString(36).slice(2)));
+  const path=String(pid).replace(/[^a-zA-Z0-9_-]/g,'')+'/'+rid+'.html';
+  toast('Generating shareable link…');
+  try{
+    const {error}=await SBPO.storage.from('timelines').upload(path,new Blob([html],{type:'text/html'}),{contentType:'text/html',upsert:false});
+    if(error) throw error;
+    const {data}=SBPO.storage.from('timelines').getPublicUrl(path);
+    openShareLinkModal(data.publicUrl,p.nome);
+  }catch(e){ toast('Could not generate the link: '+((e&&e.message)||e)); }
+}
+function openShareLinkModal(url,name){
+  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:520px">
+    <div class="modal-h"><h3>Shareable link</h3><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
+    <div class="modal-b">
+      <div style="font-size:12.5px;color:var(--txt-2);margin-bottom:12px">Anyone with this link can view the timeline for <b>${esc(name)}</b> — no login required.</div>
+      <div style="display:flex;gap:8px">
+        <input readonly value="${esc(url)}" onclick="this.select()" style="flex:1;min-width:0;padding:9px 11px;border:1px solid var(--line-2);border-radius:8px;font-size:12px;font-family:var(--mono);color:var(--txt)">
+        <button class="btn-acc" onclick="copyShareLink('${esc(url)}')" style="flex-shrink:0;display:inline-flex;align-items:center;gap:6px">${icn('copy',13)} Copy</button>
+      </div>
+    </div>
+    <div class="modal-f"><a href="${esc(url)}" target="_blank" rel="noopener" style="font-size:12.5px;color:var(--txt-2);text-decoration:underline">Open in new tab</a><button class="btn-ghost" onclick="closeModal()">Close</button></div>
+  </div></div>`;
+}
+function copyShareLink(url){
+  try{ navigator.clipboard.writeText(url); toast('Link copied ✓'); }
+  catch(e){ toast('Could not copy — select the link and copy manually.'); }
 }
 function pmAddAtv(){ EDIT.tasks=EDIT.tasks||[]; EDIT.tasks.push({id:uid(),n:'Nova atividade',done:false,fim:'',status:'no_prazo',pct:0,obs:'',resp:'',subs:[]}); renderProjModal(); }
 function pmDelAtv(tid){ EDIT.tasks=(EDIT.tasks||[]).filter(t=>t.id!==tid); renderProjModal(); }
@@ -3387,7 +3408,7 @@ function renderTimeline(){
         <span style="color:var(--txt-3);display:flex;flex-shrink:0;transform:rotate(${open?'0deg':'-90deg'});transition:transform .15s">${icn('chev',11)}</span>
         <span style="min-width:0"><div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.nome)}</div><div style="font-size:11px;color:var(--txt-3);margin-top:1px">${esc(respName(p.resp)||'—')} · ${esc(stg.name)}</div></span>
         <button onclick="event.stopPropagation();openProj('${esc(p.id)}')" title="Open project" style="margin-left:auto;flex-shrink:0;border:none;background:none;color:var(--txt-3);cursor:pointer;padding:2px;display:inline-flex">${icn('pencil',12)}</button>
-        <button onclick="event.stopPropagation();exportProjTimeline('${esc(p.id)}')" title="Export timeline (HTML)" style="flex-shrink:0;border:none;background:none;color:var(--txt-3);cursor:pointer;padding:2px;display:inline-flex">${icn('download',12)}</button>
+        <button onclick="event.stopPropagation();exportProjTimeline('${esc(p.id)}')" title="Share timeline (link)" style="flex-shrink:0;border:none;background:none;color:var(--txt-3);cursor:pointer;padding:2px;display:inline-flex">${icn('link',12)}</button>
       </div>
       <div style="flex:1;position:relative;height:46px">${hiliteStripe}${bar}</div>
     </div>
