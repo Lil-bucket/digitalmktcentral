@@ -2476,24 +2476,28 @@ function renderTLModal(){
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:720px">
     <div class="modal-h"><h3>Timeline — ${esc(p.nome)}</h3><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">${body}</div>
-    <div class="modal-f"><button class="btn-ghost" onclick="exportProjTimeline('${esc(p.id)}')" style="display:inline-flex;align-items:center;gap:6px">${icn('download',13)} Export PDF</button><button class="btn-ghost" onclick="closeModal()">Close</button></div>
+    <div class="modal-f"><button class="btn-ghost" onclick="exportProjTimeline('${esc(p.id)}')" style="display:inline-flex;align-items:center;gap:6px">${icn('download',13)} Export HTML</button><button class="btn-ghost" onclick="closeModal()">Close</button></div>
   </div></div>`;
 }
-/* Per-project printable timeline export — opens a standalone print-ready page
-   (save as PDF via the browser print dialog). Project bar + chained activity
-   bars (same due-date-chaining approximation as the Timeline screen) + each
-   activity's dated sub-items on their real start/end dates, followed by a
-   detail table of every activity and sub-item. */
+/* Per-project timeline export — downloads a standalone .html file (a "Print /
+   Save PDF" button is included inside it for whoever opens it, but the export
+   itself is a plain HTML download, not an auto-triggered print flow). Project
+   bar + chained activity bars (same due-date-chaining approximation as the
+   Timeline screen) + each activity's dated sub-items on their real start/end
+   dates, followed by a detail table of every activity and sub-item. The
+   project's own period is NOT used here — the plotted/reported range always
+   spans from the earliest to the latest dated task/sub-item. */
 function exportProjTimeline(pid){
   const p=DATA.projetos.find(x=>x.id===pid); if(!p){toast('Project not found.');return;}
   const tasks=(p.tasks||[]).slice().sort((a,b)=>String(a.fim||'9999').localeCompare(String(b.fim||'9999')));
-  const ds=[]; const pushD=d=>{ if(d) ds.push(new Date(String(d).slice(0,10)+'T00:00:00')); };
-  pushD(p.inicio); pushD(p.prazo);
+  let minStr=null,maxStr=null;
+  const pushD=d=>{ if(!d)return; const s=String(d).slice(0,10); if(!minStr||s<minStr)minStr=s; if(!maxStr||s>maxStr)maxStr=s; };
   tasks.forEach(t=>{ pushD(t.inicio); pushD(t.fim); (t.subs||[]).forEach(s2=>{ pushD(s2.inicio); pushD(s2.fim); }); });
-  if(!ds.length){ toast('This project has no dates to plot yet.'); return; }
-  let min=new Date(Math.min(...ds)), max=new Date(Math.max(...ds));
+  if(!minStr){ toast('This project has no dated activities to plot yet.'); return; }
+  const rawMin=new Date(minStr+'T00:00:00'), rawMax=new Date(maxStr+'T00:00:00');
+  let min=new Date(rawMin);
   min.setDate(min.getDate()-min.getDay());
-  const weeks=Math.max(1,Math.ceil((Math.round((max-min)/864e5)+7)/7));
+  const weeks=Math.max(1,Math.ceil((Math.round((rawMax-min)/864e5)+7)/7));
   const dayPct=100/(weeks*7);
   const MM=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   let wkHead='';
@@ -2514,12 +2518,8 @@ function exportProjTimeline(pid){
     </div>`;
   };
   const stg=stageOf(p.etapa), st=statusOf(p.status), pr=computeProg(p);
-  let gantt='';
-  if(p.inicio||p.prazo){
-    const s=new Date((p.inicio||p.prazo)+'T00:00:00'), e=new Date((p.prazo||p.inicio)+'T00:00:00');
-    gantt+=barRow(esc(p.nome),'Project · '+esc(stg.name),s,e,stg.color,pr+'%',0);
-  }
-  let prevEnd=p.inicio||p.prazo;
+  let gantt=barRow(esc(p.nome),'Project · '+esc(stg.name),rawMin,rawMax,stg.color,pr+'%',0);
+  let prevEnd=minStr;
   tasks.forEach(t=>{
     const hp=healthPill(t.status);
     const endStr=t.fim||prevEnd;
@@ -2559,18 +2559,21 @@ function exportProjTimeline(pid){
   </style></head><body>
   <button class="noprint" onclick="window.print()" style="padding:8px 14px;border-radius:8px;border:none;background:#10131a;color:#fff;font-weight:700;cursor:pointer">Print / Save PDF</button>
   <div style="font-size:20px;font-weight:800">${esc(p.nome)}</div>
-  <div style="font-size:11px;color:#5b5f6b;margin:4px 0 16px">${esc(respName(p.resp)||'—')} · ${esc(stg.name)} · ${st.name} · ${p.inicio?fmtDate(p.inicio):'—'} → ${p.prazo?fmtDate(p.prazo):'—'} · ${pr}% complete</div>
+  <div style="font-size:11px;color:#5b5f6b;margin:4px 0 16px">${esc(respName(p.resp)||'—')} · ${esc(stg.name)} · ${st.name} · ${fmtDate(minStr)} → ${fmtDate(maxStr)} · ${pr}% complete</div>
   <div style="border:1px solid #e4e6ec;border-radius:10px;overflow:hidden">
     <div style="display:flex;border-bottom:1px solid #e4e6ec;background:#fafbfd"><div style="width:220px;flex-shrink:0;padding:6px 10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#8a90a0;border-right:1px solid #e4e6ec">Project / activity / sub-item</div><div style="flex:1;display:flex">${wkHead}</div></div>
     ${gantt}
   </div>
   <table><thead><tr><th>Activity / sub-item</th><th>Assignee</th><th>Start</th><th>Due</th><th>Status</th><th style="text-align:right">%</th><th>Notes</th></tr></thead><tbody>${rowsTbl.join('')||'<tr><td colspan="7">No activities.</td></tr>'}</tbody></table>
   <div style="margin-top:14px;font-size:9.5px;color:#8a90a0">Exported from TCL Platform · ${new Date().toLocaleDateString('en-US',{day:'2-digit',month:'short',year:'numeric'})}</div>
-  <script>window.onload=function(){setTimeout(function(){window.print()},400)}<\/script>
   </body></html>`;
-  const w=window.open('','_blank');
-  if(!w){ toast('Popup blocked — allow popups to export.'); return; }
-  w.document.write(html); w.document.close();
+  const fname='timeline_'+(p.nome||'projeto').replace(/[^a-z0-9]+/gi,'_').replace(/^_+|_+$/g,'').slice(0,60)+'.html';
+  const blob=new Blob([html],{type:'text/html'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=fname;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('Timeline exported ✓');
 }
 function pmAddAtv(){ EDIT.tasks=EDIT.tasks||[]; EDIT.tasks.push({id:uid(),n:'Nova atividade',done:false,fim:'',status:'no_prazo',pct:0,obs:'',resp:'',subs:[]}); renderProjModal(); }
 function pmDelAtv(tid){ EDIT.tasks=(EDIT.tasks||[]).filter(t=>t.id!==tid); renderProjModal(); }
@@ -3384,7 +3387,7 @@ function renderTimeline(){
         <span style="color:var(--txt-3);display:flex;flex-shrink:0;transform:rotate(${open?'0deg':'-90deg'});transition:transform .15s">${icn('chev',11)}</span>
         <span style="min-width:0"><div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.nome)}</div><div style="font-size:11px;color:var(--txt-3);margin-top:1px">${esc(respName(p.resp)||'—')} · ${esc(stg.name)}</div></span>
         <button onclick="event.stopPropagation();openProj('${esc(p.id)}')" title="Open project" style="margin-left:auto;flex-shrink:0;border:none;background:none;color:var(--txt-3);cursor:pointer;padding:2px;display:inline-flex">${icn('pencil',12)}</button>
-        <button onclick="event.stopPropagation();exportProjTimeline('${esc(p.id)}')" title="Export timeline (PDF)" style="flex-shrink:0;border:none;background:none;color:var(--txt-3);cursor:pointer;padding:2px;display:inline-flex">${icn('download',12)}</button>
+        <button onclick="event.stopPropagation();exportProjTimeline('${esc(p.id)}')" title="Export timeline (HTML)" style="flex-shrink:0;border:none;background:none;color:var(--txt-3);cursor:pointer;padding:2px;display:inline-flex">${icn('download',12)}</button>
       </div>
       <div style="flex:1;position:relative;height:46px">${hiliteStripe}${bar}</div>
     </div>
