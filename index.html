@@ -916,7 +916,7 @@ async function loadAll(){
     const [orc,prj,pos,tet,rat,nt,pes,fee]=await Promise.all([
       SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
       SBPO.from('projetos').select('id,nome,agencia,orcamento_id,product_category,activity,projeto_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc'),
-      SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao'),
+      SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
       SBPO.from('tetos').select('projeto_id,competencia,teto'),
       SBPO.from('rateio_alocacao').select('projeto_id,competencia,valor,categoria'),
       SBPO.from('notificacoes').select('id,mensagem,tipo,po_id,projeto_id,lida,criada_em').order('criada_em',{ascending:false}).limit(200),
@@ -3399,7 +3399,7 @@ async function submitReqPO(){
 }
 async function reloadPO(){
   try{
-    const {data}=await SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao');
+    const {data}=await SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id');
     DATA.pos=data||[];
   }catch(e){}
 }
@@ -4643,7 +4643,7 @@ async function reloadPOAll(){
     const [orc,prj,pos,tet,rat]=await Promise.all([
       SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
       SBPO.from('projetos').select('id,nome,agencia,orcamento_id,product_category,activity,projeto_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc'),
-      SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao'),
+      SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
       SBPO.from('tetos').select('projeto_id,competencia,teto'),
       SBPO.from('rateio_alocacao').select('projeto_id,competencia,valor,categoria')
     ]);
