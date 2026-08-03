@@ -1884,7 +1884,20 @@ async function submitCampValues(){
       if(!splits.length && cv.qual){ splits=(DATA.fee||[]).filter(f=>String(f.tipo||'').toUpperCase()===String(cv.qual||'').toUpperCase()); }
       if(!splits.length){ toast('Cannot resolve the rateio categories. Re-pick the rateio in "Edit category / budget".'); return; }
       const alloc=[];
-      rows.forEach(r=>{ const v=+r.valor||0; splits.forEach(s=>{ alloc.push({projeto_id:cv.id,categoria:s.categoria||null,competencia:r.mes+'-01',valor:r2(v*(+s.percentual||0))}); }); });
+      /* Independently rounding each category's share (r2(v*pct)) drifts a
+         few cents/reais off the typed monthly total whenever the fee
+         percentuals are repeating decimals (e.g. thirds) — every row but the
+         last gets its own rounded share, the last absorbs whatever's left so
+         the split always reconciles exactly to v. Same pattern already used
+         by reqSplitBreakdown() for the PO-request split-by-percentage flow. */
+      rows.forEach(r=>{
+        const v=+r.valor||0; let running=0;
+        splits.forEach((s,i)=>{
+          let valor=r2(v*(+s.percentual||0));
+          if(i===splits.length-1) valor=r2(v-running); else running+=valor;
+          alloc.push({projeto_id:cv.id,categoria:s.categoria||null,competencia:r.mes+'-01',valor});
+        });
+      });
       await SBPO.from('rateio_alocacao').delete().eq('projeto_id',cv.id);
       const {error}=await SBPO.from('rateio_alocacao').insert(alloc); if(error)throw error;
     }else{
