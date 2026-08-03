@@ -1801,14 +1801,22 @@ async function reallocDebitTetos(pid,fromMonth,amount){
   if(e2)throw e2;
 }
 /* rateio_alocacao has no unique key (rows are summed), but the source month's
-   rows still have to be reduced proportionally by the amount moved out. */
+   rows still have to be reduced proportionally by the amount moved out.
+   Rounding each row's reduction independently can drift the total debited
+   away from `amount` by a few cents — every row but the last keeps its own
+   rounded reduction, the last absorbs whatever's left so the total moved
+   always matches `amount` exactly (same pattern as submitCampValues). */
 async function reallocDebitRateio(pid,fromMonth,amount){
   const comp=fromMonth+'-01';
   const {data,error}=await SBPO.from('rateio_alocacao').select('id,valor').eq('projeto_id',pid).eq('competencia',comp);
   if(error)throw error;
   const rows=data||[]; const tot=rows.reduce((s,r)=>s+(+r.valor||0),0); if(!tot)return;
-  for(const r of rows){
-    const nv=Math.max(0,r2((+r.valor||0)-(+amount||0)*((+r.valor||0)/tot)));
+  let runningCut=0;
+  for(let i=0;i<rows.length;i++){
+    const r=rows[i];
+    let cut=r2((+amount||0)*((+r.valor||0)/tot));
+    if(i===rows.length-1) cut=r2((+amount||0)-runningCut); else runningCut+=cut;
+    const nv=Math.max(0,r2((+r.valor||0)-cut));
     const {error:e2}=await SBPO.from('rateio_alocacao').update({valor:nv}).eq('id',r.id); if(e2)throw e2;
   }
 }
@@ -1828,7 +1836,19 @@ async function submitRealloc(){
       const totalByCat={}; (DATA.rateio||[]).filter(r=>r.projeto_id===p.id&&r.competencia&&String(r.competencia).slice(0,7)===REALLOC.fromMonth).forEach(r=>{ totalByCat[r.categoria]=(totalByCat[r.categoria]||0)+(+r.valor||0); });
       const totAll=Object.values(totalByCat).reduce((a,b)=>a+b,0)||1;
       const rows=[];
-      preview.forEach(pr=>{ cats.forEach(cat=>{ const share=(totalByCat[cat]||(totAll/cats.length))/totAll; rows.push({projeto_id:p.id,categoria:cat,competencia:pr.mes+'-01',valor:r2(pr.valor*share)}); }); });
+      /* Same reconciliation as submitCampValues/reqSplitBreakdown — every
+         category but the last keeps its own rounded share of pr.valor, the
+         last absorbs the remainder so each month's split always sums back
+         to exactly pr.valor. */
+      preview.forEach(pr=>{
+        let running=0;
+        cats.forEach((cat,i)=>{
+          const share=(totalByCat[cat]||(totAll/cats.length))/totAll;
+          let valor=r2(pr.valor*share);
+          if(i===cats.length-1) valor=r2(pr.valor-running); else running+=valor;
+          rows.push({projeto_id:p.id,categoria:cat,competencia:pr.mes+'-01',valor});
+        });
+      });
       const {error}=await SBPO.from('rateio_alocacao').insert(rows); if(error)throw error;
       await reallocDebitRateio(p.id,REALLOC.fromMonth,moved);
     } else {
@@ -4701,8 +4721,17 @@ async function submitOrc(){
 }
 
 let FEE=null;
-function openFeeEditor(){ FEE=(DATA.fee||[]).map(f=>({agencia:f.agencia||'',tipo:FEE_TIPOS.some(([v])=>v===f.tipo)?f.tipo:'AGENCIA',categoria:f.categoria||'',percentual:f.percentual!=null?Math.round(f.percentual*10000)/100:'',cc:f.cc||'',account:f.account||'',descricao:f.descricao||''})); if(!FEE.length)FEE=[{agencia:'',tipo:'AGENCIA',categoria:'',percentual:'',cc:'',account:'',descricao:''}]; renderFeeEditor(); }
-function feeRowSet(i,k,v){ if(FEE&&FEE[i])FEE[i][k]=v; }
+/* percentualRaw carries the DB's full-precision value through the editor
+   untouched — the visible `percentual` field is rounded to 2 decimals for
+   display/typing, but percentages here often come from a fraction like
+   10000/30000 that needs many more digits to reconcile split totals to the
+   cent. Without this, saving the form (even to edit an unrelated field on
+   some OTHER row) would silently truncate every row's percentual down to
+   whatever 2-decimal value happens to be displayed. Editing the % field
+   directly clears percentualRaw for that row — the typed value becomes the
+   new source of truth at whatever precision was typed. */
+function openFeeEditor(){ FEE=(DATA.fee||[]).map(f=>({agencia:f.agencia||'',tipo:FEE_TIPOS.some(([v])=>v===f.tipo)?f.tipo:'AGENCIA',categoria:f.categoria||'',percentual:f.percentual!=null?Math.round(f.percentual*10000)/100:'',percentualRaw:f.percentual!=null?f.percentual:null,cc:f.cc||'',account:f.account||'',descricao:f.descricao||''})); if(!FEE.length)FEE=[{agencia:'',tipo:'AGENCIA',categoria:'',percentual:'',percentualRaw:null,cc:'',account:'',descricao:''}]; renderFeeEditor(); }
+function feeRowSet(i,k,v){ if(FEE&&FEE[i]){ FEE[i][k]=v; if(k==='percentual') FEE[i].percentualRaw=null; } }
 function feeAddRow(){ FEE.push({agencia:'',tipo:'AGENCIA',categoria:'',percentual:'',cc:'',account:'',descricao:''}); renderFeeEditor(); }
 function feeDelRow(i){ FEE.splice(i,1); renderFeeEditor(); }
 /* NOTE: `tipo` is constrained by the DB (fee_rateio_tipo_check) to exactly
@@ -4733,7 +4762,7 @@ function renderFeeEditor(){
 async function saveFee(){
   if(viewOnly()){toast(roMsg());return;}
   if(!FEE)return;
-  const rows=FEE.filter(f=>(f.agencia||'').trim()&&FEE_TIPOS.some(([v])=>v===f.tipo)).map(f=>({agencia:f.agencia.trim(),tipo:f.tipo,categoria:(f.categoria||'').trim(),percentual:(+f.percentual||0)/100,cc:(f.cc||'').trim(),account:(f.account||'').trim(),descricao:(f.descricao||'').trim()}));
+  const rows=FEE.filter(f=>(f.agencia||'').trim()&&FEE_TIPOS.some(([v])=>v===f.tipo)).map(f=>({agencia:f.agencia.trim(),tipo:f.tipo,categoria:(f.categoria||'').trim(),percentual:f.percentualRaw!=null?f.percentualRaw:(+f.percentual||0)/100,cc:(f.cc||'').trim(),account:(f.account||'').trim(),descricao:(f.descricao||'').trim()}));
   try{
     await SBPO.from('fee_rateio').delete().not('agencia','is',null);
     if(rows.length){ const {error}=await SBPO.from('fee_rateio').insert(rows); if(error)throw error; }
