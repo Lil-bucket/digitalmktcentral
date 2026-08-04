@@ -213,7 +213,19 @@
   .pct{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:11px;font-weight:600;width:40px;text-align:right;flex-shrink:0;color:var(--txt-2)}
 
   /* ===== COST CENTER TABLE ===== */
-  .cc-wrap{overflow-x:auto}
+  /* Scroll-shadow affordance: a soft edge shadow only appears on a side while
+     there's still content to reveal there — background-attachment:local pair
+     masks it with the page bg as content scrolls under, fixed pair stays put
+     at the container edges. No JS needed to know when to show/hide it. */
+  .cc-wrap{overflow-x:auto;position:relative;background-color:#fff;background-repeat:no-repeat;
+    background-image:
+      linear-gradient(to right,#fff 30%,rgba(255,255,255,0)),
+      linear-gradient(to left,#fff 30%,rgba(255,255,255,0)),
+      linear-gradient(to right,rgba(16,19,26,.12),rgba(16,19,26,0)),
+      linear-gradient(to left,rgba(16,19,26,.12),rgba(16,19,26,0));
+    background-position:left center,right center,left center,right center;
+    background-size:34px 100%,34px 100%,14px 100%,14px 100%;
+    background-attachment:local,local,scroll,scroll;}
   .cc-tbl{border-collapse:separate;border-spacing:0;width:100%}
   .cc-tbl th{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;background:var(--paper-2);border-bottom:1px solid var(--line);padding:8px 10px}
   .cc-tbl td{padding:9px 10px;border-bottom:1px solid #edeff4;white-space:nowrap;font-size:11.5px}
@@ -228,6 +240,15 @@
   .cc-tbl thead .s1,.cc-tbl thead .s2,.cc-tbl thead .s3{background:var(--paper-2);z-index:3}
   .cc-tbl tfoot td{background:var(--paper-2);border-top:1px solid var(--line);border-bottom:none;font-weight:700}
   .cc-tbl tfoot .s1,.cc-tbl tfoot .s2,.cc-tbl tfoot .s3{background:var(--paper-2)}
+  /* current-month highlight — background tint, not a side-stripe accent */
+  .cc-tbl .cc-now{background:var(--accent-soft)}
+  .cc-tbl thead .cc-now{background:#dde4fb}
+  .cc-tbl tfoot .cc-now{background:#dde4fb}
+  .cc-now-lbl{display:inline-block;font-size:8px;font-weight:800;color:#fff;background:var(--accent);border-radius:5px;padding:1.5px 5px;margin-left:6px;letter-spacing:.04em;vertical-align:1px}
+  .cc-tbl th.sortable{cursor:pointer;user-select:none}
+  .cc-tbl th.sortable:hover{color:var(--txt-2)}
+  .cc-tbl th .sort-i{display:inline-flex;vertical-align:-2px;margin-left:3px;opacity:.55}
+  .cc-tbl th.sort-active .sort-i{opacity:1;color:var(--accent)}
 
   /* ===== PO PHASE TABS ===== */
   .po-tabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px}
@@ -534,6 +555,17 @@ function stageOf(i){return STAGES.find(s=>s.id===i)||STAGES[0];}
 function statusOf(i){return STATUS.find(s=>s.id===i)||STATUS[0];}
 function taskDays(t){if(t&&t.inicio&&t.fim){const d=Math.round((new Date(t.fim+'T00:00:00')-new Date(t.inicio+'T00:00:00'))/864e5)+1;return d>0?d:1;}return Math.max(1,+(t&&t.w)||1);}
 function computeProg(p){if(!p.tasks||!p.tasks.length)return p.prog||0;const tw=p.tasks.reduce((s,t)=>s+taskDays(t),0);const dw=p.tasks.filter(t=>t.done).reduce((s,t)=>s+taskDays(t),0);return tw?Math.round(dw/tw*100):0;}
+/* Effective start date for Gantt-style bars. p.inicio is often left blank
+   (only the due date gets filled in) — falling back straight to p.prazo (the
+   old behavior) collapses the whole bar into a same-day sliver and hides
+   real earlier activity (e.g. a project whose tasks started in July shows
+   nothing until its August due date). Fall back to the earliest task date
+   instead, so the bar reflects when work actually began. */
+function projEffStart(p){
+  if(p.inicio) return p.inicio;
+  const ds=(p.tasks||[]).map(t=>t.inicio||t.fim).filter(Boolean).sort();
+  return ds[0]||p.prazo;
+}
 function autoEtapa(p){const prog=computeProg(p);if(prog>=100)return'concluido';const w=['briefing','producao','revisao','ajustes','entrega'];let i=Math.floor(prog/100*w.length);if(i>4)i=4;if(i<0)i=0;return w[i];}
 function effectiveEtapa(p){ if(computeProg(p)>=100) return 'concluido'; return (p.etapa_override && STAGES.some(s=>s.id===p.etapa_override)) ? p.etapa_override : autoEtapa(p); }
 function autoStatus(p){const prog=computeProg(p);if(prog>=100)return'concluido';if(p.bloqueado)return'bloqueado';const dd=p.prazo?daysTo(p.prazo):null;if(dd!==null&&dd<0)return'atrasado';const overdue=(p.tasks||[]).some(t=>!t.done&&t.fim&&daysTo(t.fim)<0);if(overdue)return'atencao';return'no_prazo';}
@@ -1059,8 +1091,8 @@ function go(screen){
   else if(screen==='mytasks') v.innerHTML=renderNotes();
   else if(screen==='agencywork') v.innerHTML=renderAgencyWork();
   else if(screen==='notif') v.innerHTML=renderNotif();
-  else if(screen==='bo'){ v.innerHTML=renderBudgetOverview(false); buildCampanhaChart(); buildOverviewMonthlyChart(false); }
-  else if(screen==='budgets'){ v.innerHTML=renderBudgets(); buildBudgetActivityChart(); }
+  else if(screen==='bo'){ v.innerHTML=renderBudgetOverview(false); buildCampanhaChart(); buildOverviewMonthlyChart(false); ccAutoScroll(); }
+  else if(screen==='budgets'){ v.innerHTML=renderBudgets(); buildBudgetActivityChart(); ccAutoScroll(); }
   else if(screen==='campaigns'){ v.innerHTML=renderCampanhas(); buildCampanhaChart(); }
   else if(screen==='pos'||screen==='mypos') v.innerHTML=renderPOs();
   else if(screen==='podesk') v.innerHTML=renderAprovacoes();
@@ -1143,12 +1175,41 @@ function renderDash(){
   ${renderRecommendations()}`;
 }
 
+/* List sort — defaults to health severity (Blocked/Late first, Completed
+   last) per Lucas's ask; click a header to re-sort, click again to reverse.
+   Ties fall back to name so the order stays stable. */
+let PROJ_SORT={col:'health',dir:1};
+const PROJ_HEALTH_RANK={bloqueado:0,atrasado:1,atencao:2,no_prazo:3,concluido:4};
+function projSortVal(p,col){
+  switch(col){
+    case 'name': return (p.nome||'').toLowerCase();
+    case 'owner': return (respName(p.resp)||'').toLowerCase();
+    case 'stage': { const i=STAGES.findIndex(s=>s.id===p.etapa); return i<0?99:i; }
+    case 'health': return PROJ_HEALTH_RANK[p.status]??9;
+    case 'progress': return computeProg(p);
+    case 'due': return p.prazo||'9999-99-99';
+    default: return 0;
+  }
+}
+function projSortHeaderClick(col){
+  if(PROJ_SORT.col===col) PROJ_SORT.dir*=-1; else PROJ_SORT={col,dir:1};
+  go(SCREEN);
+}
+function sortTh(state,col,label,onClick,align){
+  const active=state.col===col;
+  return `<span onclick="${onClick}('${col}')" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:3px;${align==='right'?'justify-content:flex-end':''}${active?';color:var(--txt-2)':''}">${label}<span style="font-size:9px;color:var(--accent);width:8px;display:inline-block;visibility:${active?'visible':'hidden'}">${active&&state.dir<0?'▼':'▲'}</span></span>`;
+}
 function renderProjetos(){
-  const list=projList().slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+  const list=projList().slice().sort((a,b)=>{
+    const va=projSortVal(a,PROJ_SORT.col), vb=projSortVal(b,PROJ_SORT.col);
+    let c=va<vb?-1:va>vb?1:0;
+    if(!c) c=(a.nome||'').localeCompare(b.nome||'');
+    return c*PROJ_SORT.dir;
+  });
   if(!list.length)return '<div class="empty">No projects found.</div>';
   return `<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
     <div style="display:grid;grid-template-columns:1.7fr 1fr 1.1fr 1fr 1.2fr .7fr .5fr;gap:10px;padding:11px 17px;background:#fafbfd;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">
-      <span>Project</span><span>Owner</span><span>Stage</span><span>Health</span><span>Progress</span><span>Due</span><span></span></div>
+      ${sortTh(PROJ_SORT,'name','Project','projSortHeaderClick')}${sortTh(PROJ_SORT,'owner','Owner','projSortHeaderClick')}${sortTh(PROJ_SORT,'stage','Stage','projSortHeaderClick')}${sortTh(PROJ_SORT,'health','Health','projSortHeaderClick')}${sortTh(PROJ_SORT,'progress','Progress','projSortHeaderClick')}${sortTh(PROJ_SORT,'due','Due','projSortHeaderClick')}<span></span></div>
     ${list.map(p=>{const stg=stageOf(p.etapa);const hp=healthPill(p.status);const di=deadlineInfo(p);const pr=computeProg(p);const bt=businessTypeOf(p.ptipo);
       return `<div class="proj-row" onclick="openProj('${esc(p.id)}')" style="display:grid;grid-template-columns:1.7fr 1fr 1.1fr 1fr 1.2fr .7fr .5fr;gap:10px;padding:13px 17px;border-bottom:1px solid #edeff4;align-items:center;font-size:13px;cursor:pointer" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
         <span style="min-width:0"><span style="font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span><span style="font-size:11px;color:var(--txt-3);display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${bt?`<span style="font-weight:800;color:${bt.color}">${esc(bt.name)}</span> · `:''}${esc(p.partner||p.marca||'')}${(p.categorias||[]).length?` · ${esc((p.categorias||[]).join(', '))}`:''}</span></span>
@@ -3008,7 +3069,7 @@ function renderProjModal(){
       </div>`:''}
     </div>`).join('');
   const logsHTML=(EDIT.logs||[]).slice().reverse().map(l=>`<div style="background:var(--paper-2);border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-bottom:7px"><div style="font-size:11px;color:var(--txt-3);font-weight:600;margin-bottom:4px">${esc(l.autor)} · ${fmtDate(l.t)}</div><div style="font-size:13px">${fmtLogTxt(l.txt)}</div></div>`).join('')||'<div style="font-size:12.5px;color:var(--txt-3)">No updates yet.</div>';
-  $('#modalMount').innerHTML=`<div class="overlay${reopen?' no-anim':''}" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal${reopen?' no-anim':''}">
+  $('#modalMount').innerHTML=`<div class="overlay${reopen?' no-anim':''}" onclick="if(event.target===this)pmOverlayClose()"><div role="dialog" aria-modal="true" class="modal${reopen?' no-anim':''}">
     <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--accent);flex-shrink:0;margin-right:2px"></span><div style="flex:1;min-width:0"><h3>${EDIT._new?'New project':esc(EDIT.nome||'Project')}</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Everything below stays open for editing by the creator and admins</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">
       ${ED?'':'<div class="banner">You are not the owner or admin: you can update status, check activities/sub-items and post to the log, but not edit the main fields.</div>'}
@@ -3055,6 +3116,16 @@ function renderProjModal(){
   const al=$('#pmAtvList'); if(al) al.scrollTop=prevAtvScroll;
 }
 function pmToggleOpen(tid){ const t=atv(tid); if(t){ t._open=!t._open; renderProjModal(); } }
+/* Clicking outside the modal (the dimmed backdrop) while editing an existing
+   project saves instead of discarding — matches every other in-modal edit
+   here, which already writes straight into EDIT with no separate "unsaved
+   changes" concept. New projects still just cancel: autosaving a blank/
+   half-filled "New project" form on an accidental outside click would create
+   junk records, and validation (name/type required) would trap the user in
+   a form they were trying to leave. */
+function pmOverlayClose(){
+  if(EDIT&&!EDIT._new) saveProj(); else closeModal();
+}
 async function saveProj(){
   if(!EDIT)return;
   if(!(EDIT.nome||'').trim()){ toast('Give the project a name.'); return; }
@@ -3512,6 +3583,19 @@ function tlNav(d){ if(d===0)TL_OFF=0; else TL_OFF+=d; TL_FIT=false; TL_HILITE=nu
 function tlFitToggle(){ TL_FIT=!TL_FIT; TL_HILITE=null; go(SCREEN); }
 let TL_EXPANDED={}; // project id -> inline activities-timeline dropdown open?
 function tlToggleProjRow(pid){ TL_EXPANDED[pid]=!TL_EXPANDED[pid]; go(SCREEN); }
+/* Jump the Timeline's navigable window back to a specific date — used by the
+   "◀ {date}" labels shown when a project/activity's bar sits entirely before
+   the current window. Places that date about a week in from the left edge
+   (same convention as the default "today" window) instead of flush at 0. */
+function tlJumpTo(dateStr){
+  if(!dateStr)return;
+  const d=new Date(dateStr+'T00:00:00');
+  const tdy=today0();
+  const base=new Date(tdy); base.setDate(base.getDate()-base.getDay()-7);
+  const dWeekStart=new Date(d); dWeekStart.setDate(dWeekStart.getDate()-dWeekStart.getDay());
+  TL_OFF=Math.round((dWeekStart-base)/(7*864e5))-1;
+  TL_FIT=false; TL_HILITE=null; go(SCREEN);
+}
 /* Gantt-style, not a plain list — each activity gets its own bar positioned
    on the SAME week scale (min/dayPct) as the parent project row above it, so
    the bars line up under the shared week header instead of needing one of
@@ -3523,7 +3607,7 @@ function tlProjActivitiesHTML(p,min,dayPct,weeks){
   const tasks=(p.tasks||[]).slice().sort((a,b)=>String(a.fim||'9999').localeCompare(String(b.fim||'9999')));
   if(!tasks.length) return '<div style="font-size:12px;color:var(--txt-3);padding:8px 16px 8px 45px">No activities.</div>';
   const winEnd=new Date(min); winEnd.setDate(winEnd.getDate()+(weeks||1)*7);
-  let prevEnd=p.inicio||p.prazo;
+  let prevEnd=projEffStart(p);
   return tasks.map(t=>{
     const st=statusOf(t.status), hp=healthPill(t.status);
     const endStr=t.fim||prevEnd;
@@ -3531,7 +3615,8 @@ function tlProjActivitiesHTML(p,min,dayPct,weeks){
     prevEnd=endStr;
     let bar;
     if(e<min){
-      bar=`<span style="position:absolute;left:8px;top:9px;font-size:9.5px;font-weight:700;color:var(--txt-3)">◀ ${t.fim?fmtDate(t.fim):'—'}</span>`;
+      bar=t.fim?`<span onclick="tlJumpTo('${esc(t.fim)}')" title="Jump the timeline back to this date" style="position:absolute;left:8px;top:9px;font-size:9.5px;font-weight:700;color:var(--txt-3);cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px">◀ ${fmtDate(t.fim)}</span>`
+        :`<span style="position:absolute;left:8px;top:9px;font-size:9.5px;font-weight:700;color:var(--txt-3)">◀ —</span>`;
     }else if(s>=winEnd){
       bar=`<span style="position:absolute;right:8px;top:9px;font-size:9.5px;font-weight:700;color:var(--txt-3)">${t.fim?fmtDate(t.fim):'—'} ▶</span>`;
     }else{
@@ -3555,7 +3640,7 @@ function renderTimeline(){
   const list=visProjs().filter(p=>p.prazo).slice();
   if(!list.length)return '<div class="empty">No projects with a due date.</div>';
   // range de semanas — fit-all (escala original) ou janela navegável de TL_SPAN semanas
-  const dates=[]; list.forEach(p=>{if(p.inicio)dates.push(new Date(p.inicio+'T00:00:00'));if(p.prazo)dates.push(new Date(p.prazo+'T00:00:00'));});
+  const dates=[]; list.forEach(p=>{dates.push(new Date(projEffStart(p)+'T00:00:00'));if(p.prazo)dates.push(new Date(p.prazo+'T00:00:00'));});
   const tdy=today0();
   let min,weeks;
   if(TL_FIT){
@@ -3570,7 +3655,7 @@ function renderTimeline(){
   const dayPct=100/(weeks*7);
   const winEnd=new Date(min); winEnd.setDate(winEnd.getDate()+weeks*7);
   const MM=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const ranges=list.map(p=>({p,s:new Date((p.inicio||p.prazo)+'T00:00:00'),e:new Date(p.prazo+'T00:00:00')}));
+  const ranges=list.map(p=>({p,s:new Date(projEffStart(p)+'T00:00:00'),e:new Date(p.prazo+'T00:00:00')}));
   // highlight stripe for the selected week — same left/width math as a header cell, drawn behind the bars/header text
   const hiliteStripe=TL_HILITE!=null?`<div style="position:absolute;top:0;bottom:0;left:${TL_HILITE/weeks*100}%;width:${100/weeks}%;background:rgba(214,138,4,.12);pointer-events:none"></div>`:'';
   let wkHead=''; const wkTotals=[];
@@ -3584,14 +3669,14 @@ function renderTimeline(){
     wkHead+=`<div onclick="tlToggleWeek(${w})" title="${cnt} project(s) active this week — click to highlight the column" style="flex:1;min-width:0;padding:9px 2px;text-align:center;font-size:10px;font-weight:600;color:${now?'#fff':sel?'#7a5200':'#8a90a0'};background:${now?'#10131a':sel?'#fbf0d8':'transparent'};border-right:1px solid #edeff4;cursor:pointer">${dd.getDate()}/${MM[dd.getMonth()]}</div>`;
   }
   const wkTotalsRow=weeks?`<div style="display:flex;position:relative">${hiliteStripe}${wkTotals.map((c,w)=>`<div style="flex:1;min-width:0;padding:6px 2px;text-align:center;font-family:var(--mono);font-size:10px;font-weight:700;color:${TL_HILITE===w?'#9c6404':'var(--txt-3)'};border-right:1px solid #edeff4">${c||'—'}</div>`).join('')}</div>`:'';
-  const rows=list.sort((a,b)=>new Date((a.inicio||a.prazo)+'T00:00:00')-new Date((b.inicio||b.prazo)+'T00:00:00')).map(p=>{
+  const rows=list.sort((a,b)=>new Date(projEffStart(a)+'T00:00:00')-new Date(projEffStart(b)+'T00:00:00')).map(p=>{
     const stg=stageOf(p.etapa); const pr=computeProg(p);
-    const s=new Date((p.inicio||p.prazo)+'T00:00:00'), e=new Date(p.prazo+'T00:00:00');
+    const s=new Date(projEffStart(p)+'T00:00:00'), e=new Date(p.prazo+'T00:00:00');
     let bar;
     if(e<min){
-      bar=`<span style="position:absolute;left:8px;top:15px;font-size:10px;font-weight:700;color:var(--txt-3)">◀ ended ${fmtDate(p.prazo)}</span>`;
+      bar=`<span onclick="event.stopPropagation();tlJumpTo('${esc(p.prazo)}')" title="Jump the timeline back to this date" style="position:absolute;left:8px;top:15px;font-size:10px;font-weight:700;color:var(--txt-3);cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px">◀ ended ${fmtDate(p.prazo)}</span>`;
     }else if(s>=winEnd){
-      bar=`<span style="position:absolute;right:8px;top:15px;font-size:10px;font-weight:700;color:var(--txt-3)">starts ${fmtDate(p.inicio||p.prazo)} ▶</span>`;
+      bar=`<span style="position:absolute;right:8px;top:15px;font-size:10px;font-weight:700;color:var(--txt-3)">starts ${fmtDate(projEffStart(p))} ▶</span>`;
     }else{
       const left=Math.max(0,((s-min)/864e5)*dayPct);
       const rawR=(((e-min)/864e5)+1)*dayPct;
@@ -3622,7 +3707,7 @@ function renderTimeline(){
     <button class="chip-btn" onclick="tlFitToggle()" style="margin-left:auto">${TL_FIT?`${TL_SPAN}-week view`:'Fit all'}</button>
   </div>`;
   return navBar+`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-    <div style="display:flex;border-bottom:1px solid var(--line);background:#fafbfd"><div style="width:230px;flex-shrink:0;padding:11px 16px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);border-right:1px solid var(--line)">Project</div><div style="flex:1;display:flex">${wkHead}</div></div>
+    <div style="display:flex;border-bottom:1px solid var(--line);background:#fafbfd;position:sticky;top:0;z-index:5"><div style="width:230px;flex-shrink:0;padding:11px 16px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);border-right:1px solid var(--line)">Project</div><div style="flex:1;display:flex">${wkHead}</div></div>
     ${rows}
     <div style="display:flex;border-top:1px solid var(--line);background:#fafbfd"><div style="width:230px;flex-shrink:0;padding:6px 16px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);border-right:1px solid var(--line);display:flex;align-items:center">Active/week</div><div style="flex:1">${wkTotalsRow}</div></div>
     </div>
@@ -3667,8 +3752,11 @@ function renderWeekly(){
   const tasksDone=list.reduce((s,p)=>s+((p.tasks||[]).filter(t=>t.done).length),0);
   const now=new Date().toLocaleDateString('en-US',{day:'2-digit',month:'long',year:'numeric'});
   const st=(n,l,col)=>`<span><b style="font-family:'Hanken Grotesk',sans-serif;font-size:24px;display:block${col?';color:'+col:''}">${n}</b><span style="font-size:11.5px;color:var(--txt-2);font-weight:600">${l}</span></span>`;
-  const line=(p,extra)=>`<div style="padding:9px 0;border-bottom:1px dashed var(--line);font-size:13px;cursor:pointer" onclick="openProj('${esc(p.id)}')"><b>${esc(p.nome)}</b>${extra?' — '+extra:''} <span style="color:var(--txt-2)">· ${esc(respName(p.resp)||'—')}</span></div>`;
-  const sec=(label,col,items,extraFn)=>`<div style="padding:16px 22px;border-bottom:1px solid var(--line)"><div style="font-size:11.5px;font-weight:800;letter-spacing:.06em;color:${col};margin-bottom:9px;display:flex;align-items:center;gap:7px"><span style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></span>${label}</div>${items.length?items.map(p=>line(p,extraFn(p))).join(''):'<div style="font-size:12.5px;color:var(--txt-3)">Nothing here.</div>'}</div>`;
+  const line=(p,extra,showComplete)=>`<div style="padding:9px 0;border-bottom:1px dashed var(--line);font-size:13px;display:flex;align-items:center;gap:10px">
+      <span style="flex:1;min-width:0;cursor:pointer" onclick="openProj('${esc(p.id)}')"><b>${esc(p.nome)}</b>${extra?' — '+extra:''} <span style="color:var(--txt-2)">· ${esc(respName(p.resp)||'—')}</span></span>
+      ${showComplete&&canEdit(p)?`<button onclick="event.stopPropagation();weeklyMarkDelivered('${esc(p.id)}')" class="chip-btn" style="flex-shrink:0;font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:5px">${icn('check',11)} Mark delivered</button>`:''}
+    </div>`;
+  const sec=(label,col,items,extraFn,showComplete)=>`<div style="padding:16px 22px;border-bottom:1px solid var(--line)"><div style="font-size:11.5px;font-weight:800;letter-spacing:.06em;color:${col};margin-bottom:9px;display:flex;align-items:center;gap:7px"><span style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></span>${label}</div>${items.length?items.map(p=>line(p,extraFn(p),showComplete)).join(''):'<div style="font-size:12.5px;color:var(--txt-3)">Nothing here.</div>'}</div>`;
   const luTxt=p=>{const lu=latestLog(p);return lu?esc(lu.txt):'';};
   return `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;gap:16px;flex-wrap:wrap">
       <div style="max-width:520px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:15px">Week of ${now}</b><div style="font-size:12.5px;color:var(--txt-2);margin-top:2px">Auto-generated from project data — copy or email.</div></div>
@@ -3676,10 +3764,24 @@ function renderWeekly(){
     <div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
       <div style="padding:18px 22px;border-bottom:1px solid var(--line);background:#fafbfd;display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
         ${st(delivered.length,'Delivered')}${st(progress.length,'In progress')}${st(risk.length,'At risk','#b32418')}${st(tasksDone,'Tasks completed')}</div>
-      ${sec('DELIVERED','#0c7048',delivered,luTxt)}
-      ${sec('AT RISK','#9c6404',risk,luTxt)}
-      ${sec('IN PROGRESS','#0e5ba6',progress,p=>luTxt(p)+' ('+computeProg(p)+'%)')}
+      ${sec('AT RISK','#9c6404',risk,luTxt,true)}
+      ${sec('IN PROGRESS','#0e5ba6',progress,p=>luTxt(p)+' ('+computeProg(p)+'%)',true)}
+      <div style="padding:16px 22px;background:var(--paper-2)"><div style="font-size:11.5px;font-weight:800;letter-spacing:.06em;color:#0c7048;margin-bottom:9px;display:flex;align-items:center;gap:7px"><span style="width:8px;height:8px;border-radius:50%;background:#0c7048;flex-shrink:0"></span>DELIVERED</div>${delivered.length?delivered.map(p=>line(p,luTxt(p),false)).join(''):'<div style="font-size:12.5px;color:var(--txt-3)">Nothing here.</div>'}</div>
     </div>`;
+}
+/* Marks a project fully done (all activities + sub-items) so status/stage
+   derive to "concluido" the same way they would if checked off one by one —
+   there's no separate status_override field, so this is the legitimate path. */
+async function weeklyMarkDelivered(pid){
+  const p=DATA.projetos.find(x=>x.id===pid); if(!p)return;
+  if(!canEdit(p)){ toast('Only the owner or admin can mark this delivered.'); return; }
+  if(!confirm('Mark "'+p.nome+'" as delivered? This completes all remaining activities.'))return;
+  (p.tasks||[]).forEach(t=>{ t.done=true; t.pct=100; (t.subs||[]).forEach(s=>s.done=true); });
+  p.etapa=effectiveEtapa(p); p.status=autoStatus(p);
+  p.logs=p.logs||[]; p.logs.push({txt:'Marked as delivered',autor:(currentUser&&currentUser.email)||'—',t:new Date().toISOString()});
+  try{ await SBPO.from('act_projects').upsert({id:p.id,data:p}); toast('Project marked as delivered ✓'); }
+  catch(e){ toastErr(e); return; }
+  go(SCREEN);
 }
 function copyWeekly(){
   const list=DATA.projetos;
@@ -3713,16 +3815,41 @@ async function toggleMyTask(pid,tid){
   try{ await SBPO.from('act_projects').upsert({id:p.id,data:p}); toast('Activity updated ✓'); }catch(e){ toast('Error saving.'); }
   go(SCREEN);
 }
+let AGWORK_SORT={col:null,dir:1};
+function agworkSortClick(col){ if(AGWORK_SORT.col===col) AGWORK_SORT.dir*=-1; else AGWORK_SORT={col,dir:1}; go(SCREEN); }
 function renderAgencyWork(){
   let list=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO');
   if(MINHA_AGENCIA) list=list.filter(p=>p.agencia===MINHA_AGENCIA);
+  if(AGWORK_SORT.col){
+    const key={nome:'nome',cat:'product_category',act:'activity'}[AGWORK_SORT.col];
+    list=list.slice().sort((a,b)=>{ const c=(a[key]||'').toLowerCase().localeCompare((b[key]||'').toLowerCase()); return c*AGWORK_SORT.dir; });
+  }
+  const th=(col,label)=>`<th onclick="agworkSortClick('${col}')" style="cursor:pointer;user-select:none">${sortLbl(AGWORK_SORT,col,label)}</th>`;
   return `<div class="banner" style="background:var(--violet-bg);border-color:#cfc2f0;color:#5535ad">${icn('lock',12)} Read-only — you see the work assigned to your agency${MINHA_AGENCIA?' ('+esc(MINHA_AGENCIA)+')':''}.</div>
-    <div class="tbl-wrap"><table><thead><tr><th>Campaign</th><th>Category</th><th>Activity</th></tr></thead><tbody>
+    <div class="tbl-wrap"><table><thead><tr>${th('nome','Campaign')}${th('cat','Category')}${th('act','Activity')}</tr></thead><tbody>
     ${list.length?list.map(p=>`<tr><td style="font-weight:600">${esc(p.nome)}</td><td>${esc(p.product_category||'—')}</td><td>${esc(p.activity||'—')}</td></tr>`).join(''):'<tr><td colspan="3"><div class="empty">No assigned work.</div></td></tr>'}
   </tbody></table></div>`;
 }
 let RATEIO_ACC_OPEN={};
 function toggleRateioAcc(key){ RATEIO_ACC_OPEN[key]=!RATEIO_ACC_OPEN[key]; go(SCREEN); }
+/* Cost-center table — click-to-sort state + current-month scroll helpers.
+   ccAutoScroll runs after every render (called from go()) so the table
+   always opens on the current month instead of column 1; ccJumpNow is the
+   same scroll, user-triggered, for after they've scrolled away. */
+let CC_SORT={col:null,dir:1};
+function ccSortClick(col){ if(CC_SORT.col===col) CC_SORT.dir*=-1; else CC_SORT={col,dir:1}; go(SCREEN); }
+function sortLbl(state,col,label){
+  const active=state.col===col;
+  return `${esc(label)}<span style="font-size:8px;color:var(--accent);margin-left:3px;visibility:${active?'visible':'hidden'}">${active&&state.dir<0?'▼':'▲'}</span>`;
+}
+function ccScrollTo(behavior){
+  const wrap=document.querySelector('.cc-wrap'); if(!wrap)return;
+  const cell=document.getElementById('cc-m-'+new Date().toISOString().slice(0,7)); if(!cell)return;
+  const stickyW=92+96+170; // s1+s2+s3 widths
+  wrap.scrollTo({left:Math.max(0,cell.offsetLeft-stickyW-14),behavior:behavior||'auto'});
+}
+function ccAutoScroll(){ ccScrollTo('auto'); }
+function ccJumpNow(){ ccScrollTo('smooth'); }
 function feeSplitBlock(only){
   const fee=DATA.fee||[];
   const canFee=(isManager||PAPEL==='admin')&&!viewOnly();
@@ -3791,37 +3918,50 @@ function feeSplitBlock(only){
   const allMonths=new Set(); Object.values(accMap).forEach(a=>{Object.keys(a.months).forEach(m=>allMonths.add(m));Object.keys(a.cons).forEach(m=>allMonths.add(m));});
   const monthList=Array.from(allMonths).sort();
   const accRows=Object.values(accMap);
+  accRows.forEach(a=>{ a.totB=Object.values(a.months).reduce((s,v)=>s+v,0); a.totC=Object.values(a.cons).reduce((s,v)=>s+v,0); a.totS=a.totB-a.totC; });
+  if(CC_SORT.col){
+    const key=CC_SORT.col;
+    accRows.sort((x,y)=>{
+      let vx=key==='cc'||key==='acc'||key==='desc'?(x[key]||'').toLowerCase():x[key];
+      let vy=key==='cc'||key==='acc'||key==='desc'?(y[key]||'').toLowerCase():y[key];
+      const c=vx<vy?-1:vx>vy?1:0;
+      return c*CC_SORT.dir;
+    });
+  }
   let gB=0,gC=0; const gByM={};
   accRows.forEach(a=>{monthList.forEach(m=>{const b=a.months[m]||0,c=a.cons[m]||0;gByM[m]=gByM[m]||{b:0,c:0};gByM[m].b+=b;gByM[m].c+=c;gB+=b;gC+=c;});});
   const band=i=>i%2?' mband':'';
+  const mNow=new Date().toISOString().slice(0,7);
+  const nowCls=m=>m===mNow?' cc-now':'';
+  const hasNow=monthList.includes(mNow);
   const accountsBlock=`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05);margin-top:16px">
-    <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">Cost center / account — monthly budget, consumption &amp; balance</b><span style="font-size:11.5px;color:var(--txt-3)">scroll sideways — identification stays fixed</span></div>
+    <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">Cost center / account — monthly budget, consumption &amp; balance</b><span style="font-size:11.5px;color:var(--txt-3)">click a header to sort · scroll sideways — Cost center/Account/Description stay fixed</span>${hasNow?`<button class="chip-btn" onclick="ccJumpNow()" style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;flex-shrink:0">${icn('calendar',12)} Current month</button>`:''}</div>
     ${accRows.length?`<div class="cc-wrap"><table class="cc-tbl">
       <thead>
         <tr>
-          <th rowspan="2" class="s1" style="text-align:left">Cost center</th>
-          <th rowspan="2" class="s2" style="text-align:left">Account</th>
-          <th rowspan="2" class="s3" style="text-align:left">Description</th>
-          ${monthList.map((m,i)=>`<th colspan="3" class="msep${band(i)}" style="text-align:center;color:var(--txt-2)">${esc(fmtMes(m+'-01'))}</th>`).join('')}
+          <th rowspan="2" class="s1 sortable${CC_SORT.col==='cc'?' sort-active':''}" style="text-align:left" onclick="ccSortClick('cc')">${sortLbl(CC_SORT,'cc','Cost center')}</th>
+          <th rowspan="2" class="s2 sortable${CC_SORT.col==='acc'?' sort-active':''}" style="text-align:left" onclick="ccSortClick('acc')">${sortLbl(CC_SORT,'acc','Account')}</th>
+          <th rowspan="2" class="s3 sortable${CC_SORT.col==='desc'?' sort-active':''}" style="text-align:left" onclick="ccSortClick('desc')">${sortLbl(CC_SORT,'desc','Description')}</th>
+          ${monthList.map((m,i)=>`<th colspan="3" id="cc-m-${esc(m)}" class="msep${band(i)}${nowCls(m)}" style="text-align:center;color:var(--txt-2)">${esc(fmtMes(m+'-01'))}${m===mNow?'<span class="cc-now-lbl">NOW</span>':''}</th>`).join('')}
           <th colspan="3" class="msep" style="text-align:center;background:#eef0f6;color:var(--txt-2)">Total</th>
         </tr>
         <tr>
-          ${monthList.map((m,i)=>`<th class="msep${band(i)}" style="text-align:right;font-weight:600">Budget</th><th class="${band(i).trim()}" style="text-align:right;font-weight:600">Cons.</th><th class="${band(i).trim()}" style="text-align:right;font-weight:600">Balance</th>`).join('')}
-          <th class="msep" style="text-align:right;background:#eef0f6">Budget</th><th style="text-align:right;background:#eef0f6">Cons.</th><th style="text-align:right;background:#eef0f6">Balance</th>
+          ${monthList.map((m,i)=>`<th class="msep${band(i)}${nowCls(m)}" style="text-align:right;font-weight:600">Budget</th><th class="${band(i).trim()}${nowCls(m)}" style="text-align:right;font-weight:600">Cons.</th><th class="${band(i).trim()}${nowCls(m)}" style="text-align:right;font-weight:600">Balance</th>`).join('')}
+          <th class="msep sortable${CC_SORT.col==='totB'?' sort-active':''}" style="text-align:right;background:#eef0f6" onclick="ccSortClick('totB')">${sortLbl(CC_SORT,'totB','Budget')}</th><th class="sortable${CC_SORT.col==='totC'?' sort-active':''}" style="text-align:right;background:#eef0f6" onclick="ccSortClick('totC')">${sortLbl(CC_SORT,'totC','Cons.')}</th><th class="sortable${CC_SORT.col==='totS'?' sort-active':''}" style="text-align:right;background:#eef0f6" onclick="ccSortClick('totS')">${sortLbl(CC_SORT,'totS','Balance')}</th>
         </tr>
       </thead>
       <tbody>
-      ${accRows.map(a=>{const totB=Object.values(a.months).reduce((s,v)=>s+v,0);const totC=Object.values(a.cons).reduce((s,v)=>s+v,0);const totS=totB-totC;return `<tr>
+      ${accRows.map(a=>{const{totB,totC,totS}=a;return `<tr>
         <td class="mono s1" title="${esc(a.cc||'')}">${esc(a.cc||'—')}</td>
         <td class="mono s2" title="${esc(a.acc||'')}">${esc(a.acc||'—')}</td>
         <td class="s3" style="font-size:12px" title="${esc(a.desc||'')}">${esc(a.desc||'—')}</td>
-        ${monthList.map((m,i)=>{const b=a.months[m]||0,c=a.cons[m]||0,s=b-c;return `<td class="num msep${band(i)}" style="color:var(--txt-3)">${b?BRL(b):'—'}</td><td class="num${band(i)}" style="font-weight:600">${c?BRL(c):'—'}</td><td class="num${band(i)}" style="font-weight:700;color:${s<0?'var(--po)':'var(--txt)'}">${(b||c)?BRL(s):'—'}</td>`;}).join('')}
+        ${monthList.map((m,i)=>{const b=a.months[m]||0,c=a.cons[m]||0,s=b-c;return `<td class="num msep${band(i)}${nowCls(m)}" style="color:var(--txt-3)">${b?BRL(b):'—'}</td><td class="num${band(i)}${nowCls(m)}" style="font-weight:600">${c?BRL(c):'—'}</td><td class="num${band(i)}${nowCls(m)}" style="font-weight:700;color:${s<0?'var(--po)':'var(--txt)'}">${(b||c)?BRL(s):'—'}</td>`;}).join('')}
         <td class="num msep" style="color:var(--txt-3);background:#fafbfd">${BRL(totB)}</td><td class="num" style="font-weight:600;background:#fafbfd">${BRL(totC)}</td><td class="num" style="font-weight:800;background:#fafbfd;color:${totS<0?'var(--po)':'var(--txt)'}">${BRL(totS)}</td>
       </tr>`;}).join('')}
       </tbody>
       <tfoot><tr>
         <td class="s1" style="font-weight:800;font-size:12px;font-family:'Hanken Grotesk',sans-serif">Total</td><td class="s2"></td><td class="s3"></td>
-        ${monthList.map((m,i)=>{const g=gByM[m]||{b:0,c:0},s=g.b-g.c;return `<td class="num msep${band(i)}" style="color:var(--txt-3)">${BRL(g.b)}</td><td class="num${band(i)}">${BRL(g.c)}</td><td class="num${band(i)}" style="color:${s<0?'var(--po)':'var(--txt)'}">${BRL(s)}</td>`;}).join('')}
+        ${monthList.map((m,i)=>{const g=gByM[m]||{b:0,c:0},s=g.b-g.c;return `<td class="num msep${band(i)}${nowCls(m)}" style="color:var(--txt-3)">${BRL(g.b)}</td><td class="num${band(i)}${nowCls(m)}">${BRL(g.c)}</td><td class="num${band(i)}${nowCls(m)}" style="color:${s<0?'var(--po)':'var(--txt)'}">${BRL(s)}</td>`;}).join('')}
         <td class="num msep" style="color:var(--txt-3)">${BRL(gB)}</td><td class="num">${BRL(gC)}</td><td class="num" style="font-weight:800;color:${(gB-gC)<0?'var(--po)':'var(--txt)'}">${BRL(gB-gC)}</td>
       </tr></tfoot>
     </table></div>`:'<div style="padding:16px 17px;font-size:12.5px;color:var(--txt-3)">No classified amounts yet.</div>'}
