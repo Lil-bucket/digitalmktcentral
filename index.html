@@ -108,7 +108,16 @@
   .top .barcol{width:7px;height:32px;border-radius:4px;flex-shrink:0}
   .top h1{font-size:18px;letter-spacing:-.025em;margin:0}
   .top .sub{font-size:12px;color:var(--txt-3);margin-top:1px}
-  .view{flex:1;padding:26px 28px 56px;overflow-y:auto}
+  /* No overflow-y:auto here — #view never actually gets its own scrollbar
+     (nothing constrains its height, .main just grows taller than 100vh and
+     the PAGE scrolls), so this was dead weight that additionally broke
+     position:sticky for everything inside it: overflow-y:auto with no
+     overflow-x set computes overflow-x to 'auto' too (CSS overflow-spec
+     coupling rule), making #view itself a sticky-positioning containing
+     block — any sticky descendant then sticks to #view's own (never-
+     scrolling) box instead of the page, freezing it at the wrong offset
+     instead of actually tracking scroll. */
+  .view{flex:1;padding:26px 28px 56px}
 
   .kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:22px}
   .kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:15px 15px 13px;position:relative;overflow:hidden;box-shadow:var(--sh-1);transition:box-shadow var(--med) var(--ease),transform var(--med) var(--ease)}
@@ -138,9 +147,17 @@
   .s-blue{background:var(--blue-bg);color:#0e5ba6}.s-blue .d{background:var(--blue)}
   .s-slate{background:var(--slate-bg);color:#494c54}.s-slate .d{background:var(--slate)}
   .avatar{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:10.5px;font-weight:700;color:#fff;flex-shrink:0}
-  .tbl-wrap{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;overflow-x:auto;box-shadow:var(--sh-1)}
+  /* No overflow here on purpose — ANY non-visible overflow (hidden or auto,
+     even on a single axis) makes this the sticky-positioning containing
+     block for descendants, which silently breaks "stick to the page" for
+     the sticky <th> below (it'd stick to this box's own scroll instead,
+     which never happens, so it just sits frozen in the wrong spot). Corner
+     rounding is done on the header/body cells instead of via clipping. */
+  .tbl-wrap{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--sh-1)}
+  .tbl-wrap th:first-child{border-top-left-radius:14px}
+  .tbl-wrap th:last-child{border-top-right-radius:14px}
   table{width:100%;border-collapse:collapse}
-  th{text-align:left;font-family:var(--mono);font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.08em;padding:11px 16px;border-bottom:1px solid var(--line);background:var(--paper-2);white-space:nowrap}
+  th{text-align:left;font-family:var(--mono);font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.08em;padding:11px 16px;border-bottom:1px solid var(--line);background:var(--paper-2);white-space:nowrap;position:sticky;top:var(--sticky-top,73px);z-index:4}
   td{padding:12px 16px;border-bottom:1px solid var(--line);font-size:13.5px;vertical-align:middle}
   tr:last-child td{border-bottom:none}
   tbody tr{transition:background var(--fast) var(--ease)}
@@ -237,7 +254,15 @@
   .cc-tbl .s1{left:0;min-width:92px;max-width:92px;overflow:hidden;text-overflow:ellipsis}
   .cc-tbl .s2{left:92px;min-width:96px;max-width:96px;overflow:hidden;text-overflow:ellipsis}
   .cc-tbl .s3{left:188px;min-width:170px;max-width:170px;overflow:hidden;text-overflow:ellipsis;box-shadow:inset -1px 0 0 var(--line-2)}
-  .cc-tbl thead .s1,.cc-tbl thead .s2,.cc-tbl thead .s3{background:var(--paper-2);z-index:3}
+  /* No vertical sticky header here: .cc-wrap needs overflow-x:auto for the
+     horizontal scroll + frozen s1/s2/s3 columns, and per the CSS overflow
+     spec that FORCES overflow-y to 'auto' too (a lone non-visible axis pulls
+     the other one off 'visible') — making .cc-wrap itself the sticky
+     containing block for its cells, not the page. A row can't stick to a
+     scroll position that never happens. Solving both at once needs a
+     JS-synced dual-scrollbar split (separate header/body scroll areas),
+     which is out of scope here — left as horizontal-only sticky. */
+  .cc-tbl thead .s1,.cc-tbl thead .s2,.cc-tbl thead .s3{background:var(--paper-2);z-index:5}
   .cc-tbl tfoot td{background:var(--paper-2);border-top:1px solid var(--line);border-bottom:none;font-weight:700}
   .cc-tbl tfoot .s1,.cc-tbl tfoot .s2,.cc-tbl tfoot .s3{background:var(--paper-2)}
   /* current-month highlight — background tint, not a side-stripe accent */
@@ -1098,6 +1123,19 @@ function go(screen){
   else if(screen==='podesk') v.innerHTML=renderAprovacoes();
   else if(screen==='people') v.innerHTML=renderPeople();
   else if(screen==='reqpo'){ v.innerHTML=renderPOs(); openReqPO(); }
+  syncStickyOffset();
+}
+/* #view has no height cap of its own (it grows to fit content) — the
+   PAGE/body is what actually scrolls, with .top staying pinned via its own
+   sticky+z-index:20. So any sticky table header rendered inside #view can't
+   just use top:0 — that sits exactly where .top already is and ends up
+   hidden behind it (higher z-index). --sticky-top is the real height of
+   .top + #viewAsBar (the latter only appears for admin "View as" on Budget
+   screens), measured fresh after every render since it varies by screen. */
+function syncStickyOffset(){
+  const topBar=document.querySelector('.top'), vab=document.getElementById('viewAsBar');
+  const h=(topBar?topBar.getBoundingClientRect().height:0)+(vab?vab.getBoundingClientRect().height:0);
+  document.documentElement.style.setProperty('--sticky-top',h+'px');
 }
 
 /* charts */
@@ -1207,8 +1245,8 @@ function renderProjetos(){
     return c*PROJ_SORT.dir;
   });
   if(!list.length)return '<div class="empty">No projects found.</div>';
-  return `<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-    <div style="display:grid;grid-template-columns:1.7fr 1fr 1.1fr 1fr 1.2fr .7fr .5fr;gap:10px;padding:11px 17px;background:#fafbfd;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">
+  return `<div style="background:#fff;border:1px solid var(--line);border-radius:13px;box-shadow:0 1px 2px rgba(20,22,28,.05)">
+    <div style="display:grid;grid-template-columns:1.7fr 1fr 1.1fr 1fr 1.2fr .7fr .5fr;gap:10px;padding:11px 17px;background:#fafbfd;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;position:sticky;top:var(--sticky-top,73px);z-index:5;border-radius:13px 13px 0 0">
       ${sortTh(PROJ_SORT,'name','Project','projSortHeaderClick')}${sortTh(PROJ_SORT,'owner','Owner','projSortHeaderClick')}${sortTh(PROJ_SORT,'stage','Stage','projSortHeaderClick')}${sortTh(PROJ_SORT,'health','Health','projSortHeaderClick')}${sortTh(PROJ_SORT,'progress','Progress','projSortHeaderClick')}${sortTh(PROJ_SORT,'due','Due','projSortHeaderClick')}<span></span></div>
     ${list.map(p=>{const stg=stageOf(p.etapa);const hp=healthPill(p.status);const di=deadlineInfo(p);const pr=computeProg(p);const bt=businessTypeOf(p.ptipo);
       return `<div class="proj-row" onclick="openProj('${esc(p.id)}')" style="display:grid;grid-template-columns:1.7fr 1fr 1.1fr 1fr 1.2fr .7fr .5fr;gap:10px;padding:13px 17px;border-bottom:1px solid #edeff4;align-items:center;font-size:13px;cursor:pointer" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
@@ -2177,14 +2215,14 @@ function renderPOs(){
       <span class="mono" style="font-size:10px;font-weight:800;background:${on?'#fff':'var(--paper)'};border:1px solid ${f.c}40;border-radius:20px;padding:1px 7px;color:${f.c};flex-shrink:0">${f.list.length}</span>
     </button>`;
   }).join('')}</div>`:'';
-  const body=active?`<div class="po-phase" style="border:1.5px solid ${active.c}30;border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.04);background:#fff">
-    <div style="padding:10px 16px;background:${active.bg};display:flex;align-items:center;gap:10px">
+  const body=active?`<div class="po-phase" style="border:1.5px solid ${active.c}30;border-radius:13px;box-shadow:0 1px 2px rgba(20,22,28,.04);background:#fff">
+    <div style="padding:10px 16px;background:${active.bg};display:flex;align-items:center;gap:10px;border-radius:12px 12px 0 0">
       <span class="ich" style="width:26px;height:26px;background:#fff;color:${active.c};flex-shrink:0">${icn(active.icon,13)}</span>
       <b style="font-family:'Hanken Grotesk',sans-serif;font-size:12.5px;letter-spacing:.02em;color:${active.c}">${active.t}</b>
       <span style="flex:1"></span>
       <span class="mono" style="font-size:11.5px;font-weight:700;color:${active.c}">${BRL(active.list.reduce((sum,po)=>sum+(+po.valor||0),0))}</span>
     </div>
-    <div style="background:#fafbfd;border-top:1px solid var(--line);border-bottom:1px solid var(--line)">${head}</div>
+    <div style="background:#fafbfd;border-top:1px solid var(--line);border-bottom:1px solid var(--line);position:sticky;top:var(--sticky-top,73px);z-index:5">${head}</div>
     <div class="po-rows">${active.list.map(rowHTML).join('')}</div>
     <div class="po-empty-filter" style="display:none;padding:30px 16px;text-align:center;color:var(--txt-3);font-size:12.5px">No POs match your filters in this phase — try another tab above.</div>
   </div>`:'<div class="empty">No POs found for your access.</div>';
@@ -2738,7 +2776,7 @@ function renderTLModal(){
       </div>`;
     }).join('');
     body=`<div style="border:1px solid var(--line);border-radius:11px;overflow:hidden">
-      <div style="display:flex;border-bottom:1px solid var(--line);background:#fafbfd"><div style="width:190px;flex-shrink:0;padding:9px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);border-right:1px solid var(--line)">Sub-item</div><div style="flex:1;display:flex">${wkHead}</div></div>
+      <div style="display:flex;border-bottom:1px solid var(--line);background:#fafbfd;position:sticky;top:0;z-index:2"><div style="width:190px;flex-shrink:0;padding:9px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);border-right:1px solid var(--line)">Sub-item</div><div style="flex:1;display:flex">${wkHead}</div></div>
       ${rowsHtml}
     </div>`;
   }
@@ -3737,10 +3775,10 @@ function renderTimeline(){
     <span style="font-size:12px;font-weight:700;color:var(--txt-2);font-family:var(--mono)">${TL_FIT?'Full range':rangeLbl}</span>
     <button class="chip-btn" onclick="tlFitToggle()" style="margin-left:auto">${TL_FIT?`${TL_SPAN}-week view`:'Fit all'}</button>
   </div>`;
-  return navBar+`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-    <div style="display:flex;border-bottom:1px solid var(--line);background:#fafbfd;position:sticky;top:0;z-index:5"><div style="width:230px;flex-shrink:0;padding:11px 16px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);border-right:1px solid var(--line)">Project</div><div style="flex:1;display:flex">${wkHead}</div></div>
+  return navBar+`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;box-shadow:0 1px 2px rgba(20,22,28,.05)">
+    <div style="display:flex;border-bottom:1px solid var(--line);background:#fafbfd;position:sticky;top:var(--sticky-top,73px);z-index:5;border-radius:13px 13px 0 0"><div style="width:230px;flex-shrink:0;padding:11px 16px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);border-right:1px solid var(--line)">Project</div><div style="flex:1;display:flex">${wkHead}</div></div>
     ${rows}
-    <div style="display:flex;border-top:1px solid var(--line);background:#fafbfd"><div style="width:230px;flex-shrink:0;padding:6px 16px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);border-right:1px solid var(--line);display:flex;align-items:center">Active/week</div><div style="flex:1">${wkTotalsRow}</div></div>
+    <div style="display:flex;border-top:1px solid var(--line);background:#fafbfd;border-radius:0 0 13px 13px"><div style="width:230px;flex-shrink:0;padding:6px 16px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);border-right:1px solid var(--line);display:flex;align-items:center">Active/week</div><div style="flex:1">${wkTotalsRow}</div></div>
     </div>
   <div style="display:flex;gap:16px;margin-top:12px;font-size:11.5px;color:var(--txt-2);font-weight:600;flex-wrap:wrap">
     <span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#1273cf;margin-right:5px;vertical-align:-1px"></span>In production</span>
@@ -3884,7 +3922,9 @@ function ccScrollTo(behavior){
   const stickyW=92+96+170; // s1+s2+s3 widths
   wrap.scrollTo({left:Math.max(0,cell.offsetLeft-stickyW-14),behavior:behavior||'auto'});
 }
-function ccAutoScroll(){ ccScrollTo('auto'); }
+function ccAutoScroll(){
+  ccScrollTo('auto');
+}
 function ccJumpNow(){ ccScrollTo('smooth'); }
 function feeSplitBlock(only){
   const fee=DATA.fee||[];
@@ -4710,13 +4750,13 @@ function renderPeople(){
   };
   const groupsHTML=keys.map(k=>{
     const isTcl=k==='Time TCL';
-    return `<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05);margin-bottom:16px">
-      <div style="padding:12px 17px;border-bottom:1px solid var(--line);background:${isTcl?'var(--paper-2)':'#fff'};display:flex;align-items:center;gap:9px">
+    return `<div style="background:#fff;border:1px solid var(--line);border-radius:13px;box-shadow:0 1px 2px rgba(20,22,28,.05);margin-bottom:16px">
+      <div style="padding:12px 17px;border-bottom:1px solid var(--line);background:${isTcl?'var(--paper-2)':'#fff'};display:flex;align-items:center;gap:9px;border-radius:13px 13px 0 0">
         <span style="width:8px;height:17px;border-radius:3px;background:${isTcl?'var(--ink)':'var(--po)'}"></span>
         <b style="font-family:'Hanken Grotesk',sans-serif;font-size:13.5px">${esc(k)}</b>
         <span style="font-size:11px;color:var(--txt-3);font-weight:600">${groups[k].length} ${groups[k].length===1?'person':'people'}</span>
       </div>
-      <div style="display:grid;grid-template-columns:1.3fr 1.6fr 1.1fr .8fr;gap:10px;padding:9px 17px;background:#fafbfd;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">
+      <div style="display:grid;grid-template-columns:1.3fr 1.6fr 1.1fr .8fr;gap:10px;padding:9px 17px;background:#fafbfd;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;position:sticky;top:var(--sticky-top,73px);z-index:4">
         <span>Name</span><span>Email</span><span>Role</span><span></span></div>
       ${groups[k].map(row).join('')}
     </div>`;
