@@ -387,7 +387,7 @@ let SBPO = window.supabase.createClient(PO_URL, PO_KEY, {auth:{storageKey:'sb-ur
    STATE
    ============================================================ */
 let currentUser=null, isManager=false, booted=false;
-let PO_ACCESS=false, PAPEL='', MINHA_AGENCIA='';
+let PO_ACCESS=false, PAPEL='', MINHA_AGENCIA='', AGENCIA_NIVEL='completo';
 /* "View as" — admin-only, read-only simulated view of the Budget module.
    Frontend-only filter/gate: never sent to Supabase, never changes real
    PAPEL/MINHA_AGENCIA, and every write action checks viewOnly() before
@@ -760,6 +760,7 @@ const DEMO_ROLES=[
   {v:'financeiro',label:'Finance — Carla Dias'},
   {v:'agencia:Wavemaker',label:'Agency — Diego Souza (Wavemaker)'},
   {v:'agencia:Mindshare',label:'Agency — Eva Martins (Mindshare)'},
+  {v:'agencia:Wavemaker:po',label:'Agency — PO only (Wavemaker)'},
   {v:'pendente',label:'Pending — Fábio Rocha'}
 ];
 function seedDemoData(){
@@ -833,7 +834,11 @@ function seedDemoData(){
   TEAM=[];
 }
 function demoSetRole(v){
-  if(v.startsWith('agencia:')){ PAPEL='agencia'; MINHA_AGENCIA=v.slice(8); isManager=false; }
+  AGENCIA_NIVEL='completo';
+  if(v.startsWith('agencia:')){
+    const parts=v.split(':'); PAPEL='agencia'; MINHA_AGENCIA=parts[1]; isManager=false;
+    if(parts[2]==='po') AGENCIA_NIVEL='po';
+  }
   else { PAPEL=v; MINHA_AGENCIA=''; isManager=(v==='admin'); }
   PO_ACCESS=!!PAPEL&&PAPEL!=='pendente';
   VIEW_AS=null;
@@ -948,7 +953,10 @@ async function loadPapel(){
     PO_ACCESS=!!PAPEL && PAPEL!=='pendente';
     if(!PAPEL && !window.__poErr) window.__poErr='no role for this user';
   }catch(e){ PO_ACCESS=false; window.__poErr=(e&&e.message)||'papel_atual failed'; }
-  if(PAPEL==='agencia'){ try{ const {data:a}=await SBPO.rpc('agencia_atual'); MINHA_AGENCIA=a||''; }catch(e){} }
+  if(PAPEL==='agencia'){
+    try{ const {data:a}=await SBPO.rpc('agencia_atual'); MINHA_AGENCIA=a||''; }catch(e){}
+    try{ const {data:n}=await SBPO.rpc('agencia_nivel_atual'); AGENCIA_NIVEL=n||'completo'; }catch(e){}
+  }
 }
 
 /* ============================================================
@@ -1003,6 +1011,12 @@ function currentNav(){
   // Work-module screens follow PAPEL; Budget screens additionally require
   // PO_ACCESS (PAPEL resolved and not 'pendente') — both come from the same
   // single Supabase session/papel_atual() call now, see loadPapel().
+  // Restricted agency sub-level (agencia_nivel='po') is a narrower carve-out
+  // of the 'agencia' role, not a separate PAPEL — only "POs & Approvals",
+  // no Work screens, no Overview/Budgets/Campaigns (those carry budget caps
+  // this sub-level shouldn't see; enforced again at the RLS level, this is
+  // just the nav — see repoint_role_functions_to_perfis-era RLS policies).
+  if(PAPEL==='agencia'&&AGENCIA_NIVEL==='po') return {global:GLOBAL_NAV, work:[], budget:(PO_ACCESS?['pos']:[])};
   const role=ROLE_NAV[PAPEL];
   if(!role) return {global:GLOBAL_NAV, work:PANEL_ONLY_WORK, budget:[]};
   return {global:GLOBAL_NAV, work:role.work, budget:(PO_ACCESS?role.budget:[])};
@@ -2226,7 +2240,13 @@ function renderPOs(){
     <div class="po-rows">${active.list.map(rowHTML).join('')}</div>
     <div class="po-empty-filter" style="display:none;padding:30px 16px;text-align:center;color:var(--txt-3);font-size:12.5px">No POs match your filters in this phase — try another tab above.</div>
   </div>`:'<div class="empty">No POs found for your access.</div>';
-  const projPend=DATA.poProjetos.filter(p=>p.aprovacao_status==='PENDENTE');
+  // PO-only agency contacts (agencia_nivel='po') don't get this — it surfaces
+  // campaign budget totals (tetoPend) and category/activity planning info,
+  // which is exactly the Overview/Campaigns-level detail this sub-level is
+  // scoped away from everywhere else. Same restriction, just enforced here
+  // too since this banner renders unconditionally on the one screen they do see.
+  const isPoOnly=PAPEL==='agencia'&&AGENCIA_NIVEL==='po';
+  const projPend=isPoOnly?[]:DATA.poProjetos.filter(p=>p.aprovacao_status==='PENDENTE');
   const canAprovaCamp=demoWritable(['admin','marketing','financeiro'].includes(PAPEL)||isManager);
   const tetoPend={};
   if(projPend.length){ DATA.tetos.forEach(t=>tetoPend[t.projeto_id]=(tetoPend[t.projeto_id]||0)+(+t.teto||0)); DATA.rateio.forEach(r=>tetoPend[r.projeto_id]=(tetoPend[r.projeto_id]||0)+(+r.valor||0)); }
@@ -4744,7 +4764,7 @@ function renderPeople(){
     return `<div style="display:grid;grid-template-columns:1.3fr 1.6fr 1.1fr .8fr;gap:10px;padding:11px 17px;border-bottom:1px solid #edeff4;align-items:center;font-size:13px">
       <span style="display:flex;align-items:center;gap:9px;min-width:0"><span class="avatar" style="width:26px;height:26px;background:${avColor(nome)};font-size:10px">${initials(nome)}</span><span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(nome)}</span></span>
       <span class="mono" style="font-size:11.5px;color:var(--txt-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(pe.email||'')}</span>
-      <span><span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:${r.bg};color:${r.fg}">${r.t}</span></span>
+      <span><span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:${r.bg};color:${r.fg}">${r.t}</span>${pe.agencia_nivel==='po'?`<span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;background:var(--slate-bg);color:var(--txt-2);margin-left:5px" title="Only sees POs & Approvals; notified only when a PO number is issued">PO only</span>`:''}</span>
       <span style="display:flex;justify-content:flex-end">${isManager||PAPEL==='admin'?`<button class="chip-btn" onclick="editPerson('${esc(pe.user_id)}')">Edit</button>`:'<span style="font-size:11px;color:var(--txt-3)">—</span>'}</span>
     </div>`;
   };
@@ -4771,12 +4791,12 @@ function renderPeople(){
 let PERSON=null;
 function openPersonNew(){
   if(PAPEL!=='admin'){ toast('Only admin can add people.'); return; }
-  PERSON={user_id:null,nome:'',sobrenome:'',email:'',papel:'',agencia:'',_new:true};
+  PERSON={user_id:null,nome:'',sobrenome:'',email:'',papel:'',agencia:'',agencia_nivel:'completo',_new:true};
   renderPersonModal();
 }
 function editPerson(userId){
   const pe=(DATA.pessoas||[]).find(x=>x.user_id===userId); if(!pe)return;
-  PERSON={user_id:userId,nome:pe.nome||'',sobrenome:pe.sobrenome||'',email:pe.email||'',papel:pe.papel||'',agencia:pe.agencia||''};
+  PERSON={user_id:userId,nome:pe.nome||'',sobrenome:pe.sobrenome||'',email:pe.email||'',papel:pe.papel||'',agencia:pe.agencia||'',agencia_nivel:pe.agencia_nivel||'completo'};
   renderPersonModal();
 }
 function personSet(k,v){ if(!PERSON)return; PERSON[k]=v; if(k==='papel')renderPersonModal(); }
@@ -4785,6 +4805,7 @@ function renderPersonModal(){
   const roles=[['admin','Admin'],['marketing','Marketing'],['financeiro','Finance'],['agencia','Agency'],['pendente','Pending']];
   const ags=agencyOpts();
   const isNew=!!PERSON._new;
+  const isAgencia=PERSON.papel==='agencia';
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:480px">
     <div class="modal-h"><h3>${isNew?'Add person':'Edit person'}</h3><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">
@@ -4796,8 +4817,14 @@ function renderPersonModal(){
       <div class="field"><label>Email</label><input value="${esc(PERSON.email)}" onchange="personSet('email',this.value)" placeholder="name@company.com"></div>
       <div class="fgrid">
         <div class="field"><label>Role</label><select onchange="personSet('papel',this.value)"><option value="">Select…</option>${roles.map(r=>`<option value="${r[0]}" ${PERSON.papel===r[0]?'selected':''}>${r[1]}</option>`).join('')}</select></div>
-        ${PERSON.papel==='agencia'?`<div class="field"><label>Agency</label><input list="agList" value="${esc(PERSON.agencia)}" onchange="personSet('agencia',this.value)"><datalist id="agList">${ags.map(a=>`<option>${esc(a)}</option>`).join('')}</datalist></div>`:'<div class="field"></div>'}
+        ${isAgencia?`<div class="field"><label>Agency</label><input list="agList" value="${esc(PERSON.agencia)}" onchange="personSet('agencia',this.value)"><datalist id="agList">${ags.map(a=>`<option>${esc(a)}</option>`).join('')}</datalist></div>`:'<div class="field"></div>'}
       </div>
+      ${isAgencia?`<div class="field full" style="margin-top:2px"><label>Access level</label>
+        <select onchange="personSet('agencia_nivel',this.value)">
+          <option value="completo" ${PERSON.agencia_nivel==='completo'?'selected':''}>Full — Work + Overview/Campaigns/Budgets/POs</option>
+          <option value="po" ${PERSON.agencia_nivel==='po'?'selected':''}>PO only — sees only POs & Approvals, notified only when a PO number is issued</option>
+        </select>
+      </div>`:''}
       <div style="font-size:11px;color:var(--txt-3);margin-top:2px">${isNew?'A temporary account is created right away; the code lets them finish setup via "First access".':'Password is managed by the user (first-access flow) and can’t be edited here.'}</div>
     </div>
     <div class="modal-f"><span>${(!isNew&&PAPEL==='admin')?`<button class="btn-del" onclick="deletarPessoa('${esc(PERSON.user_id)}')">Delete user</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" onclick="savePerson()">${isNew?'Send invite':'Save'}</button></div></div>
@@ -4805,12 +4832,13 @@ function renderPersonModal(){
 }
 async function savePerson(){
   if(!PERSON)return;
+  const nivel=PERSON.papel==='agencia'&&PERSON.agencia_nivel==='po'?'po':'completo';
   if(PERSON._new){
     if(!(PERSON.email||'').trim()){ toast('Enter an email.'); return; }
     if(!PERSON.papel){ toast('Select a role.'); return; }
     if(PERSON.papel==='agencia'&&!(PERSON.agencia||'').trim()){ toast('Choose the agency.'); return; }
     if(DEMO_MODE){
-      DATA.pessoas.push({user_id:'demo-'+uid(),nome:PERSON.nome,sobrenome:PERSON.sobrenome,email:PERSON.email,papel:PERSON.papel,agencia:PERSON.papel==='agencia'?PERSON.agencia:null});
+      DATA.pessoas.push({user_id:'demo-'+uid(),nome:PERSON.nome,sobrenome:PERSON.sobrenome,email:PERSON.email,papel:PERSON.papel,agencia:PERSON.papel==='agencia'?PERSON.agencia:null,agencia_nivel:nivel});
       toast('Person invited ✓ (demo)'); closeModal(); go(SCREEN); return;
     }
     if(viewOnly()){ toast(roMsg()); return; }
@@ -4818,7 +4846,7 @@ async function savePerson(){
       const {data:sPO}=await SBPO.auth.getSession();
       const token=sPO&&sPO.session&&sPO.session.access_token;
       if(!token) throw new Error('no active PO session');
-      const r=await fetch(PO_URL+'/functions/v1/admin-usuarios',{method:'POST',headers:{'Content-Type':'application/json','apikey':PO_KEY,'Authorization':'Bearer '+token},body:JSON.stringify({action:'convidar',email:PERSON.email.trim().toLowerCase(),papel:PERSON.papel,agencia:PERSON.papel==='agencia'?PERSON.agencia:null,nome:PERSON.nome,sobrenome:PERSON.sobrenome})});
+      const r=await fetch(PO_URL+'/functions/v1/admin-usuarios',{method:'POST',headers:{'Content-Type':'application/json','apikey':PO_KEY,'Authorization':'Bearer '+token},body:JSON.stringify({action:'convidar',email:PERSON.email.trim().toLowerCase(),papel:PERSON.papel,agencia:PERSON.papel==='agencia'?PERSON.agencia:null,agencia_nivel:nivel,nome:PERSON.nome,sobrenome:PERSON.sobrenome})});
       const j=await r.json();
       if(!j||j.error) throw new Error((j&&j.error)||'invite failed');
       const {data:pes}=await SBPO.rpc('listar_pessoas'); DATA.pessoas=pes||[];
@@ -4827,7 +4855,7 @@ async function savePerson(){
     return;
   }
   try{
-    const {error}=await SBPO.rpc('definir_papel',{p_user:PERSON.user_id,p_papel:PERSON.papel,p_agencia:PERSON.papel==='agencia'?(PERSON.agencia||null):null});
+    const {error}=await SBPO.rpc('definir_papel',{p_user:PERSON.user_id,p_papel:PERSON.papel,p_agencia:PERSON.papel==='agencia'?(PERSON.agencia||null):null,p_agencia_nivel:nivel});
     if(error)throw error;
     try{ await SBPO.from('perfis').update({nome:PERSON.nome,sobrenome:PERSON.sobrenome,email:PERSON.email}).eq('user_id',PERSON.user_id); }catch(e){ console.warn('name update:',e); }
     const {data:pes}=await SBPO.rpc('listar_pessoas'); DATA.pessoas=pes||[];
