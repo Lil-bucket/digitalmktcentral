@@ -3746,40 +3746,45 @@ function renderTeam(){
 }
 function renderWeekly(){
   const list=visProjs();
-  const delivered=list.filter(p=>p.status==='concluido');
+  const done=list.filter(p=>p.status==='concluido');
+  const delivered=done.filter(p=>!p.weeklyConcluded);
+  const concluded=done.filter(p=>p.weeklyConcluded);
   const risk=list.filter(p=>p.status==='atrasado'||p.status==='bloqueado');
   const progress=list.filter(p=>p.status==='no_prazo'||p.status==='atencao');
   const tasksDone=list.reduce((s,p)=>s+((p.tasks||[]).filter(t=>t.done).length),0);
   const now=new Date().toLocaleDateString('en-US',{day:'2-digit',month:'long',year:'numeric'});
   const st=(n,l,col)=>`<span><b style="font-family:'Hanken Grotesk',sans-serif;font-size:24px;display:block${col?';color:'+col:''}">${n}</b><span style="font-size:11.5px;color:var(--txt-2);font-weight:600">${l}</span></span>`;
-  const line=(p,extra,showComplete)=>`<div style="padding:9px 0;border-bottom:1px dashed var(--line);font-size:13px;display:flex;align-items:center;gap:10px">
+  const line=(p,extra,showConclude)=>`<div style="padding:9px 0;border-bottom:1px dashed var(--line);font-size:13px;display:flex;align-items:center;gap:10px">
       <span style="flex:1;min-width:0;cursor:pointer" onclick="openProj('${esc(p.id)}')"><b>${esc(p.nome)}</b>${extra?' — '+extra:''} <span style="color:var(--txt-2)">· ${esc(respName(p.resp)||'—')}</span></span>
-      ${showComplete&&canEdit(p)?`<button onclick="event.stopPropagation();weeklyMarkDelivered('${esc(p.id)}')" class="chip-btn" style="flex-shrink:0;font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:5px">${icn('check',11)} Mark delivered</button>`:''}
+      ${showConclude&&canEdit(p)?`<button onclick="event.stopPropagation();weeklyMarkConcluded('${esc(p.id)}')" class="chip-btn" style="flex-shrink:0;font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:5px">${icn('check',11)} Mark concluded</button>`:''}
     </div>`;
-  const sec=(label,col,items,extraFn,showComplete)=>`<div style="padding:16px 22px;border-bottom:1px solid var(--line)"><div style="font-size:11.5px;font-weight:800;letter-spacing:.06em;color:${col};margin-bottom:9px;display:flex;align-items:center;gap:7px"><span style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></span>${label}</div>${items.length?items.map(p=>line(p,extraFn(p),showComplete)).join(''):'<div style="font-size:12.5px;color:var(--txt-3)">Nothing here.</div>'}</div>`;
+  const sec=(label,col,items,extraFn,showConclude)=>`<div style="padding:16px 22px;border-bottom:1px solid var(--line)"><div style="font-size:11.5px;font-weight:800;letter-spacing:.06em;color:${col};margin-bottom:9px;display:flex;align-items:center;gap:7px"><span style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></span>${label}</div>${items.length?items.map(p=>line(p,extraFn(p),showConclude)).join(''):'<div style="font-size:12.5px;color:var(--txt-3)">Nothing here.</div>'}</div>`;
   const luTxt=p=>{const lu=latestLog(p);return lu?esc(lu.txt):'';};
   return `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;gap:16px;flex-wrap:wrap">
       <div style="max-width:520px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:15px">Week of ${now}</b><div style="font-size:12.5px;color:var(--txt-2);margin-top:2px">Auto-generated from project data — copy or email.</div></div>
       <div style="display:flex;gap:8px"><button onclick="copyWeekly()" style="padding:9px 15px;border-radius:9px;border:none;background:#10131a;color:#fff;font-weight:600;font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center;gap:7px">${icn('copy',13)} Copy report</button></div></div>
     <div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
       <div style="padding:18px 22px;border-bottom:1px solid var(--line);background:#fafbfd;display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
-        ${st(delivered.length,'Delivered')}${st(progress.length,'In progress')}${st(risk.length,'At risk','#b32418')}${st(tasksDone,'Tasks completed')}</div>
-      ${sec('AT RISK','#9c6404',risk,luTxt,true)}
-      ${sec('IN PROGRESS','#0e5ba6',progress,p=>luTxt(p)+' ('+computeProg(p)+'%)',true)}
-      <div style="padding:16px 22px;background:var(--paper-2)"><div style="font-size:11.5px;font-weight:800;letter-spacing:.06em;color:#0c7048;margin-bottom:9px;display:flex;align-items:center;gap:7px"><span style="width:8px;height:8px;border-radius:50%;background:#0c7048;flex-shrink:0"></span>DELIVERED</div>${delivered.length?delivered.map(p=>line(p,luTxt(p),false)).join(''):'<div style="font-size:12.5px;color:var(--txt-3)">Nothing here.</div>'}</div>
+        ${st(done.length,'Delivered')}${st(progress.length,'In progress')}${st(risk.length,'At risk','#b32418')}${st(tasksDone,'Tasks completed')}</div>
+      ${sec('AT RISK','#9c6404',risk,luTxt,false)}
+      ${sec('IN PROGRESS','#0e5ba6',progress,p=>luTxt(p)+' ('+computeProg(p)+'%)',false)}
+      ${sec('DELIVERED','#0c7048',delivered,luTxt,true)}
+      <div style="padding:16px 22px;background:var(--paper-2)"><div style="font-size:11.5px;font-weight:800;letter-spacing:.06em;color:var(--txt-3);margin-bottom:9px;display:flex;align-items:center;gap:7px"><span style="width:8px;height:8px;border-radius:50%;background:var(--txt-3);flex-shrink:0"></span>CONCLUDED</div>${concluded.length?concluded.map(p=>line(p,luTxt(p),false)).join(''):'<div style="font-size:12.5px;color:var(--txt-3)">Nothing here.</div>'}</div>
     </div>`;
 }
-/* Marks a project fully done (all activities + sub-items) so status/stage
-   derive to "concluido" the same way they would if checked off one by one —
-   there's no separate status_override field, so this is the legitimate path. */
-async function weeklyMarkDelivered(pid){
+/* "Mark concluded" only ever shows on DELIVERED rows (project status is
+   already "concluido" there — all tasks done). This does NOT touch task/
+   status data at all; it just flags the project so the weekly report can
+   archive it out of the active Delivered list into a separate terminal
+   block, so Delivered doesn't keep growing with old, already-reported
+   items every week. weeklyConcluded lives on the project record itself
+   (not per-browser/localStorage) so the archived state is the same for
+   everyone looking at Weekly Status, same as every other project field. */
+async function weeklyMarkConcluded(pid){
   const p=DATA.projetos.find(x=>x.id===pid); if(!p)return;
-  if(!canEdit(p)){ toast('Only the owner or admin can mark this delivered.'); return; }
-  if(!confirm('Mark "'+p.nome+'" as delivered? This completes all remaining activities.'))return;
-  (p.tasks||[]).forEach(t=>{ t.done=true; t.pct=100; (t.subs||[]).forEach(s=>s.done=true); });
-  p.etapa=effectiveEtapa(p); p.status=autoStatus(p);
-  p.logs=p.logs||[]; p.logs.push({txt:'Marked as delivered',autor:(currentUser&&currentUser.email)||'—',t:new Date().toISOString()});
-  try{ await SBPO.from('act_projects').upsert({id:p.id,data:p}); toast('Project marked as delivered ✓'); }
+  if(!canEdit(p)){ toast('Only the owner or admin can do this.'); return; }
+  p.weeklyConcluded=true;
+  try{ await SBPO.from('act_projects').upsert({id:p.id,data:p}); toast('Moved to Concluded ✓'); }
   catch(e){ toastErr(e); return; }
   go(SCREEN);
 }
