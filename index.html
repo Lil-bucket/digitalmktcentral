@@ -1773,6 +1773,23 @@ function campDrawerJump(m){
    in the app already).
    ============================================================ */
 let REALLOC=null; // {pid,fromMonth,balance,mode,splitCount,rows:[{id,mes,valor}]}
+/* Fresh, server-side reread of a month's unused balance — mirrors
+   campPastUnallocatedBalance()'s definition exactly (cap minus every PO not
+   REJEITADA/CANCELADA) but bypasses the in-memory DATA cache, which is only
+   as current as this browser tab's last load/reload. Used by submitRealloc
+   as a right-before-write staleness check. */
+async function reallocFetchCurrentBalance(pid,fromMonth){
+  const comp=fromMonth+'-01';
+  const [{data:tetoRows,error:e1},{data:rateioRows,error:e2},{data:poRows,error:e3}]=await Promise.all([
+    SBPO.from('tetos').select('teto').eq('projeto_id',pid).eq('competencia',comp),
+    SBPO.from('rateio_alocacao').select('valor').eq('projeto_id',pid).eq('competencia',comp),
+    SBPO.from('pos').select('valor,status').eq('projeto_id',pid).eq('competencia',comp)
+  ]);
+  if(e1)throw e1; if(e2)throw e2; if(e3)throw e3;
+  const cap=(tetoRows||[]).reduce((s,r)=>s+(+r.teto||0),0)+(rateioRows||[]).reduce((s,r)=>s+(+r.valor||0),0);
+  const committed=(poRows||[]).filter(po=>!['REJEITADA','CANCELADA'].includes(po.status)).reduce((s,po)=>s+(+po.valor||0),0);
+  return r2(cap-committed);
+}
 function campNextCalMonth(m){ const y=+m.slice(0,4), mo=+m.slice(5,7); return mo===12?(y+1)+'-01':m.slice(0,4)+'-'+String(mo+1).padStart(2,'0'); }
 function campFutureRegisteredMonths(pid,afterM){ return Object.keys(campMonthlyTotals(pid)).filter(m=>m>afterM).sort(); }
 function openReallocModal(pid,fromMonth,balance){
@@ -1891,6 +1908,20 @@ async function submitRealloc(){
   const p=DATA.poProjetos.find(x=>x.id===REALLOC.pid); if(!p)return;
   const moved=r2(sum);
   try{
+    /* Guard against a stale-page double reallocation (real incident: a second
+       user whose page hadn't refreshed re-opened this same month's balance
+       and submitted again, crediting the destination month twice while the
+       source month — already at 0 — just clamped, hiding the problem). The
+       modal's REALLOC.balance was captured whenever the page/campaign was
+       last loaded; re-derive the SAME balance fresh from the server right
+       before writing and refuse if it no longer matches — this is exactly
+       what would have caught it. */
+    const fresh=await reallocFetchCurrentBalance(REALLOC.pid,REALLOC.fromMonth);
+    if(Math.abs(fresh-REALLOC.balance)>0.5){
+      toast('This balance changed since you opened this — it may have already been reallocated. Reload and try again.');
+      REALLOC=null; closeModal(); await reloadPOAll(); openCampDetail(p.id);
+      return;
+    }
     if(p.rateio){
       const cats=[...new Set((DATA.rateio||[]).filter(r=>r.projeto_id===p.id).map(r=>r.categoria))];
       if(!cats.length){ toast('Cannot resolve rateio categories for this campaign.'); return; }
