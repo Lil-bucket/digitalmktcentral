@@ -515,6 +515,16 @@ function canEdit(p){return fullAccess()||!p||!p.owner||p.owner===(currentUser&&c
    is open to every profile, regardless of role or involvement in the
    project — only the main project fields stay gated behind canEdit(). */
 function canTagPeople(p){return true;}
+function isTagged(p){
+  const me=((currentUser&&currentUser.email)||'').toLowerCase();
+  return !!(me&&p&&(p.envolvidos||[]).some(x=>(x.email||'').toLowerCase()===me));
+}
+/* The activity list is a shared working surface, not an owner-only field:
+   besides the owner/admin (canEdit), anyone on the marketing profile who is
+   tagged on the project can add, rename, reorder and delete its activities.
+   The main project fields (name, type, due date, categories, brand) and
+   "Delete project" stay gated behind canEdit(). */
+function canEditAtividades(p){ return canEdit(p)||(effPapel()==='marketing'&&isTagged(p)); }
 function visProjs(){
   if(PAPEL==='agencia'&&MINHA_AGENCIA){
     const meEmail=((currentUser&&currentUser.email)||'').toLowerCase();
@@ -2927,8 +2937,8 @@ function copyShareLink(url){
   try{ navigator.clipboard.writeText(url); toast('Link copied ✓'); }
   catch(e){ toast('Could not copy — select the link and copy manually.'); }
 }
-function pmAddAtv(){ EDIT.tasks=EDIT.tasks||[]; EDIT.tasks.push({id:uid(),n:'Nova atividade',done:false,fim:'',status:'no_prazo',pct:0,obs:'',resp:'',subs:[]}); renderProjModal(); }
-function pmDelAtv(tid){ EDIT.tasks=(EDIT.tasks||[]).filter(t=>t.id!==tid); renderProjModal(); }
+function pmAddAtv(){ if(!canEditAtividades(EDIT))return; EDIT.tasks=EDIT.tasks||[]; EDIT.tasks.push({id:uid(),n:'Nova atividade',done:false,fim:'',status:'no_prazo',pct:0,obs:'',resp:'',subs:[]}); renderProjModal(); }
+function pmDelAtv(tid){ if(!canEditAtividades(EDIT))return; EDIT.tasks=(EDIT.tasks||[]).filter(t=>t.id!==tid); renderProjModal(); }
 /* Drag-to-reorder activities — same DRAG-id + dataTransfer pattern as the
    Kanban card drag (dragStartCard/dropOnStage), scoped to EDIT.tasks. */
 let DRAG_ATV=null;
@@ -2937,7 +2947,7 @@ function atvDragOver(ev){ ev.preventDefault(); ev.dataTransfer.dropEffect='move'
 function atvDrop(ev,tid){
   ev.preventDefault();
   const from=DRAG_ATV||ev.dataTransfer.getData('text/plain'); DRAG_ATV=null;
-  if(!from||from===tid||!EDIT)return;
+  if(!from||from===tid||!EDIT||!canEditAtividades(EDIT))return;
   const tasks=EDIT.tasks||[];
   const fi=tasks.findIndex(t=>t.id===from), ti=tasks.findIndex(t=>t.id===tid);
   if(fi<0||ti<0)return;
@@ -3112,6 +3122,10 @@ let PM_OPEN=false;
 function openProjModal(proj,isNew){ EDIT=proj; EDIT._new=isNew; PM_OPEN=false; renderProjModal(); }
 function renderProjModal(){
   if(!EDIT)return; const ED=canEdit(EDIT); const dis=ED?'':'disabled'; const canTag=canTagPeople(EDIT);
+  // Activities have their own, wider gate than the main project fields —
+  // tagged marketing people can work the activity list without being able to
+  // rename/retype/delete the project itself.
+  const EDA=canEditAtividades(EDIT); const disA=EDA?'':'disabled';
   // Every small edit (toggling a category chip, checking off an activity...)
   // re-renders this whole modal by replacing #modalMount's innerHTML, which
   // swaps in a brand-new .modal-b node — that reset its scroll to 0 on every
@@ -3126,15 +3140,15 @@ function renderProjModal(){
   const atvHTML=tasks.map((t,i)=>`
     <div ondragover="atvDragOver(event)" ondrop="atvDrop(event,'${t.id}')" style="border:1px solid ${t.done?'#bfe4d0':'var(--line-2)'};border-radius:10px;padding:9px 11px;margin-bottom:7px;background:${t.done?'#eef8f1':'#fff'}">
       <div style="display:flex;align-items:center;gap:8px">
-        ${(ED&&tasks.length>1)?`<span draggable="true" ondragstart="atvDragStart(event,'${t.id}')" title="Drag to reorder" style="display:flex;align-items:center;color:var(--txt-3);cursor:grab;flex-shrink:0">${icn('grip',14)}</span>`:''}
+        ${(EDA&&tasks.length>1)?`<span draggable="true" ondragstart="atvDragStart(event,'${t.id}')" title="Drag to reorder" style="display:flex;align-items:center;color:var(--txt-3);cursor:grab;flex-shrink:0">${icn('grip',14)}</span>`:''}
         <button onclick="pmAtvDone('${t.id}')" title="Mark done" style="width:18px;height:18px;border-radius:5px;border:2px solid ${t.done?'#16a06a':'var(--line-2)'};background:${t.done?'#16a06a':'#fff'};color:#fff;font-size:11px;font-weight:800;cursor:pointer;flex-shrink:0;padding:0;line-height:1">${t.done?'✓':''}</button>
         <span class="mono" style="font-size:10px;color:var(--txt-3);width:18px;text-align:right;flex-shrink:0">${String(i+1).padStart(2,'0')}</span>
-        <input class="nm" value="${esc(t.n)}" onchange="pmAtvSet('${t.id}','n',this.value)" ${dis} placeholder="Activity name…" style="flex:1;padding:7px 10px;border:1px solid var(--line-2);border-radius:8px;background:var(--paper-2);font:inherit;font-size:12.5px;font-weight:600;min-width:0">
+        <input class="nm" value="${esc(t.n)}" onchange="pmAtvSet('${t.id}','n',this.value)" ${disA} placeholder="Activity name…" style="flex:1;padding:7px 10px;border:1px solid var(--line-2);border-radius:8px;background:var(--paper-2);font:inherit;font-size:12.5px;font-weight:600;min-width:0">
         <select onchange="pmAtvSet('${t.id}','resp',this.value)" title="Assigned to" style="width:132px;padding:7px 8px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font:inherit;font-size:11px;color:var(--txt-2);flex-shrink:0">${subPersonOpts(t.resp)}</select>
         <input type="date" value="${esc(t.fim||'')}" onchange="pmAtvSet('${t.id}','fim',this.value)" title="Due date" style="width:150px;padding:7px 8px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font:inherit;font-size:11.5px;color:var(--txt-2);flex-shrink:0">
         ${!EDIT._new?`<span class="badge ${statusOf(t.status).cls}" style="flex-shrink:0;font-size:10px;padding:2px 8px"><span class="d"></span>${statusOf(t.status).name}</span><span class="mono" style="font-size:10.5px;font-weight:700;color:var(--txt-2);width:34px;text-align:right;flex-shrink:0">${t.pct||0}%</span>`:''}
         <button class="chip-btn" onclick="pmToggleOpen('${t.id}')" style="flex-shrink:0">${t._open?'– close':'+ subs'}</button>
-        ${ED?`<button onclick="pmDelAtv('${t.id}')" style="width:24px;height:24px;border-radius:6px;border:none;background:transparent;color:var(--txt-3);font-size:11px;cursor:pointer;flex-shrink:0">✕</button>`:''}
+        ${EDA?`<button onclick="pmDelAtv('${t.id}')" style="width:24px;height:24px;border-radius:6px;border:none;background:transparent;color:var(--txt-3);font-size:11px;cursor:pointer;flex-shrink:0">✕</button>`:''}
       </div>
       ${t._open?`<div style="margin:8px 0 2px 26px;padding:10px 12px;background:var(--paper-2);border:1px solid var(--line);border-radius:9px">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px;flex-wrap:wrap">
@@ -3159,9 +3173,9 @@ function renderProjModal(){
     </div>`).join('');
   const logsHTML=(EDIT.logs||[]).slice().reverse().map(l=>`<div style="background:var(--paper-2);border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-bottom:7px"><div style="font-size:11px;color:var(--txt-3);font-weight:600;margin-bottom:4px">${esc(l.autor)} · ${fmtDate(l.t)}</div><div style="font-size:13px">${fmtLogTxt(l.txt)}</div></div>`).join('')||'<div style="font-size:12.5px;color:var(--txt-3)">No updates yet.</div>';
   $('#modalMount').innerHTML=`<div class="overlay${reopen?' no-anim':''}" onclick="if(event.target===this)pmOverlayClose()"><div role="dialog" aria-modal="true" class="modal${reopen?' no-anim':''}">
-    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--accent);flex-shrink:0;margin-right:2px"></span><div style="flex:1;min-width:0"><h3>${EDIT._new?'New project':esc(EDIT.nome||'Project')}</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Everything below stays open for editing by the creator and admins</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--accent);flex-shrink:0;margin-right:2px"></span><div style="flex:1;min-width:0"><h3>${EDIT._new?'New project':esc(EDIT.nome||'Project')}</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Everything below stays open for editing by the creator and admins — activities also by tagged Marketing people</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">
-      ${ED?'':'<div class="banner">You are not the owner or admin: you can update status, check activities/sub-items and post to the log, but not edit the main fields.</div>'}
+      ${ED?'':`<div class="banner">${EDA?'You\'re tagged on this project and on the Marketing profile: you can edit the activities (add, rename, reorder, remove) and post to the log, but not the main project fields.':'You are not the owner or admin: you can update status, check activities/sub-items and post to the log, but not edit the main fields.'}</div>`}
       <div class="field"><label>Project name</label><input value="${esc(EDIT.nome||'')}" onchange="pmSet('nome',this.value)" ${dis} placeholder="e.g. Holiday Campaign 2026" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
       <div class="fgrid" style="margin-top:14px">
         <div class="field"><label>Project type <span style="font-weight:600;color:var(--txt-3)">(sets activity template &amp; filters)</span></label><select onchange="pmPTipo(this.value)" ${dis}><option value="">Select…</option>${BUSINESS_TYPES.map(b=>`<option value="${b.id}" ${EDIT.ptipo===b.id?'selected':''}>${b.name}</option>`).join('')}</select></div>
@@ -3174,7 +3188,7 @@ function renderProjModal(){
         <div style="padding:9px 13px;background:#fdf3e7;border-bottom:1px solid #f0d9c2;display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="font-size:10.5px;font-weight:800;color:#b5550c">${tasks.length} activities from the "${esc(tName)}" pattern — edit names, dates & sub-items now or after</span>${(!EDIT._new&&projHasSubs(EDIT))?`<button class="chip-btn" onclick="openProjTimeline('${esc(EDIT.id)}')" style="flex-shrink:0;display:inline-flex;align-items:center;gap:5px">${icn('calendar',12)} View timeline</button>`:''}</div>
         <div id="pmAtvList" style="padding:9px 11px;max-height:280px;overflow-y:auto">
           ${atvHTML||'<div style="font-size:12.5px;color:var(--txt-3);padding:6px">No activities.</div>'}
-          ${ED?'<button class="btn-ghost" onclick="pmAddAtv()" style="margin-top:2px">+ Add activity</button>':''}
+          ${EDA?'<button class="btn-ghost" onclick="pmAddAtv()" style="margin-top:2px">+ Add activity</button>':''}
         </div>
         <div style="padding:8px 13px;border-top:1px solid #edeff4;background:var(--paper-2);font-size:10.5px;color:var(--txt-3)">Open status — everyone involved can post status updates and add sub-items after creation.</div>
       </div>
@@ -3197,7 +3211,7 @@ function renderProjModal(){
       ${logsHTML}
     </div>
     <div class="modal-f">
-      <span style="font-size:11px;color:var(--txt-3);flex:1">${(ED&&!EDIT._new)?`<a onclick="delProj('${EDIT.id}')" style="color:var(--red);cursor:pointer;font-weight:600">Delete project</a>`:'Editable later by: creator · admin'}</span>
+      <span style="font-size:11px;color:var(--txt-3);flex:1">${(ED&&!EDIT._new)?`<a onclick="delProj('${EDIT.id}')" style="color:var(--red);cursor:pointer;font-weight:600">Delete project</a>`:'Editable later by: creator · admin — activities also by tagged Marketing people'}</span>
       <div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" onclick="saveProj()">${EDIT._new?'Create project':'Save'}</button></div>
     </div>
   </div></div>`;
