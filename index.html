@@ -172,6 +172,9 @@
   .loading{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;height:60vh;color:var(--txt-3);font-size:13px}
   .loading::before{content:'';width:24px;height:24px;border-radius:50%;border:2.5px solid var(--line-2);border-top-color:var(--accent);animation:spin .7s linear infinite}
   @keyframes spin{to{transform:rotate(1turn)}}
+  /* Background data refresh in flight — quiet by design: the reload icon
+     spins, nothing moves or blocks. */
+  #btnSync.syncing .icn{animation:spin .9s linear infinite;color:var(--accent)}
   [contenteditable][data-placeholder]:empty:before{content:attr(data-placeholder);color:var(--txt-3)}
   [contenteditable] ul{margin:4px 0 4px 18px}
 
@@ -362,7 +365,7 @@
       <div class="tl"><span class="barcol" id="barcol"></span><div><h1 id="scrTitle">Dashboard</h1><div class="sub" id="scrSub"></div></div></div>
       <div style="display:flex;align-items:center;gap:10px">
         <div id="ctaBox"></div>
-        <button class="btn-ghost" onclick="location.reload()" title="Reload page" aria-label="Reload page" style="display:inline-flex;align-items:center;gap:6px"><svg class="icn" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4"/></svg> Reload</button>
+        <button class="btn-ghost" id="btnSync" onclick="location.reload()" title="Reload page" aria-label="Reload page" style="display:inline-flex;align-items:center;gap:6px"><svg class="icn" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4"/></svg> Reload</button>
       </div>
     </header>
     <div id="viewAsBar"></div>
@@ -941,7 +944,9 @@ async function onSignedIn(user){
   $('#acctAv').textContent=(user.email||'?')[0].toUpperCase();
   $('#acctAv').style.background=avColor(user.email);
   try{ await loadPapel(); }catch(e){ console.warn('papel_atual:',e); window.__poErr=(e&&e.message)||String(e); }
-  try{ await loadAll(); }catch(e){ console.error('load:',e); }
+  // LAST_SYNC so the first go() below doesn't immediately refetch what we
+  // just fetched.
+  try{ await loadAll(); LAST_SYNC=Date.now(); }catch(e){ console.error('load:',e); }
   try{ await loadPTasksRemote(); }catch(e){}
   // diagnostic line in sidebar footer
   try{ const d=$('#poDiag'); if(d){ d.textContent = PO_ACCESS ? ('Budget: '+PAPEL) : ('Budget off — '+(window.__poErr||'no PO role')); d.style.color = PO_ACCESS ? '#7d8493' : '#ef7f88'; } }catch(e){}
@@ -972,37 +977,109 @@ async function loadPapel(){
 /* ============================================================
    DATA LOADING (leitura real do banco único, Budget-Control)
    ============================================================ */
+/* Every stored project passes through this on the way in: records written by
+   older versions carry Portuguese/legacy key names (atividades, subitens,
+   texto…) and some predate the status/pct fields entirely. etapa/status are
+   derived, never trusted from the row — which also means a refresh
+   recomputes "Late" against today's date, not against whenever this tab
+   happened to be opened. */
+function normProjeto(p){
+  p.tasks=(p.tasks||p.atividades||p.activities||p.checklist||[]).map(t=>({...t, n:t.n||t.nome||t.titulo||t.title||'', done:!!t.done, fim:t.fim||t.due||'', status:t.status||(t.done?'concluido':'no_prazo'), pct:t.pct!=null?t.pct:(t.done?100:0), obs:t.obs||t.nota||'', subs:t.subs||t.subitens||[]}));
+  p.logs=(p.logs||p.updates||[]).map(l=>({...l, txt:l.txt||l.texto||l.mensagem||l.msg||'', autor:l.autor||l.author||l.by||'', t:l.t||l.data||l.date||''}));
+  p.etapa=effectiveEtapa(p); p.status=autoStatus(p);
+  return p;
+}
+const Q_WORK=()=>[
+  SBPO.from('act_projects').select('id,data'),
+  SBPO.from('act_config').select('data').eq('id','app').maybeSingle()
+];
+const Q_BUDGET=()=>[
+  SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
+  SBPO.from('projetos').select('id,nome,agencia,orcamento_id,product_category,activity,projeto_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc'),
+  SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
+  SBPO.from('tetos').select('projeto_id,competencia,teto'),
+  SBPO.from('rateio_alocacao').select('projeto_id,competencia,valor,categoria'),
+  SBPO.from('notificacoes').select('id,mensagem,tipo,po_id,projeto_id,lida,criada_em').order('criada_em',{ascending:false}).limit(200),
+  SBPO.rpc('listar_pessoas'),
+  SBPO.from('fee_rateio').select('agencia,tipo,categoria,percentual,cc,account,descricao')
+];
+/* A table that failed keeps whatever it had instead of blanking: a refresh
+   that half-fails should degrade to "one panel is stale", never to
+   "everything is empty". */
+function tookOr(r,prev){ return (!r||r.error)?prev:(r.data||[]); }
 async function loadAll(){
-  // painel de projetos (Work module — tabelas act_*)
-  try{
-    const [pr,cf]=await Promise.all([
-      SBPO.from('act_projects').select('id,data'),
-      SBPO.from('act_config').select('data').eq('id','app').maybeSingle()
-    ]);
-    DATA.projetos=(pr.data||[]).map(r=>r.data).filter(Boolean);
-    DATA.projetos.forEach(p=>{ p.tasks=(p.tasks||p.atividades||p.activities||p.checklist||[]).map(t=>({...t, n:t.n||t.nome||t.titulo||t.title||'', done:!!t.done, fim:t.fim||t.due||'', status:t.status||(t.done?'concluido':'no_prazo'), pct:t.pct!=null?t.pct:(t.done?100:0), obs:t.obs||t.nota||'', subs:t.subs||t.subitens||[]})); p.logs=(p.logs||p.updates||[]).map(l=>({...l, txt:l.txt||l.texto||l.mensagem||l.msg||'', autor:l.autor||l.author||l.by||'', t:l.t||l.data||l.date||''})); p.etapa=effectiveEtapa(p);p.status=autoStatus(p);});
-    const s=(cf&&cf.data&&cf.data.data)?cf.data.data:{};
+  const wantPO=!!PO_ACCESS;
+  // ONE parallel batch for the whole app. Work and Budget used to be two
+  // sequential waves (await the act_* tables, then await the eight PO ones),
+  // so every full load cost two round-trips back to back. Each query also
+  // catches on its own, so a single broken table can't reject the batch and
+  // strand the other nine.
+  const qs=Q_WORK().concat(wantPO?Q_BUDGET():[]);
+  const r=await Promise.all(qs.map(q=>Promise.resolve(q).then(x=>x,e=>({data:null,error:e}))));
+  const [pr,cf]=r;
+  if(pr&&pr.error) console.error('projetos painel:',pr.error);
+  else DATA.projetos=(pr.data||[]).map(x=>x.data).filter(Boolean).map(normProjeto);
+  if(cf&&!cf.error){
+    const s=(cf.data&&cf.data.data)?cf.data.data:{};
     TEAM=(s.team||[]).map(p=>typeof p==='string'?{nome:p,empresa:''}:p);
     STAGE_DESCS=Object.assign({},STAGE_DESCS_DEFAULT,s.stageDescs||{});
-  }catch(e){console.error('projetos painel:',e);}
-  if(!PO_ACCESS)return;
-  // PO / orçamento
-  try{
-    const [orc,prj,pos,tet,rat,nt,pes,fee]=await Promise.all([
-      SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
-      SBPO.from('projetos').select('id,nome,agencia,orcamento_id,product_category,activity,projeto_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc'),
-      SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
-      SBPO.from('tetos').select('projeto_id,competencia,teto'),
-      SBPO.from('rateio_alocacao').select('projeto_id,competencia,valor,categoria'),
-      SBPO.from('notificacoes').select('id,mensagem,tipo,po_id,projeto_id,lida,criada_em').order('criada_em',{ascending:false}).limit(200),
-      SBPO.rpc('listar_pessoas'),
-      SBPO.from('fee_rateio').select('agencia,tipo,categoria,percentual,cc,account,descricao')
-    ]);
-    DATA.orcamentos=orc.data||[]; DATA.poProjetos=(prj.data||[]).filter(p=>p.aprovacao_status!=='REJEITADO'); DATA.pos=pos.data||[];
-    DATA.tetos=tet.data||[]; DATA.rateio=rat.data||[]; DATA.notif=nt.data||[];
-    DATA.pessoas=pes.data||[]; DATA.fee=fee.data||[];
-  }catch(e){console.error('PO load:',e);}
+  }
+  if(!wantPO)return;
+  const [orc,prj,pos,tet,rat,nt,pes,fee]=r.slice(2);
+  DATA.orcamentos=tookOr(orc,DATA.orcamentos);
+  DATA.poProjetos=(prj&&prj.error)?DATA.poProjetos:((prj.data||[]).filter(p=>p.aprovacao_status!=='REJEITADO'));
+  DATA.pos=tookOr(pos,DATA.pos);
+  DATA.tetos=tookOr(tet,DATA.tetos);
+  DATA.rateio=tookOr(rat,DATA.rateio);
+  DATA.notif=tookOr(nt,DATA.notif);
+  DATA.pessoas=tookOr(pes,DATA.pessoas);
+  DATA.fee=tookOr(fee,DATA.fee);
 }
+
+/* ============================================================
+   LIVE REFRESH
+   ============================================================
+   DATA used to be fetched exactly once, at sign-in, and from then on only
+   patched by whatever this tab itself wrote. A tab left open for a few hours
+   was therefore showing a frozen snapshot: activities other people had
+   already ticked off still counted as pending, so their projects kept
+   rendering as "Late" until someone hit Reload — items that "looked late but
+   weren't". Now every navigation, every screen re-render and every return to
+   the tab refetches the whole app in the single parallel batch above. */
+let SYNCING=false, LAST_SYNC=0, SYNC_SUPPRESS=false, SYNC_DEFERRED=false;
+const SYNC_GAP=12000; // ms — implicit refreshes coalesce; nav clicks and tab-focus force through
+function modalOpen(){ const m=document.getElementById('modalMount'); return !!(m&&m.firstElementChild); }
+function syncBadge(on){
+  const b=document.getElementById('btnSync'); if(!b)return;
+  b.classList.toggle('syncing',!!on);
+  b.title=on?'Updating…':'Reload page';
+}
+function syncRerender(){
+  // SYNC_SUPPRESS stops the re-render's own go() from asking for yet another
+  // refresh, which would loop forever.
+  SYNC_SUPPRESS=true;
+  try{ buildNav(); go(SCREEN); } finally{ SYNC_SUPPRESS=false; }
+}
+async function refreshAll(opts){
+  const force=!!(opts&&opts.force);
+  if(DEMO_MODE||!booted||SYNCING)return;
+  if(!force&&Date.now()-LAST_SYNC<SYNC_GAP)return;
+  SYNCING=true; syncBadge(true);
+  try{ await loadAll(); LAST_SYNC=Date.now(); }
+  catch(e){ console.warn('refresh:',e); }
+  finally{ SYNCING=false; syncBadge(false); }
+  // Data is in either way; only the repaint waits. Re-rendering underneath an
+  // open modal would rebuild the screen behind it — and on 'reqpo' would even
+  // re-fire openReqPO() over a half-filled form — so defer to closeModal().
+  if(modalOpen()){ SYNC_DEFERRED=true; return; }
+  syncRerender();
+}
+/* Sidebar navigation forces past the throttle: clicking into a screen is
+   exactly when you expect to be looking at current data. The screen paints
+   from cache first so navigation stays instant, then repaints when the batch
+   lands. */
+function navGo(id){ go(id); refreshAll({force:true}); }
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) refreshAll({force:true}); });
 
 /* ============================================================
    NAV + ROUTING — espelha o protótipo aprovado (menu por papel)
@@ -1052,7 +1129,7 @@ function buildNav(){
 }
 function navBtn(it,col){
   const badge=it.badge?`<span class="badge">${it.badge>99?'99+':it.badge}</span>`:'';
-  return `<button class="nav-btn${SCREEN===it.id?' on':''}" onclick="go('${it.id}')"><span class="dot2" style="background:${col}"></span>${esc(it.label)}${badge}</button>`;
+  return `<button class="nav-btn${SCREEN===it.id?' on':''}" onclick="navGo('${it.id}')"><span class="dot2" style="background:${col}"></span>${esc(it.label)}${badge}</button>`;
 }
 const SCREEN_META={
   dash:{t:'Dashboard',s:'Work · Executive overview',mod:'work'},
@@ -1148,6 +1225,9 @@ function go(screen){
   else if(screen==='people') v.innerHTML=renderPeople();
   else if(screen==='reqpo'){ v.innerHTML=renderPOs(); openReqPO(); }
   syncStickyOffset();
+  // Any button that lands on a screen also pulls fresh data (throttled, so a
+  // burst of re-renders after a save costs one batch, not ten).
+  if(!SYNC_SUPPRESS) refreshAll();
 }
 /* #view has no height cap of its own (it grows to fit content) — the
    PAGE/body is what actually scrolls, with .top staying pinned via its own
@@ -1284,7 +1364,24 @@ function renderProjetos(){
       </div>`;
     }).join('')}</div>`;
 }
-function openProj(id){ const p=DATA.projetos.find(x=>x.id===id); if(p) openProjModal(JSON.parse(JSON.stringify(p)), false); }
+/* Opens the detail against a freshly-read row, not the cached one — clicking
+   into an item is the moment its real status matters most, and one indexed
+   row is a cheap read. Falls back to cache if the read fails, so a flaky
+   connection still opens the modal. */
+async function openProj(id){
+  let p=DATA.projetos.find(x=>x.id===id); if(!p)return;
+  if(!DEMO_MODE){
+    try{
+      const {data,error}=await SBPO.from('act_projects').select('data').eq('id',id).maybeSingle();
+      if(!error&&data&&data.data){
+        p=normProjeto(data.data);
+        const i=DATA.projetos.findIndex(x=>x.id===id);
+        if(i>=0)DATA.projetos[i]=p;
+      }
+    }catch(e){}
+  }
+  openProjModal(JSON.parse(JSON.stringify(p)), false);
+}
 /* Duplicate: opens a prefilled "new project" form (same type/categories/brand/
    activity names) rather than silently creating a copy — nothing is saved
    until the user reviews it and hits Create, same as any other new project.
@@ -2601,7 +2698,11 @@ async function rejeitarFatPO(){
    ESTÁGIO 2 — CRIAR/EDITAR PROJETO (salva no painel)
    ============================================================ */
 let EDIT=null;
-function closeModal(){ $('#modalMount').innerHTML=''; EDIT=null; PODETAIL=null; PM_OPEN=false; }
+function closeModal(){
+  $('#modalMount').innerHTML=''; EDIT=null; PODETAIL=null; PM_OPEN=false;
+  // A refresh that landed while this modal was open held its repaint back.
+  if(SYNC_DEFERRED){ SYNC_DEFERRED=false; syncRerender(); }
+}
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&$('#modalMount').firstElementChild) closeModal(); });
 function tasksKey(){ return 'po_ptasks_'+((currentUser&&currentUser.email)||'anon'); }
 /* Personal tasks live in Supabase (painel · tarefas_pessoais, RLS per email).
