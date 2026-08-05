@@ -518,6 +518,15 @@ function canEdit(p){return fullAccess()||!p||!p.owner||p.owner===(currentUser&&c
    is open to every profile, regardless of role or involvement in the
    project — only the main project fields stay gated behind canEdit(). */
 function canTagPeople(p){return true;}
+/* Who can BE tagged: everyone on the roster except PO-only agency logins.
+   That sub-level (agencia_nivel='po') has no Work module at all — its whole
+   nav is "POs & Approvals" — so tagging one would email them about a project
+   screen they cannot open. listar_pessoas() already returns agencia_nivel,
+   so this needs no backend change. Existing tags are left alone: the rule
+   gates adding, never displaying or removing. */
+function isPoOnlyPessoa(pe){ return !!(pe&&pe.papel==='agencia'&&pe.agencia_nivel==='po'); }
+function taggablePessoas(){ return (DATA.pessoas||[]).filter(pe=>pe.email&&!isPoOnlyPessoa(pe)); }
+function pessoaByEmail(email){ return (DATA.pessoas||[]).find(x=>x.email===email); }
 function isTagged(p){
   const me=((currentUser&&currentUser.email)||'').toLowerCase();
   return !!(me&&p&&(p.envolvidos||[]).some(x=>(x.email||'').toLowerCase()===me));
@@ -791,13 +800,16 @@ function seedDemoData(){
     tasks:typeOf(p.tipo).tasks.map((n,ti)=>({id:'demo-task-'+i+'-'+ti,n,done:ti<(stages.indexOf(p.etapa)+1)*1.4,fim:p.prazo,status:'no_prazo',pct:0,obs:'',resp:'',subs:[]})),
     logs:[],envolvidos:[],categorias:[],etapa:p.etapa,etapa_override:p.etapa,status:p.status}));
 
+  // agencia_nivel mirrors what listar_pessoas() returns for real — without it
+  // the demo can't show the PO-only carve-outs (no Work nav, not taggable).
   const pessoas=[
-    {user_id:'demo-u-admin',nome:'Ana',sobrenome:'Ramos',email:'ana.ramos@demo.tcl',papel:'admin',agencia:''},
-    {user_id:'demo-u-mkt',nome:'Bruno',sobrenome:'Silva',email:'bruno.silva@demo.tcl',papel:'marketing',agencia:''},
-    {user_id:'demo-u-fin',nome:'Carla',sobrenome:'Dias',email:'carla.dias@demo.tcl',papel:'financeiro',agencia:''},
-    {user_id:'demo-u-ag1',nome:'Diego',sobrenome:'Souza',email:'diego.souza@wavemaker.demo',papel:'agencia',agencia:'Wavemaker'},
-    {user_id:'demo-u-ag2',nome:'Eva',sobrenome:'Martins',email:'eva.martins@mindshare.demo',papel:'agencia',agencia:'Mindshare'},
-    {user_id:'demo-u-pend',nome:'Fábio',sobrenome:'Rocha',email:'fabio.rocha@demo.tcl',papel:'pendente',agencia:''}
+    {user_id:'demo-u-admin',nome:'Ana',sobrenome:'Ramos',email:'ana.ramos@demo.tcl',papel:'admin',agencia:'',agencia_nivel:'completo'},
+    {user_id:'demo-u-mkt',nome:'Bruno',sobrenome:'Silva',email:'bruno.silva@demo.tcl',papel:'marketing',agencia:'',agencia_nivel:'completo'},
+    {user_id:'demo-u-fin',nome:'Carla',sobrenome:'Dias',email:'carla.dias@demo.tcl',papel:'financeiro',agencia:'',agencia_nivel:'completo'},
+    {user_id:'demo-u-ag1',nome:'Diego',sobrenome:'Souza',email:'diego.souza@wavemaker.demo',papel:'agencia',agencia:'Wavemaker',agencia_nivel:'completo'},
+    {user_id:'demo-u-ag2',nome:'Eva',sobrenome:'Martins',email:'eva.martins@mindshare.demo',papel:'agencia',agencia:'Mindshare',agencia_nivel:'completo'},
+    {user_id:'demo-u-agpo',nome:'Gustavo',sobrenome:'Lima',email:'gustavo.lima@wavemaker.demo',papel:'agencia',agencia:'Wavemaker',agencia_nivel:'po'},
+    {user_id:'demo-u-pend',nome:'Fábio',sobrenome:'Rocha',email:'fabio.rocha@demo.tcl',papel:'pendente',agencia:'',agencia_nivel:'completo'}
   ];
 
   const orcamentos=[
@@ -855,7 +867,9 @@ function demoSetRole(v){
   else { PAPEL=v; MINHA_AGENCIA=''; isManager=(v==='admin'); }
   PO_ACCESS=!!PAPEL&&PAPEL!=='pendente';
   VIEW_AS=null;
-  const person=(DATA.pessoas||[]).find(pe=>pe.papel===PAPEL&&(PAPEL!=='agencia'||pe.agencia===MINHA_AGENCIA))||{email:'demo@example.com'};
+  // Match the access sub-level too, so "Agency — PO only" lands on the
+  // PO-only persona instead of the full-access one at the same agency.
+  const person=(DATA.pessoas||[]).find(pe=>pe.papel===PAPEL&&(PAPEL!=='agencia'||(pe.agencia===MINHA_AGENCIA&&(pe.agencia_nivel||'completo')===AGENCIA_NIVEL)))||{email:'demo@example.com'};
   currentUser={email:person.email};
   $('#acctEmail').textContent=person.email;
   $('#acctAv').textContent=(person.email||'?')[0].toUpperCase();
@@ -3059,8 +3073,14 @@ function atvDrop(ev,tid){
 /* Sub-items count toward their parent activity's % — auto-computed from
    how many sub-items are done, replacing the activity's manual % input
    whenever the activity has sub-items registered. */
+/* The activity/sub-item "— tag someone —" picker draws from the same roster
+   and carries the same exclusion: assigning work to a login with no Work
+   screens is a dead end. A name already stored on an activity is kept in the
+   list so an existing assignment doesn't silently blank out on re-render. */
 function subPersonOpts(sel){
-  const names=[...new Set((DATA.pessoas||[]).map(pe=>[pe.nome,pe.sobrenome].filter(Boolean).join(' ')).filter(Boolean))].sort();
+  const names=[...new Set(taggablePessoas().map(pe=>[pe.nome,pe.sobrenome].filter(Boolean).join(' ')).filter(Boolean))];
+  if(sel&&!names.includes(sel)) names.push(sel);
+  names.sort();
   return '<option value="">— tag someone —</option>'+names.map(n=>`<option ${n===sel?'selected':''}>${esc(n)}</option>`).join('');
 }
 function pmRecalcPctFromSubs(t){
@@ -3085,7 +3105,7 @@ function pmDelSub(tid,sid){ const t=atv(tid); if(t){ t.subs=(t.subs||[]).filter(
    can't also accidentally match a separate "Ana Costa". */
 function pmMentionScan(txt){
   const esc2=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-  const people=(DATA.pessoas||[]).filter(pe=>pe.email);
+  const people=taggablePessoas();
   const out=[], seen=new Set(); let work=txt;
   people.forEach(pe=>{
     const nome=[pe.nome,pe.sobrenome].filter(Boolean).join(' ').trim();
@@ -3107,8 +3127,13 @@ function pmTogglePessoa(email,nome){
   if(!EDIT)return;
   EDIT.envolvidos=EDIT.envolvidos||[];
   const i=EDIT.envolvidos.findIndex(x=>x.email===email);
+  // Untagging always works — a PO-only person tagged before this rule existed
+  // (or before their access was narrowed) has to stay removable.
   if(i>=0) EDIT.envolvidos.splice(i,1);
-  else EDIT.envolvidos.push({email,nome});
+  else{
+    if(isPoOnlyPessoa(pessoaByEmail(email))){ toast('PO-only agency logins can\'t be tagged — they have no project screens.'); return; }
+    EDIT.envolvidos.push({email,nome});
+  }
   renderProjModal();
 }
 function pmTaggedChipsHTML(){
@@ -3124,6 +3149,7 @@ function pmTaggedChipsHTML(){
 function pmTagFromMention(email,nome){
   if(!EDIT)return;
   EDIT.envolvidos=EDIT.envolvidos||[];
+  if(isPoOnlyPessoa(pessoaByEmail(email)))return;
   if(EDIT.envolvidos.some(x=>x.email===email))return;
   EDIT.envolvidos.push({email,nome});
   const box=document.getElementById('pmTaggedChips');
@@ -3133,8 +3159,8 @@ function pmPeopleFilter(q){
   const dd=document.getElementById('pmPeopleDD'); if(!dd||!EDIT)return;
   const ql=(q||'').trim().toLowerCase();
   const tagged=new Set((EDIT.envolvidos||[]).map(x=>x.email));
-  const matches=(DATA.pessoas||[]).filter(pe=>{
-    if(!pe.email||tagged.has(pe.email))return false;
+  const matches=taggablePessoas().filter(pe=>{
+    if(tagged.has(pe.email))return false;
     const nome=[pe.nome,pe.sobrenome].filter(Boolean).join(' ')||pe.email;
     return !ql||(nome+' '+(pe.agencia||'')).toLowerCase().includes(ql);
   }).slice(0,8);
@@ -3173,8 +3199,7 @@ function pmMentionInput(ta){
   const q=pmMentionQuery(ta);
   if(q===null){ dd.style.display='none'; dd.innerHTML=''; return; }
   const ql=q.toLowerCase();
-  const matches=(DATA.pessoas||[]).filter(pe=>{
-    if(!pe.email)return false;
+  const matches=taggablePessoas().filter(pe=>{
     const nome=[pe.nome,pe.sobrenome].filter(Boolean).join(' ');
     return !ql||nome.toLowerCase().includes(ql);
   }).slice(0,8);
@@ -3294,7 +3319,7 @@ function renderProjModal(){
         <div style="padding:8px 13px;border-top:1px solid #edeff4;background:var(--paper-2);font-size:10.5px;color:var(--txt-3)">Open status — everyone involved can post status updates and add sub-items after creation.</div>
       </div>
       <div class="field"><label>Owner <span style="font-weight:600;color:var(--txt-3)">(you — creator)</span></label><div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:var(--paper)"><span class="avatar" style="width:22px;height:22px;background:${avColor(EDIT.owner||EDIT.resp)};font-size:9.5px">${initials(EDIT.owner||EDIT.resp||'?')}</span><b style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(EDIT.owner||EDIT.resp||'—')}</b></div></div>
-      <div class="field full" style="margin-top:14px"><label>People tagged on this project <span style="font-weight:600;color:var(--txt-3)">(anyone can tag people here)</span></label>
+      <div class="field full" style="margin-top:14px"><label>People tagged on this project <span style="font-weight:600;color:var(--txt-3)">(anyone can tag — PO-only agency logins excluded)</span></label>
         <div id="pmTaggedChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:${canTag?'8px':'0'}">${pmTaggedChipsHTML()}</div>
         ${canTag?`<div style="position:relative">
           <input id="pmPeopleQ" oninput="pmPeopleFilter(this.value)" onfocus="pmPeopleFilter(this.value)" onblur="pmPeopleBlur()" placeholder="+ Search a person to tag… (type a name)" autocomplete="off" style="width:100%;padding:9px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13px">
