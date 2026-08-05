@@ -1,60 +1,48 @@
 # Digital MKT Central — Unified Platform
 
-React + TypeScript + Supabase SPA para gerenciamento unificado de projetos e orçamentos.
+Plataforma unificada de gestão de projetos (Work) e orçamento/POs (Budget), servida em
+**https://central.po-control.com.br**.
 
-## Setup
+**O app é o `index.html` da raiz** — um único arquivo, sem build step. Supabase, Chart.js e
+xlsx entram por CDN; toda a UI é renderizada por template literals em JS. Não há bundler no
+caminho de produção.
 
-1. **Clone o repo**
-   ```bash
-   git clone https://github.com/Lil-bucket/digitalmktcentral.git
-   cd digitalmktcentral
-   ```
+## Rodar localmente
 
-2. **Instale dependências**
-   ```bash
-   npm install
-   ```
+```bash
+npm run dev
+```
 
-3. **Configure as variáveis de ambiente**
-   ```bash
-   cp .env.example .env.local
-   # Edite .env.local com seu VITE_SUPABASE_ANON_KEY
-   ```
-   
-   Você encontra a chave em: Supabase Dashboard → Settings → API → Project URL & Keys → `anon` key.
+Sobe um servidor estático em http://localhost:8000 (é só `python3 -m http.server`, sem
+dependências). Acrescente `?demo=1` na URL para entrar no modo demo — dados falsos, nada é
+gravado, e o seletor no canto inferior direito troca de papel (admin / marketing / finance /
+agência) para testar permissões.
 
-4. **Rode localmente**
-   ```bash
-   npm run dev
-   ```
+## Deploy
 
-5. **Build para produção**
-   ```bash
-   npm run build
-   npm run preview
-   ```
+```bash
+npm run deploy
+```
 
-6. **Deploy no GitHub Pages**
-   ```bash
-   npm run deploy
-   ```
-   (push automático para `gh-pages` branch)
+O GitHub Pages serve o branch **`main`, path `/`** (com `CNAME` → `central.po-control.com.br`),
+então publicar é literalmente commitar e dar push no `main` — sem build, sem branch
+intermediário. O build costuma levar ~1 min; dá para acompanhar com
+`gh api repos/Lil-bucket/digitalmktcentral/pages/builds/latest`.
 
-## Estrutura
+> O branch `gh-pages` é resquício de um fluxo antigo (parado desde 07/2026) e **não é servido
+> por nada** — ignore-o.
 
-- `src/lib/supabase.ts` — Cliente Supabase + RPCs
-- `src/types.ts` — TypeScript interfaces
-- `src/components/Auth.tsx` — Login/Signup
-- `src/components/Dashboard.tsx` — Layout principal
-- `src/components/Sidebar.tsx` — Menu de módulos
-- `src/components/modules/` — Work & Budget
+## Backend
 
-## Próximos passos
+Dois projetos Supabase, configurados no topo do `index.html`. As policies de RLS vivem no
+Supabase, não no repo — o frontend só reflete as permissões, não as define.
 
-1. Integrar os modais (projetos, campanhas, POs) da UI prototype
-2. Implementar RLS policies (schema.sql §5)
-3. Conectar todas as RPCs (papel_atual, classificar, etc)
-4. Testar cada fluxo por papel (admin, marketing, financeiro, agencia)
+## Legado
+
+`src/`, `vite.config.ts`, `tsconfig*.json` e as dependências React/Vite do `package.json` são
+de um scaffold SPA que nunca chegou a ser usado: não há `node_modules`, o `package-lock.json`
+é um stub sem pacotes resolvidos e o `base` do Vite aponta para um path que não é o do domínio
+atual. Nada disso participa do app em produção.
 
 ## Suporte
 

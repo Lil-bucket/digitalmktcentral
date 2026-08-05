@@ -5,10 +5,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview",
-    "deploy": "npm run build && gh-pages -d dist"
+    "dev": "python3 -m http.server 8000",
+    "deploy": "git push origin main"
   },
   "dependencies": {
     "react": "^18.2.0",
