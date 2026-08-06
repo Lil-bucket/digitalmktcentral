@@ -1806,7 +1806,7 @@ function campTimelineHTML(fl,q){
   const nowM=new Date().toISOString().slice(0,7);
   rows.sort((a,b)=>a.months[0].localeCompare(b.months[0])||b.teto-a.teto);
   const th='font-family:var(--mono);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3)';
-  const headCells=axis.map(mm=>`<div style="flex:1;min-width:0;padding:8px 2px;text-align:center;font-family:var(--mono);font-size:9.5px;font-weight:700;color:${mm===nowM?'#fff':'var(--txt-3)'};background:${mm===nowM?'var(--ink)':'transparent'};border-right:1px solid #edeff4;white-space:nowrap;overflow:hidden">${fmtMes(mm+'-01')}</div>`).join('');
+  const headCells=axis.map(mm=>`<div style="flex:1;min-width:0;padding:8px 2px;text-align:center;font-family:var(--mono);font-size:9.5px;font-weight:700;color:${mm===nowM?'#fff':(mm<nowM?'#a4aab5':'var(--txt-3)')};background:${mm===nowM?'var(--ink)':'transparent'};border-right:1px solid #edeff4;white-space:nowrap;overflow:hidden">${fmtMes(mm+'-01')}</div>`).join('');
   const trs=rows.map(r=>{
     const m=catMeta(String(r.p.product_category||'').trim()||'Uncategorized');
     const lc=campLifecycle(r.p);
@@ -1816,26 +1816,30 @@ function campTimelineHTML(fl,q){
       const used=campMonthUsed(r.p.id,mm);
       const rl=mm===first?'5px':'0', rr=mm===last?'5px':'0';
       // used>cfg also flags the no-cap-but-spent case (cfg 0, used > 0).
-      const isNow=mm===nowM, over=used>cfg+0.5;
-      const pastDone=mm<nowM&&cfg>0&&campMonthCons(r.p.id,mm)>=cfg-0.5;
+      const isNow=mm===nowM, past=mm<nowM, over=used>cfg+0.5;
+      const pastDone=past&&cfg>0&&campMonthCons(r.p.id,mm)>=cfg-0.5;
       // The bar is a track + a fill: the track is what was CONFIGURED for the
-      // month (shaded by size, so "darker = higher" still reads at a glance),
-      // the fill is what has been USED against it. Past months used to hide
-      // both numbers and fade to 32% once consumed — settled history wasn't
-      // meant to compete visually — but that also meant you couldn't see what
-      // a finished month had been given or spent without opening the drawer.
-      // Now the figures always show and the fill carries the "it's done" cue.
+      // month, the fill is what has been USED against it, so the fill always
+      // reads against its own track. Colour weight follows TIME, not size: a
+      // month that already closed is settled history and stays washed out,
+      // while the current month and everything still ahead carry the full
+      // colour — those are the ones there is still something to do about.
+      // (Size only modulates the saturation inside each of the two bands.)
+      // The figures print in every month either way; only the ink changes.
       const trackBg=cfg?m.c:(inSpan?'#e9ebf1':'transparent');
-      const trackOp=cfg?(0.18+0.28*cfg/maxVal):1;
+      const trackOp=cfg?(past?0.08+0.10*cfg/maxVal:0.60+0.30*cfg/maxVal):(past?0.4:1);
       const fillPct=cfg?Math.min(100,used/cfg*100):(used?100:0);
+      // Over-cap keeps its red in closed months too — an overspend is still
+      // worth spotting after the month ends, so it only steps down a notch.
+      const fillOp=past?(over?0.75:0.26):1;
       const tip=`${fmtMes(mm+'-01')} · configured ${cfg?BRL(cfg):'—'} · used ${used?BRL(used):'—'}${cfg?' · balance '+BRL(cfg-used):''}${over?' · over cap':''}${pastDone?' · completed':''}`;
       return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-right:1px solid #f2f3f7;padding:3px 1px;background:${isNow?'rgba(18,115,207,.09)':'transparent'}" title="${esc(tip)}">
         <span style="display:block;position:relative;width:100%;height:14px;border-radius:${rl} ${rr} ${rr} ${rl};overflow:hidden">
           <span style="position:absolute;inset:0;background:${trackBg};opacity:${trackOp.toFixed(2)}"></span>
-          ${(cfg||used)?`<span style="position:absolute;left:0;top:0;bottom:0;width:${fillPct.toFixed(1)}%;background:${over?'var(--po)':m.c}"></span>`:''}
+          ${(cfg||used)?`<span style="position:absolute;left:0;top:0;bottom:0;width:${fillPct.toFixed(1)}%;background:${over?'var(--po)':m.c};opacity:${fillOp}"></span>`:''}
         </span>
-        ${(cfg||used)?`<span class="mono" style="font-size:8px;font-weight:600;color:var(--txt-3);line-height:1.15;white-space:nowrap">${cfg?fmtCompactBRL(cfg):'—'}</span>
-        <span class="mono" style="font-size:8px;font-weight:800;color:${over?'var(--po)':'var(--txt-2)'};line-height:1.15;white-space:nowrap">${used?fmtCompactBRL(used):'—'}</span>`:''}
+        ${(cfg||used)?`<span class="mono" style="font-size:8px;font-weight:600;color:${past?'#9199a6':'var(--txt-3)'};line-height:1.15;white-space:nowrap">${cfg?fmtCompactBRL(cfg):'—'}</span>
+        <span class="mono" style="font-size:8px;font-weight:800;color:${over?'var(--po)':(past?'var(--txt-3)':'var(--txt-2)')};line-height:1.15;white-space:nowrap">${used?fmtCompactBRL(used):'—'}</span>`:''}
       </div>`;
     }).join('');
     const usedTot=r.months.reduce((s,mm)=>s+campMonthUsed(r.p.id,mm),0);
@@ -1853,8 +1857,8 @@ function campTimelineHTML(fl,q){
   const totCells=axis.map(mm=>{
     const tot=rows.reduce((s,r)=>s+(+r.mt[mm]||0),0);
     const totUsed=rows.reduce((s,r)=>s+campMonthUsed(r.p.id,mm),0);
-    const isNow=mm===nowM;
-    return `<div style="flex:1;min-width:0;padding:6px 2px;text-align:center;font-family:var(--mono);font-size:9.5px;background:${isNow?'rgba(18,115,207,.09)':'transparent'};border-right:1px solid #edeff4;white-space:nowrap;overflow:hidden" title="${esc(fmtMes(mm+'-01')+' · configured '+(tot?BRL(tot):'—')+' · used '+(totUsed?BRL(totUsed):'—'))}"><div style="font-weight:700;color:var(--txt-3);line-height:1.2">${tot?fmtCompactBRL(tot):'—'}</div><div style="font-weight:800;color:${totUsed>tot+0.5?'var(--po)':'var(--txt-2)'};line-height:1.2">${totUsed?fmtCompactBRL(totUsed):'—'}</div></div>`;
+    const isNow=mm===nowM, past=mm<nowM;
+    return `<div style="flex:1;min-width:0;padding:6px 2px;text-align:center;font-family:var(--mono);font-size:9.5px;background:${isNow?'rgba(18,115,207,.09)':'transparent'};border-right:1px solid #edeff4;white-space:nowrap;overflow:hidden" title="${esc(fmtMes(mm+'-01')+' · configured '+(tot?BRL(tot):'—')+' · used '+(totUsed?BRL(totUsed):'—'))}"><div style="font-weight:700;color:${past?'#9199a6':'var(--txt-3)'};line-height:1.2">${tot?fmtCompactBRL(tot):'—'}</div><div style="font-weight:800;color:${totUsed>tot+0.5?'var(--po)':(past?'var(--txt-3)':'var(--txt-2)')};line-height:1.2">${totUsed?fmtCompactBRL(totUsed):'—'}</div></div>`;
   }).join('');
   const totalsRow=`<div style="display:flex;border-top:2px solid var(--line);background:var(--paper-2)">
     <div style="width:230px;flex-shrink:0;padding:8px 14px;${th};border-right:1px solid var(--line);display:flex;align-items:center">Total by month</div>
@@ -1872,6 +1876,7 @@ function campTimelineHTML(fl,q){
     <div style="padding:9px 14px;border-top:1px solid var(--line);font-size:11px;color:var(--txt-3);display:flex;gap:16px;flex-wrap:wrap;align-items:center">
       <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:16px;height:9px;border-radius:2px;display:inline-block;position:relative;overflow:hidden"><span style="position:absolute;inset:0;background:var(--blue);opacity:.3"></span><span style="position:absolute;left:0;top:0;bottom:0;width:55%;background:var(--blue)"></span></span>track = configured, fill = used</span>
       <span>Every month keeps both figures — top = configured, bottom = used</span>
+      <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:16px;height:9px;border-radius:2px;display:inline-block;background:var(--blue);opacity:.28"></span>closed months (washed out)</span>
       <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:12px;height:8px;background:var(--ink);border-radius:2px;display:inline-block"></span>current month</span>
       <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:12px;height:8px;background:#e9ebf1;border-radius:2px;display:inline-block"></span>in period, no allocation</span>
       <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:12px;height:8px;background:var(--po);border-radius:2px;display:inline-block"></span>used over the configured cap</span>
