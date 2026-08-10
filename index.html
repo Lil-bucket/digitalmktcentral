@@ -303,6 +303,9 @@
      it becomes clickable, so the row still reads Cons. first. */
   .cc-tbl td.cc-drill-b{font-weight:400;color:var(--txt-3)}
   .cc-tbl td.cc-drill-b:hover{color:var(--accent-deep)}
+  /* A campaign line inside the Budget breakdown — opens that campaign. */
+  .cc-camp-row{cursor:pointer;transition:background var(--fast) var(--ease)}
+  .cc-camp-row:hover{background:var(--accent-soft)}
   .cc-tbl th.sortable{cursor:pointer;user-select:none}
   .cc-tbl th.sortable:hover{color:var(--txt-2)}
   .cc-tbl th .sort-i{display:inline-flex;vertical-align:-2px;margin-left:3px;opacity:.55}
@@ -1982,7 +1985,7 @@ function openCampDetail(pid){
       ${months.length>1?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">${chips}</div>`:''}
     </div>
     <div class="modal-b">${summary}<div style="font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin:2px 0 10px">Month by month</div>${blocks}</div>
-    <div class="modal-f"><span></span><div style="display:flex;gap:10px">${demoWritable(PO_ACCESS)?`<button class="btn-acc" style="background:var(--po)" onclick="openReqPO('${esc(p.id)}')">+ Request PO</button>`:''}${((['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly())?`<button class="btn-ghost" onclick="openCampValues('${esc(p.id)}')">Edit monthly values</button><button class="btn-ghost" onclick="openCampEdit('${esc(p.id)}')">Edit category</button>`:''}<button class="btn-ghost" onclick="closeModal()">Close</button></div></div>
+    <div class="modal-f">${CC_DRILL_BACK?`<button class="btn-ghost" onclick="ccDrillBack()">← Back to breakdown</button>`:'<span></span>'}<div style="display:flex;gap:10px">${demoWritable(PO_ACCESS)?`<button class="btn-acc" style="background:var(--po)" onclick="openReqPO('${esc(p.id)}')">+ Request PO</button>`:''}${((['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly())?`<button class="btn-ghost" onclick="openCampValues('${esc(p.id)}')">Edit monthly values</button><button class="btn-ghost" onclick="openCampEdit('${esc(p.id)}')">Edit category</button>`:''}<button class="btn-ghost" onclick="closeModal()">Close</button></div></div>
   </div></div>`;
 }
 
@@ -2768,7 +2771,7 @@ async function rejeitarFatPO(){
    ============================================================ */
 let EDIT=null;
 function closeModal(){
-  $('#modalMount').innerHTML=''; EDIT=null; PODETAIL=null; PM_OPEN=false;
+  $('#modalMount').innerHTML=''; EDIT=null; PODETAIL=null; PM_OPEN=false; CC_DRILL_BACK=null;
   // A refresh that landed while this modal was open held its repaint back.
   if(SYNC_DEFERRED){ SYNC_DEFERRED=false; syncRerender(); }
 }
@@ -4377,6 +4380,20 @@ function ccDrill(rowIdx,monIdx,kind){
   if(!a||!m)return;
   return (kind==='budget'?ccDrillBudget:ccDrillCons)(a,m);
 }
+/* Where a drill-down was opened from, so the campaign detail it hands off to
+   can offer a way back. Held as the row's key rather than its index, and
+   replayed through a fresh render, because the campaign screen can change the
+   numbers underneath (reallocating a balance) and rows can move. Cleared by
+   closeModal(), so the back button only exists inside an open chain. */
+let CC_DRILL_BACK=null;
+function ccDrillBack(){
+  const b=CC_DRILL_BACK; if(!b)return;
+  go(SCREEN); // repaint the table first — CC_VIEW is what the indices address
+  const ri=(CC_VIEW.accRows||[]).findIndex(a=>a.key===b.key);
+  const mi=(CC_VIEW.monthList||[]).indexOf(b.m);
+  if(ri<0||mi<0){ closeModal(); return; }
+  ccDrill(ri,mi,b.kind);
+}
 function ccDrillHead(a,m,title,tint){
   return `<div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:${tint};flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>${title} · ${esc(fmtMes(m+'-01'))}</h3><div style="font-size:12px;color:var(--txt-3)">${a.cat?esc(a.cat)+' · ':''}<span class="mono">${esc(a.cc||'—')}</span> · <span class="mono">${esc(a.acc||'—')}</span>${a.desc?' · '+esc(a.desc):''}</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>`;
 }
@@ -4385,6 +4402,7 @@ function ccDrillCons(a,m){
   if(!det.length)return;
   const total=det.reduce((s,d)=>s+d.share,0);
   const split=det.some(d=>d.ratio<0.9999);
+  CC_DRILL_BACK={key:a.key,m,kind:'cons'};
   const cols=`1.5fr 1fr .8fr ${split?'.7fr ':''}.8fr`;
   const head=`<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:8px 12px;background:var(--paper-2);border-radius:9px 9px 0 0;font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em"><span>PO</span><span>Campaign</span><span>Status</span>${split?'<span style="text-align:right">Split</span>':''}<span style="text-align:right">Value</span></div>`;
   const rows=det.map(d=>{
@@ -4418,11 +4436,12 @@ function ccDrillBudget(a,m){
   const total=det.reduce((s,d)=>s+d.valor,0);
   const consBy={};
   (a.det[m]||[]).forEach(d=>{ consBy[d.proj.id]=(consBy[d.proj.id]||0)+d.share; });
+  CC_DRILL_BACK={key:a.key,m,kind:'budget'};
   const cols='1.6fr .5fr .9fr .9fr .9fr';
   const head=`<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:8px 12px;background:var(--paper-2);border-radius:9px 9px 0 0;font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em"><span>Campaign</span><span>Cat.</span><span style="text-align:right">Budget</span><span style="text-align:right">Cons.</span><span style="text-align:right">Balance</span></div>`;
   const rows=det.map(d=>{
     const c=consBy[d.proj.id]||0, bal=d.valor-c;
-    return `<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:9px 12px;border-bottom:1px solid #edeff4;font-size:12px;align-items:center">
+    return `<div class="cc-camp-row" onclick="openCampDetail('${esc(d.proj.id)}')" title="Open campaign" style="display:grid;grid-template-columns:${cols};gap:10px;padding:9px 12px;border-bottom:1px solid #edeff4;font-size:12px;align-items:center">
       <span style="min-width:0"><b style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.proj.nome||'—')}</b><span style="font-size:10.5px;color:var(--txt-3)">${esc(d.proj.agencia||'—')}${d.proj.rateio?' · rateio '+esc(d.proj.rateio_tipo||''):''}</span></span>
       <span style="font-size:11px;font-weight:700;color:var(--txt-2)">${esc(d.categoria||'—')}</span>
       <span class="mono" style="text-align:right;font-weight:700">${BRL(d.valor)}</span>
