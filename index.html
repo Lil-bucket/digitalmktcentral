@@ -269,21 +269,26 @@
   .cc-tbl .mband{background:#fafbfe}
   .cc-tbl thead .mband{background:#f4f6fb}
   .cc-tbl .msep{border-left:1px solid var(--line)}
-  .cc-tbl .s1,.cc-tbl .s2,.cc-tbl .s3{position:sticky;top:auto;z-index:2;background:#fff}
-  .cc-tbl .s1{left:0;min-width:92px;max-width:92px;overflow:hidden;text-overflow:ellipsis}
-  .cc-tbl .s2{left:92px;min-width:96px;max-width:96px;overflow:hidden;text-overflow:ellipsis}
-  .cc-tbl .s3{left:188px;min-width:170px;max-width:170px;overflow:hidden;text-overflow:ellipsis;box-shadow:inset -1px 0 0 var(--line-2)}
+  /* Frozen identity columns. The `left` offsets are the running sum of the
+     widths before them, so a width change here means changing the next
+     column's offset too — and CC_STICKY_W, which ccScrollTo() uses to park a
+     month clear of them. */
+  .cc-tbl .s0,.cc-tbl .s1,.cc-tbl .s2,.cc-tbl .s3{position:sticky;top:auto;z-index:2;background:#fff}
+  .cc-tbl .s0{left:0;min-width:62px;max-width:62px;overflow:hidden;text-overflow:ellipsis}
+  .cc-tbl .s1{left:62px;min-width:92px;max-width:92px;overflow:hidden;text-overflow:ellipsis}
+  .cc-tbl .s2{left:154px;min-width:96px;max-width:96px;overflow:hidden;text-overflow:ellipsis}
+  .cc-tbl .s3{left:250px;min-width:170px;max-width:170px;overflow:hidden;text-overflow:ellipsis;box-shadow:inset -1px 0 0 var(--line-2)}
   /* No vertical sticky header here: .cc-wrap needs overflow-x:auto for the
-     horizontal scroll + frozen s1/s2/s3 columns, and per the CSS overflow
+     horizontal scroll + frozen s0/s1/s2/s3 columns, and per the CSS overflow
      spec that FORCES overflow-y to 'auto' too (a lone non-visible axis pulls
      the other one off 'visible') — making .cc-wrap itself the sticky
      containing block for its cells, not the page. A row can't stick to a
      scroll position that never happens. Solving both at once needs a
      JS-synced dual-scrollbar split (separate header/body scroll areas),
      which is out of scope here — left as horizontal-only sticky. */
-  .cc-tbl thead .s1,.cc-tbl thead .s2,.cc-tbl thead .s3{background:var(--paper-2);z-index:5}
+  .cc-tbl thead .s0,.cc-tbl thead .s1,.cc-tbl thead .s2,.cc-tbl thead .s3{background:var(--paper-2);z-index:5}
   .cc-tbl tfoot td{background:var(--paper-2);border-top:1px solid var(--line);border-bottom:none;font-weight:700}
-  .cc-tbl tfoot .s1,.cc-tbl tfoot .s2,.cc-tbl tfoot .s3{background:var(--paper-2)}
+  .cc-tbl tfoot .s0,.cc-tbl tfoot .s1,.cc-tbl tfoot .s2,.cc-tbl tfoot .s3{background:var(--paper-2)}
   /* current-month highlight — background tint, not a side-stripe accent */
   .cc-tbl .cc-now{background:var(--accent-soft)}
   .cc-tbl thead .cc-now{background:#dde4fb}
@@ -294,6 +299,10 @@
      grid of buttons — it reads as "this number opens up", nothing louder. */
   .cc-tbl td.cc-drill{font-weight:600;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-decoration-color:#aeb5c4;text-underline-offset:3px}
   .cc-tbl td.cc-drill:hover{color:var(--accent-deep);text-decoration-color:var(--accent);background:var(--accent-soft)}
+  /* Budget is the quiet column of the triplet — it stays muted and light when
+     it becomes clickable, so the row still reads Cons. first. */
+  .cc-tbl td.cc-drill-b{font-weight:400;color:var(--txt-3)}
+  .cc-tbl td.cc-drill-b:hover{color:var(--accent-deep)}
   .cc-tbl th.sortable{cursor:pointer;user-select:none}
   .cc-tbl th.sortable:hover{color:var(--txt-2)}
   .cc-tbl th .sort-i{display:inline-flex;vertical-align:-2px;margin-left:3px;opacity:.55}
@@ -4122,11 +4131,11 @@ function sortLbl(state,col,label){
   const active=state.col===col;
   return `${esc(label)}<span style="font-size:8px;color:var(--accent);margin-left:3px;visibility:${active?'visible':'hidden'}">${active&&state.dir<0?'▼':'▲'}</span>`;
 }
+const CC_STICKY_W=62+92+96+170; // s0+s1+s2+s3 — must track the .cc-tbl widths
 function ccScrollTo(behavior){
   const wrap=document.querySelector('.cc-wrap'); if(!wrap)return;
   const cell=document.getElementById('cc-m-'+new Date().toISOString().slice(0,7)); if(!cell)return;
-  const stickyW=92+96+170; // s1+s2+s3 widths
-  wrap.scrollTo({left:Math.max(0,cell.offsetLeft-stickyW-14),behavior:behavior||'auto'});
+  wrap.scrollTo({left:Math.max(0,cell.offsetLeft-CC_STICKY_W-14),behavior:behavior||'auto'});
 }
 function ccAutoScroll(){
   ccScrollTo('auto');
@@ -4252,11 +4261,19 @@ function ccAggregate(opt){
   const accKey=(cc,acc,desc)=>`${cc||''}|${acc||''}|${desc||''}`;
   const accMap={};
   const slot=(key,cc,acc,desc,cat)=>{
-    const a=(accMap[key]=accMap[key]||{key,cc,acc,desc,months:{},cons:{},det:{},cats:new Set()});
+    const a=(accMap[key]=accMap[key]||{key,cc,acc,desc,months:{},cons:{},det:{},detB:{},cats:new Set()});
     if(cat) a.cats.add(cat);
     return a;
   };
   const addDet=(a,m,entry)=>{ (a.det[m]=a.det[m]||[]).push(entry); };
+  /* Budget side of the same idea: which campaigns make up the figure in the
+     Budget column. One line per campaign+category rather than per underlying
+     record, since a campaign can carry several monthly caps for one month. */
+  const addDetB=(a,m,proj,categoria,valor)=>{
+    const list=(a.detB[m]=a.detB[m]||[]);
+    const hit=list.find(e=>e.proj.id===proj.id&&e.categoria===categoria);
+    if(hit) hit.valor+=valor; else list.push({proj,categoria,valor});
+  };
   const keepCat=cat=>{
     const c=String(cat||'');
     if(CC_FILTER.scope==='nolabg'&&c===CC_LABG) return false;
@@ -4290,6 +4307,7 @@ function ccAggregate(opt){
           const a=slot(accKey(cc,acc,desc),cc,acc,desc,cat);
           a.months[m]=(a.months[m]||0)+cats[cat];
           a.cons[m]=(a.cons[m]||0)+consM*ratio;
+          addDetB(a,m,p,cat,cats[cat]);
           (posByMonth[m]||[]).forEach(po=>addDet(a,m,{po,proj:p,categoria:cat,ratio,share:(+po.valor||0)*ratio}));
         });
       });
@@ -4301,6 +4319,7 @@ function ccAggregate(opt){
         const m=String(t.competencia).slice(0,7);
         const a=slot(key,p.cc,p.account,p.account_desc,p.product_category);
         a.months[m]=(a.months[m]||0)+(+t.teto||0);
+        addDetB(a,m,p,p.product_category||'',+t.teto||0);
       });
       Object.keys(consByMonth).forEach(m=>{
         const a=slot(key,p.cc,p.account,p.account_desc,p.product_category);
@@ -4318,6 +4337,9 @@ function ccAggregate(opt){
      reading it off the contributions is what actually catches them. */
   all.forEach(a=>{
     a.isLabg=a.cats.size?Array.from(a.cats).every(c=>c===CC_LABG):CC_TAIL.includes(String(a.cc||'').trim());
+    // Normally one category per account line; joined rather than hidden if the
+    // data ever routes two of them to the same cost center/account/description.
+    a.cat=Array.from(a.cats).sort().join(' + ');
     a.totB=Object.values(a.months).reduce((s,v)=>s+v,0);
     a.totC=Object.values(a.cons).reduce((s,v)=>s+v,0);
     a.totS=a.totB-a.totC;
@@ -4335,30 +4357,39 @@ function ccAggregate(opt){
   if(opt&&opt.sort&&CC_SORT.col){
     const key=CC_SORT.col;
     accRows.sort((x,y)=>{
-      let vx=key==='cc'||key==='acc'||key==='desc'?(x[key]||'').toLowerCase():x[key];
-      let vy=key==='cc'||key==='acc'||key==='desc'?(y[key]||'').toLowerCase():y[key];
+      const txt=key==='cat'||key==='cc'||key==='acc'||key==='desc';
+      let vx=txt?(x[key]||'').toLowerCase():x[key];
+      let vy=txt?(y[key]||'').toLowerCase():y[key];
       const c=vx<vy?-1:vx>vy?1:0;
       return c*CC_SORT.dir;
     });
   }
   return {accRows,monthList};
 }
-/* Drill-down for one consumption cell: the POs that add up to it. Addressed
-   by position in the table the user is looking at (CC_VIEW is written by the
-   renderer, so sorting and filtering are already applied) rather than by a
-   cc|account|description key, which is free text and would need escaping
-   through an onclick attribute. */
-function ccDrill(rowIdx,monIdx){
+/* Drill-down for one cell: what adds up to it. `kind` picks the side —
+   "cons" lists the POs behind a Cons. figure, "budget" the campaigns behind a
+   Budget figure. Addressed by position in the table the user is looking at
+   (CC_VIEW is written by the renderer, so sorting and filtering are already
+   applied) rather than by a cc|account|description key, which is free text
+   and would need escaping through an onclick attribute. */
+function ccDrill(rowIdx,monIdx,kind){
   const a=(CC_VIEW.accRows||[])[rowIdx], m=(CC_VIEW.monthList||[])[monIdx];
   if(!a||!m)return;
+  return (kind==='budget'?ccDrillBudget:ccDrillCons)(a,m);
+}
+function ccDrillHead(a,m,title,tint){
+  return `<div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:${tint};flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>${title} · ${esc(fmtMes(m+'-01'))}</h3><div style="font-size:12px;color:var(--txt-3)">${a.cat?esc(a.cat)+' · ':''}<span class="mono">${esc(a.cc||'—')}</span> · <span class="mono">${esc(a.acc||'—')}</span>${a.desc?' · '+esc(a.desc):''}</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>`;
+}
+function ccDrillCons(a,m){
   const det=(a.det[m]||[]).slice().sort((x,y)=>y.share-x.share);
   if(!det.length)return;
   const total=det.reduce((s,d)=>s+d.share,0);
   const split=det.some(d=>d.ratio<0.9999);
-  const head=`<div style="display:grid;grid-template-columns:1.5fr 1fr .8fr ${split?'.7fr ':''}.8fr;gap:10px;padding:8px 12px;background:var(--paper-2);border-radius:9px 9px 0 0;font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em"><span>PO</span><span>Campaign</span><span>Status</span>${split?'<span style="text-align:right">Split</span>':''}<span style="text-align:right">Value</span></div>`;
+  const cols=`1.5fr 1fr .8fr ${split?'.7fr ':''}.8fr`;
+  const head=`<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:8px 12px;background:var(--paper-2);border-radius:9px 9px 0 0;font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em"><span>PO</span><span>Campaign</span><span>Status</span>${split?'<span style="text-align:right">Split</span>':''}<span style="text-align:right">Value</span></div>`;
   const rows=det.map(d=>{
     const po=d.po, s=PO_STATUS[po.status]||{t:po.status,c:'s-slate'};
-    return `<div style="display:grid;grid-template-columns:1.5fr 1fr .8fr ${split?'.7fr ':''}.8fr;gap:10px;padding:9px 12px;border-bottom:1px solid #edeff4;font-size:12px;align-items:center">
+    return `<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:9px 12px;border-bottom:1px solid #edeff4;font-size:12px;align-items:center">
       <span style="min-width:0"><b style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.descricao||'—')}</b><span class="mono" style="font-size:10.5px;color:var(--txt-3)">${esc(po.numero_po||'no PO number')}${po.nf_numero?' · NF '+esc(po.nf_numero):''} · ${esc(po.agencia||'—')}</span></span>
       <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txt-2)">${esc(d.proj.nome||'—')}${d.categoria?`<span style="font-size:10.5px;color:var(--txt-3)"> · ${esc(d.categoria)}</span>`:''}</span>
       <span><span class="badge ${s.c}" style="font-size:10px"><span class="d"></span>${esc(s.t)}</span></span>
@@ -4367,11 +4398,44 @@ function ccDrill(rowIdx,monIdx){
     </div>`;
   }).join('');
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:760px">
-    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--accent);flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Consumption · ${esc(fmtMes(m+'-01'))}</h3><div style="font-size:12px;color:var(--txt-3)"><span class="mono">${esc(a.cc||'—')}</span> · <span class="mono">${esc(a.acc||'—')}</span>${a.desc?' · '+esc(a.desc):''}</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
+    ${ccDrillHead(a,m,'Consumption','var(--accent)')}
     <div class="modal-b">
       <div style="display:flex;align-items:baseline;gap:16px;margin-bottom:12px">
         <span style="flex-shrink:0;white-space:nowrap"><b class="mono" style="font-size:21px;font-weight:800">${BRL(total)}</b><span style="font-size:11.5px;color:var(--txt-3);margin-left:8px">${det.length} PO${det.length>1?'s':''}</span></span>
         ${split?'<span style="font-size:11.5px;color:var(--txt-3);text-align:right">Split values — a rateio campaign spreads each PO across several accounts by its configured share.</span>':''}
+      </div>
+      <div style="border:1px solid var(--line);border-radius:10px;overflow:hidden">${head}${rows}</div>
+    </div>
+  </div></div>`;
+}
+/* Budget side: the campaigns whose monthly cap (or rateio allocation) makes
+   up the figure. Consumption is shown alongside each one so an over- or
+   under-spending campaign is visible without leaving the modal — the numbers
+   come from the same slices the Cons. cell sums, filtered to that campaign. */
+function ccDrillBudget(a,m){
+  const det=(a.detB[m]||[]).slice().sort((x,y)=>y.valor-x.valor);
+  if(!det.length)return;
+  const total=det.reduce((s,d)=>s+d.valor,0);
+  const consBy={};
+  (a.det[m]||[]).forEach(d=>{ consBy[d.proj.id]=(consBy[d.proj.id]||0)+d.share; });
+  const cols='1.6fr .5fr .9fr .9fr .9fr';
+  const head=`<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:8px 12px;background:var(--paper-2);border-radius:9px 9px 0 0;font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em"><span>Campaign</span><span>Cat.</span><span style="text-align:right">Budget</span><span style="text-align:right">Cons.</span><span style="text-align:right">Balance</span></div>`;
+  const rows=det.map(d=>{
+    const c=consBy[d.proj.id]||0, bal=d.valor-c;
+    return `<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:9px 12px;border-bottom:1px solid #edeff4;font-size:12px;align-items:center">
+      <span style="min-width:0"><b style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.proj.nome||'—')}</b><span style="font-size:10.5px;color:var(--txt-3)">${esc(d.proj.agencia||'—')}${d.proj.rateio?' · rateio '+esc(d.proj.rateio_tipo||''):''}</span></span>
+      <span style="font-size:11px;font-weight:700;color:var(--txt-2)">${esc(d.categoria||'—')}</span>
+      <span class="mono" style="text-align:right;font-weight:700">${BRL(d.valor)}</span>
+      <span class="mono" style="text-align:right;color:var(--txt-2)">${c?BRL(c):'—'}</span>
+      <span class="mono" style="text-align:right;font-weight:700;color:${bal<-0.005?'var(--po)':'var(--txt)'}">${BRL(bal)}</span>
+    </div>`;
+  }).join('');
+  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:760px">
+    ${ccDrillHead(a,m,'Budget','#0c7048')}
+    <div class="modal-b">
+      <div style="display:flex;align-items:baseline;gap:16px;margin-bottom:12px">
+        <span style="flex-shrink:0;white-space:nowrap"><b class="mono" style="font-size:21px;font-weight:800">${BRL(total)}</b><span style="font-size:11.5px;color:var(--txt-3);margin-left:8px">${det.length} campaign${det.length>1?'s':''}</span></span>
+        <span style="font-size:11.5px;color:var(--txt-3);text-align:right">Budget is the monthly cap for a direct campaign, or the rateio allocation for a split one.</span>
       </div>
       <div style="border:1px solid var(--line);border-radius:10px;overflow:hidden">${head}${rows}</div>
     </div>
@@ -4490,12 +4554,13 @@ function feeSplitBlock(only){
   const accountsBlock=`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05);margin-top:16px">
     <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line)">
       <div style="display:flex;align-items:center;gap:10px"><b style="flex:1;min-width:0;font-family:'Hanken Grotesk',sans-serif;font-size:14px">Cost center / account — monthly budget, consumption &amp; balance</b>${hasNow?`<button class="chip-btn" onclick="ccJumpNow()" style="display:inline-flex;align-items:center;gap:5px;flex-shrink:0">${icn('calendar',12)} Current month</button>`:''}<button class="chip-btn" onclick="exportCostCenterXLSX()" style="display:inline-flex;align-items:center;gap:5px;flex-shrink:0">${icn('download',12)} Export Excel</button></div>
-      <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">click a header to sort · click a <b style="font-weight:700;color:var(--txt-2)">Cons.</b> figure to see the POs behind it · scroll sideways — Cost center/Account/Description stay fixed${ccFilterOn()?` · <b style="font-weight:700;color:var(--accent-deep)">${ccFilterLabel()}</b> — totals and the export follow the filter`:''}</div>
+      <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">click a header to sort · click a <b style="font-weight:700;color:var(--txt-2)">Budget</b> figure for the campaigns behind it, a <b style="font-weight:700;color:var(--txt-2)">Cons.</b> figure for the POs · scroll sideways — Cat./Cost center/Account/Description stay fixed${ccFilterOn()?` · <b style="font-weight:700;color:var(--accent-deep)">${ccFilterLabel()}</b> — totals and the export follow the filter`:''}</div>
       ${ccFilterBar()}
     </div>
     ${accRows.length?`<div class="cc-wrap"><table class="cc-tbl">
       <thead>
         <tr>
+          <th rowspan="2" class="s0 sortable${CC_SORT.col==='cat'?' sort-active':''}" style="text-align:left" onclick="ccSortClick('cat')">${sortLbl(CC_SORT,'cat','Cat.')}</th>
           <th rowspan="2" class="s1 sortable${CC_SORT.col==='cc'?' sort-active':''}" style="text-align:left" onclick="ccSortClick('cc')">${sortLbl(CC_SORT,'cc','Cost center')}</th>
           <th rowspan="2" class="s2 sortable${CC_SORT.col==='acc'?' sort-active':''}" style="text-align:left" onclick="ccSortClick('acc')">${sortLbl(CC_SORT,'acc','Account')}</th>
           <th rowspan="2" class="s3 sortable${CC_SORT.col==='desc'?' sort-active':''}" style="text-align:left" onclick="ccSortClick('desc')">${sortLbl(CC_SORT,'desc','Description')}</th>
@@ -4509,17 +4574,20 @@ function feeSplitBlock(only){
       </thead>
       <tbody>
       ${accRows.map((a,ri)=>{const{totB,totC,totS}=a;return `<tr>
+        <td class="s0" style="font-weight:700;font-size:11px" title="${esc(a.cat||'')}">${esc(a.cat||'—')}</td>
         <td class="mono s1" title="${esc(a.cc||'')}">${esc(a.cc||'—')}</td>
         <td class="mono s2" title="${esc(a.acc||'')}">${esc(a.acc||'—')}</td>
         <td class="s3" style="font-size:12px" title="${esc(a.desc||'')}">${esc(a.desc||'—')}</td>
-        ${monthList.map((m,i)=>{const b=a.months[m]||0,c=a.cons[m]||0,s=b-c;const n=(a.det[m]||[]).length;
-          const consCell=c&&n?`<td class="num cc-drill${band(i)}${nowCls(m)}" onclick="ccDrill(${ri},${i})" title="${n} PO${n>1?'s':''} — click to see them">${BRL(c)}</td>`:`<td class="num${band(i)}${nowCls(m)}" style="font-weight:600">${c?BRL(c):'—'}</td>`;
-          return `<td class="num msep${band(i)}${nowCls(m)}" style="color:var(--txt-3)">${b?BRL(b):'—'}</td>${consCell}<td class="num${band(i)}${nowCls(m)}" style="font-weight:700;color:${s<0?'var(--po)':'var(--txt)'}">${(b||c)?BRL(s):'—'}</td>`;}).join('')}
+        ${monthList.map((m,i)=>{const b=a.months[m]||0,c=a.cons[m]||0,s=b-c;
+          const nb=(a.detB[m]||[]).length, nc=(a.det[m]||[]).length;
+          const budCell=b&&nb?`<td class="num msep cc-drill cc-drill-b${band(i)}${nowCls(m)}" onclick="ccDrill(${ri},${i},'budget')" title="${nb} campaign${nb>1?'s':''} — click to see them">${BRL(b)}</td>`:`<td class="num msep${band(i)}${nowCls(m)}" style="color:var(--txt-3)">${b?BRL(b):'—'}</td>`;
+          const consCell=c&&nc?`<td class="num cc-drill${band(i)}${nowCls(m)}" onclick="ccDrill(${ri},${i},'cons')" title="${nc} PO${nc>1?'s':''} — click to see them">${BRL(c)}</td>`:`<td class="num${band(i)}${nowCls(m)}" style="font-weight:600">${c?BRL(c):'—'}</td>`;
+          return `${budCell}${consCell}<td class="num${band(i)}${nowCls(m)}" style="font-weight:700;color:${s<0?'var(--po)':'var(--txt)'}">${(b||c)?BRL(s):'—'}</td>`;}).join('')}
         <td class="num msep" style="color:var(--txt-3);background:#fafbfd">${BRL(totB)}</td><td class="num" style="font-weight:600;background:#fafbfd">${BRL(totC)}</td><td class="num" style="font-weight:800;background:#fafbfd;color:${totS<0?'var(--po)':'var(--txt)'}">${BRL(totS)}</td>
       </tr>`;}).join('')}
       </tbody>
       <tfoot><tr>
-        <td class="s1" style="font-weight:800;font-size:12px;font-family:'Hanken Grotesk',sans-serif">Total</td><td class="s2"></td><td class="s3"></td>
+        <td class="s0" style="font-weight:800;font-size:12px;font-family:'Hanken Grotesk',sans-serif">Total</td><td class="s1"></td><td class="s2"></td><td class="s3"></td>
         ${monthList.map((m,i)=>{const g=gByM[m]||{b:0,c:0},s=g.b-g.c;return `<td class="num msep${band(i)}${nowCls(m)}" style="color:var(--txt-3)">${BRL(g.b)}</td><td class="num${band(i)}${nowCls(m)}">${BRL(g.c)}</td><td class="num${band(i)}${nowCls(m)}" style="color:${s<0?'var(--po)':'var(--txt)'}">${BRL(s)}</td>`;}).join('')}
         <td class="num msep" style="color:var(--txt-3)">${BRL(gB)}</td><td class="num">${BRL(gC)}</td><td class="num" style="font-weight:800;color:${(gB-gC)<0?'var(--po)':'var(--txt)'}">${BRL(gB-gC)}</td>
       </tr></tfoot>
@@ -5137,7 +5205,7 @@ function costCenterExportRows(){
   if(!canSensitive) return null;
   const {accRows,monthList}=ccAggregate();
   const rows=accRows.map(a=>{
-    const row={'Centro de custo':a.cc||'—','Conta':a.acc||'—','Descrição':a.desc||'—'};
+    const row={'Categoria':a.cat||'—','Centro de custo':a.cc||'—','Conta':a.acc||'—','Descrição':a.desc||'—'};
     let totB=0,totC=0;
     monthList.forEach(m=>{
       const b=a.months[m]||0, c=a.cons[m]||0, label=fmtMes(m+'-01');
@@ -5152,7 +5220,7 @@ function costCenterExportRows(){
     return row;
   });
   if(rows.length){
-    const totalRow={'Centro de custo':'Total','Conta':'','Descrição':''};
+    const totalRow={'Categoria':'Total','Centro de custo':'','Conta':'','Descrição':''};
     let gB=0,gC=0;
     monthList.forEach(m=>{
       let b=0,c=0; accRows.forEach(a=>{b+=a.months[m]||0;c+=a.cons[m]||0;});
