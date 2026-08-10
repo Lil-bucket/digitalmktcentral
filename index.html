@@ -4156,7 +4156,67 @@ let CC_VIEW={accRows:[],monthList:[]};
 const CC_LABG='LABG';
 const CC_LABG_CC='1109123033';
 const CC_TAIL=[CC_LABG_CC];
-const ccTailRank=cc=>CC_TAIL.includes(String(cc||'').trim())?1:0;
+/* Row order of the Extrato: cost center, then account, then line, in the
+   sequence the finance sheet uses. It is NOT sortable-by-value order — TV
+   lists account 32202169 before 32202171 and AC does the reverse — so it can
+   only come from the maintained list, not from comparing fields.
+
+   The same 17 lines live in the `extrato_layout` table (column `ord`), which
+   would be the better source, but that table has RLS enabled with no SELECT
+   policy at all, so the app's client can't read it. Until such a policy
+   exists this array is the copy — if the Extrato is reordered, both need the
+   same edit. */
+const CC_LAYOUT=[
+  ['1109123014','32202169','Agency Fee - F2F'],
+  ['1109123014','32202169','Shutterstock Images for agency'],
+  ['1109123014','32202169','KOL agency Fee - IEST Group'],
+  ['1109123014','32202171','KOL - Influencers'],
+  ['1109123014','32202171','Always on (media and production)'],
+  ['1109123014','32202171','Product Campaing ( A400/P8L and stadium tvs)'],
+  ['1109123014','32202171','Product Campaign (SQD Mini LED)'],
+  ['1109123014','32202171','Product Campaign Monitor'],
+  ['1406122014','32202171','KOL - Influencers'],
+  ['1406122014','32202171','Installetrs KOL - Influencers'],
+  ['1406122014','32202171','Always on (media and production)'],
+  ['1406122014','32202171','Product Campaign (Freshin)'],
+  ['1406122014','32202169','Agency Fee - F2F'],
+  ['1406122014','32202169','KOL agency Fee - IEST Group'],
+  ['1607122049','32202171','Agency Fee - F2F'],
+  ['1603122014','32202171','KOL - Influencers ( WG launch 1)'],
+  ['1603122014','32202171','KOL - Influencers ( WG launch 2)']
+];
+/* Descriptions drift between the layout and what campaigns actually carry —
+   "Always on (media and production)" vs "…(TV)", "SQD Mini LED" vs
+   "SQD Miniled". Comparing on letters and digits only, minus a trailing
+   category tag, matches those without hand-maintaining aliases. */
+const ccNormDesc=s=>String(s||'').toLowerCase()
+  .replace(/\s*\((?:tv|ac|mob|ref|wg|labg)\)\s*$/,'')
+  .replace(/[^a-z0-9]/g,'');
+let _ccLayoutIx=null;
+function ccLayoutIndex(){
+  if(_ccLayoutIx) return _ccLayoutIx;
+  const exact={},byAcc={},byCc={};
+  CC_LAYOUT.forEach(([cc,acc,desc],i)=>{
+    exact[cc+'|'+acc+'|'+ccNormDesc(desc)]=i;
+    byAcc[cc+'|'+acc]=i; // last wins → the end of that account's block
+    byCc[cc]=i;          // last wins → the end of that cost center's rows
+  });
+  return (_ccLayoutIx={exact,byAcc,byCc});
+}
+/* Graded match, so a line the layout doesn't know still lands in a sensible
+   place instead of at the bottom: exact line → end of its account block →
+   end of its cost center → after everything listed. */
+function ccLayoutRank(a){
+  const ix=ccLayoutIndex(), cc=String(a.cc||'').trim(), acc=String(a.acc||'').trim();
+  const e=ix.exact[cc+'|'+acc+'|'+ccNormDesc(a.desc)];
+  if(e!=null) return e;
+  const g=ix.byAcc[cc+'|'+acc];
+  if(g!=null) return g+0.5;
+  const c=ix.byCc[cc];
+  if(c!=null) return c+0.6;
+  return CC_LAYOUT.length+1;
+}
+const ccTailRank=a=>(a&&a.isLabg)?1:0;
 /* Table filter. Unlike hiding rows in the DOM, this is applied inside the
    aggregation, so every number downstream — monthly figures, row totals, the
    grand total row, the drill-down and both Excel sheets — is recomputed from
@@ -4191,7 +4251,11 @@ function ccAggregate(opt){
   const campsAll=(DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO');
   const accKey=(cc,acc,desc)=>`${cc||''}|${acc||''}|${desc||''}`;
   const accMap={};
-  const slot=(key,cc,acc,desc)=>(accMap[key]=accMap[key]||{key,cc,acc,desc,months:{},cons:{},det:{}});
+  const slot=(key,cc,acc,desc,cat)=>{
+    const a=(accMap[key]=accMap[key]||{key,cc,acc,desc,months:{},cons:{},det:{},cats:new Set()});
+    if(cat) a.cats.add(cat);
+    return a;
+  };
   const addDet=(a,m,entry)=>{ (a.det[m]=a.det[m]||[]).push(entry); };
   const keepCat=cat=>{
     const c=String(cat||'');
@@ -4223,7 +4287,7 @@ function ccAggregate(opt){
              just because LABG is hidden. Filtering drops slices, never resizes
              the ones that remain. */
           const ratio=cats[cat]/totalM;
-          const a=slot(accKey(cc,acc,desc),cc,acc,desc);
+          const a=slot(accKey(cc,acc,desc),cc,acc,desc,cat);
           a.months[m]=(a.months[m]||0)+cats[cat];
           a.cons[m]=(a.cons[m]||0)+consM*ratio;
           (posByMonth[m]||[]).forEach(po=>addDet(a,m,{po,proj:p,categoria:cat,ratio,share:(+po.valor||0)*ratio}));
@@ -4235,11 +4299,11 @@ function ccAggregate(opt){
       const key=accKey(p.cc,p.account,p.account_desc);
       (DATA.tetos||[]).filter(t=>t.projeto_id===p.id).forEach(t=>{
         const m=String(t.competencia).slice(0,7);
-        const a=slot(key,p.cc,p.account,p.account_desc);
+        const a=slot(key,p.cc,p.account,p.account_desc,p.product_category);
         a.months[m]=(a.months[m]||0)+(+t.teto||0);
       });
       Object.keys(consByMonth).forEach(m=>{
-        const a=slot(key,p.cc,p.account,p.account_desc);
+        const a=slot(key,p.cc,p.account,p.account_desc,p.product_category);
         a.cons[m]=(a.cons[m]||0)+consByMonth[m];
         (posByMonth[m]||[]).forEach(po=>addDet(a,m,{po,proj:p,categoria:p.product_category||'',ratio:1,share:(+po.valor||0)}));
       });
@@ -4247,12 +4311,27 @@ function ccAggregate(opt){
   });
   const allMonths=new Set(); Object.values(accMap).forEach(a=>{Object.keys(a.months).forEach(m=>allMonths.add(m));Object.keys(a.cons).forEach(m=>allMonths.add(m));});
   const monthList=Array.from(allMonths).sort();
-  /* Belt and braces on "Excl. LABG": the category pass already drops every
-     LABG contribution, and the LABG cost center only ever receives them — but
-     if the rateio mapping ever pointed another category at it, the promise is
-     still "no LABG line anywhere", so the row goes too. */
-  const accRows=Object.values(accMap).filter(a=>CC_FILTER.scope!=='nolabg'||!CC_TAIL.includes(String(a.cc||'').trim()));
-  accRows.forEach(a=>{ a.totB=Object.values(a.months).reduce((s,v)=>s+v,0); a.totC=Object.values(a.cons).reduce((s,v)=>s+v,0); a.totS=a.totB-a.totC; });
+  const all=Object.values(accMap);
+  /* A row is Matriz (LABG) when every category feeding it is LABG — not when
+     it sits on one hardcoded cost center. LABG spends through more than one
+     (1109123033, 1109123018, and campaigns with no cost center at all), so
+     reading it off the contributions is what actually catches them. */
+  all.forEach(a=>{
+    a.isLabg=a.cats.size?Array.from(a.cats).every(c=>c===CC_LABG):CC_TAIL.includes(String(a.cc||'').trim());
+    a.totB=Object.values(a.months).reduce((s,v)=>s+v,0);
+    a.totC=Object.values(a.cons).reduce((s,v)=>s+v,0);
+    a.totS=a.totB-a.totC;
+  });
+  // Belt and braces on "Excl. LABG": keepCat already dropped every LABG
+  // contribution, so this only ever catches a leftover.
+  const accRows=all.filter(a=>CC_FILTER.scope!=='nolabg'||!a.isLabg);
+  /* Base order is the Extrato layout, with the Matriz (LABG) lines after
+     everything else. Clicking a column header re-sorts on top of this. */
+  accRows.sort((x,y)=>ccTailRank(x)-ccTailRank(y)
+    ||ccLayoutRank(x)-ccLayoutRank(y)
+    ||String(x.cc||'').localeCompare(String(y.cc||''))
+    ||String(x.acc||'').localeCompare(String(y.acc||''))
+    ||String(x.desc||'').localeCompare(String(y.desc||'')));
   if(opt&&opt.sort&&CC_SORT.col){
     const key=CC_SORT.col;
     accRows.sort((x,y)=>{
@@ -4308,10 +4387,10 @@ function ccPOExportRows(nfDates){
      that one sorts alphabetically (Apr before Jan) and would scramble the
      year boundary. The key is dropped again before the rows reach the sheet. */
   const items=[];
-  accRows.forEach(a=>monthList.forEach(m=>{
+  accRows.forEach((a,ai)=>monthList.forEach(m=>{
     (a.det[m]||[]).forEach(d=>{
       const po=d.po, st=PO_STATUS[po.status]||{t:po.status};
-      items.push({m,row:{
+      items.push({m,tail:ccTailRank(a),ai,row:{
         'Mês de lançamento':fmtMes(m+'-01'),
         'Categoria':d.categoria||'—',
         'Data da NF':(nfDates&&nfDates[po.id])?fmtDataBR(nfDates[po.id]):'—',
@@ -4329,10 +4408,10 @@ function ccPOExportRows(nfDates){
       }});
     });
   }));
-  items.sort((x,y)=>ccTailRank(x.row['Centro de custo'])-ccTailRank(y.row['Centro de custo'])
-    ||x.m.localeCompare(y.m)
-    ||String(x.row['Centro de custo']).localeCompare(String(y.row['Centro de custo']))
-    ||String(x.row['Conta']).localeCompare(String(y.row['Conta'])));
+  /* Matriz (LABG) last, then posting month oldest first, then the Extrato
+     row order (accRows already carries it) so a month's lines read down the
+     sheet in the same sequence as the table above. */
+  items.sort((x,y)=>x.tail-y.tail||x.m.localeCompare(y.m)||x.ai-y.ai);
   const rows=items.map(i=>i.row);
   return rows;
 }
@@ -5057,7 +5136,6 @@ function costCenterExportRows(){
   const canSensitive=effIsManager()||['admin','financeiro'].includes(effPapel());
   if(!canSensitive) return null;
   const {accRows,monthList}=ccAggregate();
-  accRows.sort((x,y)=>ccTailRank(x.cc)-ccTailRank(y.cc));
   const rows=accRows.map(a=>{
     const row={'Centro de custo':a.cc||'—','Conta':a.acc||'—','Descrição':a.desc||'—'};
     let totB=0,totC=0;
