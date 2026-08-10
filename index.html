@@ -245,15 +245,31 @@
       linear-gradient(to left,rgba(16,19,26,.12),rgba(16,19,26,0));
     background-position:left center,right center,left center,right center;
     background-size:34px 100%,34px 100%,14px 100%,14px 100%;
-    background-attachment:local,local,scroll,scroll;}
+    background-attachment:local,local,scroll,scroll;
+    scrollbar-width:thin;scrollbar-color:#c3c9d5 #f1f3f8;}
+  /* Always-visible horizontal scrollbar. macOS ships overlay scrollbars by
+     default ("show when scrolling"), so this table — the one place in the app
+     where sideways scrolling is the whole point — otherwise reads as having no
+     scrollbar at all. Giving the track an explicit height opts this container
+     out of overlay mode in Blink/WebKit and keeps the affordance on screen. */
+  .cc-wrap::-webkit-scrollbar{height:11px}
+  .cc-wrap::-webkit-scrollbar-track{background:#f1f3f8;border-radius:0 0 12px 12px}
+  .cc-wrap::-webkit-scrollbar-thumb{background:#c3c9d5;border-radius:7px;border:3px solid #f1f3f8}
+  .cc-wrap::-webkit-scrollbar-thumb:hover{background:#a8b0c0}
   .cc-tbl{border-collapse:separate;border-spacing:0;width:100%}
-  .cc-tbl th{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;background:var(--paper-2);border-bottom:1px solid var(--line);padding:8px 10px}
+  /* position/top reset is load-bearing: the global `th` rule sets
+     position:sticky + top:var(--sticky-top) for the page-scrolling tables, and
+     it leaks in here too. Inside .cc-wrap (its own scrollport, no vertical
+     scroll) that offset doesn't pin anything — it just shoves the whole header
+     ~80px down over the first data rows. Only the frozen s1/s2/s3 columns want
+     sticky here, and horizontally only, so top stays auto for them. */
+  .cc-tbl th{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;background:var(--paper-2);border-bottom:1px solid var(--line);padding:8px 10px;position:static;top:auto}
   .cc-tbl td{padding:9px 10px;border-bottom:1px solid #edeff4;white-space:nowrap;font-size:11.5px}
   .cc-tbl .num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
   .cc-tbl .mband{background:#fafbfe}
   .cc-tbl thead .mband{background:#f4f6fb}
   .cc-tbl .msep{border-left:1px solid var(--line)}
-  .cc-tbl .s1,.cc-tbl .s2,.cc-tbl .s3{position:sticky;z-index:2;background:#fff}
+  .cc-tbl .s1,.cc-tbl .s2,.cc-tbl .s3{position:sticky;top:auto;z-index:2;background:#fff}
   .cc-tbl .s1{left:0;min-width:92px;max-width:92px;overflow:hidden;text-overflow:ellipsis}
   .cc-tbl .s2{left:92px;min-width:96px;max-width:96px;overflow:hidden;text-overflow:ellipsis}
   .cc-tbl .s3{left:188px;min-width:170px;max-width:170px;overflow:hidden;text-overflow:ellipsis;box-shadow:inset -1px 0 0 var(--line-2)}
@@ -4019,9 +4035,9 @@ function renderWeekly(){
     <div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
       <div style="padding:18px 22px;border-bottom:1px solid var(--line);background:#fafbfd;display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
         ${st(done.length,'Delivered')}${st(progress.length,'In progress')}${st(risk.length,'At risk','#b32418')}${st(tasksDone,'Tasks completed')}</div>
+      ${sec('DELIVERED','#0c7048',delivered,luTxt,true)}
       ${sec('AT RISK','#9c6404',risk,luTxt,false)}
       ${sec('IN PROGRESS','#0e5ba6',progress,p=>luTxt(p)+' ('+computeProg(p)+'%)',false)}
-      ${sec('DELIVERED','#0c7048',delivered,luTxt,true)}
       <div style="padding:16px 22px;background:var(--paper-2)"><div style="font-size:11.5px;font-weight:800;letter-spacing:.06em;color:var(--txt-3);margin-bottom:9px;display:flex;align-items:center;gap:7px"><span style="width:8px;height:8px;border-radius:50%;background:var(--txt-3);flex-shrink:0"></span>CONCLUDED</div>${concluded.length?concluded.map(p=>line(p,luTxt(p),false)).join(''):'<div style="font-size:12.5px;color:var(--txt-3)">Nothing here.</div>'}</div>
     </div>`;
 }
