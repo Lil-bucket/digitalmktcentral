@@ -4251,13 +4251,16 @@ function ccDrill(rowIdx,monIdx){
    when someone actually exports (and left blank if that read is denied). */
 function ccPOExportRows(nfDates){
   const {accRows,monthList}=ccAggregate();
-  const rows=[];
+  /* Sorted on the raw YYYY-MM key, never on the rendered "Jan/26" label —
+     that one sorts alphabetically (Apr before Jan) and would scramble the
+     year boundary. The key is dropped again before the rows reach the sheet. */
+  const items=[];
   accRows.forEach(a=>monthList.forEach(m=>{
     (a.det[m]||[]).forEach(d=>{
       const po=d.po, st=PO_STATUS[po.status]||{t:po.status};
-      rows.push({
-        'Categoria':d.categoria||'—',
+      items.push({m,row:{
         'Mês de lançamento':fmtMes(m+'-01'),
+        'Categoria':d.categoria||'—',
         'Data da NF':(nfDates&&nfDates[po.id])?fmtDataBR(nfDates[po.id]):'—',
         'Valor':Math.round(d.share*100)/100,
         'Descrição da PO':po.descricao||'—',
@@ -4270,10 +4273,13 @@ function ccPOExportRows(nfDates){
         'Agência':po.agencia||'—',
         'Status':st.t||po.status,
         '% do rateio':Math.round(d.ratio*10000)/100
-      });
+      }});
     });
   }));
-  rows.sort((x,y)=>String(x['Centro de custo']).localeCompare(String(y['Centro de custo']))||String(x['Mês de lançamento']).localeCompare(String(y['Mês de lançamento'])));
+  items.sort((x,y)=>x.m.localeCompare(y.m)
+    ||String(x.row['Centro de custo']).localeCompare(String(y.row['Centro de custo']))
+    ||String(x.row['Conta']).localeCompare(String(y.row['Conta'])));
+  const rows=items.map(i=>i.row);
   return rows;
 }
 async function ccNFDates(){
