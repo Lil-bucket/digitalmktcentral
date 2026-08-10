@@ -4148,6 +4148,13 @@ function ccJumpNow(){ ccScrollTo('smooth'); }
    ============================================================ */
 const CC_CONS_ST=['FATURADA','VALIDADA','CONCLUIDA','APROVADA','PO_GERADA','ATUALIZAR_INFO'];
 let CC_VIEW={accRows:[],monthList:[]};
+/* Cost centers that sink to the bottom of the exported sheets. LABG isn't one
+   of the product lines — it's already the one scope the Overview can exclude
+   on its own (BO_SCOPE) — so in the export it sits after everything else
+   instead of in the middle of the product cost centers. Ranking, not
+   filtering: the rows are all still there and the totals are unchanged. */
+const CC_TAIL=['1109123033'];
+const ccTailRank=cc=>CC_TAIL.includes(String(cc||'').trim())?1:0;
 function ccAggregate(opt){
   const fee=DATA.fee||[];
   const campsAll=(DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO');
@@ -4276,7 +4283,8 @@ function ccPOExportRows(nfDates){
       }});
     });
   }));
-  items.sort((x,y)=>x.m.localeCompare(y.m)
+  items.sort((x,y)=>ccTailRank(x.row['Centro de custo'])-ccTailRank(y.row['Centro de custo'])
+    ||x.m.localeCompare(y.m)
     ||String(x.row['Centro de custo']).localeCompare(String(y.row['Centro de custo']))
     ||String(x.row['Conta']).localeCompare(String(y.row['Conta'])));
   const rows=items.map(i=>i.row);
@@ -4984,6 +4992,7 @@ function costCenterExportRows(){
   const canSensitive=effIsManager()||['admin','financeiro'].includes(effPapel());
   if(!canSensitive) return null;
   const {accRows,monthList}=ccAggregate();
+  accRows.sort((x,y)=>ccTailRank(x.cc)-ccTailRank(y.cc));
   const rows=accRows.map(a=>{
     const row={'Centro de custo':a.cc||'—','Conta':a.acc||'—','Descrição':a.desc||'—'};
     let totB=0,totC=0;
