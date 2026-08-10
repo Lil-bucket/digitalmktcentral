@@ -4148,13 +4148,44 @@ function ccJumpNow(){ ccScrollTo('smooth'); }
    ============================================================ */
 const CC_CONS_ST=['FATURADA','VALIDADA','CONCLUIDA','APROVADA','PO_GERADA','ATUALIZAR_INFO'];
 let CC_VIEW={accRows:[],monthList:[]};
-/* Cost centers that sink to the bottom of the exported sheets. LABG isn't one
-   of the product lines — it's already the one scope the Overview can exclude
-   on its own (BO_SCOPE) — so in the export it sits after everything else
-   instead of in the middle of the product cost centers. Ranking, not
-   filtering: the rows are all still there and the totals are unchanged. */
-const CC_TAIL=['1109123033'];
+/* Matriz (LABG) is both a product category and a cost center of its own, and
+   it isn't one of the product lines — the Overview already carries a scope
+   that takes it out (BO_SCOPE). Here it drives two things: it sinks to the
+   bottom of the exported sheets (ranking, not filtering — every row is still
+   there and no total moves), and it's what the "Excl. LABG" scope removes. */
+const CC_LABG='LABG';
+const CC_LABG_CC='1109123033';
+const CC_TAIL=[CC_LABG_CC];
 const ccTailRank=cc=>CC_TAIL.includes(String(cc||'').trim())?1:0;
+/* Table filter. Unlike hiding rows in the DOM, this is applied inside the
+   aggregation, so every number downstream — monthly figures, row totals, the
+   grand total row, the drill-down and both Excel sheets — is recomputed from
+   only the contributions that survive the filter. */
+let CC_FILTER={scope:'all',cat:''};
+function ccFilterOn(){ return CC_FILTER.scope!=='all'||!!CC_FILTER.cat; }
+function ccSetScope(s){
+  CC_FILTER.scope=s;
+  // "Excl. LABG" and "Category: LABG" would cancel each other out into an
+  // empty table; dropping the category is the readable resolution.
+  if(s==='nolabg'&&CC_FILTER.cat===CC_LABG) CC_FILTER.cat='';
+  go(SCREEN);
+}
+function ccSetCat(c){ CC_FILTER.cat=c; go(SCREEN); }
+function ccFilterLabel(){
+  const b=[];
+  if(CC_FILTER.scope==='nolabg') b.push('Matriz (LABG) excluded');
+  if(CC_FILTER.cat) b.push(esc(CC_FILTER.cat)+' only');
+  return b.join(' · ');
+}
+/* Categories that actually appear in the data, in the canonical product order,
+   so the picker never offers a category with nothing behind it. */
+function ccCategories(){
+  const s=new Set();
+  (DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO'&&!p.rateio&&p.product_category).forEach(p=>s.add(p.product_category));
+  (DATA.rateio||[]).forEach(r=>r.categoria&&s.add(r.categoria));
+  const seen=Array.from(s);
+  return PRODUCT_CATS.filter(c=>seen.includes(c)).concat(seen.filter(c=>!PRODUCT_CATS.includes(c)).sort());
+}
 function ccAggregate(opt){
   const fee=DATA.fee||[];
   const campsAll=(DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO');
@@ -4162,6 +4193,11 @@ function ccAggregate(opt){
   const accMap={};
   const slot=(key,cc,acc,desc)=>(accMap[key]=accMap[key]||{key,cc,acc,desc,months:{},cons:{},det:{}});
   const addDet=(a,m,entry)=>{ (a.det[m]=a.det[m]||[]).push(entry); };
+  const keepCat=cat=>{
+    const c=String(cat||'');
+    if(CC_FILTER.scope==='nolabg'&&c===CC_LABG) return false;
+    return !CC_FILTER.cat||c===CC_FILTER.cat;
+  };
   campsAll.forEach(p=>{
     const consByMonth={}, posByMonth={};
     DATA.pos.filter(po=>po.projeto_id===p.id&&CC_CONS_ST.includes(po.status)).forEach(po=>{
@@ -4178,9 +4214,14 @@ function ccAggregate(opt){
       Object.keys(monthCat).forEach(m=>{
         const cats=monthCat[m]; const totalM=Object.values(cats).reduce((s,v)=>s+v,0)||1; const consM=consByMonth[m]||0;
         Object.keys(cats).forEach(cat=>{
+          if(!keepCat(cat))return;
           const f=fee.find(x=>x.tipo===p.rateio_tipo&&x.categoria===cat);
           const cc=f?f.cc:'', acc=f?f.account:'', desc=f?f.descricao:'';
           if(!cc&&!acc&&!desc)return;
+          /* totalM stays the month's FULL rateio total even when categories are
+             filtered out — a PO's LABG share must not be redistributed onto TV
+             just because LABG is hidden. Filtering drops slices, never resizes
+             the ones that remain. */
           const ratio=cats[cat]/totalM;
           const a=slot(accKey(cc,acc,desc),cc,acc,desc);
           a.months[m]=(a.months[m]||0)+cats[cat];
@@ -4190,6 +4231,7 @@ function ccAggregate(opt){
       });
     } else {
       if(!p.cc&&!p.account&&!p.account_desc)return;
+      if(!keepCat(p.product_category))return;
       const key=accKey(p.cc,p.account,p.account_desc);
       (DATA.tetos||[]).filter(t=>t.projeto_id===p.id).forEach(t=>{
         const m=String(t.competencia).slice(0,7);
@@ -4205,7 +4247,11 @@ function ccAggregate(opt){
   });
   const allMonths=new Set(); Object.values(accMap).forEach(a=>{Object.keys(a.months).forEach(m=>allMonths.add(m));Object.keys(a.cons).forEach(m=>allMonths.add(m));});
   const monthList=Array.from(allMonths).sort();
-  const accRows=Object.values(accMap);
+  /* Belt and braces on "Excl. LABG": the category pass already drops every
+     LABG contribution, and the LABG cost center only ever receives them — but
+     if the rateio mapping ever pointed another category at it, the promise is
+     still "no LABG line anywhere", so the row goes too. */
+  const accRows=Object.values(accMap).filter(a=>CC_FILTER.scope!=='nolabg'||!CC_TAIL.includes(String(a.cc||'').trim()));
   accRows.forEach(a=>{ a.totB=Object.values(a.months).reduce((s,v)=>s+v,0); a.totC=Object.values(a.cons).reduce((s,v)=>s+v,0); a.totS=a.totB-a.totC; });
   if(opt&&opt.sort&&CC_SORT.col){
     const key=CC_SORT.col;
@@ -4299,6 +4345,24 @@ async function ccNFDates(){
     return byPo;
   }catch(e){ console.warn('po_log (NF date):',(e&&e.message)||e); return null; }
 }
+/* Filter strip for the table — same segmented-control language as the
+   Overview's Period/Scope bar, so the two screens read alike. */
+function ccFilterBar(){
+  const seg=(onc,on,l,title)=>`<button onclick="${onc}"${title?` title="${esc(title)}"`:''} style="padding:5px 11px;border-radius:7px;border:none;background:${on?'#fff':'transparent'};color:${on?'var(--accent-deep)':'var(--txt-2)'};font-size:11.5px;font-weight:700;cursor:pointer;box-shadow:${on?'var(--sh-1)':'none'}">${l}</button>`;
+  const group=(label,inner)=>`<span style="display:inline-flex;align-items:center;gap:7px"><span style="font-size:9.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3)">${label}</span>${inner}</span>`;
+  const scope=`<span style="display:inline-flex;gap:3px;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:3px">
+    ${seg("ccSetScope('all')",CC_FILTER.scope==='all','Total','Every category, including Matriz (LABG)')}
+    ${seg("ccSetScope('nolabg')",CC_FILTER.scope==='nolabg','Excl. LABG','Drop the Matriz (LABG) rows and their values from every figure in this table')}
+  </span>`;
+  const cats=ccCategories().filter(c=>CC_FILTER.scope!=='nolabg'||c!==CC_LABG);
+  const sel=`<select onchange="ccSetCat(this.value)" style="padding:5px 9px;border:1px solid var(--line);border-radius:9px;background:#fff;font-size:11.5px;font-weight:600;color:var(--txt-2)">
+    <option value=""${CC_FILTER.cat?'':' selected'}>All categories</option>
+    ${cats.map(c=>`<option value="${esc(c)}"${CC_FILTER.cat===c?' selected':''}>${esc(c)}</option>`).join('')}
+  </select>`;
+  const clear=ccFilterOn()?`<button class="chip-btn" onclick="ccClearFilter()" style="font-size:11px;padding:5px 10px">Clear filter</button>`:'';
+  return `<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:9px">${group('Scope',scope)}${group('Category',sel)}${clear}</div>`;
+}
+function ccClearFilter(){ CC_FILTER={scope:'all',cat:''}; go(SCREEN); }
 async function exportCostCenterXLSX(){
   if(!window.XLSX){ toast('Exportação indisponível — script não carregado.'); return; }
   const ccRows=costCenterExportRows();
@@ -4347,7 +4411,8 @@ function feeSplitBlock(only){
   const accountsBlock=`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05);margin-top:16px">
     <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line)">
       <div style="display:flex;align-items:center;gap:10px"><b style="flex:1;min-width:0;font-family:'Hanken Grotesk',sans-serif;font-size:14px">Cost center / account — monthly budget, consumption &amp; balance</b>${hasNow?`<button class="chip-btn" onclick="ccJumpNow()" style="display:inline-flex;align-items:center;gap:5px;flex-shrink:0">${icn('calendar',12)} Current month</button>`:''}<button class="chip-btn" onclick="exportCostCenterXLSX()" style="display:inline-flex;align-items:center;gap:5px;flex-shrink:0">${icn('download',12)} Export Excel</button></div>
-      <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">click a header to sort · click a <b style="font-weight:700;color:var(--txt-2)">Cons.</b> figure to see the POs behind it · scroll sideways — Cost center/Account/Description stay fixed</div>
+      <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">click a header to sort · click a <b style="font-weight:700;color:var(--txt-2)">Cons.</b> figure to see the POs behind it · scroll sideways — Cost center/Account/Description stay fixed${ccFilterOn()?` · <b style="font-weight:700;color:var(--accent-deep)">${ccFilterLabel()}</b> — totals and the export follow the filter`:''}</div>
+      ${ccFilterBar()}
     </div>
     ${accRows.length?`<div class="cc-wrap"><table class="cc-tbl">
       <thead>
@@ -4379,7 +4444,7 @@ function feeSplitBlock(only){
         ${monthList.map((m,i)=>{const g=gByM[m]||{b:0,c:0},s=g.b-g.c;return `<td class="num msep${band(i)}${nowCls(m)}" style="color:var(--txt-3)">${BRL(g.b)}</td><td class="num${band(i)}${nowCls(m)}">${BRL(g.c)}</td><td class="num${band(i)}${nowCls(m)}" style="color:${s<0?'var(--po)':'var(--txt)'}">${BRL(s)}</td>`;}).join('')}
         <td class="num msep" style="color:var(--txt-3)">${BRL(gB)}</td><td class="num">${BRL(gC)}</td><td class="num" style="font-weight:800;color:${(gB-gC)<0?'var(--po)':'var(--txt)'}">${BRL(gB-gC)}</td>
       </tr></tfoot>
-    </table></div>`:'<div style="padding:16px 17px;font-size:12.5px;color:var(--txt-3)">No classified amounts yet.</div>'}
+    </table></div>`:`<div style="padding:16px 17px;font-size:12.5px;color:var(--txt-3)">${ccFilterOn()?'Nothing matches this filter. <a onclick="ccClearFilter()" style="cursor:pointer;text-decoration:underline;color:var(--accent)">Clear it</a> to see every cost center.':'No classified amounts yet.'}</div>`}
   </div>`;
   if(only==='accounts') return accountsBlock;
   if(only==='rateio') return rateioBlock;
