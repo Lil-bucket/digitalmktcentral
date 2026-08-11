@@ -1043,7 +1043,7 @@ const Q_WORK=()=>[
 ];
 const Q_BUDGET=()=>[
   SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
-  SBPO.from('projetos').select('id,nome,agencia,orcamento_id,product_category,activity,projeto_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em'),
+  SBPO.from('projetos').select('id,nome,agencia,orcamento_id,product_category,activity,projeto_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em'),
   SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
   SBPO.from('tetos').select('projeto_id,competencia,teto'),
   SBPO.from('rateio_alocacao').select('projeto_id,competencia,valor,categoria'),
@@ -2037,6 +2037,13 @@ function openCampDetail(pid){
           <span style="display:flex;flex-shrink:0;margin-top:1px">${icn(r.icon,14)}</span>
           <span><b>${r.t}</b> — ${cut}. The budget figures below are unchanged, on purpose: they are the record of what this campaign was given.${p.restricao_motivo?`<div style="margin-top:3px;font-weight:600">${esc(p.restricao_motivo)}</div>`:''}${p.restricao_em?`<div style="margin-top:2px;opacity:.75">since ${fmtDataBR(p.restricao_em)}</div>`:''}</span>
         </div>`;})()}
+      ${(()=>{const pd=campCapPedido(p); if(pd==null)return '';
+        const cur=campCapAprovado(p.id)||0;
+        return `<div style="display:flex;align-items:flex-start;gap:10px;background:var(--blue-bg);border:1px solid #bcd9f5;border-radius:9px;padding:10px 12px;margin-top:12px;font-size:12px;color:#0e5ba6">
+          <span style="display:flex;flex-shrink:0;margin-top:1px">${icn('coins',14)}</span>
+          <span style="flex:1"><b>Cap increase requested</b> — from <b class="mono">${BRL(cur)}</b> to <b class="mono">${BRL(pd)}</b>.${p.cap_pedido_motivo?`<div style="margin-top:3px;font-weight:600">${esc(p.cap_pedido_motivo)}</div>`:''}${p.cap_pedido_em?`<div style="margin-top:2px;opacity:.75">asked ${fmtDataBR(p.cap_pedido_em)}</div>`:''}</span>
+          ${canRestrict()?`<span style="display:flex;gap:6px;flex-shrink:0"><button class="chip-btn" onclick="decidirCapPedido('${esc(p.id)}',true)">Approve</button><button class="chip-btn" onclick="decidirCapPedido('${esc(p.id)}',false)">Reject</button></span>`:''}
+        </div>`;})()}
       ${alertHTML}
       ${months.length>1?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">${chips}</div>`:''}
     </div>
@@ -2257,26 +2264,102 @@ function campValRowSet(id,k,v){ const r=CAMPVAL&&CAMPVAL.rows.find(x=>x.id===id)
    formatted. */
 const moneyFmt=n=>(+n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 const moneyParse=s=>{ const d=String(s==null?'':s).replace(/\D/g,''); return d?(+d)/100:0; };
-/* How much this campaign may hold in total: its category's registered budget
-   minus what every OTHER campaign in that category already holds. Editing a
-   campaign doesn't make it compete with itself, so its own current allocation
-   is headroom, not spend. Returns null when there's no ceiling to respect —
-   the category has no registered budget, or the campaign is rateio and its
-   money lands across several categories at once, where a single-category
-   ceiling would be a lie. */
-function campCapMax(pid){
+/* The campaign's approved ceiling. A stored fact, fixed when the campaign is
+   approved — never derived from what it currently holds.
+
+   The derived version this replaces (category budget minus the other
+   campaigns, floored at the campaign's own total) moved with the very edit it
+   was meant to validate: raising a month raised the ceiling with it, so it
+   could never report an overage, and pulling the months back down only ever
+   showed a growing surplus against a number that had already drifted up.
+
+   Falls back to what the campaign holds today when cap_aprovado is missing — a
+   campaign still pending approval — so the box degrades to "no ceiling news"
+   rather than to a ceiling of zero. */
+function campCapAprovado(pid){
   const p=(DATA.poProjetos||[]).find(x=>x.id===pid);
-  if(!p||p.rateio) return null;
-  const cat=String(p.product_category||'').trim();
-  if(!cat) return null;
-  const orc=(DATA.orcamentos||[]).find(o=>String(o.product_category||'').trim()===cat);
-  const total=+(orc&&orc.valor_total)||0;
-  if(!total) return null;
-  const catOf={}; (DATA.poProjetos||[]).forEach(x=>{catOf[x.id]=String(x.product_category||'').trim();});
-  let others=0;
-  (DATA.tetos||[]).forEach(t=>{ if(t.projeto_id!==pid&&catOf[t.projeto_id]===cat) others+=(+t.teto||0); });
-  (DATA.rateio||[]).forEach(r=>{ if(r.projeto_id!==pid&&r.categoria===cat) others+=(+r.valor||0); });
-  return Math.max(0,total-others);
+  if(!p) return null;
+  if(p.cap_aprovado!=null&&p.cap_aprovado!=='') return +p.cap_aprovado;
+  return Object.values(campMonthlyTotals(pid)).reduce((s,v)=>s+v,0);
+}
+function campCapPedido(p){ return (p&&p.cap_pedido!=null&&p.cap_pedido!=='')?+p.cap_pedido:null; }
+/* Raising a cap is an approval, lowering it is not. Giving budget back needs
+   nobody's permission; taking more does. So marketing files a request and an
+   admin/manager decides, while an admin/manager can set the cap directly —
+   which is also how a cap inflated by mistake gets corrected. */
+let CAPEDIT=null;
+function openCapEdit(pid){
+  const p=DATA.poProjetos.find(x=>x.id===pid); if(!p)return;
+  if(!canRestrict()){ toast('Only marketing managers or admin can set the cap.'); return; }
+  CAPEDIT={id:pid,mode:'set',valor:campCapAprovado(pid)||0,motivo:''};
+  renderCapForm();
+}
+function openCapPedido(pid){
+  const p=DATA.poProjetos.find(x=>x.id===pid); if(!p)return;
+  CAPEDIT={id:pid,mode:'ask',valor:campCapAprovado(pid)||0,motivo:''};
+  renderCapForm();
+}
+function capSet(k,v){ if(CAPEDIT)CAPEDIT[k]=v; }
+function capMoney(el){ const v=moneyParse(el.value); CAPEDIT.valor=v; el.value=v?moneyFmt(v):''; }
+function renderCapForm(){
+  if(!CAPEDIT)return;
+  const p=DATA.poProjetos.find(x=>x.id===CAPEDIT.id)||{};
+  const cur=campCapAprovado(CAPEDIT.id)||0;
+  const alloc=Object.values(campMonthlyTotals(CAPEDIT.id)).reduce((s,v)=>s+v,0);
+  const ask=CAPEDIT.mode==='ask';
+  const delta=(+CAPEDIT.valor||0)-cur;
+  /* Lowering below what the months already hold would leave the campaign
+     instantly over its own cap, so it's refused here rather than saved into an
+     impossible state. */
+  const below=!ask&&(+CAPEDIT.valor||0)<alloc-0.005;
+  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:480px">
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--po);flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>${ask?'Request a higher cap':'Approved cap'}</h3><div style="font-size:12px;color:var(--txt-3)">${esc(p.nome||'')}</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
+    <div class="modal-b">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--paper-2)"><div style="font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase">Current cap</div><div class="mono" style="font-size:15px;font-weight:800;margin-top:3px">${BRL(cur)}</div></div>
+        <div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--paper-2)"><div style="font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase">Months allocated</div><div class="mono" style="font-size:15px;font-weight:800;margin-top:3px">${BRL(alloc)}</div></div>
+      </div>
+      <div class="field"><label>${ask?'Cap you need':'New cap'}</label><span style="position:relative;display:flex;align-items:center"><span style="position:absolute;left:11px;font-size:12px;color:var(--txt-3);pointer-events:none">R$</span><input type="text" inputmode="numeric" value="${CAPEDIT.valor?moneyFmt(CAPEDIT.valor):''}" oninput="capMoney(this)" placeholder="0,00" class="mono" style="width:100%;padding:9px 11px 9px 34px;text-align:right"></span>
+        ${delta?`<div style="font-size:11.5px;color:${delta>0?'var(--po)':'#16a06a'};margin-top:5px;font-weight:600">${delta>0?'+':'−'}${BRL(Math.abs(delta))} ${delta>0?'more than':'less than'} today's cap</div>`:''}
+      </div>
+      ${below?`<div class="banner" style="background:var(--red-bg);border-color:#f2c4bf;color:#7d1a14">The months already add up to <b class="mono">${BRL(alloc)}</b>. Lower the monthly values first, then bring the cap down.</div>`:''}
+      <div class="field"><label>${ask?'Why do you need more?':'Reason'}</label><textarea rows="3" oninput="capSet('motivo',this.value)" placeholder="${ask?'What changed that needs a bigger budget?':'Why is the cap changing?'}">${esc(CAPEDIT.motivo)}</textarea></div>
+    </div>
+    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po);${below?'opacity:.5;cursor:not-allowed':''}" ${below?'disabled':''} onclick="${ask?'submitCapPedido()':'submitCapEdit()'}">${ask?'Send request':'Save cap'}</button></div></div>
+  </div></div>`;
+}
+async function submitCapPedido(){
+  if(!CAPEDIT)return; if(viewOnly()){toast(roMsg());return;}
+  const cur=campCapAprovado(CAPEDIT.id)||0;
+  if(!(+CAPEDIT.valor>cur+0.005)){ toast('Ask for more than the current cap — to lower it, just reduce the months.'); return; }
+  if(!String(CAPEDIT.motivo||'').trim()){ toast('Describe why you need more.'); return; }
+  try{
+    const {error}=await SBPO.from('projetos').update({cap_pedido:r2(+CAPEDIT.valor),cap_pedido_motivo:String(CAPEDIT.motivo).trim(),cap_pedido_em:new Date().toISOString()}).eq('id',CAPEDIT.id);
+    if(error)throw error;
+    CAPEDIT=null; closeModal(); await reloadPOAll(); toast('Cap increase requested ✓ — an admin will decide.'); go(SCREEN);
+  }catch(e){ toastErr(e); }
+}
+async function submitCapEdit(){
+  if(!CAPEDIT)return; if(viewOnly()){toast(roMsg());return;}
+  const alloc=Object.values(campMonthlyTotals(CAPEDIT.id)).reduce((s,v)=>s+v,0);
+  if(+CAPEDIT.valor<alloc-0.005){ toast('The months already allocate more than that. Reduce them first.'); return; }
+  try{
+    const {error}=await SBPO.from('projetos').update({cap_aprovado:r2(+CAPEDIT.valor),cap_pedido:null,cap_pedido_motivo:null,cap_pedido_em:null}).eq('id',CAPEDIT.id);
+    if(error)throw error;
+    CAPEDIT=null; closeModal(); await reloadPOAll(); toast('Cap updated ✓'); goCostCenter();
+  }catch(e){ toastErr(e); }
+}
+async function decidirCapPedido(pid,ok){
+  if(viewOnly()){toast(roMsg());return;}
+  if(!canRestrict()){ toast('Only marketing managers or admin can decide this.'); return; }
+  const p=DATA.poProjetos.find(x=>x.id===pid); if(!p)return;
+  const pedido=campCapPedido(p); if(pedido==null)return;
+  try{
+    const patch=ok?{cap_aprovado:r2(pedido),cap_pedido:null,cap_pedido_motivo:null,cap_pedido_em:null}
+                  :{cap_pedido:null,cap_pedido_motivo:null,cap_pedido_em:null};
+    const {error}=await SBPO.from('projetos').update(patch).eq('id',pid); if(error)throw error;
+    await reloadPOAll(); toast(ok?`Cap raised to ${BRL(pedido)} ✓`:'Cap request rejected'); go(SCREEN);
+  }catch(e){ toastErr(e); }
 }
 function campValAddRow(){ if(!CAMPVAL)return; const last=CAMPVAL.rows[CAMPVAL.rows.length-1]; CAMPVAL.rows.push({id:uid(),mes:last?last.mes:new Date().toISOString().slice(0,7),valor:''}); renderCampValues(); }
 function campValDelRow(id){ if(!CAMPVAL)return; CAMPVAL.rows=CAMPVAL.rows.filter(x=>x.id!==id); renderCampValues(); }
@@ -2286,7 +2369,7 @@ function campValDelRow(id){ if(!CAMPVAL)return; CAMPVAL.rows=CAMPVAL.rows.filter
 function campValSync(){
   if(!CAMPVAL)return;
   const total=CAMPVAL.rows.reduce((s,r)=>s+(+r.valor||0),0);
-  const cap=CAMPVAL.capLimit;
+  const cap=campCapAprovado(CAMPVAL.id);
   const el=id=>document.getElementById(id);
   if(el('cvTotal')) el('cvTotal').textContent=BRL(total);
   const over=cap!=null&&total>cap+0.005;
@@ -2308,20 +2391,8 @@ function campValMoney(id,el){
 }
 function renderCampValues(){
   if(!CAMPVAL)return; const p=DATA.poProjetos.find(x=>x.id===CAMPVAL.id)||{};
-  if(CAMPVAL.capMax===undefined){
-    const raw=campCapMax(CAMPVAL.id);
-    /* A category can already be allocated past its registered budget, which
-       would leave such a campaign unsaveable — you couldn't even move money
-       between its months without first fixing the whole category. So the
-       enforced limit is the higher of the cap and what the campaign already
-       held: you can always redistribute or reduce, never increase past the
-       cap, and never make an existing overage worse. */
-    CAMPVAL.capMax=raw;
-    CAMPVAL.capBase=CAMPVAL.rows.reduce((s,r)=>s+(+r.valor||0),0);
-    CAMPVAL.capLimit=raw==null?null:Math.max(raw,CAMPVAL.capBase);
-  }
-  const cap=CAMPVAL.capLimit;
-  const grandfathered=cap!=null&&CAMPVAL.capMax!=null&&cap>CAMPVAL.capMax+0.005;
+  const cap=campCapAprovado(CAMPVAL.id);
+  const pedido=campCapPedido(p);
   const total=CAMPVAL.rows.reduce((s,r)=>s+(+r.valor||0),0);
   const bal=cap!=null?cap-total:null;
   const over=bal!=null&&bal<-0.005;
@@ -2329,7 +2400,7 @@ function renderCampValues(){
       <div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--paper-2)">
         <div style="font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em">Cap for this campaign</div>
         <div class="mono" style="font-size:15px;font-weight:800;margin-top:3px">${BRL(cap)}</div>
-        <div style="font-size:10.5px;color:var(--txt-3);margin-top:2px">${grandfathered?`${esc(p.product_category||'')} is already allocated past its budget — held at this campaign's current total`:`${esc(p.product_category||'')} budget, minus the other campaigns in it`}</div>
+        <div style="font-size:10.5px;color:var(--txt-3);margin-top:2px">${p.cap_aprovado!=null?'fixed when the campaign was approved':'not approved yet — using the current total'}</div>
       </div>
       <div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--paper-2)">
         <div id="cvBalLbl" style="font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em">${over?'Over the cap':'Still available'}</div>
@@ -2337,8 +2408,12 @@ function renderCampValues(){
         <div style="font-size:10.5px;color:var(--txt-3);margin-top:2px">updates as you change a month</div>
       </div>
     </div>
-    <div id="cvWarn" class="banner" style="display:${over?'':'none'};margin-bottom:12px;background:var(--red-bg);border-color:#f2c4bf;color:#7d1a14">The months add up to more than this campaign's cap. Bring the total down to save.</div>`
-   :`<div class="banner" style="margin-bottom:12px">No registered budget to check against for this ${CAMPVAL.rateio?'rateio ':''}campaign, so no cap is enforced here.</div>`;
+    <div id="cvWarn" class="banner" style="display:${over?'':'none'};margin-bottom:12px;background:var(--red-bg);border-color:#f2c4bf;color:#7d1a14">The months add up to more than the approved cap. Reduce them to save${canRestrict()?'':', or ask for an increase'}.</div>
+    ${pedido!=null?`<div class="banner" style="margin-bottom:12px;background:var(--blue-bg);border-color:#bcd9f5;color:#0e5ba6">An increase to <b class="mono">${BRL(pedido)}</b> has been requested and is awaiting a decision. Until it's approved the cap above is what applies.</div>`:''}
+    ${canRestrict()
+      ? `<div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="chip-btn" onclick="openCapEdit('${esc(CAMPVAL.id)}')">Change approved cap…</button></div>`
+      : `<div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="chip-btn" onclick="openCapPedido('${esc(CAMPVAL.id)}')">Request a higher cap…</button></div>`}`
+   :`<div class="banner" style="margin-bottom:12px">This campaign has no approved cap yet, so nothing is enforced here.</div>`;
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:520px">
     <div class="modal-h"><h3>Monthly values — ${esc(p.nome||'')}</h3><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">
@@ -2363,10 +2438,9 @@ async function submitCampValues(){
   if(!rows.length){ toast('Add at least one month with a value.'); return; }
   // Re-check the cap here too: the button is disabled while over, but the cap
   // is derived from data that a background refresh can move under the modal.
-  const raw=campCapMax(cv.id);
-  const limit=raw==null?null:Math.max(raw,cv.capBase||0);
+  const limit=campCapAprovado(cv.id);
   const total=rows.reduce((s,r)=>s+(+r.valor||0),0);
-  if(limit!=null&&total>limit+0.005){ toast(`Over the campaign cap by ${BRL(total-limit)} — adjust the months and try again.`); return; }
+  if(limit!=null&&total>limit+0.005){ toast(`Over the approved cap by ${BRL(total-limit)} — reduce the months, or request an increase.`); return; }
   try{
     if(cv.rateio){
       let splits=(DATA.fee||[]).filter(f=>f.tipo===cv.qual);
@@ -2620,7 +2694,16 @@ async function rejeitarPO(id){
 async function aprovarCamp(id){
   if(DEMO_MODE){ const p=DATA.poProjetos.find(x=>x.id===id); if(p)p.aprovacao_status='APROVADO'; toast('Campaign approved ✓ (demo)'); go(SCREEN); return; }
   if(viewOnly()){toast(roMsg());return;}
-  try{ const {error}=await SBPO.rpc('aprovar_projeto',{p_projeto:id}); if(error)throw error; toast('Campaign approved ✓'); await reloadPOAll(); go(SCREEN); }
+  try{
+    const {error}=await SBPO.rpc('aprovar_projeto',{p_projeto:id}); if(error)throw error;
+    /* Freeze the ceiling at approval. From here the monthly values may be
+       redistributed or reduced freely, but the total can only grow through an
+       approved request — which is the whole point of approving an opening. */
+    const cap=r2(Object.values(campMonthlyTotals(id)).reduce((s,v)=>s+v,0));
+    try{ await SBPO.from('projetos').update({cap_aprovado:cap}).eq('id',id); }
+    catch(e2){ console.warn('cap_aprovado on approval:',(e2&&e2.message)||e2); }
+    toast(`Campaign approved ✓ — cap fixed at ${BRL(cap)}`); await reloadPOAll(); go(SCREEN);
+  }
   catch(e){ toastErr(e); }
 }
 async function rejeitarCamp(id){
@@ -5686,7 +5769,7 @@ async function reloadPOAll(){
   try{
     const [orc,prj,pos,tet,rat]=await Promise.all([
       SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
-      SBPO.from('projetos').select('id,nome,agencia,orcamento_id,product_category,activity,projeto_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em'),
+      SBPO.from('projetos').select('id,nome,agencia,orcamento_id,product_category,activity,projeto_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em'),
       SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
       SBPO.from('tetos').select('projeto_id,competencia,teto'),
       SBPO.from('rateio_alocacao').select('projeto_id,competencia,valor,categoria')
