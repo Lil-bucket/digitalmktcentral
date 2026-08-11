@@ -444,7 +444,7 @@ function roMsg(){ return DEMO_MODE?'Demo mode — sandbox with fake data, nothin
    write action stays hidden in demo (plain !viewOnly()) since it isn't
    locally simulated. */
 function demoWritable(cond){ return cond&&(DEMO_MODE||!viewOnly()); }
-let DATA={projetos:[], orcamentos:[], poProjetos:[], pos:[], tetos:[], rateio:[], notif:[], mencoes:[], pessoas:[], fee:[], ccLayout:[]};
+let DATA={projetos:[], orcamentos:[], poProjetos:[], pos:[], tetos:[], rateio:[], notif:[], mencoes:[], pessoas:[], fee:[], ccLayout:[], campanhas:[], campanhaCategorias:[]};
 let TEAM=[];
 let SCREEN='dash';
 
@@ -1043,13 +1043,15 @@ const Q_WORK=()=>[
 ];
 const Q_BUDGET=()=>[
   SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
-  SBPO.from('funds').select('id,nome,agencia,orcamento_id,product_category,activity,fund_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em'),
+  SBPO.from('funds').select('id,nome,agencia,orcamento_id,product_category,activity,fund_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em,campanha_id'),
   SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
   SBPO.from('tetos').select('fund_id,competencia,teto'),
   SBPO.from('rateio_alocacao').select('fund_id,competencia,valor,categoria'),
   SBPO.from('notificacoes').select('id,mensagem,tipo,po_id,fund_id,lida,criada_em').order('criada_em',{ascending:false}).limit(200),
   SBPO.rpc('listar_pessoas'),
   SBPO.from('fee_rateio').select('agencia,tipo,categoria,percentual,cc,account,descricao'),
+  SBPO.from('campanhas').select('*'),
+  SBPO.from('campanha_categorias').select('campanha_id,categoria'),
   /* Extrato row order. Readable by marketing/finance/admin only, which is a
      superset of who can see the cost-center table; for anyone else the query
      comes back empty and ccLayoutIndex() falls back to CC_LAYOUT. */
@@ -1077,7 +1079,7 @@ async function loadAll(){
     STAGE_DESCS=Object.assign({},STAGE_DESCS_DEFAULT,s.stageDescs||{});
   }
   if(!wantPO)return;
-  const [orc,prj,pos,tet,rat,nt,pes,fee,lay]=r.slice(2);
+  const [orc,prj,pos,tet,rat,nt,pes,fee,lay,camp,campCat]=r.slice(2);
   DATA.orcamentos=tookOr(orc,DATA.orcamentos);
   DATA.poProjetos=(prj&&prj.error)?DATA.poProjetos:((prj.data||[]).filter(p=>p.aprovacao_status!=='REJEITADO'));
   DATA.pos=tookOr(pos,DATA.pos);
@@ -1087,6 +1089,8 @@ async function loadAll(){
   DATA.pessoas=tookOr(pes,DATA.pessoas);
   DATA.fee=tookOr(fee,DATA.fee);
   DATA.ccLayout=tookOr(lay,DATA.ccLayout);
+  DATA.campanhas=tookOr(camp,DATA.campanhas);
+  DATA.campanhaCategorias=tookOr(campCat,DATA.campanhaCategorias);
 }
 
 /* ============================================================
@@ -1138,11 +1142,11 @@ document.addEventListener('visibilitychange',()=>{ if(!document.hidden) refreshA
    NAV + ROUTING — espelha o protótipo aprovado (menu por papel)
    ============================================================ */
 const W_LABELS={dash:'Dashboard',board:'Board',list:'List',timeline:'Timeline',team:'Team',weekly:'Weekly Status',mytasks:'Tasks',agencywork:'Assigned Work',notif:'Notifications'};
-const B_LABELS={bo:'Overview',budgets:'Budgets',funds:'Funds',pos:'POs & Approvals',approvals:'Approvals',podesk:'PO Desk',people:'People & Roles',reqpo:'Request PO',mypos:'My POs',balance:'Balance'};
+const B_LABELS={bo:'Overview',budgets:'Budgets',funds:'Funds',campanhas:'Campaigns',pos:'POs & Approvals',approvals:'Approvals',podesk:'PO Desk',people:'People & Roles',reqpo:'Request PO',mypos:'My POs',balance:'Balance'};
 const ROLE_NAV={
-  admin:      {work:['dash','board','list','timeline','team','weekly','mytasks'], budget:['bo','budgets','funds','pos','people']},
-  marketing:  {work:['dash','board','list','timeline','weekly','mytasks'],        budget:['bo','funds','pos']},
-  financeiro: {work:[],                                                          budget:['bo','budgets','funds','pos']},
+  admin:      {work:['dash','board','list','timeline','team','weekly','mytasks'], budget:['bo','budgets','campanhas','funds','pos','people']},
+  marketing:  {work:['dash','board','list','timeline','weekly','mytasks'],        budget:['bo','campanhas','funds','pos']},
+  financeiro: {work:[],                                                          budget:['bo','campanhas','funds','pos']},
   agencia:    {work:['board','list','timeline'],                                 budget:['bo','funds','pos']}
 };
 const PANEL_ONLY_WORK=['dash','board','list','timeline','weekly','mytasks'];
@@ -1197,6 +1201,7 @@ const SCREEN_META={
   bo:{t:'Budget overview',s:'Budget · Spend health, categories and alerts',mod:'budget'},
   budgets:{t:'Budgets',s:'Budget · Categories',mod:'budget'},
   funds:{t:'Funds',s:'Budget · Consumption per fund',mod:'budget'},
+  campanhas:{t:'Campaigns',s:'Budget · Grouping layer above Fund',mod:'budget'},
   pos:{t:'POs & Approvals',s:'Budget · Single queue by lifecycle phase',mod:'budget'},
   mypos:{t:'My POs',s:'Budget · Your agency\'s POs',mod:'budget'},
   approvals:{t:'Approvals',s:'Budget · Pending funds and POs',mod:'budget'},
@@ -1253,6 +1258,8 @@ function go(screen){
     $('#ctaBox').innerHTML=`${['dash','board','list'].includes(screen)?ptipoFilterHTML():''}${statusChip}${exportBtn}<button class="btn-ghost" onclick="openStageGuide()">Stage guide</button><button class="btn-acc" onclick="openProjNew()">+ New project</button>`;
   } else if(screen==='funds'&&demoWritable(['admin','marketing'].includes(PAPEL))){
     $('#ctaBox').innerHTML='<button class="btn-acc" style="background:var(--po)" onclick="openFundNew()">+ New fund</button>';
+  } else if(screen==='campanhas'&&demoWritable(['admin','marketing'].includes(PAPEL))){
+    $('#ctaBox').innerHTML='<button class="btn-acc" style="background:var(--po)" onclick="openCampanhaNew()">+ New campaign</button>';
   } else if(screen==='budgets'){
     const canBudget=PAPEL==='admin'&&!viewOnly();
     $('#ctaBox').innerHTML=`<button class="btn-ghost" onclick="exportBudgetXLSX()">Exportar Excel</button>${canBudget?'<button class="btn-acc" style="background:var(--po)" onclick="openOrcNew()">+ New budget</button>':''}`;
@@ -1273,6 +1280,7 @@ function go(screen){
   else if(screen==='bo'){ v.innerHTML=renderBudgetOverview(false); buildFundChart(); buildOverviewMonthlyChart(false); buildOverviewPies(); ccAutoScroll(); }
   else if(screen==='budgets'){ v.innerHTML=renderBudgets(); buildBudgetActivityChart(); ccAutoScroll(); }
   else if(screen==='funds'){ v.innerHTML=renderFunds(); buildFundChart(); }
+  else if(screen==='campanhas'){ v.innerHTML=renderCampanhasList(); }
   else if(screen==='pos'||screen==='mypos') v.innerHTML=renderPOs();
   else if(screen==='podesk') v.innerHTML=renderAprovacoes();
   else if(screen==='people') v.innerHTML=renderPeople();
@@ -1692,7 +1700,7 @@ function renderFunds(){
   FUND_CTX={list,tetoBy,consBy,compBy,pendBy};
   return fundKpisHTML()+`
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
-      <div style="display:flex;gap:6px">${[['cat','Categories'],['tl','Timeline']].map(v=>`<button onclick="fundSetView('${v[0]}')" style="padding:8px 13px;border-radius:8px;border:1px solid ${FUND_VIEW===v[0]?'var(--po)':'var(--line-2)'};background:${FUND_VIEW===v[0]?'#fbe4e1':'#fff'};color:${FUND_VIEW===v[0]?'#bf0008':'var(--txt-2)'};font-size:12px;font-weight:700;cursor:pointer">${v[1]}</button>`).join('')}</div>
+      <div style="display:flex;gap:6px">${[['cat','Categories'],['camp','Campaigns'],['tl','Timeline']].map(v=>`<button onclick="fundSetView('${v[0]}')" style="padding:8px 13px;border-radius:8px;border:1px solid ${FUND_VIEW===v[0]?'var(--po)':'var(--line-2)'};background:${FUND_VIEW===v[0]?'#fbe4e1':'#fff'};color:${FUND_VIEW===v[0]?'#bf0008':'var(--txt-2)'};font-size:12px;font-weight:700;cursor:pointer">${v[1]}</button>`).join('')}</div>
       <div style="position:relative;flex:1;max-width:340px;min-width:200px">
         <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--txt-3);display:flex">${icn('search',14)}</span>
         <input id="fundQ" value="${esc(FUND_Q)}" oninput="fundSearch(this.value)" placeholder="Search fund, agency…" style="width:100%;padding:9px 12px 9px 34px;border-radius:10px;border:1px solid var(--line-2);background:#fff;font-size:13px;font-family:inherit;outline:none">
@@ -1732,6 +1740,7 @@ function renderCampBody(){
   const q=FUND_Q;
   const fl=fundVisible();
   if(FUND_VIEW==='tl') return fundTimelineHTML(fl,q);
+  if(FUND_VIEW==='camp') return fundCampBodyHTML(fl);
   const catOf=p=>(String(p.product_category||'').trim())||'Uncategorized';
   const byCat={};
   fl.forEach(p=>{ (byCat[catOf(p)]=byCat[catOf(p)]||[]).push(p); });
@@ -1765,6 +1774,43 @@ function renderCampBody(){
   }).join('');
   return `<div id="fundBody" style="display:flex;flex-direction:column;gap:13px">${sections}</div>`;
 }
+/* ===== Campaigns view: same accordion as the Categories view, grouped by
+   campanha_id instead of product_category, with a "Funds avulsos" section at
+   the end for funds that carry no campanha_id (standalone/historical). Reuses
+   fundItemGroupsHTML/fundItemRowHTML/fundGaugeHTML — no new row markup. ===== */
+function fundCampBodyHTML(fl){
+  const m={c:'var(--po)',bg:'#fbe4e1'};
+  const byCamp={}; const avulsos=[];
+  fl.forEach(p=>{ if(p.campanha_id) (byCamp[p.campanha_id]=byCamp[p.campanha_id]||[]).push(p); else avulsos.push(p); });
+  const campIds=Object.keys(byCamp).sort((a,b)=>{
+    const na=(DATA.campanhas.find(c=>c.id===a)||{}).nome||'', nb=(DATA.campanhas.find(c=>c.id===b)||{}).nome||'';
+    return na.localeCompare(nb);
+  });
+  if(!campIds.length&&!avulsos.length) return `<div id="fundBody"><div class="empty">No funds match the current search/filters.</div></div>`;
+  const section=(key,label,funds,sub)=>{
+    const t=campTotals(key==='__avulsos'?null:key);
+    const tot=funds.reduce((s,p)=>s+((FUND_CTX.tetoBy[p.id])||0),0);
+    const collapsed=!!FUND_COLLAPSED['camp:'+key];
+    return `<div style="background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
+      <div onclick="fundToggleCat('camp:${esc(key)}')" style="padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer" onmouseover="this.style.background='var(--paper-2)'" onmouseout="this.style.background=''">
+        <span style="min-width:0;flex:1">
+          <b style="font-family:'Hanken Grotesk',sans-serif;font-size:13.5px;display:block">${esc(label)}</b>
+          <span style="font-size:11px;color:var(--txt-3);font-weight:600">${funds.length} fund${funds.length===1?'':'s'}${sub?' · '+esc(sub):''}</span>
+        </span>
+        ${key!=='__avulsos'?fundGaugeHTML(t.teto,t.cons,t.comp,0,'var(--po)',220):`<span class="mono" style="font-size:12.5px;font-weight:700;color:var(--ink)">${BRL(tot)}</span>`}
+        <span style="color:var(--txt-3);display:flex;transform:rotate(${collapsed?'-90deg':'0deg'});transition:transform .15s">${icn('chev',14)}</span>
+      </div>
+      ${collapsed?'':fundCatBody(funds,m)}
+    </div>`;
+  };
+  const sections=campIds.map(cid=>{
+    const c=DATA.campanhas.find(x=>x.id===cid)||{nome:'—'};
+    const sm=campStatusMeta(c.status);
+    return section(cid,c.nome,byCamp[cid],sm.t);
+  }).join('');
+  const avulsosSection=avulsos.length?section('__avulsos','Funds avulsos',avulsos):'';
+  return `<div id="fundBody" style="display:flex;flex-direction:column;gap:13px">${sections}${avulsosSection}</div>`;
+}
 /* ===== Category view: activity columns (fixed, aligned across categories) + compact cards ===== */
 const ACT_COL_ORDER=['Campaign','FEE','KOL','AON','Communication'];
 function actColLabel(a){ return ({Campaign:'Campaign',FEE:'Fee',KOL:'KOL',AON:'AON',Communication:'Comms'})[a]||a||'Other'; }
@@ -1792,19 +1838,15 @@ function fundGlobalCats(){
    activity) + a single-color progress bar matching the category color, and
    the row itself opens the shared fund detail modal (the one source of
    truth used everywhere: List, Kanban, Overview, Budgets & Fees). */
-function fundItemRowHTML(p,m){
-  const {tetoBy,consBy,compBy,pendBy}=FUND_CTX;
-  const tot=tetoBy[p.id]||0, cons=consBy[p.id]||0, comp=compBy[p.id]||0, pnd=pendBy[p.id]||0;
-  const rawc=tot?(cons+comp+pnd)/tot*100:0, over=rawc>100.5, near=!over&&rawc>=90;
-  const lc=fundLifecycle(p);
-  /* The figures live inside the bar rather than on their own line above it —
-     one band instead of two, which is what makes the row thin. The fill is a
-     soft tint of the category colour so the ink on top stays legible whether
-     it sits over the filled or the empty part; a saturated leading edge keeps
-     the bar reading as coloured. */
-  const fillCol=over?'var(--po)':m.c;
+/* Shared budget gauge: cap vs consumed+committed, as a single-color bar with
+   the figures baked in. Used per-fund (fundItemRowHTML) and, aggregated
+   across a campanha's funds, on the Campaigns screen (campanhaGaugeHTML) —
+   one drawing routine so both places move together. */
+function fundGaugeHTML(tot,cons,comp,pnd,color,width){
+  const rawc=tot?(cons+comp+(pnd||0))/tot*100:0, over=rawc>100.5, near=!over&&rawc>=90;
+  const fillCol=over?'var(--po)':color;
   const barW=Math.min(100,rawc);
-  const bar=`<span title="Consumed + committed / cap" style="position:relative;display:flex;align-items:center;width:270px;flex-shrink:0;height:22px;border-radius:7px;background:#eef0f4;overflow:hidden">
+  return `<span title="Consumed + committed / cap" style="position:relative;display:flex;align-items:center;width:${width||270}px;flex-shrink:0;height:22px;border-radius:7px;background:#eef0f4;overflow:hidden">
       <span style="position:absolute;left:0;top:0;bottom:0;width:${barW}%;background:${fillCol};opacity:.26"></span>
       ${barW>0.5?`<span style="position:absolute;left:0;top:0;bottom:0;width:3px;background:${fillCol}"></span>`:''}
       <span class="mono" style="position:relative;display:flex;align-items:center;gap:6px;width:100%;padding:0 9px;font-size:10.5px;font-weight:700;color:var(--txt-2);white-space:nowrap">
@@ -1813,6 +1855,17 @@ function fundItemRowHTML(p,m){
         <span style="margin-left:auto;color:${over?'#bf0008':near?'#9c6404':'var(--txt)'}">${tot?Math.round(rawc)+'%':'—'}</span>
       </span>
     </span>`;
+}
+function fundItemRowHTML(p,m){
+  const {tetoBy,consBy,compBy,pendBy}=FUND_CTX;
+  const tot=tetoBy[p.id]||0, cons=consBy[p.id]||0, comp=compBy[p.id]||0, pnd=pendBy[p.id]||0;
+  const lc=fundLifecycle(p);
+  /* The figures live inside the bar rather than on their own line above it —
+     one band instead of two, which is what makes the row thin. The fill is a
+     soft tint of the category colour so the ink on top stays legible whether
+     it sits over the filled or the empty part; a saturated leading edge keeps
+     the bar reading as coloured. */
+  const bar=fundGaugeHTML(tot,cons,comp,pnd,m.c,270);
   return `<div class="camp-item" onclick="openFundDetail('${esc(p.id)}')" style="padding:7px 6px;cursor:pointer;border-bottom:1px solid ${m.bg};${lc==='done'?'opacity:.62;':''}" onmouseover="this.style.background='${m.bg}'" onmouseout="this.style.background=''">
     <div style="display:flex;align-items:center;gap:10px">
       <span style="flex:1;min-width:0;font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span>
@@ -2497,7 +2550,7 @@ function recoverQual(pid){
 function openCampEdit(pid){
   const p=DATA.poProjetos.find(x=>x.id===pid); if(!p)return;
   const feeMode = p.activity==='FEE' ? (p.rateio ? 'split' : 'whole') : 'shared';
-  FUNDEDIT={id:pid,nome:p.nome||'',agencia:p.agencia||'',activity:p.activity||'Campaign',cat:guessCat(p.product_category||p.nome),rateio:!!p.rateio,qual:(feeMode==='split'?recoverQual(pid):''),feeMode:feeMode};
+  FUNDEDIT={id:pid,nome:p.nome||'',agencia:p.agencia||'',activity:p.activity||'Campaign',cat:guessCat(p.product_category||p.nome),rateio:!!p.rateio,qual:(feeMode==='split'?recoverQual(pid):''),feeMode:feeMode,campanha_id:p.campanha_id||''};
   renderCampEditForm();
 }
 function fundEditSet(k,v){ if(FUNDEDIT)FUNDEDIT[k]=v; }
@@ -2514,6 +2567,7 @@ function renderCampEditForm(){
         <div class="field"><label>Activity</label><select onchange="fundEditActivity(this.value)">${ACT_OPTS.map(a=>`<option ${ce.activity===a?'selected':''}>${a}</option>`).join('')}</select></div>
         <div class="field"><label>Agency</label><select onchange="fundEditSet('agencia',this.value)">${ags.map(a=>`<option ${ce.agencia===a?'selected':''}>${esc(a)}</option>`).join('')}${ags.length?'':'<option value="">—</option>'}</select></div>
       </div>
+      <div class="field full" style="margin-top:14px"><label>Campaign <span style="font-weight:600;color:var(--txt-3)">(optional grouping)</span></label><select onchange="fundEditSet('campanha_id',this.value)"><option value="" ${!ce.campanha_id?'selected':''}>— none —</option>${(DATA.campanhas||[]).map(c=>`<option value="${c.id}" ${ce.campanha_id===c.id?'selected':''}>${esc(c.nome)}</option>`).join('')}</select></div>
       ${classField}
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">Was: <b>${esc((DATA.poProjetos.find(x=>x.id===ce.id)||{}).product_category||'—')}</b>. Months and total value stay the same.</div>
     </div>
@@ -2532,7 +2586,7 @@ async function submitFundEdit(){
       await SBPO.from('rateio_alocacao').delete().eq('fund_id',ce.id); // in case it was split before
       let cc='',account='',account_desc='';
       try{ const {data:cls}=await SBPO.rpc('classificar',{p_d:ce.cat,p_e:ce.activity||'',p_f:''}); const c=(cls&&cls[0])||{}; cc=c.cc||''; account=c.account||''; account_desc=c.descricao||''; }catch(e){}
-      const {error}=await SBPO.from('funds').update({nome:ce.nome.trim(),agencia:ce.agencia||null,activity:ce.activity||null,rateio:false,rateio_tipo:null,product_category:ce.cat,cc,account,account_desc}).eq('id',ce.id);
+      const {error}=await SBPO.from('funds').update({nome:ce.nome.trim(),agencia:ce.agencia||null,activity:ce.activity||null,rateio:false,rateio_tipo:null,product_category:ce.cat,cc,account,account_desc,campanha_id:ce.campanha_id||null}).eq('id',ce.id);
       if(error)throw error;
     }
     FUNDEDIT=null; toast('Fund updated ✓'); closeModal(); await reloadPOAll(); goCostCenter();
@@ -4172,6 +4226,140 @@ async function deletarOrcamento(id){
 }
 
 /* ============================================================
+   CAMPANHAS — grouping layer above Fund. A campanha bundles one or more
+   funds (DATA.poProjetos, via funds.campanha_id) under a name/budget/owner,
+   tagged with the categories it spans (campanha_categorias). Nothing here
+   changes how a Fund itself is stored or rendered — it only adds an
+   optional parent and a screen that rolls several funds up into one card.
+   ============================================================ */
+const CAMP_CATS=['TV','AC','Mobile','Monitor','Home Appliances','LABG'];
+function campStatusMeta(s){
+  return ({planejada:{t:'Planned',c:'s-blue'},ativa:{t:'Active',c:'s-green'},encerrada:{t:'Closed',c:'s-slate'}})[s]||{t:s||'—',c:'s-slate'};
+}
+function campCategorias(campId){
+  return (DATA.campanhaCategorias||[]).filter(c=>c.campanha_id===campId).map(c=>c.categoria);
+}
+function campFunds(campId){
+  return (DATA.poProjetos||[]).filter(p=>p.campanha_id===campId);
+}
+/* Same cap/consumed/committed aggregation renderFunds() does per-fund
+   (tetos + rateio_alocacao for the cap, pos by status for spend), just
+   summed across every fund that belongs to this campanha instead of one. */
+function campTotals(campId){
+  const ids=new Set(campFunds(campId).map(p=>p.id));
+  let teto=0,cons=0,comp=0;
+  DATA.tetos.forEach(t=>{ if(ids.has(t.fund_id)) teto+=(+t.teto||0); });
+  DATA.rateio.forEach(r=>{ if(ids.has(r.fund_id)) teto+=(+r.valor||0); });
+  DATA.pos.forEach(po=>{ if(!ids.has(po.fund_id))return; const v=+po.valor||0; if(CONS.includes(po.status))cons+=v; else if(COMP.includes(po.status))comp+=v; });
+  return {teto,cons,comp};
+}
+function campanhaGaugeHTML(campId,width){
+  const t=campTotals(campId);
+  return fundGaugeHTML(t.teto,t.cons,t.comp,0,'#e20613',width||220);
+}
+function renderCampanhasList(){
+  let list=(DATA.campanhas||[]).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+  if(!list.length) return `<div class="empty">No campaigns yet. Campaigns group one or more funds under a name, budget and owner — create one and link funds to it from the fund form.</div>`;
+  const rows=list.map(c=>{
+    const cats=campCategorias(c.id);
+    const funds=campFunds(c.id);
+    const sm=campStatusMeta(c.status);
+    return `<div class="camp-item" onclick="openCampanhaDetail('${esc(c.id)}')" style="padding:12px 14px;cursor:pointer;border-bottom:1px solid var(--line)" onmouseover="this.style.background='var(--paper-2)'" onmouseout="this.style.background=''">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span style="flex:1;min-width:160px">
+          <b style="font-family:'Hanken Grotesk',sans-serif;font-size:13.5px;display:block">${esc(c.nome)}</b>
+          <span style="font-size:11px;color:var(--txt-3);font-weight:600">${esc(c.responsavel||'No owner set')} · ${funds.length} fund${funds.length===1?'':'s'}</span>
+        </span>
+        <span style="display:flex;gap:5px;flex-wrap:wrap;max-width:260px">${cats.length?cats.map(cat=>`<span class="badge s-blue" style="font-size:10px;padding:2px 8px">${esc(cat)}</span>`).join(''):'<span style="font-size:11px;color:var(--txt-3)">No categories</span>'}</span>
+        <span class="badge ${sm.c}" style="flex-shrink:0"><span class="d"></span>${sm.t}</span>
+        ${campanhaGaugeHTML(c.id,220)}
+      </div>
+    </div>`;
+  }).join('');
+  return `<div style="background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">${rows}</div>`;
+}
+function openCampanhaDetail(id){ openCampanhaEdit(id); }
+let CAMPEDIT=null;
+function openCampanhaNew(){
+  const o0=(DATA.orcamentos||[])[0];
+  CAMPEDIT={id:null,nome:'',budget_id:o0?o0.id:'',responsavel:'',status:'planejada',descricao:'',cats:[]};
+  renderCampanhaForm();
+}
+function openCampanhaEdit(id){
+  const c=(DATA.campanhas||[]).find(x=>x.id===id); if(!c)return;
+  CAMPEDIT={id:c.id,nome:c.nome||'',budget_id:c.budget_id||'',responsavel:c.responsavel||'',status:c.status||'planejada',descricao:c.descricao||'',cats:campCategorias(c.id)};
+  renderCampanhaForm();
+}
+function campEditSet(k,v){ if(CAMPEDIT)CAMPEDIT[k]=v; }
+function campEditToggleCat(cat){
+  if(!CAMPEDIT)return;
+  const i=CAMPEDIT.cats.indexOf(cat);
+  if(i<0) CAMPEDIT.cats.push(cat); else CAMPEDIT.cats.splice(i,1);
+  renderCampanhaForm();
+}
+function renderCampanhaForm(){
+  if(!CAMPEDIT)return; const ce=CAMPEDIT; const editing=!!ce.id;
+  const orcs=DATA.orcamentos||[];
+  const statusOpts=['planejada','ativa','encerrada'].map(s=>`<option value="${s}" ${ce.status===s?'selected':''}>${campStatusMeta(s).t}</option>`).join('');
+  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:560px">
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--po);flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>${editing?'Edit campaign':'New campaign'}</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Groups one or more funds under a name, budget and owner</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
+    <div class="modal-b">
+      <div class="field full"><label>Campaign name</label><input value="${esc(ce.nome)}" onchange="campEditSet('nome',this.value)" placeholder="e.g. Back to School 2026" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
+      <div class="fgrid" style="margin-top:14px">
+        <div class="field"><label>Budget</label><select onchange="campEditSet('budget_id',this.value)">${orcs.map(o=>`<option value="${o.id}" ${ce.budget_id===o.id?'selected':''}>${esc(o.nome||o.product_category)}</option>`).join('')||'<option value="">— no budget —</option>'}</select></div>
+        <div class="field"><label>Status</label><select onchange="campEditSet('status',this.value)">${statusOpts}</select></div>
+      </div>
+      <div class="field full" style="margin-top:14px"><label>Responsible</label><input value="${esc(ce.responsavel)}" onchange="campEditSet('responsavel',this.value)" placeholder="Owner name" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
+      <div class="field full" style="margin-top:14px"><label>Categories</label>
+        <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:4px">${CAMP_CATS.map(cat=>`<button type="button" onclick="campEditToggleCat('${cat}')" style="padding:6px 12px;border-radius:20px;border:1px solid ${ce.cats.includes(cat)?'var(--po)':'var(--line-2)'};background:${ce.cats.includes(cat)?'#fbe4e1':'#fff'};color:${ce.cats.includes(cat)?'#bf0008':'var(--txt-2)'};font-size:12px;font-weight:700;cursor:pointer">${cat}</button>`).join('')}</div>
+      </div>
+      <div class="field full" style="margin-top:14px"><label>Description</label><textarea onchange="campEditSet('descricao',this.value)" rows="3" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13px;resize:vertical">${esc(ce.descricao)}</textarea></div>
+      ${editing?`<div style="font-size:11.5px;color:var(--txt-3);margin-top:10px">${campFunds(ce.id).length} fund(s) linked. Link/unlink funds from each fund's edit form.</div>`:''}
+    </div>
+    <div class="modal-f"><span>${(editing&&PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarCampanha('${esc(ce.id)}')">Delete campaign</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitCampanha()">${editing?'Save':'Create campaign'}</button></div></div>
+  </div></div>`;
+}
+async function submitCampanha(){
+  if(viewOnly()){toast(roMsg());return;}
+  if(!CAMPEDIT)return; const ce=CAMPEDIT;
+  if(!ce.nome.trim()){ toast('Give the campaign a name.'); return; }
+  try{
+    let campId=ce.id;
+    if(campId){
+      const {error}=await SBPO.from('campanhas').update({nome:ce.nome.trim(),budget_id:ce.budget_id||null,responsavel:ce.responsavel||null,status:ce.status,descricao:ce.descricao||null}).eq('id',campId);
+      if(error)throw error;
+    }else{
+      const {data,error}=await SBPO.from('campanhas').insert({nome:ce.nome.trim(),budget_id:ce.budget_id||null,responsavel:ce.responsavel||null,status:ce.status,descricao:ce.descricao||null}).select().single();
+      if(error)throw error;
+      campId=data.id;
+    }
+    // Simplest correct approach given the low row counts: wipe this campanha's
+    // category rows and re-insert the selected set, rather than diffing.
+    await SBPO.from('campanha_categorias').delete().eq('campanha_id',campId);
+    if(ce.cats.length){
+      const {error:e2}=await SBPO.from('campanha_categorias').insert(ce.cats.map(cat=>({campanha_id:campId,categoria:cat})));
+      if(e2)throw e2;
+    }
+    CAMPEDIT=null; toast(ce.id?'Campaign updated ✓':'Campaign created ✓'); closeModal(); await reloadPOAll(); go('campanhas');
+  }catch(e){ toastErr(e); }
+}
+async function deletarCampanha(id){
+  if(viewOnly()){toast(roMsg());return;}
+  if(PAPEL!=='admin'){ toast('Only admin can delete.'); return; }
+  const c=(DATA.campanhas||[]).find(x=>x.id===id)||{};
+  const nFunds=campFunds(id).length;
+  if(nFunds){ toast(`Remova o vínculo dos ${nFunds} fund(s) antes de excluir "${c.nome||''}".`); return; }
+  if(!confirm('Delete campaign "'+(c.nome||'')+'"?\n\nThis cannot be undone.'))return;
+  try{
+    await SBPO.from('campanha_categorias').delete().eq('campanha_id',id);
+    const {error}=await SBPO.from('campanhas').delete().eq('id',id);
+    if(error)throw error;
+    CAMPEDIT=null; closeModal(); await reloadPOAll(); go('campanhas'); toast('Campaign deleted.');
+  }catch(e){ toastErr(e); }
+}
+window.deletarCampanha=deletarCampanha;
+
+/* ============================================================
    TELAS ADICIONAIS (espelham o protótipo aprovado)
    ============================================================ */
 let TL_HILITE=null; // highlighted week index, or null — click a week header to toggle
@@ -5767,14 +5955,17 @@ async function deletarPessoa(userId){
    ============================================================ */
 async function reloadPOAll(){
   try{
-    const [orc,prj,pos,tet,rat]=await Promise.all([
+    const [orc,prj,pos,tet,rat,camp,campCat]=await Promise.all([
       SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
-      SBPO.from('funds').select('id,nome,agencia,orcamento_id,product_category,activity,fund_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em'),
+      SBPO.from('funds').select('id,nome,agencia,orcamento_id,product_category,activity,fund_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em,campanha_id'),
       SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
       SBPO.from('tetos').select('fund_id,competencia,teto'),
-      SBPO.from('rateio_alocacao').select('fund_id,competencia,valor,categoria')
+      SBPO.from('rateio_alocacao').select('fund_id,competencia,valor,categoria'),
+      SBPO.from('campanhas').select('*'),
+      SBPO.from('campanha_categorias').select('campanha_id,categoria')
     ]);
     DATA.orcamentos=orc.data||[]; DATA.poProjetos=(prj.data||[]).filter(p=>p.aprovacao_status!=='REJEITADO'); DATA.pos=pos.data||[]; DATA.tetos=tet.data||[]; DATA.rateio=rat.data||[];
+    DATA.campanhas=camp.data||DATA.campanhas; DATA.campanhaCategorias=campCat.data||DATA.campanhaCategorias;
   }catch(e){ console.error('reloadPOAll:',e); }
 }
 function agencyOpts(){
@@ -5788,7 +5979,7 @@ function rateioTipos(){ const s=new Set((DATA.fee||[]).map(f=>f.tipo).filter(Boo
 function openFundNew(){
   const o0=(DATA.orcamentos||[])[0];
   const nowM=new Date().toISOString().slice(0,7);
-  FUND={nome:'',orcamento_id:o0?o0.id:'',agencia:(agencyOpts()[0]||''),activity:'Campaign',rows:[{id:uid(),mes:nowM,valor:''}]};
+  FUND={nome:'',orcamento_id:o0?o0.id:'',agencia:(agencyOpts()[0]||''),activity:'Campaign',campanha_id:'',rows:[{id:uid(),mes:nowM,valor:''}]};
   renderCampForm();
 }
 function fundSet(k,v){ if(!FUND)return; FUND[k]=v; renderCampForm(); }
@@ -5809,6 +6000,7 @@ function renderCampForm(){
         <div class="field"><label>Activity</label><select onchange="fundSet('activity',this.value)">${ACT_OPTS.map(a=>`<option ${FUND.activity===a?'selected':''}>${a}</option>`).join('')}</select></div>
         <div class="field"><label>Agency</label><select onchange="FUND.agencia=this.value">${ags.map(a=>`<option ${FUND.agencia===a?'selected':''}>${esc(a)}</option>`).join('')}${ags.length?'':'<option value="">—</option>'}</select></div>
       </div>
+      <div class="field full" style="margin-top:14px"><label>Campaign <span style="font-weight:600;color:var(--txt-3)">(optional grouping)</span></label><select onchange="FUND.campanha_id=this.value"><option value="" ${!FUND.campanha_id?'selected':''}>— none —</option>${(DATA.campanhas||[]).map(c=>`<option value="${c.id}" ${FUND.campanha_id===c.id?'selected':''}>${esc(c.nome)}</option>`).join('')}</select></div>
       <div class="field full"><label>Category <span style="font-weight:600;color:var(--txt-3)">(defines which budget funds it)</span></label><select onchange="fundSet('orcamento_id',this.value)">${orcs.map(o=>`<option value="${o.id}" ${FUND.orcamento_id===o.id?'selected':''}>${esc(o.nome||o.product_category)}</option>`).join('')||'<option value="">— no budget —</option>'}</select>${/fee/i.test(FUND.activity||'')?'<div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">Splitting a fee across categories (TV/AC/LABG…) is now done automatically when requesting the PO — create one fund per category instead of a shared rateio.</div>':''}</div>
       <div style="border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:6px">
         <div style="padding:10px 14px;background:#fafbfd;border-bottom:1px solid var(--line);font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">Budget distribution by month — manual</div>
@@ -5856,7 +6048,7 @@ async function submitFund(){
   try{
     let cc='',account='',account_desc='';
     try{ const {data:cls}=await SBPO.rpc('classificar',{p_d:cat,p_e:FUND.activity||'',p_f:''}); const c=(cls&&cls[0])||{}; cc=c.cc||''; account=c.account||''; account_desc=c.descricao||''; }catch(e){}
-    const campos={nome:FUND.nome.trim(),agencia:FUND.agencia||null,orcamento_id:FUND.orcamento_id,product_category:cat,activity:FUND.activity||null,cc,account,account_desc,rateio:false,rateio_tipo:null,criado_por:'portal'};
+    const campos={nome:FUND.nome.trim(),agencia:FUND.agencia||null,orcamento_id:FUND.orcamento_id,product_category:cat,activity:FUND.activity||null,cc,account,account_desc,rateio:false,rateio_tipo:null,criado_por:'portal',campanha_id:FUND.campanha_id||null};
     const {data:proj,error}=await SBPO.from('funds').insert(campos).select().single();
     if(error)throw error;
     const pid=proj.id;
