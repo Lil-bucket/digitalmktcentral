@@ -444,7 +444,7 @@ function roMsg(){ return DEMO_MODE?'Demo mode — sandbox with fake data, nothin
    write action stays hidden in demo (plain !viewOnly()) since it isn't
    locally simulated. */
 function demoWritable(cond){ return cond&&(DEMO_MODE||!viewOnly()); }
-let DATA={projetos:[], orcamentos:[], poProjetos:[], pos:[], tetos:[], rateio:[], notif:[], mencoes:[], pessoas:[], fee:[]};
+let DATA={projetos:[], orcamentos:[], poProjetos:[], pos:[], tetos:[], rateio:[], notif:[], mencoes:[], pessoas:[], fee:[], ccLayout:[]};
 let TEAM=[];
 let SCREEN='dash';
 
@@ -1049,7 +1049,11 @@ const Q_BUDGET=()=>[
   SBPO.from('rateio_alocacao').select('projeto_id,competencia,valor,categoria'),
   SBPO.from('notificacoes').select('id,mensagem,tipo,po_id,projeto_id,lida,criada_em').order('criada_em',{ascending:false}).limit(200),
   SBPO.rpc('listar_pessoas'),
-  SBPO.from('fee_rateio').select('agencia,tipo,categoria,percentual,cc,account,descricao')
+  SBPO.from('fee_rateio').select('agencia,tipo,categoria,percentual,cc,account,descricao'),
+  /* Extrato row order. Readable by marketing/finance/admin only, which is a
+     superset of who can see the cost-center table; for anyone else the query
+     comes back empty and ccLayoutIndex() falls back to CC_LAYOUT. */
+  SBPO.from('extrato_layout').select('ord,categoria,cc,account,account_desc').order('ord')
 ];
 /* A table that failed keeps whatever it had instead of blanking: a refresh
    that half-fails should degrade to "one panel is stale", never to
@@ -1073,7 +1077,7 @@ async function loadAll(){
     STAGE_DESCS=Object.assign({},STAGE_DESCS_DEFAULT,s.stageDescs||{});
   }
   if(!wantPO)return;
-  const [orc,prj,pos,tet,rat,nt,pes,fee]=r.slice(2);
+  const [orc,prj,pos,tet,rat,nt,pes,fee,lay]=r.slice(2);
   DATA.orcamentos=tookOr(orc,DATA.orcamentos);
   DATA.poProjetos=(prj&&prj.error)?DATA.poProjetos:((prj.data||[]).filter(p=>p.aprovacao_status!=='REJEITADO'));
   DATA.pos=tookOr(pos,DATA.pos);
@@ -1082,6 +1086,7 @@ async function loadAll(){
   DATA.notif=tookOr(nt,DATA.notif);
   DATA.pessoas=tookOr(pes,DATA.pessoas);
   DATA.fee=tookOr(fee,DATA.fee);
+  DATA.ccLayout=tookOr(lay,DATA.ccLayout);
 }
 
 /* ============================================================
@@ -4173,11 +4178,13 @@ const CC_TAIL=[CC_LABG_CC];
    lists account 32202169 before 32202171 and AC does the reverse — so it can
    only come from the maintained list, not from comparing fields.
 
-   The same 17 lines live in the `extrato_layout` table (column `ord`), which
-   would be the better source, but that table has RLS enabled with no SELECT
-   policy at all, so the app's client can't read it. Until such a policy
-   exists this array is the copy — if the Extrato is reordered, both need the
-   same edit. */
+   The list is the `extrato_layout` table (column `ord`), loaded with the rest
+   of the budget data — reorder the Extrato there and the table and both Excel
+   sheets follow on the next load, no deploy. CC_LAYOUT below is only the
+   fallback for when that read comes back empty (the table is readable by
+   marketing/finance/admin), so the ordering degrades to "slightly stale"
+   instead of "alphabetical soup". Keep it roughly in step; the database
+   wins whenever it answers. */
 const CC_LAYOUT=[
   ['1109123014','32202169','Agency Fee - F2F'],
   ['1109123014','32202169','Shutterstock Images for agency'],
@@ -4205,16 +4212,21 @@ const CC_LAYOUT=[
 const ccNormDesc=s=>String(s||'').toLowerCase()
   .replace(/\s*\((?:tv|ac|mob|ref|wg|labg)\)\s*$/,'')
   .replace(/[^a-z0-9]/g,'');
-let _ccLayoutIx=null;
+let _ccLayoutIx=null,_ccLayoutSrc=null;
 function ccLayoutIndex(){
-  if(_ccLayoutIx) return _ccLayoutIx;
+  // Memoised against the loaded rows themselves, so a refresh that brings a
+  // reordered Extrato rebuilds the index and a repaint that doesn't, doesn't.
+  const src=(DATA.ccLayout&&DATA.ccLayout.length)?DATA.ccLayout:null;
+  if(_ccLayoutIx&&_ccLayoutSrc===src) return _ccLayoutIx;
+  const rows=src?src.map(r=>[r.cc||'',r.account||'',r.account_desc||'']):CC_LAYOUT;
   const exact={},byAcc={},byCc={};
-  CC_LAYOUT.forEach(([cc,acc,desc],i)=>{
+  rows.forEach(([cc,acc,desc],i)=>{
     exact[cc+'|'+acc+'|'+ccNormDesc(desc)]=i;
     byAcc[cc+'|'+acc]=i; // last wins → the end of that account's block
     byCc[cc]=i;          // last wins → the end of that cost center's rows
   });
-  return (_ccLayoutIx={exact,byAcc,byCc});
+  _ccLayoutSrc=src;
+  return (_ccLayoutIx={exact,byAcc,byCc,len:rows.length});
 }
 /* Graded match, so a line the layout doesn't know still lands in a sensible
    place instead of at the bottom: exact line → end of its account block →
@@ -4227,7 +4239,7 @@ function ccLayoutRank(a){
   if(g!=null) return g+0.5;
   const c=ix.byCc[cc];
   if(c!=null) return c+0.6;
-  return CC_LAYOUT.length+1;
+  return ix.len+1;
 }
 const ccTailRank=a=>(a&&a.isLabg)?1:0;
 /* Table filter. Unlike hiding rows in the DOM, this is applied inside the
