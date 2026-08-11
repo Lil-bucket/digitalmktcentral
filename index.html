@@ -668,9 +668,9 @@ function computeRecommendations(){
   if(PO_ACCESS){
     const camps=(DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO');
     const tetoBy={},consBy={},hasConcl={};
-    DATA.tetos.forEach(t=>tetoBy[t.projeto_id]=(tetoBy[t.projeto_id]||0)+(+t.teto||0));
-    DATA.rateio.forEach(r=>tetoBy[r.projeto_id]=(tetoBy[r.projeto_id]||0)+(+r.valor||0));
-    DATA.pos.forEach(po=>{ const v=+po.valor||0; if(['FATURADA','VALIDADA','CONCLUIDA','APROVADA','PO_GERADA','ATUALIZAR_INFO'].includes(po.status)) consBy[po.projeto_id]=(consBy[po.projeto_id]||0)+v; if(po.status==='CONCLUIDA') hasConcl[po.projeto_id]=true; });
+    DATA.tetos.forEach(t=>tetoBy[t.fund_id]=(tetoBy[t.fund_id]||0)+(+t.teto||0));
+    DATA.rateio.forEach(r=>tetoBy[r.fund_id]=(tetoBy[r.fund_id]||0)+(+r.valor||0));
+    DATA.pos.forEach(po=>{ const v=+po.valor||0; if(['FATURADA','VALIDADA','CONCLUIDA','APROVADA','PO_GERADA','ATUALIZAR_INFO'].includes(po.status)) consBy[po.fund_id]=(consBy[po.fund_id]||0)+v; if(po.status==='CONCLUIDA') hasConcl[po.fund_id]=true; });
     camps.forEach(p=>{
       const tot=tetoBy[p.id]||0; if(!tot)return;
       const pct=(consBy[p.id]||0)/tot*100;
@@ -679,7 +679,7 @@ function computeRecommendations(){
       }
     });
     // Cap possibly double-counted: rows in BOTH tetos and rateio_alocacao
-    const _hasTeto=new Set(DATA.tetos.map(t=>t.projeto_id)), _hasRat=new Set(DATA.rateio.map(r=>r.projeto_id));
+    const _hasTeto=new Set(DATA.tetos.map(t=>t.fund_id)), _hasRat=new Set(DATA.rateio.map(r=>r.fund_id));
     camps.forEach(p=>{ if(_hasTeto.has(p.id)&&_hasRat.has(p.id)) out.push({sev:'high',icon:'scale',text:`Campaign "${p.nome}" has cap rows in BOTH tetos and rateio_alocacao — its cap may be double-counted. Check with diag_fees_rateio.sql.`,onclick:`openCampDetail('${p.id}')`}); });
     // 4) Agency PO volume vs. configured rateio split
     const feeByTipo={}; (DATA.fee||[]).forEach(f=>{ if(!f.tipo)return; (feeByTipo[f.tipo]=feeByTipo[f.tipo]||[]).push(f); });
@@ -688,7 +688,7 @@ function computeRecommendations(){
       const campsTipo=camps.filter(p=>p.rateio_tipo===tipo);
       if(!campsTipo.length)return;
       const ids=new Set(campsTipo.map(p=>p.id));
-      const byCat={}; DATA.rateio.forEach(r=>{ if(ids.has(r.projeto_id)&&r.categoria) byCat[r.categoria]=(byCat[r.categoria]||0)+(+r.valor||0); });
+      const byCat={}; DATA.rateio.forEach(r=>{ if(ids.has(r.fund_id)&&r.categoria) byCat[r.categoria]=(byCat[r.categoria]||0)+(+r.valor||0); });
       const totalAlloc=Object.values(byCat).reduce((s,v)=>s+v,0); if(!totalAlloc)return;
       rows.forEach(f=>{
         const expected=(+f.percentual||0)/totalPct*100;
@@ -863,7 +863,7 @@ function seedDemoData(){
   ];
   const poProjetos=campSeed.map(p=>({id:p.id,nome:p.nome,agencia:p.agencia,product_category:p.product_category,activity:p.activity,orcamento_id:p.orcamento_id,aprovacao_status:p.aprovacao_status,rateio:false,dono:'demo-u-mkt'}));
 
-  const tetos=[]; const addTeto=(pid,vals)=>vals.forEach(([m,v])=>tetos.push({projeto_id:pid,competencia:D(2026,m,1),teto:v}));
+  const tetos=[]; const addTeto=(pid,vals)=>vals.forEach(([m,v])=>tetos.push({fund_id:pid,competencia:D(2026,m,1),teto:v}));
   addTeto('demo-p1',[[6,150000],[7,150000],[8,111155]]);
   addTeto('demo-p2',[[6,60000],[7,33540]]);
   addTeto('demo-p3',[[7,1100000]]);
@@ -873,7 +873,7 @@ function seedDemoData(){
   addTeto('demo-p7',[[8,1100000]]);
 
   const pos=[]; let poN=1;
-  const addPO=(pid,mes,valor,status,extra)=>{ pos.push(Object.assign({id:'demo-po-'+(poN++),projeto_id:pid,competencia:D(2026,mes,1),valor,status,descricao:'Demo PO',numero_po:status==='SOLICITADA'||status==='EM_APROVACAO'?'':'PO-'+(1000+poN),agencia:(poProjetos.find(p=>p.id===pid)||{}).agencia,solicitado_em:D(2026,mes,3)},extra||{})); };
+  const addPO=(pid,mes,valor,status,extra)=>{ pos.push(Object.assign({id:'demo-po-'+(poN++),fund_id:pid,competencia:D(2026,mes,1),valor,status,descricao:'Demo PO',numero_po:status==='SOLICITADA'||status==='EM_APROVACAO'?'':'PO-'+(1000+poN),agencia:(poProjetos.find(p=>p.id===pid)||{}).agencia,solicitado_em:D(2026,mes,3)},extra||{})); };
   addPO('demo-p1',6,114296,'CONCLUIDA');
   addPO('demo-p2',6,76000,'CONCLUIDA');
   addPO('demo-p3',7,220000,'FATURADA');
@@ -1043,11 +1043,11 @@ const Q_WORK=()=>[
 ];
 const Q_BUDGET=()=>[
   SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
-  SBPO.from('projetos').select('id,nome,agencia,orcamento_id,product_category,activity,projeto_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em'),
-  SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
-  SBPO.from('tetos').select('projeto_id,competencia,teto'),
-  SBPO.from('rateio_alocacao').select('projeto_id,competencia,valor,categoria'),
-  SBPO.from('notificacoes').select('id,mensagem,tipo,po_id,projeto_id,lida,criada_em').order('criada_em',{ascending:false}).limit(200),
+  SBPO.from('funds').select('id,nome,agencia,orcamento_id,product_category,activity,fund_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em'),
+  SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
+  SBPO.from('tetos').select('fund_id,competencia,teto'),
+  SBPO.from('rateio_alocacao').select('fund_id,competencia,valor,categoria'),
+  SBPO.from('notificacoes').select('id,mensagem,tipo,po_id,fund_id,lida,criada_em').order('criada_em',{ascending:false}).limit(200),
   SBPO.rpc('listar_pessoas'),
   SBPO.from('fee_rateio').select('agencia,tipo,categoria,percentual,cc,account,descricao'),
   /* Extrato row order. Readable by marketing/finance/admin only, which is a
@@ -1311,9 +1311,9 @@ function buildCampanhaChart(){
   if(effPapel()==='agencia'&&effAgencia()) list=list.filter(p=>p.agencia===effAgencia());
   const tetoBy={},consBy={},compBy={};
   const inP=c=>SCREEN!=='bo'||boInPeriod(c);
-  DATA.tetos.forEach(t=>{if(!inP(t.competencia))return;tetoBy[t.projeto_id]=(tetoBy[t.projeto_id]||0)+(+t.teto||0);});
-  DATA.rateio.forEach(r=>{if(!inP(r.competencia))return;tetoBy[r.projeto_id]=(tetoBy[r.projeto_id]||0)+(+r.valor||0);});
-  DATA.pos.forEach(po=>{if(!inP(po.competencia))return;const v=+po.valor||0;if(CONS.includes(po.status))consBy[po.projeto_id]=(consBy[po.projeto_id]||0)+v;else if(COMP.includes(po.status))compBy[po.projeto_id]=(compBy[po.projeto_id]||0)+v;});
+  DATA.tetos.forEach(t=>{if(!inP(t.competencia))return;tetoBy[t.fund_id]=(tetoBy[t.fund_id]||0)+(+t.teto||0);});
+  DATA.rateio.forEach(r=>{if(!inP(r.competencia))return;tetoBy[r.fund_id]=(tetoBy[r.fund_id]||0)+(+r.valor||0);});
+  DATA.pos.forEach(po=>{if(!inP(po.competencia))return;const v=+po.valor||0;if(CONS.includes(po.status))consBy[po.fund_id]=(consBy[po.fund_id]||0)+v;else if(COMP.includes(po.status))compBy[po.fund_id]=(compBy[po.fund_id]||0)+v;});
   const top=list.map(p=>({n:p.nome,teto:tetoBy[p.id]||0,cons:consBy[p.id]||0,comp:compBy[p.id]||0})).sort((a,b)=>b.teto-a.teto).slice(0,8);
   _charts.push(new Chart(el,{type:'bar',data:{labels:top.map(t=>t.n.length>22?t.n.slice(0,20)+'…':t.n),datasets:[{label:'Budgeted',data:top.map(t=>t.teto),backgroundColor:'#e4e7ee',borderRadius:5},{label:'Consumed',data:top.map(t=>t.cons),backgroundColor:'#1273cf',borderRadius:5},{label:'Committed',data:top.map(t=>t.comp),backgroundColor:'#6d4bd1',borderRadius:5}]},options:{indexAxis:'y',plugins:{legend:{labels:{font:{family:'Hanken Grotesk',size:11},boxWidth:12}}},scales:{x:{ticks:{callback:v=>'R$ '+(v/1000)+'k',font:{family:'JetBrains Mono',size:10}}},y:{ticks:{font:{family:'Hanken Grotesk',size:11}}}}}}));
 }
@@ -1593,7 +1593,7 @@ function renderKanban(){
 function renderAprovacoes(){
   const projPend=DATA.poProjetos.filter(p=>p.aprovacao_status==='PENDENTE');
   const nomeBy={}; DATA.poProjetos.forEach(p=>nomeBy[p.id]=p.nome);
-  const tetoBy={}; DATA.tetos.forEach(t=>tetoBy[t.projeto_id]=(tetoBy[t.projeto_id]||0)+(+t.teto||0)); DATA.rateio.forEach(r=>tetoBy[r.projeto_id]=(tetoBy[r.projeto_id]||0)+(+r.valor||0));
+  const tetoBy={}; DATA.tetos.forEach(t=>tetoBy[t.fund_id]=(tetoBy[t.fund_id]||0)+(+t.teto||0)); DATA.rateio.forEach(r=>tetoBy[r.fund_id]=(tetoBy[r.fund_id]||0)+(+r.valor||0));
   let posPend=DATA.pos.filter(po=>['SOLICITADA','EM_APROVACAO'].includes(po.status));
   if(effPapel()==='agencia'&&effAgencia()) posPend=posPend.filter(po=>po.agencia===effAgencia());
   const canAprova=demoWritable(['admin','marketing','financeiro'].includes(PAPEL)||isManager);
@@ -1607,7 +1607,7 @@ function renderAprovacoes(){
   const poCol=`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
     <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">POs awaiting decision</b>${posPend.length?`<span style="background:var(--po);color:#fff;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800">${posPend.length}</span>`:''}</div>
     <div style="padding:12px 16px;display:flex;flex-direction:column;gap:10px">${posPend.length?posPend.map(po=>`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;background:#fafbfd">
-      <div style="display:flex;justify-content:space-between;gap:10px"><b style="font-size:13px">${esc(nomeBy[po.projeto_id]||'—')}</b><span class="mono" style="font-size:12px">${BRL(po.valor)}</span></div>
+      <div style="display:flex;justify-content:space-between;gap:10px"><b style="font-size:13px">${esc(nomeBy[po.fund_id]||'—')}</b><span class="mono" style="font-size:12px">${BRL(po.valor)}</span></div>
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">${esc(po.agencia||'')} · ${fmtMes(po.competencia)} · ${esc(po.descricao||'')}</div>
       ${canAprova?`<div style="display:flex;gap:7px;margin-top:10px"><button onclick="aprovarPO('${esc(po.id)}')" style="padding:7px 14px;border-radius:8px;border:none;background:var(--po);color:#fff;font-weight:700;font-size:12px;cursor:pointer">Approve</button><button onclick="rejeitarPO('${esc(po.id)}')" style="padding:7px 14px;border-radius:8px;border:1px solid var(--line-2);background:#fff;color:var(--txt-2);font-weight:700;font-size:12px;cursor:pointer">Reject</button></div>`:''}
     </div>`).join(''):'<div class="empty">No pending POs.</div>'}</div></div>`;
@@ -1686,9 +1686,9 @@ function renderCampanhas(){
   let list=DATA.poProjetos.slice();
   if(effPapel()==='agencia'&&effAgencia()) list=list.filter(p=>p.agencia===effAgencia());
   const tetoBy={}, consBy={}, compBy={}, pendBy={};
-  DATA.tetos.forEach(t=>{tetoBy[t.projeto_id]=(tetoBy[t.projeto_id]||0)+(+t.teto||0);});
-  DATA.rateio.forEach(r=>{tetoBy[r.projeto_id]=(tetoBy[r.projeto_id]||0)+(+r.valor||0);});
-  DATA.pos.forEach(po=>{const v=+po.valor||0;if(CONS.includes(po.status))consBy[po.projeto_id]=(consBy[po.projeto_id]||0)+v;else if(COMP.includes(po.status))compBy[po.projeto_id]=(compBy[po.projeto_id]||0)+v;else if(PEND.includes(po.status))pendBy[po.projeto_id]=(pendBy[po.projeto_id]||0)+v;});
+  DATA.tetos.forEach(t=>{tetoBy[t.fund_id]=(tetoBy[t.fund_id]||0)+(+t.teto||0);});
+  DATA.rateio.forEach(r=>{tetoBy[r.fund_id]=(tetoBy[r.fund_id]||0)+(+r.valor||0);});
+  DATA.pos.forEach(po=>{const v=+po.valor||0;if(CONS.includes(po.status))consBy[po.fund_id]=(consBy[po.fund_id]||0)+v;else if(COMP.includes(po.status))compBy[po.fund_id]=(compBy[po.fund_id]||0)+v;else if(PEND.includes(po.status))pendBy[po.fund_id]=(pendBy[po.fund_id]||0)+v;});
   CAMP_CTX={list,tetoBy,consBy,compBy,pendBy};
   return campKpisHTML()+`
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
@@ -1845,7 +1845,7 @@ function campCatBody(camps,m){
 const LC_ORDER={over:0,near:1,active:2,pending:3,done:4};
 function campLastMonth(pid){
   const ms=Object.keys(campMonthlyTotals(pid));
-  (DATA.pos||[]).forEach(po=>{ if(po.projeto_id===pid&&po.competencia&&!['REJEITADA','CANCELADA'].includes(po.status)) ms.push(String(po.competencia).slice(0,7)); });
+  (DATA.pos||[]).forEach(po=>{ if(po.fund_id===pid&&po.competencia&&!['REJEITADA','CANCELADA'].includes(po.status)) ms.push(String(po.competencia).slice(0,7)); });
   ms.sort(); return ms[ms.length-1]||'';
 }
 function campLifecycle(p){
@@ -1972,9 +1972,9 @@ function campTimelineHTML(fl,q){
 function openCampDetail(pid){
   const p=DATA.poProjetos.find(x=>x.id===pid); if(!p)return;
   const capByM={};
-  DATA.tetos.filter(t=>t.projeto_id===pid).forEach(t=>{const m=String(t.competencia).slice(0,7);capByM[m]=(capByM[m]||0)+(+t.teto||0);});
-  DATA.rateio.filter(r=>r.projeto_id===pid).forEach(r=>{const m=String(r.competencia).slice(0,7);capByM[m]=(capByM[m]||0)+(+r.valor||0);});
-  const posByM={}; DATA.pos.filter(po=>po.projeto_id===pid).forEach(po=>{const m=String(po.competencia).slice(0,7);(posByM[m]=posByM[m]||[]).push(po);});
+  DATA.tetos.filter(t=>t.fund_id===pid).forEach(t=>{const m=String(t.competencia).slice(0,7);capByM[m]=(capByM[m]||0)+(+t.teto||0);});
+  DATA.rateio.filter(r=>r.fund_id===pid).forEach(r=>{const m=String(r.competencia).slice(0,7);capByM[m]=(capByM[m]||0)+(+r.valor||0);});
+  const posByM={}; DATA.pos.filter(po=>po.fund_id===pid).forEach(po=>{const m=String(po.competencia).slice(0,7);(posByM[m]=posByM[m]||[]).push(po);});
   const months=[...new Set([...Object.keys(capByM),...Object.keys(posByM)])].sort();
   const nowM=new Date().toISOString().slice(0,7);
   const canRealloc=(['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly();
@@ -1993,13 +1993,13 @@ function openCampDetail(pid){
     </div>`;
   }).join('')||'<div class="empty">No months registered.</div>';
   // ---- summary (KPIs, consumption bar, rateio split) ----
-  const allPos=DATA.pos.filter(po=>po.projeto_id===pid);
+  const allPos=DATA.pos.filter(po=>po.fund_id===pid);
   const sumAll=st=>allPos.filter(po=>st.includes(po.status)).reduce((s,po)=>s+(+po.valor||0),0);
   const totCap=Object.values(capByM).reduce((a,b)=>a+(+b||0),0);
   const totConsu=sumAll(CONS), totComp=sumAll(COMP), totPend=sumAll(PEND);
   const totCons=totConsu+totComp+totPend;
   const saldoTot=totCap-totCons; const rawTot=totCap?totCons/totCap*100:0; const pctTot=Math.min(100,rawTot); const overT=rawTot>100.5, nearT=!overT&&rawTot>=90;
-  const catAlloc={}; DATA.rateio.filter(r=>r.projeto_id===pid).forEach(r=>{catAlloc[r.categoria]=(catAlloc[r.categoria]||0)+(+r.valor||0);});
+  const catAlloc={}; DATA.rateio.filter(r=>r.fund_id===pid).forEach(r=>{catAlloc[r.categoria]=(catAlloc[r.categoria]||0)+(+r.valor||0);});
   const catKeys=Object.keys(catAlloc).sort((a,b)=>catAlloc[b]-catAlloc[a]);
   const palette=['#e20613','#2a6fdb','#1f8a4c','#b5550c','#7a5cc4','#0e7c86'];
   const kpi=(lbl,val,c)=>`<div style="flex:1;min-width:118px;border:1px solid var(--line);border-radius:11px;padding:11px 13px;background:var(--paper-2)"><div style="font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">${lbl}</div><div class="mono stat-num" style="font-size:16px;font-weight:800;margin-top:3px;color:${c||'var(--txt-1)'}">${val}</div></div>`;
@@ -2063,7 +2063,7 @@ function campDrawerJump(m){
    moved forward: fully to next month, split evenly across the campaign's
    remaining registered months, or manual per-month amounts. Adds new
    tetos/rateio_alocacao rows (additive — the closed month's own record is
-   untouched, everything here is summed by projeto_id+competencia elsewhere
+   untouched, everything here is summed by fund_id+competencia elsewhere
    in the app already).
    ============================================================ */
 let REALLOC=null; // {pid,fromMonth,balance,mode,splitCount,rows:[{id,mes,valor}]}
@@ -2075,9 +2075,9 @@ let REALLOC=null; // {pid,fromMonth,balance,mode,splitCount,rows:[{id,mes,valor}
 async function reallocFetchCurrentBalance(pid,fromMonth){
   const comp=fromMonth+'-01';
   const [{data:tetoRows,error:e1},{data:rateioRows,error:e2},{data:poRows,error:e3}]=await Promise.all([
-    SBPO.from('tetos').select('teto').eq('projeto_id',pid).eq('competencia',comp),
-    SBPO.from('rateio_alocacao').select('valor').eq('projeto_id',pid).eq('competencia',comp),
-    SBPO.from('pos').select('valor,status').eq('projeto_id',pid).eq('competencia',comp)
+    SBPO.from('tetos').select('teto').eq('fund_id',pid).eq('competencia',comp),
+    SBPO.from('rateio_alocacao').select('valor').eq('fund_id',pid).eq('competencia',comp),
+    SBPO.from('pos').select('valor,status').eq('fund_id',pid).eq('competencia',comp)
   ]);
   if(e1)throw e1; if(e2)throw e2; if(e3)throw e3;
   const cap=(tetoRows||[]).reduce((s,r)=>s+(+r.teto||0),0)+(rateioRows||[]).reduce((s,r)=>s+(+r.valor||0),0);
@@ -2150,23 +2150,23 @@ function renderReallocModal(){
   </div></div>`;
 }
 function closeRealloc(){ const pid=REALLOC&&REALLOC.pid; REALLOC=null; if(pid) openCampDetail(pid); else closeModal(); }
-/* tetos has UNIQUE(projeto_id,competencia) — a target month that already has a
+/* tetos has UNIQUE(fund_id,competencia) — a target month that already has a
    cap must be UPDATED (existing + amount), never inserted a second time. */
 async function reallocCreditTetos(pid,targets){
   for(const t of targets){
     const comp=t.mes+'-01';
-    const {data,error}=await SBPO.from('tetos').select('id,teto').eq('projeto_id',pid).eq('competencia',comp).limit(1);
+    const {data,error}=await SBPO.from('tetos').select('id,teto').eq('fund_id',pid).eq('competencia',comp).limit(1);
     if(error)throw error;
     const cur=(data||[])[0];
     if(cur){ const {error:e2}=await SBPO.from('tetos').update({teto:r2((+cur.teto||0)+(+t.valor||0))}).eq('id',cur.id); if(e2)throw e2; }
-    else{ const {error:e3}=await SBPO.from('tetos').insert({projeto_id:pid,competencia:comp,teto:r2(+t.valor||0),definido_por:'realocacao'}); if(e3)throw e3; }
+    else{ const {error:e3}=await SBPO.from('tetos').insert({fund_id:pid,competencia:comp,teto:r2(+t.valor||0),definido_por:'realocacao'}); if(e3)throw e3; }
   }
 }
 /* Reallocation MOVES money: the source month's cap must drop by the same amount,
    otherwise the total budget grows. teto has CHECK (teto >= 0). */
 async function reallocDebitTetos(pid,fromMonth,amount){
   const comp=fromMonth+'-01';
-  const {data,error}=await SBPO.from('tetos').select('id,teto').eq('projeto_id',pid).eq('competencia',comp).limit(1);
+  const {data,error}=await SBPO.from('tetos').select('id,teto').eq('fund_id',pid).eq('competencia',comp).limit(1);
   if(error)throw error;
   const cur=(data||[])[0]; if(!cur)return;
   const {error:e2}=await SBPO.from('tetos').update({teto:Math.max(0,r2((+cur.teto||0)-(+amount||0)))}).eq('id',cur.id);
@@ -2180,7 +2180,7 @@ async function reallocDebitTetos(pid,fromMonth,amount){
    always matches `amount` exactly (same pattern as submitCampValues). */
 async function reallocDebitRateio(pid,fromMonth,amount){
   const comp=fromMonth+'-01';
-  const {data,error}=await SBPO.from('rateio_alocacao').select('id,valor').eq('projeto_id',pid).eq('competencia',comp);
+  const {data,error}=await SBPO.from('rateio_alocacao').select('id,valor').eq('fund_id',pid).eq('competencia',comp);
   if(error)throw error;
   const rows=data||[]; const tot=rows.reduce((s,r)=>s+(+r.valor||0),0); if(!tot)return;
   let runningCut=0;
@@ -2217,9 +2217,9 @@ async function submitRealloc(){
       return;
     }
     if(p.rateio){
-      const cats=[...new Set((DATA.rateio||[]).filter(r=>r.projeto_id===p.id).map(r=>r.categoria))];
+      const cats=[...new Set((DATA.rateio||[]).filter(r=>r.fund_id===p.id).map(r=>r.categoria))];
       if(!cats.length){ toast('Cannot resolve rateio categories for this campaign.'); return; }
-      const totalByCat={}; (DATA.rateio||[]).filter(r=>r.projeto_id===p.id&&r.competencia&&String(r.competencia).slice(0,7)===REALLOC.fromMonth).forEach(r=>{ totalByCat[r.categoria]=(totalByCat[r.categoria]||0)+(+r.valor||0); });
+      const totalByCat={}; (DATA.rateio||[]).filter(r=>r.fund_id===p.id&&r.competencia&&String(r.competencia).slice(0,7)===REALLOC.fromMonth).forEach(r=>{ totalByCat[r.categoria]=(totalByCat[r.categoria]||0)+(+r.valor||0); });
       const totAll=Object.values(totalByCat).reduce((a,b)=>a+b,0)||1;
       const rows=[];
       /* Same reconciliation as submitCampValues/reqSplitBreakdown — every
@@ -2232,7 +2232,7 @@ async function submitRealloc(){
           const share=(totalByCat[cat]||(totAll/cats.length))/totAll;
           let valor=r2(pr.valor*share);
           if(i===cats.length-1) valor=r2(pr.valor-running); else running+=valor;
-          rows.push({projeto_id:p.id,categoria:cat,competencia:pr.mes+'-01',valor});
+          rows.push({fund_id:p.id,categoria:cat,competencia:pr.mes+'-01',valor});
         });
       });
       const {error}=await SBPO.from('rateio_alocacao').insert(rows); if(error)throw error;
@@ -2334,7 +2334,7 @@ async function submitCapPedido(){
   if(!(+CAPEDIT.valor>cur+0.005)){ toast('Ask for more than the current cap — to lower it, just reduce the months.'); return; }
   if(!String(CAPEDIT.motivo||'').trim()){ toast('Describe why you need more.'); return; }
   try{
-    const {error}=await SBPO.from('projetos').update({cap_pedido:r2(+CAPEDIT.valor),cap_pedido_motivo:String(CAPEDIT.motivo).trim(),cap_pedido_em:new Date().toISOString()}).eq('id',CAPEDIT.id);
+    const {error}=await SBPO.from('funds').update({cap_pedido:r2(+CAPEDIT.valor),cap_pedido_motivo:String(CAPEDIT.motivo).trim(),cap_pedido_em:new Date().toISOString()}).eq('id',CAPEDIT.id);
     if(error)throw error;
     CAPEDIT=null; closeModal(); await reloadPOAll(); toast('Cap increase requested ✓ — an admin will decide.'); go(SCREEN);
   }catch(e){ toastErr(e); }
@@ -2344,7 +2344,7 @@ async function submitCapEdit(){
   const alloc=Object.values(campMonthlyTotals(CAPEDIT.id)).reduce((s,v)=>s+v,0);
   if(+CAPEDIT.valor<alloc-0.005){ toast('The months already allocate more than that. Reduce them first.'); return; }
   try{
-    const {error}=await SBPO.from('projetos').update({cap_aprovado:r2(+CAPEDIT.valor),cap_pedido:null,cap_pedido_motivo:null,cap_pedido_em:null}).eq('id',CAPEDIT.id);
+    const {error}=await SBPO.from('funds').update({cap_aprovado:r2(+CAPEDIT.valor),cap_pedido:null,cap_pedido_motivo:null,cap_pedido_em:null}).eq('id',CAPEDIT.id);
     if(error)throw error;
     CAPEDIT=null; closeModal(); await reloadPOAll(); toast('Cap updated ✓'); goCostCenter();
   }catch(e){ toastErr(e); }
@@ -2357,7 +2357,7 @@ async function decidirCapPedido(pid,ok){
   try{
     const patch=ok?{cap_aprovado:r2(pedido),cap_pedido:null,cap_pedido_motivo:null,cap_pedido_em:null}
                   :{cap_pedido:null,cap_pedido_motivo:null,cap_pedido_em:null};
-    const {error}=await SBPO.from('projetos').update(patch).eq('id',pid); if(error)throw error;
+    const {error}=await SBPO.from('funds').update(patch).eq('id',pid); if(error)throw error;
     await reloadPOAll(); toast(ok?`Cap raised to ${BRL(pedido)} ✓`:'Cap request rejected'); go(SCREEN);
   }catch(e){ toastErr(e); }
 }
@@ -2458,14 +2458,14 @@ async function submitCampValues(){
         splits.forEach((s,i)=>{
           let valor=r2(v*(+s.percentual||0));
           if(i===splits.length-1) valor=r2(v-running); else running+=valor;
-          alloc.push({projeto_id:cv.id,categoria:s.categoria||null,competencia:r.mes+'-01',valor});
+          alloc.push({fund_id:cv.id,categoria:s.categoria||null,competencia:r.mes+'-01',valor});
         });
       });
-      await SBPO.from('rateio_alocacao').delete().eq('projeto_id',cv.id);
+      await SBPO.from('rateio_alocacao').delete().eq('fund_id',cv.id);
       const {error}=await SBPO.from('rateio_alocacao').insert(alloc); if(error)throw error;
     }else{
-      await SBPO.from('tetos').delete().eq('projeto_id',cv.id);
-      const tetos=rows.map(r=>({projeto_id:cv.id,competencia:r.mes+'-01',teto:r2(+r.valor),definido_por:'portal'}));
+      await SBPO.from('tetos').delete().eq('fund_id',cv.id);
+      const tetos=rows.map(r=>({fund_id:cv.id,competencia:r.mes+'-01',teto:r2(+r.valor),definido_por:'portal'}));
       const {error}=await SBPO.from('tetos').insert(tetos); if(error)throw error;
     }
     CAMPVAL=null; toast('Values updated ✓'); closeModal(); await reloadPOAll(); goCostCenter();
@@ -2479,8 +2479,8 @@ let CAMPEDIT=null;
 function guessCat(str){ const s=String(str||'').toUpperCase(); for(const c of PRODUCT_CATS){ if(new RegExp('(^|[^A-Z])'+c+'([^A-Z]|$)').test(s)) return c; } return ''; }
 function campMonthlyTotals(pid){
   const m={};
-  DATA.tetos.filter(t=>t.projeto_id===pid).forEach(t=>{const k=String(t.competencia).slice(0,7);m[k]=(m[k]||0)+(+t.teto||0);});
-  DATA.rateio.filter(r=>r.projeto_id===pid).forEach(r=>{const k=String(r.competencia).slice(0,7);m[k]=(m[k]||0)+(+r.valor||0);});
+  DATA.tetos.filter(t=>t.fund_id===pid).forEach(t=>{const k=String(t.competencia).slice(0,7);m[k]=(m[k]||0)+(+t.teto||0);});
+  DATA.rateio.filter(r=>r.fund_id===pid).forEach(r=>{const k=String(r.competencia).slice(0,7);m[k]=(m[k]||0)+(+r.valor||0);});
   return m; // {'2026-07': 148000, ...}
 }
 function recoverQual(pid){
@@ -2488,7 +2488,7 @@ function recoverQual(pid){
   // heuristic only for legacy campaigns saved before rateio_tipo existed.
   const p=(DATA.poProjetos||[]).find(x=>x.id===pid);
   if(p&&p.rateio_tipo) return p.rateio_tipo;
-  const cs=new Set((DATA.rateio||[]).filter(r=>r.projeto_id===pid&&r.categoria).map(r=>r.categoria));
+  const cs=new Set((DATA.rateio||[]).filter(r=>r.fund_id===pid&&r.categoria).map(r=>r.categoria));
   if(!cs.size) return '';
   let found='';
   rateioTipos().forEach(tp=>{ const tset=new Set((DATA.fee||[]).filter(f=>f.tipo===tp).map(f=>f.categoria)); if(tset.size===cs.size && [...cs].every(c=>tset.has(c))) found=tp; });
@@ -2529,10 +2529,10 @@ async function submitCampEdit(){
     if(false){
     }else{
       // normal campaign OR integral fee (100% to a single category, e.g. Fee MOB)
-      await SBPO.from('rateio_alocacao').delete().eq('projeto_id',ce.id); // in case it was split before
+      await SBPO.from('rateio_alocacao').delete().eq('fund_id',ce.id); // in case it was split before
       let cc='',account='',account_desc='';
       try{ const {data:cls}=await SBPO.rpc('classificar',{p_d:ce.cat,p_e:ce.activity||'',p_f:''}); const c=(cls&&cls[0])||{}; cc=c.cc||''; account=c.account||''; account_desc=c.descricao||''; }catch(e){}
-      const {error}=await SBPO.from('projetos').update({nome:ce.nome.trim(),agencia:ce.agencia||null,activity:ce.activity||null,rateio:false,rateio_tipo:null,product_category:ce.cat,cc,account,account_desc}).eq('id',ce.id);
+      const {error}=await SBPO.from('funds').update({nome:ce.nome.trim(),agencia:ce.agencia||null,activity:ce.activity||null,rateio:false,rateio_tipo:null,product_category:ce.cat,cc,account,account_desc}).eq('id',ce.id);
       if(error)throw error;
     }
     CAMPEDIT=null; toast('Campaign updated ✓'); closeModal(); await reloadPOAll(); goCostCenter();
@@ -2553,7 +2553,7 @@ function poGroupSiblings(po){
 }
 function poGroupLabel(sibs){
   const nomeBy={}; DATA.poProjetos.forEach(p=>nomeBy[p.id]=p);
-  const cats=[...new Set(sibs.map(p=>{const pr=nomeBy[p.projeto_id]; return pr?pr.product_category:'';}).filter(Boolean))];
+  const cats=[...new Set(sibs.map(p=>{const pr=nomeBy[p.fund_id]; return pr?pr.product_category:'';}).filter(Boolean))];
   return 'Fee — '+(sibs[0].agencia||'')+(cats.length?' ('+cats.join('/')+')':'');
 }
 /* Collapses grouped rows into one display entry per po_grupo_id (or per id
@@ -2590,9 +2590,9 @@ function renderPOs(){
     <span>Campaign</span><span>Agency</span><span>Month</span><span style="text-align:right">Value</span><span>Payment</span><span>PO nº</span><span>Status</span><span>Action</span></div>`;
   const rowHTML=po=>{const s=PO_STATUS[po.status]||{t:po.status,c:'s-slate',icon:''};const pend=['SOLICITADA','EM_APROVACAO'].includes(po.status);const est=poEstimativaPagamento(po);
     const grouped=po._sib&&po._sib.length>1;
-    const label=grouped?poGroupLabel(po._sib):(nomeBy[po.projeto_id]||'—');
-    const q=((nomeBy[po.projeto_id]||'')+' '+(po.descricao||'')+' '+(po.numero_po||'')+' '+(po.agencia||'')).toLowerCase();
-    return `<div class="po-row" data-camp="${esc(po.projeto_id)}" data-ag="${esc(po.agencia||'')}" data-st="${esc(po.status)}" data-q="${esc(q)}" onclick="openPODetail('${esc(po.id)}')" style="display:grid;grid-template-columns:1.4fr 1fr .8fr .9fr 1fr .8fr 1.1fr 1.1fr;gap:10px;padding:12px 17px;border-bottom:1px solid #edeff4;align-items:center;font-size:13px;cursor:pointer">
+    const label=grouped?poGroupLabel(po._sib):(nomeBy[po.fund_id]||'—');
+    const q=((nomeBy[po.fund_id]||'')+' '+(po.descricao||'')+' '+(po.numero_po||'')+' '+(po.agencia||'')).toLowerCase();
+    return `<div class="po-row" data-camp="${esc(po.fund_id)}" data-ag="${esc(po.agencia||'')}" data-st="${esc(po.status)}" data-q="${esc(q)}" onclick="openPODetail('${esc(po.id)}')" style="display:grid;grid-template-columns:1.4fr 1fr .8fr .9fr 1fr .8fr 1.1fr 1.1fr;gap:10px;padding:12px 17px;border-bottom:1px solid #edeff4;align-items:center;font-size:13px;cursor:pointer">
       <span style="min-width:0"><span style="font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(label)}</span><span style="font-size:11px;color:var(--txt-3)">${esc(po.descricao||'')}${grouped?' · split across '+po._sib.length+' categories':''}</span>${poMetaHTML(po)}</span>
       <span style="color:var(--txt-2)">${esc(po.agencia||'—')}</span>
       <span style="font-size:12px;color:var(--txt-2)">${fmtMes(po.competencia)}</span>
@@ -2648,7 +2648,7 @@ function renderPOs(){
   const projPend=isPoOnly?[]:DATA.poProjetos.filter(p=>p.aprovacao_status==='PENDENTE');
   const canAprovaCamp=demoWritable(['admin','marketing','financeiro'].includes(PAPEL)||isManager);
   const tetoPend={};
-  if(projPend.length){ DATA.tetos.forEach(t=>tetoPend[t.projeto_id]=(tetoPend[t.projeto_id]||0)+(+t.teto||0)); DATA.rateio.forEach(r=>tetoPend[r.projeto_id]=(tetoPend[r.projeto_id]||0)+(+r.valor||0)); }
+  if(projPend.length){ DATA.tetos.forEach(t=>tetoPend[t.fund_id]=(tetoPend[t.fund_id]||0)+(+t.teto||0)); DATA.rateio.forEach(r=>tetoPend[r.fund_id]=(tetoPend[r.fund_id]||0)+(+r.valor||0)); }
   const campPend=projPend.length?`<div style="background:#fff;border:1px solid #f2c4bf;border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05);margin-bottom:16px">
     <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">Campaigns awaiting approval</b><span style="background:var(--po);color:#fff;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800">${projPend.length}</span></div>
     <div style="padding:12px 16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">${projPend.map(p=>`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;background:#fafbfd">
@@ -2695,12 +2695,12 @@ async function aprovarCamp(id){
   if(DEMO_MODE){ const p=DATA.poProjetos.find(x=>x.id===id); if(p)p.aprovacao_status='APROVADO'; toast('Campaign approved ✓ (demo)'); go(SCREEN); return; }
   if(viewOnly()){toast(roMsg());return;}
   try{
-    const {error}=await SBPO.rpc('aprovar_projeto',{p_projeto:id}); if(error)throw error;
+    const {error}=await SBPO.rpc('aprovar_fund',{p_fund:id}); if(error)throw error;
     /* Freeze the ceiling at approval. From here the monthly values may be
        redistributed or reduced freely, but the total can only grow through an
        approved request — which is the whole point of approving an opening. */
     const cap=r2(Object.values(campMonthlyTotals(id)).reduce((s,v)=>s+v,0));
-    try{ await SBPO.from('projetos').update({cap_aprovado:cap}).eq('id',id); }
+    try{ await SBPO.from('funds').update({cap_aprovado:cap}).eq('id',id); }
     catch(e2){ console.warn('cap_aprovado on approval:',(e2&&e2.message)||e2); }
     toast(`Campaign approved ✓ — cap fixed at ${BRL(cap)}`); await reloadPOAll(); go(SCREEN);
   }
@@ -2710,7 +2710,7 @@ async function rejeitarCamp(id){
   const motivo=prompt('Reason for rejecting the campaign:'); if(motivo===null)return;
   if(DEMO_MODE){ DATA.poProjetos=DATA.poProjetos.filter(x=>x.id!==id); toast('Campaign rejected (demo)'); go(SCREEN); return; }
   if(viewOnly()){toast(roMsg());return;}
-  try{ const {error}=await SBPO.rpc('rejeitar_projeto',{p_projeto:id,p_motivo:motivo}); if(error)throw error; toast('Campaign rejected'); await reloadPOAll(); go(SCREEN); }
+  try{ const {error}=await SBPO.rpc('rejeitar_fund',{p_fund:id,p_motivo:motivo}); if(error)throw error; toast('Campaign rejected'); await reloadPOAll(); go(SCREEN); }
   catch(e){ toastErr(e); }
 }
 
@@ -2798,7 +2798,7 @@ let PODETAIL=null;
 function openPODetail(id){ const po=DATA.pos.find(x=>x.id===id); if(!po)return; PODETAIL={id}; renderPODetailModal(); }
 function renderPODetailModal(){
   if(!PODETAIL)return; const po=DATA.pos.find(x=>x.id===PODETAIL.id); if(!po){closeModal();return;}
-  const proj=DATA.poProjetos.find(x=>x.id===po.projeto_id)||{};
+  const proj=DATA.poProjetos.find(x=>x.id===po.fund_id)||{};
   const s=PO_STATUS[po.status]||{t:po.status,c:'s-slate',icon:''};
   const sibs=poGroupSiblings(po); const grouped=sibs.length>1;
   const label=grouped?poGroupLabel(sibs):(proj.nome||'PO');
@@ -2811,7 +2811,7 @@ function renderPODetailModal(){
   }
   if(grouped){
     const nomeBy={}; DATA.poProjetos.forEach(p=>nomeBy[p.id]=p);
-    const rows=sibs.map(p=>{const pr=nomeBy[p.projeto_id]||{}; return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border-bottom:1px dashed var(--line-2);font-size:12.5px"><span>${esc(pr.product_category||pr.nome||'—')}</span><span class="mono" style="font-weight:700">${BRL(p.valor)}</span></div>`;}).join('');
+    const rows=sibs.map(p=>{const pr=nomeBy[p.fund_id]||{}; return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border-bottom:1px dashed var(--line-2);font-size:12.5px"><span>${esc(pr.product_category||pr.nome||'—')}</span><span class="mono" style="font-weight:700">${BRL(p.valor)}</span></div>`;}).join('');
     sections.push(`<div style="border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:12px"><div style="padding:8px 10px;background:var(--paper-2);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em">Budget split by category</div>${rows}</div>`);
   }
   if(poFieldVisible('numero',po)&&po.numero_po) sections.push(`<div style="margin-bottom:12px">${cell('PO number',esc(po.numero_po)+(po.po_arquivo?` · <a onclick="abrirAnexo('${esc(po.po_arquivo)}')" style="color:#3c7a63;cursor:pointer;text-decoration:underline">view file</a>`:''))}</div>`);
@@ -2822,7 +2822,7 @@ function renderPODetailModal(){
   if(poFieldVisible('contabil',po)){
     if(grouped){
       const nomeBy={}; DATA.poProjetos.forEach(p=>nomeBy[p.id]=p);
-      const rows=sibs.map(p=>{const pr=nomeBy[p.projeto_id]||{}; return `<div style="padding:7px 10px;border-bottom:1px dashed var(--line-2);font-size:12px"><b>${esc(pr.product_category||'—')}</b> — ${esc(pr.cc||'—')} · ${esc(pr.account||'—')} <span style="color:var(--txt-3)">${esc(pr.account_desc||'')}</span></div>`;}).join('');
+      const rows=sibs.map(p=>{const pr=nomeBy[p.fund_id]||{}; return `<div style="padding:7px 10px;border-bottom:1px dashed var(--line-2);font-size:12px"><b>${esc(pr.product_category||'—')}</b> — ${esc(pr.cc||'—')} · ${esc(pr.account||'—')} <span style="color:var(--txt-3)">${esc(pr.account_desc||'')}</span></div>`;}).join('');
       sections.push(`<div style="border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:4px"><div style="padding:8px 10px;background:var(--paper-2);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em">Cost center / account by category</div>${rows}</div>`);
     }else{
       sections.push(`<div style="margin-bottom:4px">${cell('Cost center / account / description',esc(proj.cc||'—')+' · '+esc(proj.account||'—')+'<div style="font-weight:500;font-size:12px;color:var(--txt-2);margin-top:2px">'+esc(proj.account_desc||'')+'</div>')}</div>`);
@@ -2865,7 +2865,7 @@ function gerarFile(inp){ const f=inp.files&&inp.files[0]; if(f){GERAR.file=f;GER
 function renderGerarPO(){
   if(!GERAR)return; const po=DATA.pos.find(p=>p.id===GERAR.id)||{};
   const sibs=poGroupSiblings(po); const grouped=sibs.length>1;
-  const label=grouped?poGroupLabel(sibs):poNome(po.projeto_id);
+  const label=grouped?poGroupLabel(sibs):poNome(po.fund_id);
   const total=grouped?sibs.reduce((s,p)=>s+(+p.valor||0),0):po.valor;
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:480px">
     <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:#3c7a63;flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Issue PO number</h3><div style="font-size:12px;color:var(--txt-3)">${esc(label)} · ${esc(po.agencia||'')} · ${BRL(total)}${grouped?' · one PO nº applied to all '+sibs.length+' categories':''}</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
@@ -2902,7 +2902,7 @@ function renderFaturarPO(){
   if(!FAT)return; const po=DATA.pos.find(p=>p.id===FAT.id)||{};
   const redo=po.status==='ATUALIZAR_INFO';
   const sibs=poGroupSiblings(po); const grouped=sibs.length>1;
-  const label=grouped?poGroupLabel(sibs):poNome(po.projeto_id);
+  const label=grouped?poGroupLabel(sibs):poNome(po.fund_id);
   const total=grouped?sibs.reduce((s,p)=>s+(+p.valor||0),0):po.valor;
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:500px">
     <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:#b5550c;flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Post invoice (NF)</h3><div style="font-size:12px;color:var(--txt-3)">${esc(label)} · PO ${esc(po.numero_po||'—')} · ${BRL(total)}${grouped?' · one NF covers all '+sibs.length+' categories':''}</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
@@ -2948,7 +2948,7 @@ function openValidarPO(id){ const po=DATA.pos.find(p=>p.id===id); if(!po)return;
 function renderValidarPO(){
   if(!VALID)return; const po=DATA.pos.find(p=>p.id===VALID.id)||{};
   const sibs=poGroupSiblings(po); const grouped=sibs.length>1;
-  const label=grouped?poGroupLabel(sibs):poNome(po.projeto_id);
+  const label=grouped?poGroupLabel(sibs):poNome(po.fund_id);
   const total=grouped?sibs.reduce((s,p)=>s+(+p.valor||0),0):po.valor;
   const cell=(l,v,c)=>`<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--paper-2)"><div style="font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em">${l}</div><div class="mono" style="font-size:13.5px;font-weight:700;margin-top:3px;color:${c||'var(--txt-1)'}">${v}</div></div>`;
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:480px">
@@ -3722,7 +3722,7 @@ function buildNotifList(){
   const wn=wnState();
   const ms=myMentions().map(m=>({...m,origin:'work'}));
   const tbl=(DATA.mencoes||[]).map(m=>({proj:m.projeto_nome,pid:'',txt:m.mensagem,autor:m.autor,t:String(m.criado_em||'').slice(0,10),origin:'work'}));
-  const budget=(DATA.notif||[]).map(n=>({proj:'Budget · PO',pid:'',poId:n.po_id||'',projId:n.projeto_id||'',tipo:n.tipo||'',txt:n.mensagem||'PO update requiring your attention',autor:'PO',t:String(n.criada_em||'').slice(0,10),origin:'budget',id:n.id,lida:!!n.lida}));
+  const budget=(DATA.notif||[]).map(n=>({proj:'Budget · PO',pid:'',poId:n.po_id||'',projId:n.fund_id||'',tipo:n.tipo||'',txt:n.mensagem||'PO update requiring your attention',autor:'PO',t:String(n.criada_em||'').slice(0,10),origin:'budget',id:n.id,lida:!!n.lida}));
   const seen=new Set();
   return [...tbl,...ms,...budget].filter(x=>{const k=x.proj+'|'+x.txt+'|'+x.t;if(seen.has(k))return false;seen.add(k);return true;})
     .map(x=>{
@@ -3781,7 +3781,7 @@ function renderNotif(){
 /* ============================================================
    ESTÁGIO 3 — PO: solicitar com escolha de mês + realocação admin
    ============================================================ */
-let REQ=null; // {mode:'single'|'split', projeto_id, splitAg, meses:[{competencia,teto}], competencia, valor, descricao}
+let REQ=null; // {mode:'single'|'split', fund_id, splitAg, meses:[{competencia,teto}], competencia, valor, descricao}
 function poNome(id){ const p=DATA.poProjetos.find(x=>x.id===id); return p?p.nome:'—'; }
 /* Fee rateio (percentuais fixos por agência) — cada categoria já aponta para
    a campanha real que consome aquele budget (Fee - <agência> TV/AC/LABG…).
@@ -3794,9 +3794,9 @@ function feeSplitGroups(){
   Object.keys(byAg).forEach(ag=>{
     const splits=byAg[ag].map(f=>{
       const proj=DATA.poProjetos.find(p=>p.activity==='FEE'&&p.agencia===ag&&p.product_category===f.categoria&&p.aprovacao_status==='APROVADO');
-      return {categoria:f.categoria, percentual:+f.percentual||0, projeto_id:proj?proj.id:null, nome:proj?proj.nome:null};
+      return {categoria:f.categoria, percentual:+f.percentual||0, fund_id:proj?proj.id:null, nome:proj?proj.nome:null};
     });
-    if(splits.length && splits.every(s=>s.projeto_id)) out.push({agencia:ag, splits});
+    if(splits.length && splits.every(s=>s.fund_id)) out.push({agencia:ag, splits});
   });
   return out;
 }
@@ -3804,32 +3804,32 @@ async function mesesDoProjeto(pid){
   const p=DATA.poProjetos.find(x=>x.id===pid);
   if(DEMO_MODE){
     if(p&&p.rateio){
-      const byM={}; (DATA.rateio||[]).filter(r=>r.projeto_id===pid).forEach(a=>{const m=String(a.competencia).slice(0,7);byM[m]=(byM[m]||0)+(+a.valor||0);});
+      const byM={}; (DATA.rateio||[]).filter(r=>r.fund_id===pid).forEach(a=>{const m=String(a.competencia).slice(0,7);byM[m]=(byM[m]||0)+(+a.valor||0);});
       return Object.keys(byM).sort().map(m=>({competencia:m+'-01',teto:byM[m]}));
     }
-    return (DATA.tetos||[]).filter(t=>t.projeto_id===pid).map(t=>({competencia:String(t.competencia).slice(0,10),teto:+t.teto})).sort((a,b)=>a.competencia.localeCompare(b.competencia));
+    return (DATA.tetos||[]).filter(t=>t.fund_id===pid).map(t=>({competencia:String(t.competencia).slice(0,10),teto:+t.teto})).sort((a,b)=>a.competencia.localeCompare(b.competencia));
   }
   try{
     if(p&&p.rateio){
-      const {data}=await SBPO.from('rateio_alocacao').select('competencia,valor').eq('projeto_id',pid);
+      const {data}=await SBPO.from('rateio_alocacao').select('competencia,valor').eq('fund_id',pid);
       const byM={}; (data||[]).forEach(a=>{const m=String(a.competencia).slice(0,7);byM[m]=(byM[m]||0)+(+a.valor||0);});
       return Object.keys(byM).sort().map(m=>({competencia:m+'-01',teto:byM[m]}));
     }else{
-      const {data}=await SBPO.from('tetos').select('competencia,teto').eq('projeto_id',pid).order('competencia');
+      const {data}=await SBPO.from('tetos').select('competencia,teto').eq('fund_id',pid).order('competencia');
       return (data||[]).map(t=>({competencia:String(t.competencia).slice(0,10),teto:+t.teto}));
     }
   }catch(e){ return []; }
 }
 function consumoMes(pid,comp){
-  return DATA.pos.filter(po=>po.projeto_id===pid&&String(po.competencia).slice(0,7)===String(comp).slice(0,7)&&!['REJEITADA','CANCELADA'].includes(po.status)).reduce((s,po)=>s+(+po.valor||0),0);
+  return DATA.pos.filter(po=>po.fund_id===pid&&String(po.competencia).slice(0,7)===String(comp).slice(0,7)&&!['REJEITADA','CANCELADA'].includes(po.status)).reduce((s,po)=>s+(+po.valor||0),0);
 }
-function projMonths(pid){ return DATA.tetos.filter(t=>t.projeto_id===pid).map(t=>({competencia:String(t.competencia).slice(0,10),teto:+t.teto})).sort((a,b)=>a.competencia.localeCompare(b.competencia)); }
+function projMonths(pid){ return DATA.tetos.filter(t=>t.fund_id===pid).map(t=>({competencia:String(t.competencia).slice(0,10),teto:+t.teto})).sort((a,b)=>a.competencia.localeCompare(b.competencia)); }
 function reqOptions(){
   // cut / frozen campaigns are not offered as PO targets at all
   let projs=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO'&&!campRestr(p));
   if(PAPEL==='agencia'&&MINHA_AGENCIA) projs=projs.filter(p=>p.agencia===MINHA_AGENCIA);
   const groups=feeSplitGroups().filter(g=>!(PAPEL==='agencia'&&MINHA_AGENCIA)||g.agencia===MINHA_AGENCIA);
-  const splitIds=new Set(groups.flatMap(g=>g.splits.map(s=>s.projeto_id)));
+  const splitIds=new Set(groups.flatMap(g=>g.splits.map(s=>s.fund_id)));
   // the individual TV/AC/LABG fee campaigns are requested through their agency's split group, not directly
   const single=projs.filter(p=>!splitIds.has(p.id));
   return {single,groups};
@@ -3897,7 +3897,7 @@ async function submitCampRestricao(){
   try{
     const patch={restricao:cr.tipo,restricao_valor:(cr.tipo==='CORTADA'&&+cr.valor>0)?r2(+cr.valor):null,
                  restricao_motivo:String(cr.motivo).trim(),restricao_em:new Date().toISOString()};
-    const {error}=await SBPO.from('projetos').update(patch).eq('id',cr.id); if(error)throw error;
+    const {error}=await SBPO.from('funds').update(patch).eq('id',cr.id); if(error)throw error;
     CAMPRESTR=null; closeModal(); await reloadPOAll();
     toast(patch.restricao==='CORTADA'?'Budget marked as cut ✓':'Spending blocked ✓');
     goCostCenter();
@@ -3908,7 +3908,7 @@ async function liftCampRestricao(){
   if(viewOnly()){toast(roMsg());return;}
   const id=CAMPRESTR.id;
   try{
-    const {error}=await SBPO.from('projetos').update({restricao:null,restricao_valor:null,restricao_motivo:null,restricao_em:null}).eq('id',id);
+    const {error}=await SBPO.from('funds').update({restricao:null,restricao_valor:null,restricao_motivo:null,restricao_em:null}).eq('id',id);
     if(error)throw error;
     CAMPRESTR=null; closeModal(); await reloadPOAll(); toast('Restriction lifted ✓'); goCostCenter();
   }catch(e){ toastErr(e); }
@@ -3922,31 +3922,31 @@ function openReqPO(pid){
   }
   const {single,groups}=reqOptions();
   if(pid){
-    const group=groups.find(g=>g.splits.some(s=>s.projeto_id===pid));
-    if(group){ REQ={mode:'split',projeto_id:'FEE::'+group.agencia,splitAg:group.agencia,meses:[],competencia:'',valor:'',descricao:''}; reqLoadMesesSplit(); return; }
-    if(single.some(p=>p.id===pid)){ REQ={mode:'single',projeto_id:pid,meses:[],competencia:'',valor:'',descricao:''}; renderReqPO(); reqLoadMeses(); return; }
+    const group=groups.find(g=>g.splits.some(s=>s.fund_id===pid));
+    if(group){ REQ={mode:'split',fund_id:'FEE::'+group.agencia,splitAg:group.agencia,meses:[],competencia:'',valor:'',descricao:''}; reqLoadMesesSplit(); return; }
+    if(single.some(p=>p.id===pid)){ REQ={mode:'single',fund_id:pid,meses:[],competencia:'',valor:'',descricao:''}; renderReqPO(); reqLoadMeses(); return; }
   }
-  REQ={mode:'single',projeto_id:single[0]?single[0].id:'',meses:[],competencia:'',valor:'',descricao:''};
-  renderReqPO(); if(REQ.projeto_id) reqLoadMeses();
+  REQ={mode:'single',fund_id:single[0]?single[0].id:'',meses:[],competencia:'',valor:'',descricao:''};
+  renderReqPO(); if(REQ.fund_id) reqLoadMeses();
 }
 async function reqLoadMeses(){
-  REQ.meses=await mesesDoProjeto(REQ.projeto_id);
+  REQ.meses=await mesesDoProjeto(REQ.fund_id);
   REQ.competencia=REQ.meses[0]?REQ.meses[0].competencia:'';
   renderReqPO();
 }
 function reqLoadMesesSplit(){
   const group=feeSplitGroups().find(g=>g.agencia===REQ.splitAg); if(!group)return;
   let comps=null;
-  group.splits.forEach(s=>{ const set=new Set(projMonths(s.projeto_id).map(m=>m.competencia)); comps=comps?new Set([...comps].filter(c=>set.has(c))):set; });
+  group.splits.forEach(s=>{ const set=new Set(projMonths(s.fund_id).map(m=>m.competencia)); comps=comps?new Set([...comps].filter(c=>set.has(c))):set; });
   REQ.meses=[...(comps||[])].sort().map(competencia=>({competencia}));
   REQ.competencia=REQ.meses[0]?REQ.meses[0].competencia:'';
   renderReqPO();
 }
 function reqSet(k,v){
   if(!REQ)return;
-  if(k==='projeto_id'){
-    if(String(v).startsWith('FEE::')){ REQ.mode='split'; REQ.splitAg=v.slice(5); REQ.projeto_id=v; reqLoadMesesSplit(); }
-    else { REQ.mode='single'; REQ.projeto_id=v; reqLoadMeses(); }
+  if(k==='fund_id'){
+    if(String(v).startsWith('FEE::')){ REQ.mode='split'; REQ.splitAg=v.slice(5); REQ.fund_id=v; reqLoadMesesSplit(); }
+    else { REQ.mode='single'; REQ.fund_id=v; reqLoadMeses(); }
     return;
   }
   REQ[k]=v;
@@ -3960,8 +3960,8 @@ function reqSplitBreakdown(){
   return group.splits.map((s,i)=>{
     let valor=r2(total*s.percentual);
     if(i===group.splits.length-1) valor=r2(total-running); else running+=valor;
-    const teto=comp?(projMonths(s.projeto_id).find(m=>m.competencia===comp)||{}).teto||0:0;
-    const cons=comp?consumoMes(s.projeto_id,comp):0;
+    const teto=comp?(projMonths(s.fund_id).find(m=>m.competencia===comp)||{}).teto||0:0;
+    const cons=comp?consumoMes(s.fund_id,comp):0;
     const saldo=teto-cons-valor;
     return {...s,valor,teto,cons,saldo};
   });
@@ -3970,8 +3970,8 @@ function renderReqPO(){
   if(!REQ)return;
   const {single,groups}=reqOptions();
   const isSplit=REQ.mode==='split'&&groups.length;
-  const campOpts=`${single.map(p=>`<option value="${p.id}" ${REQ.projeto_id===p.id?'selected':''}>${esc(p.nome)}${p.agencia?' · '+esc(p.agencia):''}</option>`).join('')}${groups.map(g=>`<option value="FEE::${esc(g.agencia)}" ${REQ.projeto_id==='FEE::'+g.agencia?'selected':''}>Fee — ${esc(g.agencia)} (split ${g.splits.map(s=>s.categoria).join('/')})</option>`).join('')}`;
-  const campField=`<div class="field"><label>Campaign</label><select onchange="reqSet('projeto_id',this.value)">${campOpts||'<option value="">—</option>'}</select></div>`;
+  const campOpts=`${single.map(p=>`<option value="${p.id}" ${REQ.fund_id===p.id?'selected':''}>${esc(p.nome)}${p.agencia?' · '+esc(p.agencia):''}</option>`).join('')}${groups.map(g=>`<option value="FEE::${esc(g.agencia)}" ${REQ.fund_id==='FEE::'+g.agencia?'selected':''}>Fee — ${esc(g.agencia)} (split ${g.splits.map(s=>s.categoria).join('/')})</option>`).join('')}`;
+  const campField=`<div class="field"><label>Campaign</label><select onchange="reqSet('fund_id',this.value)">${campOpts||'<option value="">—</option>'}</select></div>`;
   let body;
   if(isSplit){
     const rows=reqSplitBreakdown();
@@ -3998,7 +3998,7 @@ function renderReqPO(){
     `;
   }else{
     const mSel=REQ.meses.find(m=>m.competencia===REQ.competencia);
-    const teto=mSel?mSel.teto:0, cons=REQ.competencia?consumoMes(REQ.projeto_id,REQ.competencia):0, saldo=teto-cons;
+    const teto=mSel?mSel.teto:0, cons=REQ.competencia?consumoMes(REQ.fund_id,REQ.competencia):0, saldo=teto-cons;
     const val=+REQ.valor||0, estoura=val>saldo+0.001;
     body=`
       <div class="field"><label>Description</label><input value="${esc(REQ.descricao)}" onchange="reqSet('descricao',this.value)" placeholder="e.g. Video production, paid media…"></div>
@@ -4018,7 +4018,7 @@ function renderReqPO(){
   </div></div>`;
 }
 function demoAddPO(pid,competencia,agencia,valor,descricao,grupoId){
-  DATA.pos.push({id:'demo-po-'+uid(),projeto_id:pid,competencia,agencia,valor,descricao:descricao||'',numero_po:'',status:'SOLICITADA',solicitado_em:new Date().toISOString(),po_grupo_id:grupoId||null});
+  DATA.pos.push({id:'demo-po-'+uid(),fund_id:pid,competencia,agencia,valor,descricao:descricao||'',numero_po:'',status:'SOLICITADA',solicitado_em:new Date().toISOString(),po_grupo_id:grupoId||null});
 }
 async function submitReqPO(){
   if(!REQ)return;
@@ -4037,7 +4037,7 @@ async function submitReqPO(){
        exactly as before. */
     const grupoId=crypto.randomUUID();
     if(DEMO_MODE){
-      rows.forEach(r=>{ if(r.valor>0) demoAddPO(r.projeto_id,REQ.competencia,REQ.splitAg,r.valor,(REQ.descricao||'')+' — '+r.categoria,grupoId); });
+      rows.forEach(r=>{ if(r.valor>0) demoAddPO(r.fund_id,REQ.competencia,REQ.splitAg,r.valor,(REQ.descricao||'')+' — '+r.categoria,grupoId); });
       toast('PO requested for '+fmtMes(REQ.competencia)+' ✓ (demo) — budget split across '+rows.length+' categories.'); closeModal(); go('pos');
       return;
     }
@@ -4045,7 +4045,7 @@ async function submitReqPO(){
     try{
       for(const r of rows){
         if(r.valor<=0)continue;
-        const {error}=await SBPO.rpc('solicitar_po',{p_projeto:r.projeto_id,p_competencia:REQ.competencia,p_agencia:REQ.splitAg,p_valor:r.valor,p_descricao:REQ.descricao||'',p_grupo_id:grupoId});
+        const {error}=await SBPO.rpc('solicitar_po',{p_fund:r.fund_id,p_competencia:REQ.competencia,p_agencia:REQ.splitAg,p_valor:r.valor,p_descricao:REQ.descricao||'',p_grupo_id:grupoId});
         if(error)throw error;
       }
       toast('PO requested for '+fmtMes(REQ.competencia)+' ✓ — budget split across '+rows.length+' categories.'); closeModal();
@@ -4053,18 +4053,18 @@ async function submitReqPO(){
     }catch(e){ toastErr(e); }
     return;
   }
-  if(!REQ.projeto_id){ toast('Choose the campaign.'); return; }
+  if(!REQ.fund_id){ toast('Choose the campaign.'); return; }
   if(!REQ.competencia){ toast('Choose the allocation month.'); return; }
   const val=+REQ.valor||0; if(val<=0){ toast('Enter a value.'); return; }
-  const ag=(PAPEL==='agencia'&&MINHA_AGENCIA)?MINHA_AGENCIA:(DATA.poProjetos.find(p=>p.id===REQ.projeto_id)||{}).agencia||'';
+  const ag=(PAPEL==='agencia'&&MINHA_AGENCIA)?MINHA_AGENCIA:(DATA.poProjetos.find(p=>p.id===REQ.fund_id)||{}).agencia||'';
   if(DEMO_MODE){
-    demoAddPO(REQ.projeto_id,REQ.competencia,ag,val,REQ.descricao||'');
+    demoAddPO(REQ.fund_id,REQ.competencia,ag,val,REQ.descricao||'');
     toast('PO requested for '+fmtMes(REQ.competencia)+' ✓ (demo)'); closeModal(); go('pos');
     return;
   }
   if(viewOnly()){toast(roMsg());return;}
   try{
-    const {error}=await SBPO.rpc('solicitar_po',{p_projeto:REQ.projeto_id,p_competencia:REQ.competencia,p_agencia:ag,p_valor:val,p_descricao:REQ.descricao||''});
+    const {error}=await SBPO.rpc('solicitar_po',{p_fund:REQ.fund_id,p_competencia:REQ.competencia,p_agencia:ag,p_valor:val,p_descricao:REQ.descricao||''});
     if(error)throw error;
     toast('PO requested for '+fmtMes(REQ.competencia)+' ✓'); closeModal();
     await reloadPO(); go('pos');
@@ -4072,7 +4072,7 @@ async function submitReqPO(){
 }
 async function reloadPO(){
   try{
-    const {data}=await SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id');
+    const {data}=await SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id');
     DATA.pos=data||[];
   }catch(e){}
 }
@@ -4082,7 +4082,7 @@ async function realocarPO(poId){
   if(!isManager&&PAPEL!=='admin'){ toast('Only admin can reallocate.'); return; }
   const po=DATA.pos.find(p=>p.id===poId); if(!po)return;
   const sibs=poGroupSiblings(po);
-  const meses=await mesesDoProjeto(po.projeto_id);
+  const meses=await mesesDoProjeto(po.fund_id);
   const opts=meses.map(m=>fmtMes(m.competencia)).join(', ');
   const novo=prompt('Reallocate PO to which month? Project months: '+opts+(sibs.length>1?'\n\nApplies to all '+sibs.length+' categories in this PO.':'')+'\n\nEnter in YYYY-MM format (e.g. 2026-08):', String(po.competencia).slice(0,7));
   if(!novo)return;
@@ -4098,18 +4098,18 @@ let POEDIT=null;
 function editarPO(poId){
   if(!fullAccess()){ toast('Only admin can edit POs.'); return; }
   const po=DATA.pos.find(p=>p.id===poId); if(!po)return;
-  POEDIT={id:poId,projeto_id:po.projeto_id,valor:po.valor!=null?po.valor:'',descricao:po.descricao||'',numero_po:po.numero_po||'',mes:String(po.competencia||'').slice(0,7),status:po.status};
+  POEDIT={id:poId,fund_id:po.fund_id,valor:po.valor!=null?po.valor:'',descricao:po.descricao||'',numero_po:po.numero_po||'',mes:String(po.competencia||'').slice(0,7),status:po.status};
   renderPOEdit();
 }
 function poeSet(k,v){ if(POEDIT)POEDIT[k]=v; }
 async function renderPOEdit(){
   if(!POEDIT)return; const pe=POEDIT;
   let monthOpts=[pe.mes];
-  try{ const meses=await mesesDoProjeto(pe.projeto_id); monthOpts=[...new Set(meses.map(m=>String(m.competencia).slice(0,7)).concat(pe.mes))].filter(Boolean).sort(); }catch(e){}
+  try{ const meses=await mesesDoProjeto(pe.fund_id); monthOpts=[...new Set(meses.map(m=>String(m.competencia).slice(0,7)).concat(pe.mes))].filter(Boolean).sort(); }catch(e){}
   const stOpts=Object.keys(PO_STATUS).map(k=>`<option value="${k}" ${pe.status===k?'selected':''}>${PO_STATUS[k].t}</option>`).join('');
   const moOpts=monthOpts.map(m=>`<option value="${m}" ${pe.mes===m?'selected':''}>${fmtMes(m+'-01')}</option>`).join('');
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:500px">
-    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--po);flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Edit PO ${esc(pe.numero_po||'')}</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">${esc(poNome(pe.projeto_id))} — admin can edit any field</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--po);flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Edit PO ${esc(pe.numero_po||'')}</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">${esc(poNome(pe.fund_id))} — admin can edit any field</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">
       <div class="fgrid">
         <div class="field"><label>Value (R$)</label><input type="number" min="0" step="100" value="${esc(pe.valor)}" onchange="poeSet('valor',this.value)" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px" class="mono"></div>
@@ -4143,7 +4143,7 @@ async function deletarPO(id){
   if(PAPEL!=='admin'){ toast('Only admin can delete.'); return; }
   const po=DATA.pos.find(p=>p.id===id)||{};
   const sibs=poGroupSiblings(po); const grouped=sibs.length>1;
-  const label=grouped?poGroupLabel(sibs):poNome(po.projeto_id);
+  const label=grouped?poGroupLabel(sibs):poNome(po.fund_id);
   const total=grouped?sibs.reduce((s,p)=>s+(+p.valor||0),0):po.valor;
   if(!confirm('Delete this PO permanently?\n\n'+(label||'')+' · '+BRL(total)+(po.numero_po?' · PO '+po.numero_po:'')+(grouped?' · '+sibs.length+' categories':'')+'\n\nThis cannot be undone.'))return;
   try{
@@ -4155,9 +4155,9 @@ async function deletarCampanha(id){
   if(viewOnly()){toast(roMsg());return;}
   if(PAPEL!=='admin'){ toast('Only admin can delete.'); return; }
   const p=DATA.poProjetos.find(x=>x.id===id)||{};
-  const nPos=DATA.pos.filter(x=>x.projeto_id===id).length;
+  const nPos=DATA.pos.filter(x=>x.fund_id===id).length;
   if(!confirm('Delete campaign "'+(p.nome||'')+'"?\n\nThis also deletes its '+nPos+' PO(s) and all monthly caps/rateio.\n\nThis cannot be undone.'))return;
-  try{ const {error}=await SBPO.rpc('excluir_projeto',{p_projeto:id}); if(error)throw error;
+  try{ const {error}=await SBPO.rpc('excluir_fund',{p_fund:id}); if(error)throw error;
     CAMPEDIT=null; closeModal(); await reloadPOAll(); goCostCenter(); toast('Campaign deleted.');
   }catch(e){ toastErr(e); }
 }
@@ -4622,14 +4622,14 @@ function ccAggregate(opt){
   };
   campsAll.forEach(p=>{
     const consByMonth={}, posByMonth={};
-    DATA.pos.filter(po=>po.projeto_id===p.id&&CC_CONS_ST.includes(po.status)).forEach(po=>{
+    DATA.pos.filter(po=>po.fund_id===p.id&&CC_CONS_ST.includes(po.status)).forEach(po=>{
       const m=String(po.competencia).slice(0,7);
       consByMonth[m]=(consByMonth[m]||0)+(+po.valor||0);
       (posByMonth[m]=posByMonth[m]||[]).push(po);
     });
     if(p.rateio){
       const monthCat={};
-      (DATA.rateio||[]).filter(r=>r.projeto_id===p.id).forEach(r=>{
+      (DATA.rateio||[]).filter(r=>r.fund_id===p.id).forEach(r=>{
         const m=String(r.competencia).slice(0,7);
         monthCat[m]=monthCat[m]||{}; monthCat[m][r.categoria]=(monthCat[m][r.categoria]||0)+(+r.valor||0);
       });
@@ -4656,7 +4656,7 @@ function ccAggregate(opt){
       if(!p.cc&&!p.account&&!p.account_desc)return;
       if(!keepCat(p.product_category))return;
       const key=accKey(p.cc,p.account,p.account_desc);
-      (DATA.tetos||[]).filter(t=>t.projeto_id===p.id).forEach(t=>{
+      (DATA.tetos||[]).filter(t=>t.fund_id===p.id).forEach(t=>{
         const m=String(t.competencia).slice(0,7);
         const a=slot(key,p.cc,p.account,p.account_desc,p.product_category);
         a.months[m]=(a.months[m]||0)+(+t.teto||0);
@@ -4998,15 +4998,15 @@ function boPeriodBar(){
 }
 /* Month "bolinhas": one dot per campaign month, filled when that month is fully
    consumed (completed), amber when in progress, hollow when not started. */
-function campMonthCons(pid,m){ return (DATA.pos||[]).filter(po=>po.projeto_id===pid&&String(po.competencia).slice(0,7)===m&&CONS.includes(po.status)).reduce((s,po)=>s+(+po.valor||0),0); }
+function campMonthCons(pid,m){ return (DATA.pos||[]).filter(po=>po.fund_id===pid&&String(po.competencia).slice(0,7)===m&&CONS.includes(po.status)).reduce((s,po)=>s+(+po.valor||0),0); }
 /* "Used" in the sense the rest of the app means it: everything committed
    against the month's cap — invoiced (CONS), approved/issued (COMP) and still
    awaiting approval (PEND) — which is exactly what the campaign drawer
    subtracts to show a month's balance. campMonthCons() above is the narrower
    "already invoiced" figure; don't mix them or the timeline and the drawer
    will disagree about the same month. */
-function campMonthUsed(pid,m){ return (DATA.pos||[]).filter(po=>po.projeto_id===pid&&String(po.competencia).slice(0,7)===m&&(CONS.includes(po.status)||COMP.includes(po.status)||PEND.includes(po.status))).reduce((s,po)=>s+(+po.valor||0),0); }
-function campMonthCap(pid,m){ let c=0; (DATA.tetos||[]).forEach(t=>{if(t.projeto_id===pid&&String(t.competencia).slice(0,7)===m)c+=(+t.teto||0);}); (DATA.rateio||[]).forEach(r=>{if(r.projeto_id===pid&&String(r.competencia).slice(0,7)===m)c+=(+r.valor||0);}); return c; }
+function campMonthUsed(pid,m){ return (DATA.pos||[]).filter(po=>po.fund_id===pid&&String(po.competencia).slice(0,7)===m&&(CONS.includes(po.status)||COMP.includes(po.status)||PEND.includes(po.status))).reduce((s,po)=>s+(+po.valor||0),0); }
+function campMonthCap(pid,m){ let c=0; (DATA.tetos||[]).forEach(t=>{if(t.fund_id===pid&&String(t.competencia).slice(0,7)===m)c+=(+t.teto||0);}); (DATA.rateio||[]).forEach(r=>{if(r.fund_id===pid&&String(r.competencia).slice(0,7)===m)c+=(+r.valor||0);}); return c; }
 /* Past months whose cap still has unused balance (cap minus everything
    committed against it, invoiced or not) — the set a "Reallocate" prompt
    should surface. Used both by the drawer's per-month button and by the
@@ -5018,7 +5018,7 @@ function campPastUnallocatedBalance(pid){
   months.forEach(m=>{
     const cap=campMonthCap(pid,m);
     if(!cap)return;
-    const committed=(DATA.pos||[]).filter(po=>po.projeto_id===pid&&String(po.competencia).slice(0,7)===m&&!['REJEITADA','CANCELADA'].includes(po.status)).reduce((s,po)=>s+(+po.valor||0),0);
+    const committed=(DATA.pos||[]).filter(po=>po.fund_id===pid&&String(po.competencia).slice(0,7)===m&&!['REJEITADA','CANCELADA'].includes(po.status)).reduce((s,po)=>s+(+po.valor||0),0);
     const saldo=cap-committed;
     if(saldo>0.5) out.push({mes:m,saldo});
   });
@@ -5091,7 +5091,7 @@ function campMetaLineHTML(p,col){
 /* Purchase orders for one campaign, with status badges — shared by the
    Campaigns-screen detail panel and the Budgets & Fees campaign dropdown. */
 function campPOsListHTML(p){
-  let pos=(DATA.pos||[]).filter(po=>po.projeto_id===p.id);
+  let pos=(DATA.pos||[]).filter(po=>po.fund_id===p.id);
   if(PAPEL==='agencia'&&MINHA_AGENCIA) pos=pos.filter(po=>po.agencia===MINHA_AGENCIA);
   pos.sort((a,b)=>String(b.competencia||'').localeCompare(String(a.competencia||'')));
   const poRow=po=>{const s=PO_STATUS[po.status]||{t:po.status,c:'s-slate'};return `<div onclick="event.stopPropagation();openPODetail('${esc(po.id)}')" style="display:flex;align-items:center;gap:10px;padding:8px 11px;border:1px solid var(--line);border-radius:9px;margin-bottom:6px;cursor:pointer;background:#fff" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background='#fff'">
@@ -5142,14 +5142,14 @@ function accBreakdownData(){
   camps.forEach(p=>{
     const poM={};
     (DATA.pos||[]).forEach(po=>{
-      if(po.projeto_id!==p.id||!boInPeriod(po.competencia))return;
+      if(po.fund_id!==p.id||!boInPeriod(po.competencia))return;
       const m=String(po.competencia).slice(0,7), v=+po.valor||0;
       poM[m]=poM[m]||{cons:0,comp:0,pend:0};
       if(CONS.includes(po.status))poM[m].cons+=v; else if(COMP.includes(po.status))poM[m].comp+=v; else if(PEND.includes(po.status))poM[m].pend+=v;
     });
     if(p.rateio){
       const monthCat={};
-      (DATA.rateio||[]).forEach(r=>{ if(r.projeto_id!==p.id||!boInPeriod(r.competencia))return; const m=String(r.competencia).slice(0,7); monthCat[m]=monthCat[m]||{}; monthCat[m][r.categoria]=(monthCat[m][r.categoria]||0)+(+r.valor||0); });
+      (DATA.rateio||[]).forEach(r=>{ if(r.fund_id!==p.id||!boInPeriod(r.competencia))return; const m=String(r.competencia).slice(0,7); monthCat[m]=monthCat[m]||{}; monthCat[m][r.categoria]=(monthCat[m][r.categoria]||0)+(+r.valor||0); });
       Object.keys(monthCat).forEach(m=>{
         const cats=monthCat[m], tot=Object.values(cats).reduce((s,v)=>s+v,0)||1, po=poM[m]||{cons:0,comp:0,pend:0};
         Object.keys(cats).forEach(cat=>{
@@ -5163,7 +5163,7 @@ function accBreakdownData(){
       const cat=p.product_category||'—';
       if(!boScopeKeep(cat))return;
       const r=bucket(p.account||'—',cat);
-      (DATA.tetos||[]).forEach(t=>{ if(t.projeto_id!==p.id||!boInPeriod(t.competencia))return; r.b+=(+t.teto||0); });
+      (DATA.tetos||[]).forEach(t=>{ if(t.fund_id!==p.id||!boInPeriod(t.competencia))return; r.b+=(+t.teto||0); });
       Object.values(poM).forEach(v=>{ r.cons+=v.cons; r.comp+=v.comp; r.pend+=v.pend; });
     }
   });
@@ -5235,17 +5235,17 @@ function renderBudgetOverview(isBalance){
   if(effPapel()==='agencia'&&effAgencia()) camps=camps.filter(p=>p.agencia===effAgencia());
   camps=camps.filter(p=>boScopeKeep(p.product_category));
   const tetoBy={},consBy={},compBy={},pendBy={};
-  DATA.tetos.forEach(t=>{if(!boInPeriod(t.competencia))return;tetoBy[t.projeto_id]=(tetoBy[t.projeto_id]||0)+(+t.teto||0);});
-  DATA.rateio.forEach(r=>{if(!boInPeriod(r.competencia))return;tetoBy[r.projeto_id]=(tetoBy[r.projeto_id]||0)+(+r.valor||0);});
-  DATA.pos.forEach(po=>{if(!boInPeriod(po.competencia))return;const v=+po.valor||0;if(CONS.includes(po.status))consBy[po.projeto_id]=(consBy[po.projeto_id]||0)+v;else if(COMP.includes(po.status))compBy[po.projeto_id]=(compBy[po.projeto_id]||0)+v;else if(PEND.includes(po.status))pendBy[po.projeto_id]=(pendBy[po.projeto_id]||0)+v;});
+  DATA.tetos.forEach(t=>{if(!boInPeriod(t.competencia))return;tetoBy[t.fund_id]=(tetoBy[t.fund_id]||0)+(+t.teto||0);});
+  DATA.rateio.forEach(r=>{if(!boInPeriod(r.competencia))return;tetoBy[r.fund_id]=(tetoBy[r.fund_id]||0)+(+r.valor||0);});
+  DATA.pos.forEach(po=>{if(!boInPeriod(po.competencia))return;const v=+po.valor||0;if(CONS.includes(po.status))consBy[po.fund_id]=(consBy[po.fund_id]||0)+v;else if(COMP.includes(po.status))compBy[po.fund_id]=(compBy[po.fund_id]||0)+v;else if(PEND.includes(po.status))pendBy[po.fund_id]=(pendBy[po.fund_id]||0)+v;});
   const campIds=new Set(camps.map(c=>c.id));
   let orcado=0,consumido=0,compTot=0,pend=0; camps.forEach(p=>{orcado+=tetoBy[p.id]||0;consumido+=consBy[p.id]||0;compTot+=compBy[p.id]||0;pend+=pendBy[p.id]||0;});
   const saldo=orcado-consumido-compTot-pend;
   // barra do mês corrente
   const mNow=(BO_PER.mode==='month'&&BO_PER.val)?BO_PER.val:new Date().toISOString().slice(0,7);
-  let capMes=0; DATA.tetos.forEach(t=>{if(campIds.has(t.projeto_id)&&String(t.competencia).slice(0,7)===mNow)capMes+=(+t.teto||0);});
-  DATA.rateio.forEach(r=>{if(campIds.has(r.projeto_id)&&String(r.competencia).slice(0,7)===mNow)capMes+=(+r.valor||0);});
-  let consMes=0,compMes=0,penMes=0; DATA.pos.forEach(po=>{if(!campIds.has(po.projeto_id)||String(po.competencia).slice(0,7)!==mNow)return;const v=+po.valor||0;if(CONS.includes(po.status))consMes+=v;else if(COMP.includes(po.status))compMes+=v;else if(PEND.includes(po.status))penMes+=v;});
+  let capMes=0; DATA.tetos.forEach(t=>{if(campIds.has(t.fund_id)&&String(t.competencia).slice(0,7)===mNow)capMes+=(+t.teto||0);});
+  DATA.rateio.forEach(r=>{if(campIds.has(r.fund_id)&&String(r.competencia).slice(0,7)===mNow)capMes+=(+r.valor||0);});
+  let consMes=0,compMes=0,penMes=0; DATA.pos.forEach(po=>{if(!campIds.has(po.fund_id)||String(po.competencia).slice(0,7)!==mNow)return;const v=+po.valor||0;if(CONS.includes(po.status))consMes+=v;else if(COMP.includes(po.status))compMes+=v;else if(PEND.includes(po.status))penMes+=v;});
   const balMes=capMes-consMes-compMes-penMes;
   const consPctM=capMes?Math.min(100,consMes/capMes*100):0, compPctM=capMes?Math.min(100-consPctM,compMes/capMes*100):0, penPctM=capMes?Math.min(100-consPctM-compPctM,penMes/capMes*100):0;
   const stat=(l,v,col)=>`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;padding:14px 16px;box-shadow:0 1px 2px rgba(20,22,28,.05)"><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-2);font-weight:700">${l}</div><div class="mono stat-num" style="font-size:19px;font-weight:700;margin-top:7px;color:${col}">${v}</div></div>`;
@@ -5261,7 +5261,7 @@ function renderBudgetOverview(isBalance){
   const pctCons=orcado?Math.min(100,consumido/orcado*100):0;
   const pctComp=orcado?Math.min(100-pctCons,compTot/orcado*100):0;
   const pctPend=orcado?Math.min(100-pctCons-pctComp,pend/orcado*100):0;
-  const hasConclBy={}; DATA.pos.forEach(po=>{ if(po.status==='CONCLUIDA') hasConclBy[po.projeto_id]=true; });
+  const hasConclBy={}; DATA.pos.forEach(po=>{ if(po.status==='CONCLUIDA') hasConclBy[po.fund_id]=true; });
   const alerts=[];
   camps.forEach(p=>{ const tot=tetoBy[p.id]||0; if(!tot)return; const comprometido=(consBy[p.id]||0)+(compBy[p.id]||0)+(pendBy[p.id]||0); const pct=comprometido/tot*100;
     if(comprometido>tot) alerts.push({sev:'over',html:`<b>${esc(p.nome)}</b> went over its cap — ${BRL(comprometido)} committed of ${BRL(tot)}.`,id:p.id});
@@ -5360,11 +5360,11 @@ function boPieData(){
      count under its category, a rateio campaign's allocation under the
      category each slice was booked to. */
   const byCat={};
-  (DATA.tetos||[]).forEach(t=>{ if(!ids.has(t.projeto_id)||!boInPeriod(t.competencia))return; const c=catOf[t.projeto_id]; if(c&&boScopeKeep(c)) byCat[c]=(byCat[c]||0)+(+t.teto||0); });
-  (DATA.rateio||[]).forEach(r=>{ if(!ids.has(r.projeto_id)||!boInPeriod(r.competencia))return; const c=r.categoria; if(c&&boScopeKeep(c)) byCat[c]=(byCat[c]||0)+(+r.valor||0); });
+  (DATA.tetos||[]).forEach(t=>{ if(!ids.has(t.fund_id)||!boInPeriod(t.competencia))return; const c=catOf[t.fund_id]; if(c&&boScopeKeep(c)) byCat[c]=(byCat[c]||0)+(+t.teto||0); });
+  (DATA.rateio||[]).forEach(r=>{ if(!ids.has(r.fund_id)||!boInPeriod(r.competencia))return; const c=r.categoria; if(c&&boScopeKeep(c)) byCat[c]=(byCat[c]||0)+(+r.valor||0); });
   const allocBy={};
-  (DATA.tetos||[]).forEach(t=>{ if(!boInPeriod(t.competencia))return; allocBy[t.projeto_id]=(allocBy[t.projeto_id]||0)+(+t.teto||0); });
-  (DATA.rateio||[]).forEach(r=>{ if(!boInPeriod(r.competencia))return; allocBy[r.projeto_id]=(allocBy[r.projeto_id]||0)+(+r.valor||0); });
+  (DATA.tetos||[]).forEach(t=>{ if(!boInPeriod(t.competencia))return; allocBy[t.fund_id]=(allocBy[t.fund_id]||0)+(+t.teto||0); });
+  (DATA.rateio||[]).forEach(r=>{ if(!boInPeriod(r.competencia))return; allocBy[r.fund_id]=(allocBy[r.fund_id]||0)+(+r.valor||0); });
   const byAct={}; camps.forEach(p=>{ const k=actKey(p); byAct[k]=(byAct[k]||0)+(allocBy[p.id]||0); });
   const shape=(obj,labelOf,colorOf)=>{
     let items=Object.keys(obj).filter(k=>obj[k]>0.005).map(k=>({k,label:labelOf(k),v:obj[k],color:colorOf(k)}));
@@ -5437,14 +5437,14 @@ function buildOverviewMonthlyChart(isBalance){
   camps=camps.filter(p=>boScopeKeep(p.product_category));
   const campIds=new Set(camps.map(c=>c.id));
   const months=new Set();
-  DATA.tetos.forEach(t=>{if(campIds.has(t.projeto_id))months.add(String(t.competencia).slice(0,7));});
-  DATA.rateio.forEach(r=>{if(campIds.has(r.projeto_id))months.add(String(r.competencia).slice(0,7));});
-  DATA.pos.forEach(po=>{if(campIds.has(po.projeto_id)&&po.competencia)months.add(String(po.competencia).slice(0,7));});
+  DATA.tetos.forEach(t=>{if(campIds.has(t.fund_id))months.add(String(t.competencia).slice(0,7));});
+  DATA.rateio.forEach(r=>{if(campIds.has(r.fund_id))months.add(String(r.competencia).slice(0,7));});
+  DATA.pos.forEach(po=>{if(campIds.has(po.fund_id)&&po.competencia)months.add(String(po.competencia).slice(0,7));});
   const ml=Array.from(months).sort().filter(boMonthIn);
-  const lanc=ml.map(m=>{let v=0; DATA.tetos.forEach(t=>{if(campIds.has(t.projeto_id)&&String(t.competencia).slice(0,7)===m)v+=(+t.teto||0);}); DATA.rateio.forEach(r=>{if(campIds.has(r.projeto_id)&&String(r.competencia).slice(0,7)===m)v+=(+r.valor||0);}); return v;});
-  const reqd=ml.map(m=>{let v=0; DATA.pos.forEach(po=>{if(campIds.has(po.projeto_id)&&String(po.competencia).slice(0,7)===m&&PEND.includes(po.status))v+=(+po.valor||0);}); return v;});
-  const cons=ml.map(m=>{let v=0; DATA.pos.forEach(po=>{if(campIds.has(po.projeto_id)&&String(po.competencia).slice(0,7)===m&&CONS.includes(po.status))v+=(+po.valor||0);}); return v;});
-  const comp=ml.map(m=>{let v=0; DATA.pos.forEach(po=>{if(campIds.has(po.projeto_id)&&String(po.competencia).slice(0,7)===m&&COMP.includes(po.status))v+=(+po.valor||0);}); return v;});
+  const lanc=ml.map(m=>{let v=0; DATA.tetos.forEach(t=>{if(campIds.has(t.fund_id)&&String(t.competencia).slice(0,7)===m)v+=(+t.teto||0);}); DATA.rateio.forEach(r=>{if(campIds.has(r.fund_id)&&String(r.competencia).slice(0,7)===m)v+=(+r.valor||0);}); return v;});
+  const reqd=ml.map(m=>{let v=0; DATA.pos.forEach(po=>{if(campIds.has(po.fund_id)&&String(po.competencia).slice(0,7)===m&&PEND.includes(po.status))v+=(+po.valor||0);}); return v;});
+  const cons=ml.map(m=>{let v=0; DATA.pos.forEach(po=>{if(campIds.has(po.fund_id)&&String(po.competencia).slice(0,7)===m&&CONS.includes(po.status))v+=(+po.valor||0);}); return v;});
+  const comp=ml.map(m=>{let v=0; DATA.pos.forEach(po=>{if(campIds.has(po.fund_id)&&String(po.competencia).slice(0,7)===m&&COMP.includes(po.status))v+=(+po.valor||0);}); return v;});
   _charts.push(new Chart(el,{type:'bar',data:{labels:ml.map(m=>fmtMes(m+'-01')),datasets:[
     {label:isBalance?'Allocated':'Month cap',data:lanc,backgroundColor:'#d9d6cc',borderRadius:5},
     {label:'Consumed',data:cons,backgroundColor:'#1273cf',borderRadius:5},
@@ -5468,9 +5468,9 @@ function buildBudgetActivityChart(){
   if(effPapel()==='agencia'&&effAgencia()) camps=camps.filter(p=>p.agencia===effAgencia());
   camps=camps.filter(p=>(String(p.product_category||'').trim()||'Uncategorized')===BUDGET_CAT);
   const tetoBy={},consBy={},compBy={};
-  DATA.tetos.forEach(t=>{tetoBy[t.projeto_id]=(tetoBy[t.projeto_id]||0)+(+t.teto||0);});
-  DATA.rateio.forEach(r=>{tetoBy[r.projeto_id]=(tetoBy[r.projeto_id]||0)+(+r.valor||0);});
-  DATA.pos.forEach(po=>{const v=+po.valor||0;if(CONS.includes(po.status))consBy[po.projeto_id]=(consBy[po.projeto_id]||0)+v;else if(COMP.includes(po.status))compBy[po.projeto_id]=(compBy[po.projeto_id]||0)+v;});
+  DATA.tetos.forEach(t=>{tetoBy[t.fund_id]=(tetoBy[t.fund_id]||0)+(+t.teto||0);});
+  DATA.rateio.forEach(r=>{tetoBy[r.fund_id]=(tetoBy[r.fund_id]||0)+(+r.valor||0);});
+  DATA.pos.forEach(po=>{const v=+po.valor||0;if(CONS.includes(po.status))consBy[po.fund_id]=(consBy[po.fund_id]||0)+v;else if(COMP.includes(po.status))compBy[po.fund_id]=(compBy[po.fund_id]||0)+v;});
   const byAct={}; camps.forEach(p=>{const k=actKey(p);(byAct[k]=byAct[k]||[]).push(p);});
   const order=Object.keys(byAct).sort((a,b)=>{let ia=ACT_COL_ORDER.indexOf(a),ib=ACT_COL_ORDER.indexOf(b);if(ia<0)ia=99;if(ib<0)ib=99;return ia-ib||a.localeCompare(b);});
   if(!order.length)return;
@@ -5490,9 +5490,9 @@ function renderBudgets(){
   let camps=(DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO');
   if(effPapel()==='agencia'&&effAgencia()) camps=camps.filter(p=>p.agencia===effAgencia());
   const tetoBy={},consBy={},compBy={},pendBy={};
-  DATA.tetos.forEach(t=>{tetoBy[t.projeto_id]=(tetoBy[t.projeto_id]||0)+(+t.teto||0);});
-  DATA.rateio.forEach(r=>{tetoBy[r.projeto_id]=(tetoBy[r.projeto_id]||0)+(+r.valor||0);});
-  DATA.pos.forEach(po=>{const v=+po.valor||0;if(CONS.includes(po.status))consBy[po.projeto_id]=(consBy[po.projeto_id]||0)+v;else if(COMP.includes(po.status))compBy[po.projeto_id]=(compBy[po.projeto_id]||0)+v;else if(PEND.includes(po.status))pendBy[po.projeto_id]=(pendBy[po.projeto_id]||0)+v;});
+  DATA.tetos.forEach(t=>{tetoBy[t.fund_id]=(tetoBy[t.fund_id]||0)+(+t.teto||0);});
+  DATA.rateio.forEach(r=>{tetoBy[r.fund_id]=(tetoBy[r.fund_id]||0)+(+r.valor||0);});
+  DATA.pos.forEach(po=>{const v=+po.valor||0;if(CONS.includes(po.status))consBy[po.fund_id]=(consBy[po.fund_id]||0)+v;else if(COMP.includes(po.status))compBy[po.fund_id]=(compBy[po.fund_id]||0)+v;else if(PEND.includes(po.status))pendBy[po.fund_id]=(pendBy[po.fund_id]||0)+v;});
   // Group approved campaigns by product category and tie each to its budget (orc).
   const byCat={}; camps.forEach(p=>{ const k=(String(p.product_category||'').trim()||'Uncategorized'); (byCat[k]=byCat[k]||[]).push(p); });
   const orcByCat={}; orcs.forEach(o=>{ if(o.product_category) orcByCat[o.product_category]=o; });
@@ -5552,9 +5552,9 @@ function budgetExportRows(){
   let camps=(DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO');
   if(effPapel()==='agencia'&&effAgencia()) camps=camps.filter(p=>p.agencia===effAgencia());
   const tetoBy={},consBy={},compBy={},pendBy={};
-  DATA.tetos.forEach(t=>{tetoBy[t.projeto_id]=(tetoBy[t.projeto_id]||0)+(+t.teto||0);});
-  DATA.rateio.forEach(r=>{tetoBy[r.projeto_id]=(tetoBy[r.projeto_id]||0)+(+r.valor||0);});
-  DATA.pos.forEach(po=>{const v=+po.valor||0;if(CONS.includes(po.status))consBy[po.projeto_id]=(consBy[po.projeto_id]||0)+v;else if(COMP.includes(po.status))compBy[po.projeto_id]=(compBy[po.projeto_id]||0)+v;else if(PEND.includes(po.status))pendBy[po.projeto_id]=(pendBy[po.projeto_id]||0)+v;});
+  DATA.tetos.forEach(t=>{tetoBy[t.fund_id]=(tetoBy[t.fund_id]||0)+(+t.teto||0);});
+  DATA.rateio.forEach(r=>{tetoBy[r.fund_id]=(tetoBy[r.fund_id]||0)+(+r.valor||0);});
+  DATA.pos.forEach(po=>{const v=+po.valor||0;if(CONS.includes(po.status))consBy[po.fund_id]=(consBy[po.fund_id]||0)+v;else if(COMP.includes(po.status))compBy[po.fund_id]=(compBy[po.fund_id]||0)+v;else if(PEND.includes(po.status))pendBy[po.fund_id]=(pendBy[po.fund_id]||0)+v;});
   const orcs=DATA.orcamentos||[];
   const byOrc={}; camps.forEach(p=>{ const k=p.orcamento_id||'—'; (byOrc[k]=byOrc[k]||[]).push(p); });
   const rows=[];
@@ -5769,10 +5769,10 @@ async function reloadPOAll(){
   try{
     const [orc,prj,pos,tet,rat]=await Promise.all([
       SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
-      SBPO.from('projetos').select('id,nome,agencia,orcamento_id,product_category,activity,projeto_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em'),
-      SBPO.from('pos').select('id,projeto_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
-      SBPO.from('tetos').select('projeto_id,competencia,teto'),
-      SBPO.from('rateio_alocacao').select('projeto_id,competencia,valor,categoria')
+      SBPO.from('funds').select('id,nome,agencia,orcamento_id,product_category,activity,fund_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em'),
+      SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
+      SBPO.from('tetos').select('fund_id,competencia,teto'),
+      SBPO.from('rateio_alocacao').select('fund_id,competencia,valor,categoria')
     ]);
     DATA.orcamentos=orc.data||[]; DATA.poProjetos=(prj.data||[]).filter(p=>p.aprovacao_status!=='REJEITADO'); DATA.pos=pos.data||[]; DATA.tetos=tet.data||[]; DATA.rateio=rat.data||[];
   }catch(e){ console.error('reloadPOAll:',e); }
@@ -5838,7 +5838,7 @@ async function submitCamp(){
     const inPeriod=mYYYYMM=>{ const d=mYYYYMM+'-01'; return (!pStart||d>=pStart)&&(!pEnd||d<=pEnd); };
     const vAloc=rows.filter(r=>inPeriod(r.mes)).reduce((s,r)=>s+(+r.valor||0),0);
     const approvedIds=new Set((DATA.poProjetos||[]).filter(p=>p.orcamento_id===CAMP.orcamento_id&&p.aprovacao_status==='APROVADO').map(p=>p.id));
-    const vUsado=(DATA.tetos||[]).filter(t=>approvedIds.has(t.projeto_id)&&inPeriod(String(t.competencia).slice(0,7))).reduce((s,t)=>s+(+t.teto||0),0);
+    const vUsado=(DATA.tetos||[]).filter(t=>approvedIds.has(t.fund_id)&&inPeriod(String(t.competencia).slice(0,7))).reduce((s,t)=>s+(+t.teto||0),0);
     const total=+orc.valor_total||0;
     if(vAloc+vUsado>total+0.5){
       toast(`This would exceed the "${esc(orc.nome||cat)}" budget: ${BRL(vAloc)} requested + ${BRL(vUsado)} already committed exceeds the ${BRL(total)} total. Reduce the values or pick a different budget.`);
@@ -5848,7 +5848,7 @@ async function submitCamp(){
   if(DEMO_MODE){
     const pid='demo-p-'+uid();
     DATA.poProjetos.push({id:pid,nome:CAMP.nome.trim(),agencia:CAMP.agencia||null,orcamento_id:CAMP.orcamento_id,product_category:cat,activity:CAMP.activity||null,rateio:false,aprovacao_status:'PENDENTE',dono:(currentUser&&currentUser.email)||''});
-    rows.forEach(r=>DATA.tetos.push({projeto_id:pid,competencia:r.mes+'-01',teto:r2(+r.valor)}));
+    rows.forEach(r=>DATA.tetos.push({fund_id:pid,competencia:r.mes+'-01',teto:r2(+r.valor)}));
     toast('Campaign created ✓ (demo — now awaiting approval)'); closeModal(); go('campaigns');
     return;
   }
@@ -5857,12 +5857,12 @@ async function submitCamp(){
     let cc='',account='',account_desc='';
     try{ const {data:cls}=await SBPO.rpc('classificar',{p_d:cat,p_e:CAMP.activity||'',p_f:''}); const c=(cls&&cls[0])||{}; cc=c.cc||''; account=c.account||''; account_desc=c.descricao||''; }catch(e){}
     const campos={nome:CAMP.nome.trim(),agencia:CAMP.agencia||null,orcamento_id:CAMP.orcamento_id,product_category:cat,activity:CAMP.activity||null,cc,account,account_desc,rateio:false,rateio_tipo:null,criado_por:'portal'};
-    const {data:proj,error}=await SBPO.from('projetos').insert(campos).select().single();
+    const {data:proj,error}=await SBPO.from('funds').insert(campos).select().single();
     if(error)throw error;
     const pid=proj.id;
     {
-      const tetos=rows.map(r=>({projeto_id:pid,competencia:r.mes+'-01',teto:r2(+r.valor),definido_por:'portal'}));
-      const {error:e2}=await SBPO.from('tetos').upsert(tetos,{onConflict:'projeto_id,competencia'}); if(e2)throw e2;
+      const tetos=rows.map(r=>({fund_id:pid,competencia:r.mes+'-01',teto:r2(+r.valor),definido_por:'portal'}));
+      const {error:e2}=await SBPO.from('tetos').upsert(tetos,{onConflict:'fund_id,competencia'}); if(e2)throw e2;
     }
     toast('Campaign created ✓'); closeModal(); await reloadPOAll(); go('campaigns');
   }catch(e){ toastErr(e); }
@@ -5909,7 +5909,7 @@ async function submitOrc(){
     const approvedIds=new Set((DATA.poProjetos||[]).filter(p=>p.orcamento_id===ORC.id&&p.aprovacao_status==='APROVADO').map(p=>p.id));
     const pStart=ORC.ini?ORC.ini+'-01':null, pEnd=ORC.fim?ORC.fim+'-01':null;
     const inPeriod=comp=>{ const d=String(comp).slice(0,10); return (!pStart||d>=pStart)&&(!pEnd||d<=pEnd); };
-    const vUsado=(DATA.tetos||[]).filter(t=>approvedIds.has(t.projeto_id)&&inPeriod(t.competencia)).reduce((s,t)=>s+(+t.teto||0),0);
+    const vUsado=(DATA.tetos||[]).filter(t=>approvedIds.has(t.fund_id)&&inPeriod(t.competencia)).reduce((s,t)=>s+(+t.teto||0),0);
     if(val<vUsado-0.5){
       toast(`Can't set the total below ${BRL(vUsado)} — that's already allocated to approved campaigns in this budget.`);
       return;
