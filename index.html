@@ -303,7 +303,7 @@
      it becomes clickable, so the row still reads Cons. first. */
   .cc-tbl td.cc-drill-b{font-weight:400;color:var(--txt-3)}
   .cc-tbl td.cc-drill-b:hover{color:var(--accent-deep)}
-  /* A campaign line inside the Budget breakdown — opens that campaign. */
+  /* A fund line inside the Budget breakdown — opens that fund. */
   .cc-camp-row{cursor:pointer;transition:background var(--fast) var(--ease)}
   .cc-camp-row:hover{background:var(--accent-soft)}
   .cc-tbl th.sortable{cursor:pointer;user-select:none}
@@ -437,7 +437,7 @@ function effAgencia(){ return (VIEW_AS&&VIEW_AS.type==='agencia')?VIEW_AS.value:
 function effIsManager(){ return VIEW_AS?false:isManager; }
 function roMsg(){ return DEMO_MODE?'Demo mode — sandbox with fake data, nothing is written anywhere.':'Read-only view — exit "View as" to make changes.'; }
 /* Used only for the small subset of write actions that ARE simulated
-   locally in demo mode (campaign creation/approval, PO request/approval/
+   locally in demo mode (fund creation/approval, PO request/approval/
    issue/invoice — see the DEMO_MODE branches further down): shows the
    button when either a real write is allowed, or we're in demo mode
    (where the click still works, just against local DATA). Every other
@@ -666,28 +666,28 @@ function computeRecommendations(){
   });
   // 2) Budget >90% consumed with no closed PO yet
   if(PO_ACCESS){
-    const camps=(DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO');
+    const funds=(DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO');
     const tetoBy={},consBy={},hasConcl={};
     DATA.tetos.forEach(t=>tetoBy[t.fund_id]=(tetoBy[t.fund_id]||0)+(+t.teto||0));
     DATA.rateio.forEach(r=>tetoBy[r.fund_id]=(tetoBy[r.fund_id]||0)+(+r.valor||0));
     DATA.pos.forEach(po=>{ const v=+po.valor||0; if(['FATURADA','VALIDADA','CONCLUIDA','APROVADA','PO_GERADA','ATUALIZAR_INFO'].includes(po.status)) consBy[po.fund_id]=(consBy[po.fund_id]||0)+v; if(po.status==='CONCLUIDA') hasConcl[po.fund_id]=true; });
-    camps.forEach(p=>{
+    funds.forEach(p=>{
       const tot=tetoBy[p.id]||0; if(!tot)return;
       const pct=(consBy[p.id]||0)/tot*100;
       if(pct>=90&&!hasConcl[p.id]){
-        out.push({sev:'high',icon:'coins',text:`Campaign "${p.nome}" has ${Math.round(pct)}% of its budget committed but no PO has been closed (CONCLUÍDA) yet.`,onclick:`openCampDetail('${p.id}')`});
+        out.push({sev:'high',icon:'coins',text:`Fund "${p.nome}" has ${Math.round(pct)}% of its budget committed but no PO has been closed (CONCLUÍDA) yet.`,onclick:`openFundDetail('${p.id}')`});
       }
     });
     // Cap possibly double-counted: rows in BOTH tetos and rateio_alocacao
     const _hasTeto=new Set(DATA.tetos.map(t=>t.fund_id)), _hasRat=new Set(DATA.rateio.map(r=>r.fund_id));
-    camps.forEach(p=>{ if(_hasTeto.has(p.id)&&_hasRat.has(p.id)) out.push({sev:'high',icon:'scale',text:`Campaign "${p.nome}" has cap rows in BOTH tetos and rateio_alocacao — its cap may be double-counted. Check with diag_fees_rateio.sql.`,onclick:`openCampDetail('${p.id}')`}); });
+    funds.forEach(p=>{ if(_hasTeto.has(p.id)&&_hasRat.has(p.id)) out.push({sev:'high',icon:'scale',text:`Fund "${p.nome}" has cap rows in BOTH tetos and rateio_alocacao — its cap may be double-counted. Check with diag_fees_rateio.sql.`,onclick:`openFundDetail('${p.id}')`}); });
     // 4) Agency PO volume vs. configured rateio split
     const feeByTipo={}; (DATA.fee||[]).forEach(f=>{ if(!f.tipo)return; (feeByTipo[f.tipo]=feeByTipo[f.tipo]||[]).push(f); });
     Object.keys(feeByTipo).forEach(tipo=>{
       const rows=feeByTipo[tipo]; const totalPct=rows.reduce((s,f)=>s+(+f.percentual||0),0); if(!totalPct)return;
-      const campsTipo=camps.filter(p=>p.rateio_tipo===tipo);
-      if(!campsTipo.length)return;
-      const ids=new Set(campsTipo.map(p=>p.id));
+      const fundsTipo=funds.filter(p=>p.rateio_tipo===tipo);
+      if(!fundsTipo.length)return;
+      const ids=new Set(fundsTipo.map(p=>p.id));
       const byCat={}; DATA.rateio.forEach(r=>{ if(ids.has(r.fund_id)&&r.categoria) byCat[r.categoria]=(byCat[r.categoria]||0)+(+r.valor||0); });
       const totalAlloc=Object.values(byCat).reduce((s,v)=>s+v,0); if(!totalAlloc)return;
       rows.forEach(f=>{
@@ -852,7 +852,7 @@ function seedDemoData(){
     {id:'demo-orc-social',nome:'Social Always-On',product_category:'Social',valor_total:900000,periodo_inicio:D(2026,1,1),periodo_fim:D(2026,12,31)}
   ];
 
-  const campSeed=[
+  const fundSeed=[
     {id:'demo-p1',nome:'Fee - Wavemaker',agencia:'Wavemaker',product_category:'AC',activity:'FEE',orcamento_id:'demo-orc-ac',aprovacao_status:'APROVADO'},
     {id:'demo-p2',nome:'Fee - Mindshare',agencia:'Mindshare',product_category:'AC',activity:'FEE',orcamento_id:'demo-orc-ac',aprovacao_status:'APROVADO'},
     {id:'demo-p3',nome:'Freshin',agencia:'Mindshare',product_category:'AC',activity:'KOL',orcamento_id:'demo-orc-ac',aprovacao_status:'APROVADO'},
@@ -861,7 +861,7 @@ function seedDemoData(){
     {id:'demo-p6',nome:'Always On Social',agencia:'Vizeu',product_category:'Social',activity:'AON',orcamento_id:'demo-orc-social',aprovacao_status:'APROVADO'},
     {id:'demo-p7',nome:'New Product Launch',agencia:'Wavemaker',product_category:'Social',activity:'Campaign',orcamento_id:'demo-orc-social',aprovacao_status:'PENDENTE'}
   ];
-  const poProjetos=campSeed.map(p=>({id:p.id,nome:p.nome,agencia:p.agencia,product_category:p.product_category,activity:p.activity,orcamento_id:p.orcamento_id,aprovacao_status:p.aprovacao_status,rateio:false,dono:'demo-u-mkt'}));
+  const poProjetos=fundSeed.map(p=>({id:p.id,nome:p.nome,agencia:p.agencia,product_category:p.product_category,activity:p.activity,orcamento_id:p.orcamento_id,aprovacao_status:p.aprovacao_status,rateio:false,dono:'demo-u-mkt'}));
 
   const tetos=[]; const addTeto=(pid,vals)=>vals.forEach(([m,v])=>tetos.push({fund_id:pid,competencia:D(2026,m,1),teto:v}));
   addTeto('demo-p1',[[6,150000],[7,150000],[8,111155]]);
@@ -1138,12 +1138,12 @@ document.addEventListener('visibilitychange',()=>{ if(!document.hidden) refreshA
    NAV + ROUTING — espelha o protótipo aprovado (menu por papel)
    ============================================================ */
 const W_LABELS={dash:'Dashboard',board:'Board',list:'List',timeline:'Timeline',team:'Team',weekly:'Weekly Status',mytasks:'Tasks',agencywork:'Assigned Work',notif:'Notifications'};
-const B_LABELS={bo:'Overview',budgets:'Budgets',campaigns:'Campaigns',pos:'POs & Approvals',approvals:'Approvals',podesk:'PO Desk',people:'People & Roles',reqpo:'Request PO',mypos:'My POs',balance:'Balance'};
+const B_LABELS={bo:'Overview',budgets:'Budgets',funds:'Funds',pos:'POs & Approvals',approvals:'Approvals',podesk:'PO Desk',people:'People & Roles',reqpo:'Request PO',mypos:'My POs',balance:'Balance'};
 const ROLE_NAV={
-  admin:      {work:['dash','board','list','timeline','team','weekly','mytasks'], budget:['bo','budgets','campaigns','pos','people']},
-  marketing:  {work:['dash','board','list','timeline','weekly','mytasks'],        budget:['bo','campaigns','pos']},
-  financeiro: {work:[],                                                          budget:['bo','budgets','campaigns','pos']},
-  agencia:    {work:['board','list','timeline'],                                 budget:['bo','campaigns','pos']}
+  admin:      {work:['dash','board','list','timeline','team','weekly','mytasks'], budget:['bo','budgets','funds','pos','people']},
+  marketing:  {work:['dash','board','list','timeline','weekly','mytasks'],        budget:['bo','funds','pos']},
+  financeiro: {work:[],                                                          budget:['bo','budgets','funds','pos']},
+  agencia:    {work:['board','list','timeline'],                                 budget:['bo','funds','pos']}
 };
 const PANEL_ONLY_WORK=['dash','board','list','timeline','weekly','mytasks'];
 const GLOBAL_NAV=['notif'];
@@ -1153,7 +1153,7 @@ function currentNav(){
   // single Supabase session/papel_atual() call now, see loadPapel().
   // Restricted agency sub-level (agencia_nivel='po') is a narrower carve-out
   // of the 'agencia' role, not a separate PAPEL — only "POs & Approvals",
-  // no Work screens, no Overview/Budgets/Campaigns (those carry budget caps
+  // no Work screens, no Overview/Budgets/Funds (those carry budget caps
   // this sub-level shouldn't see; enforced again at the RLS level, this is
   // just the nav — see repoint_role_functions_to_perfis-era RLS policies).
   if(PAPEL==='agencia'&&AGENCIA_NIVEL==='po') return {global:GLOBAL_NAV, work:[], budget:(PO_ACCESS?['pos']:[])};
@@ -1196,14 +1196,14 @@ const SCREEN_META={
   notif:{t:'Notifications',s:'All updates — Work and Budget',mod:'work'},
   bo:{t:'Budget overview',s:'Budget · Spend health, categories and alerts',mod:'budget'},
   budgets:{t:'Budgets',s:'Budget · Categories',mod:'budget'},
-  campaigns:{t:'Campaigns',s:'Budget · Consumption per campaign',mod:'budget'},
+  funds:{t:'Funds',s:'Budget · Consumption per fund',mod:'budget'},
   pos:{t:'POs & Approvals',s:'Budget · Single queue by lifecycle phase',mod:'budget'},
   mypos:{t:'My POs',s:'Budget · Your agency\'s POs',mod:'budget'},
-  approvals:{t:'Approvals',s:'Budget · Pending campaigns and POs',mod:'budget'},
+  approvals:{t:'Approvals',s:'Budget · Pending funds and POs',mod:'budget'},
   podesk:{t:'PO Desk',s:'Budget · Issue & validate',mod:'budget'},
   people:{t:'People & Roles',s:'Budget · Access',mod:'budget'},
   reqpo:{t:'Request PO',s:'Budget · New request',mod:'budget'},
-  balance:{t:'Balance',s:'Budget · Balance per campaign',mod:'budget'}
+  balance:{t:'Balance',s:'Budget · Balance per fund',mod:'budget'}
 };
 /* "View as" selector — lets an admin browse Budget screens as a chosen
    agency or role, read-only, without a real login/role/RLS change. */
@@ -1251,8 +1251,8 @@ function go(screen){
     const statusChip=STATUS_FILTER?`<button onclick="setStatusFilter('')" style="padding:8px 12px;border-radius:9px;border:1px solid var(--line-2);background:#fff;font-size:12px;font-weight:600;color:var(--txt-2);margin-right:8px">Status: ${esc(statusOf(STATUS_FILTER).name)} ✕</button>`:'';
     const exportBtn=screen==='list'?'<button class="btn-ghost" onclick="exportWorkXLSX()">Exportar Excel</button>':'';
     $('#ctaBox').innerHTML=`${['dash','board','list'].includes(screen)?ptipoFilterHTML():''}${statusChip}${exportBtn}<button class="btn-ghost" onclick="openStageGuide()">Stage guide</button><button class="btn-acc" onclick="openProjNew()">+ New project</button>`;
-  } else if(screen==='campaigns'&&demoWritable(['admin','marketing'].includes(PAPEL))){
-    $('#ctaBox').innerHTML='<button class="btn-acc" style="background:var(--po)" onclick="openCampNew()">+ New campaign</button>';
+  } else if(screen==='funds'&&demoWritable(['admin','marketing'].includes(PAPEL))){
+    $('#ctaBox').innerHTML='<button class="btn-acc" style="background:var(--po)" onclick="openFundNew()">+ New fund</button>';
   } else if(screen==='budgets'){
     const canBudget=PAPEL==='admin'&&!viewOnly();
     $('#ctaBox').innerHTML=`<button class="btn-ghost" onclick="exportBudgetXLSX()">Exportar Excel</button>${canBudget?'<button class="btn-acc" style="background:var(--po)" onclick="openOrcNew()">+ New budget</button>':''}`;
@@ -1270,9 +1270,9 @@ function go(screen){
   else if(screen==='mytasks') v.innerHTML=renderNotes();
   else if(screen==='agencywork') v.innerHTML=renderAgencyWork();
   else if(screen==='notif') v.innerHTML=renderNotif();
-  else if(screen==='bo'){ v.innerHTML=renderBudgetOverview(false); buildCampanhaChart(); buildOverviewMonthlyChart(false); buildOverviewPies(); ccAutoScroll(); }
+  else if(screen==='bo'){ v.innerHTML=renderBudgetOverview(false); buildFundChart(); buildOverviewMonthlyChart(false); buildOverviewPies(); ccAutoScroll(); }
   else if(screen==='budgets'){ v.innerHTML=renderBudgets(); buildBudgetActivityChart(); ccAutoScroll(); }
-  else if(screen==='campaigns'){ v.innerHTML=renderCampanhas(); buildCampanhaChart(); }
+  else if(screen==='funds'){ v.innerHTML=renderFunds(); buildFundChart(); }
   else if(screen==='pos'||screen==='mypos') v.innerHTML=renderPOs();
   else if(screen==='podesk') v.innerHTML=renderAprovacoes();
   else if(screen==='people') v.innerHTML=renderPeople();
@@ -1305,7 +1305,7 @@ function buildDashCharts(){
   const vals=defs.map(d=>list.filter(p=>p.status===d[1]).length);
   _charts.push(new Chart(el,{type:'doughnut',data:{labels:defs.map(d=>d[0]),datasets:[{data:vals,backgroundColor:defs.map(d=>d[2]),borderWidth:2,borderColor:'#fff'}]},options:{cutout:'62%',plugins:{legend:{position:'right',labels:{font:{family:'Hanken Grotesk',size:12},boxWidth:12,padding:10}}}}}));
 }
-function buildCampanhaChart(){
+function buildFundChart(){
   const el=document.getElementById('chartCamp'); if(!el||!window.Chart)return;
   let list=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO');
   if(effPapel()==='agencia'&&effAgencia()) list=list.filter(p=>p.agencia===effAgencia());
@@ -1597,13 +1597,13 @@ function renderAprovacoes(){
   let posPend=DATA.pos.filter(po=>['SOLICITADA','EM_APROVACAO'].includes(po.status));
   if(effPapel()==='agencia'&&effAgencia()) posPend=posPend.filter(po=>po.agencia===effAgencia());
   const canAprova=demoWritable(['admin','marketing','financeiro'].includes(PAPEL)||isManager);
-  const campCol=`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-    <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">Campaigns awaiting approval</b>${projPend.length?`<span style="background:var(--po);color:#fff;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800">${projPend.length}</span>`:''}</div>
+  const fundCol=`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
+    <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">Funds awaiting approval</b>${projPend.length?`<span style="background:var(--po);color:#fff;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800">${projPend.length}</span>`:''}</div>
     <div style="padding:12px 16px;display:flex;flex-direction:column;gap:10px">${projPend.length?projPend.map(p=>`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;background:#fafbfd">
       <div style="display:flex;justify-content:space-between;gap:10px"><b style="font-size:13px">${esc(p.nome)}</b><span class="mono" style="font-size:12px">${BRL(tetoBy[p.id]||0)}</span></div>
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">${esc(p.agencia||'')} · ${esc(p.product_category||'')} · ${esc(p.activity||'')}</div>
       ${canAprova?`<div style="display:flex;gap:7px;margin-top:10px"><button onclick="aprovarCamp('${esc(p.id)}')" style="padding:7px 14px;border-radius:8px;border:none;background:var(--po);color:#fff;font-weight:700;font-size:12px;cursor:pointer">Approve</button><button onclick="rejeitarCamp('${esc(p.id)}')" style="padding:7px 14px;border-radius:8px;border:1px solid var(--line-2);background:#fff;color:var(--txt-2);font-weight:700;font-size:12px;cursor:pointer">Reject</button></div>`:''}
-    </div>`).join(''):'<div class="empty">No pending campaigns.</div>'}</div></div>`;
+    </div>`).join(''):'<div class="empty">No pending funds.</div>'}</div></div>`;
   const poCol=`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
     <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">POs awaiting decision</b>${posPend.length?`<span style="background:var(--po);color:#fff;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800">${posPend.length}</span>`:''}</div>
     <div style="padding:12px 16px;display:flex;flex-direction:column;gap:10px">${posPend.length?posPend.map(po=>`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;background:#fafbfd">
@@ -1611,14 +1611,14 @@ function renderAprovacoes(){
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">${esc(po.agencia||'')} · ${fmtMes(po.competencia)} · ${esc(po.descricao||'')}</div>
       ${canAprova?`<div style="display:flex;gap:7px;margin-top:10px"><button onclick="aprovarPO('${esc(po.id)}')" style="padding:7px 14px;border-radius:8px;border:none;background:var(--po);color:#fff;font-weight:700;font-size:12px;cursor:pointer">Approve</button><button onclick="rejeitarPO('${esc(po.id)}')" style="padding:7px 14px;border-radius:8px;border:1px solid var(--line-2);background:#fff;color:var(--txt-2);font-weight:700;font-size:12px;cursor:pointer">Reject</button></div>`:''}
     </div>`).join(''):'<div class="empty">No pending POs.</div>'}</div></div>`;
-  return `<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px">${campCol}${poCol}</div>`;
+  return `<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px">${fundCol}${poCol}</div>`;
 }
 
 /* ============================================================
    RENDER — BUDGET
    ============================================================ */
 const CONS=['FATURADA','VALIDADA','CONCLUIDA'], COMP=['APROVADA','PO_GERADA','ATUALIZAR_INFO'], PEND=['SOLICITADA','EM_APROVACAO'];
-/* Campaigns screen — visual meta + UI state */
+/* Funds screen — visual meta + UI state */
 /* Category colors deliberately avoid the status hues (blue=consumed,
    violet=committed, amber=pending, green=balance) so a category chip never
    reads as a status next to a progress bar. */
@@ -1634,104 +1634,104 @@ const CAT_META={
 const catMeta=k=>CAT_META[k]||{c:'#59606e',bg:'#edeff4',icon:'folder',label:k};
 const ACT_META={KOL:{icon:'mic',label:'KOL / Influencer'},FEE:{icon:'clipboard',label:'Agency fee'},AON:{icon:'radio',label:'Always On'},Campaings:{icon:'megaphone',label:'Campaign'},Campaign:{icon:'megaphone',label:'Campaign'}};
 const actMeta=a=>ACT_META[a]||{icon:'tag',label:a||'—'};
-let CAMP_Q='', CAMP_COLLAPSED={};
-let CAMP_VIEW=(function(){try{const v=localStorage.getItem('camp_view')||'cat';return v==='list'?'cat':v;}catch(e){return 'cat';}})();
-let CAMP_FILTER_ACT='', CAMP_FILTER_CAT='';
-function campSetView(v){ CAMP_VIEW=v; try{localStorage.setItem('camp_view',v);}catch(e){} go('campaigns'); }
-function campSetFilter(kind,v){
-  if(kind==='act')CAMP_FILTER_ACT=v; else CAMP_FILTER_CAT=v;
-  const b=document.getElementById('campBody'); if(b) b.outerHTML=renderCampBody();
-  const k=document.getElementById('campKpis'); if(k) k.outerHTML=campKpisHTML();
+let FUND_Q='', FUND_COLLAPSED={};
+let FUND_VIEW=(function(){try{const v=localStorage.getItem('fund_view')||'cat';return v==='list'?'cat':v;}catch(e){return 'cat';}})();
+let FUND_FILTER_ACT='', FUND_FILTER_CAT='';
+function fundSetView(v){ FUND_VIEW=v; try{localStorage.setItem('fund_view',v);}catch(e){} go('funds'); }
+function fundSetFilter(kind,v){
+  if(kind==='act')FUND_FILTER_ACT=v; else FUND_FILTER_CAT=v;
+  const b=document.getElementById('fundBody'); if(b) b.outerHTML=renderCampBody();
+  const k=document.getElementById('fundKpis'); if(k) k.outerHTML=fundKpisHTML();
 }
 /* Overview's activity-totals rows are a summary — clicking one drills into
-   the itemized Campaigns screen, pre-filtered to that category + activity. */
-function jumpToCampaigns(catKeyStr,actKeyStr){
-  CAMP_FILTER_CAT=catKeyStr||''; CAMP_FILTER_ACT=actKeyStr||'';
-  go('campaigns');
+   the itemized Funds screen, pre-filtered to that category + activity. */
+function jumpToFunds(catKeyStr,actKeyStr){
+  FUND_FILTER_CAT=catKeyStr||''; FUND_FILTER_ACT=actKeyStr||'';
+  go('funds');
 }
-function campSearch(v){
-  CAMP_Q=(v||'').toLowerCase();
-  const b=document.getElementById('campBody'); if(b) b.outerHTML=renderCampBody();
-  const k=document.getElementById('campKpis'); if(k) k.outerHTML=campKpisHTML();
+function fundSearch(v){
+  FUND_Q=(v||'').toLowerCase();
+  const b=document.getElementById('fundBody'); if(b) b.outerHTML=renderCampBody();
+  const k=document.getElementById('fundKpis'); if(k) k.outerHTML=fundKpisHTML();
 }
-function campToggleCat(ck){ CAMP_COLLAPSED[ck]=!CAMP_COLLAPSED[ck]; const b=document.getElementById('campBody'); if(b){ b.outerHTML=renderCampBody(); } }
-/* Headline numbers for the campaigns on screen — campVisible(), not the whole
-   table. An agency login counts its own campaigns; narrowing to a category or
+function fundToggleCat(ck){ FUND_COLLAPSED[ck]=!FUND_COLLAPSED[ck]; const b=document.getElementById('fundBody'); if(b){ b.outerHTML=renderCampBody(); } }
+/* Headline numbers for the funds on screen — fundVisible(), not the whole
+   table. An agency login counts its own funds; narrowing to a category or
    typing in the search narrows the totals with it, so the numbers always
    describe the rows underneath them. */
-function campKpisHTML(){
-  const {tetoBy,consBy,compBy}=CAMP_CTX||{tetoBy:{},consBy:{},compBy:{}};
-  const vis=campVisible();
+function fundKpisHTML(){
+  const {tetoBy,consBy,compBy}=FUND_CTX||{tetoBy:{},consBy:{},compBy:{}};
+  const vis=fundVisible();
   const aprov=vis.filter(p=>p.aprovacao_status==='APROVADO');
   let orcado=0,consumido=0,comprometido=0;
   aprov.forEach(p=>{orcado+=tetoBy[p.id]||0;consumido+=consBy[p.id]||0;comprometido+=compBy[p.id]||0;});
   const pendCount=vis.filter(p=>p.aprovacao_status==='PENDENTE').length;
-  const doneCount=aprov.filter(p=>campLifecycle(p)==='done').length;
-  const filtered=!!(CAMP_Q||CAMP_FILTER_ACT||CAMP_FILTER_CAT);
+  const doneCount=aprov.filter(p=>fundLifecycle(p)==='done').length;
+  const filtered=!!(FUND_Q||FUND_FILTER_ACT||FUND_FILTER_CAT);
   const stat=(l,v,col)=>`<div class="kpi"><span class="bar" style="background:${col}"></span><div class="lbl">${l}</div><div class="num" style="font-size:19px;margin-top:7px">${v}</div></div>`;
-  return `<div id="campKpis" style="margin-bottom:18px">
+  return `<div id="fundKpis" style="margin-bottom:18px">
     <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px">
-      ${stat('Campaigns',String(vis.length),'#10131a')}
+      ${stat('Funds',String(vis.length),'#10131a')}
       ${stat('Budgeted (approved)',BRL(orcado),'#10131a')}
       ${stat('Consumed',BRL(consumido),'var(--po)')}
       ${stat('Committed',BRL(comprometido),'var(--violet)')}
       ${stat('Pending approval',String(pendCount),'var(--amber)')}
       ${stat('Completed',String(doneCount),'#59606e')}
     </div>
-    ${filtered?`<div style="font-size:11.5px;color:var(--txt-3);margin-top:7px">Totals follow the active filters — <a onclick="campClearAll()" style="cursor:pointer;text-decoration:underline;color:var(--po)">show every campaign</a>.</div>`:''}
+    ${filtered?`<div style="font-size:11.5px;color:var(--txt-3);margin-top:7px">Totals follow the active filters — <a onclick="fundClearAll()" style="cursor:pointer;text-decoration:underline;color:var(--po)">show every fund</a>.</div>`:''}
   </div>`;
 }
-function campClearAll(){ CAMP_Q=''; CAMP_FILTER_ACT=''; CAMP_FILTER_CAT=''; go('campaigns'); }
-function renderCampanhas(){
+function fundClearAll(){ FUND_Q=''; FUND_FILTER_ACT=''; FUND_FILTER_CAT=''; go('funds'); }
+function renderFunds(){
   let list=DATA.poProjetos.slice();
   if(effPapel()==='agencia'&&effAgencia()) list=list.filter(p=>p.agencia===effAgencia());
   const tetoBy={}, consBy={}, compBy={}, pendBy={};
   DATA.tetos.forEach(t=>{tetoBy[t.fund_id]=(tetoBy[t.fund_id]||0)+(+t.teto||0);});
   DATA.rateio.forEach(r=>{tetoBy[r.fund_id]=(tetoBy[r.fund_id]||0)+(+r.valor||0);});
   DATA.pos.forEach(po=>{const v=+po.valor||0;if(CONS.includes(po.status))consBy[po.fund_id]=(consBy[po.fund_id]||0)+v;else if(COMP.includes(po.status))compBy[po.fund_id]=(compBy[po.fund_id]||0)+v;else if(PEND.includes(po.status))pendBy[po.fund_id]=(pendBy[po.fund_id]||0)+v;});
-  CAMP_CTX={list,tetoBy,consBy,compBy,pendBy};
-  return campKpisHTML()+`
+  FUND_CTX={list,tetoBy,consBy,compBy,pendBy};
+  return fundKpisHTML()+`
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
-      <div style="display:flex;gap:6px">${[['cat','Categories'],['tl','Timeline']].map(v=>`<button onclick="campSetView('${v[0]}')" style="padding:8px 13px;border-radius:8px;border:1px solid ${CAMP_VIEW===v[0]?'var(--po)':'var(--line-2)'};background:${CAMP_VIEW===v[0]?'#fbe4e1':'#fff'};color:${CAMP_VIEW===v[0]?'#bf0008':'var(--txt-2)'};font-size:12px;font-weight:700;cursor:pointer">${v[1]}</button>`).join('')}</div>
+      <div style="display:flex;gap:6px">${[['cat','Categories'],['tl','Timeline']].map(v=>`<button onclick="fundSetView('${v[0]}')" style="padding:8px 13px;border-radius:8px;border:1px solid ${FUND_VIEW===v[0]?'var(--po)':'var(--line-2)'};background:${FUND_VIEW===v[0]?'#fbe4e1':'#fff'};color:${FUND_VIEW===v[0]?'#bf0008':'var(--txt-2)'};font-size:12px;font-weight:700;cursor:pointer">${v[1]}</button>`).join('')}</div>
       <div style="position:relative;flex:1;max-width:340px;min-width:200px">
         <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--txt-3);display:flex">${icn('search',14)}</span>
-        <input id="campQ" value="${esc(CAMP_Q)}" oninput="campSearch(this.value)" placeholder="Search campaign, agency…" style="width:100%;padding:9px 12px 9px 34px;border-radius:10px;border:1px solid var(--line-2);background:#fff;font-size:13px;font-family:inherit;outline:none">
+        <input id="fundQ" value="${esc(FUND_Q)}" oninput="fundSearch(this.value)" placeholder="Search fund, agency…" style="width:100%;padding:9px 12px 9px 34px;border-radius:10px;border:1px solid var(--line-2);background:#fff;font-size:13px;font-family:inherit;outline:none">
       </div>
-      <span style="font-size:11.5px;color:var(--txt-3)">${CAMP_VIEW==='tl'?'Row = campaign period · each month shows what was configured and what was used, past months included. Click a row to open.':'Click a card for the month-by-month detail (cap × POs).'}</span>
+      <span style="font-size:11.5px;color:var(--txt-3)">${FUND_VIEW==='tl'?'Row = fund period · each month shows what was configured and what was used, past months included. Click a row to open.':'Click a card for the month-by-month detail (cap × POs).'}</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
       <span style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--txt-3)">Filters</span>
-      <select onchange="campSetFilter('act',this.value)" style="padding:7px 10px;border-radius:8px;border:1px solid ${CAMP_FILTER_ACT?'var(--po)':'var(--line-2)'};background:#fff;font-size:12px;font-weight:600;color:var(--txt-2)">
+      <select onchange="fundSetFilter('act',this.value)" style="padding:7px 10px;border-radius:8px;border:1px solid ${FUND_FILTER_ACT?'var(--po)':'var(--line-2)'};background:#fff;font-size:12px;font-weight:600;color:var(--txt-2)">
         <option value="">All activities</option>
-        ${campGlobalActs().map(a=>`<option value="${esc(a)}" ${CAMP_FILTER_ACT===a?'selected':''}>${esc(actColLabel(a))}</option>`).join('')}
+        ${fundGlobalActs().map(a=>`<option value="${esc(a)}" ${FUND_FILTER_ACT===a?'selected':''}>${esc(actColLabel(a))}</option>`).join('')}
       </select>
-      <select onchange="campSetFilter('cat',this.value)" style="padding:7px 10px;border-radius:8px;border:1px solid ${CAMP_FILTER_CAT?'var(--po)':'var(--line-2)'};background:#fff;font-size:12px;font-weight:600;color:var(--txt-2)">
+      <select onchange="fundSetFilter('cat',this.value)" style="padding:7px 10px;border-radius:8px;border:1px solid ${FUND_FILTER_CAT?'var(--po)':'var(--line-2)'};background:#fff;font-size:12px;font-weight:600;color:var(--txt-2)">
         <option value="">All categories</option>
-        ${campGlobalCats().map(c=>`<option value="${esc(c)}" ${CAMP_FILTER_CAT===c?'selected':''}>${esc(c)}</option>`).join('')}
+        ${fundGlobalCats().map(c=>`<option value="${esc(c)}" ${FUND_FILTER_CAT===c?'selected':''}>${esc(c)}</option>`).join('')}
       </select>
-      ${(CAMP_FILTER_ACT||CAMP_FILTER_CAT)?`<button onclick="campSetFilter('act','');campSetFilter('cat','')" style="border:none;background:none;color:var(--po);font-size:12px;font-weight:700;cursor:pointer">Clear filters</button>`:''}
+      ${(FUND_FILTER_ACT||FUND_FILTER_CAT)?`<button onclick="fundSetFilter('act','');fundSetFilter('cat','')" style="border:none;background:none;color:var(--po);font-size:12px;font-weight:700;cursor:pointer">Clear filters</button>`:''}
     </div>
     ${renderCampBody()}`;
 }
-let CAMP_CTX=null;
-/* The campaigns actually on screen: what this profile may see (CAMP_CTX.list
+let FUND_CTX=null;
+/* The funds actually on screen: what this profile may see (FUND_CTX.list
    is already access-scoped) narrowed by the active filters and search. The
    headline numbers and the list both read this, so a number at the top can
-   never describe a set of campaigns the rows below don't show. */
-function campVisible(){
-  const {list}=CAMP_CTX||{list:[]};
+   never describe a set of funds the rows below don't show. */
+function fundVisible(){
+  const {list}=FUND_CTX||{list:[]};
   let fl=list;
-  if(CAMP_FILTER_ACT) fl=fl.filter(p=>actKey(p)===CAMP_FILTER_ACT);
-  if(CAMP_FILTER_CAT) fl=fl.filter(p=>(String(p.product_category||'').trim()||'Uncategorized')===CAMP_FILTER_CAT);
-  if(CAMP_Q) fl=fl.filter(p=>((p.nome||'')+' '+(p.agencia||'')+' '+(p.product_category||'')+' '+(p.activity||'')).toLowerCase().includes(CAMP_Q));
+  if(FUND_FILTER_ACT) fl=fl.filter(p=>actKey(p)===FUND_FILTER_ACT);
+  if(FUND_FILTER_CAT) fl=fl.filter(p=>(String(p.product_category||'').trim()||'Uncategorized')===FUND_FILTER_CAT);
+  if(FUND_Q) fl=fl.filter(p=>((p.nome||'')+' '+(p.agencia||'')+' '+(p.product_category||'')+' '+(p.activity||'')).toLowerCase().includes(FUND_Q));
   return fl;
 }
 function renderCampBody(){
-  if(!CAMP_CTX) return '<div id="campBody"></div>';
-  const {tetoBy}=CAMP_CTX;
-  const q=CAMP_Q;
-  const fl=campVisible();
-  if(CAMP_VIEW==='tl') return campTimelineHTML(fl,q);
+  if(!FUND_CTX) return '<div id="fundBody"></div>';
+  const {tetoBy}=FUND_CTX;
+  const q=FUND_Q;
+  const fl=fundVisible();
+  if(FUND_VIEW==='tl') return fundTimelineHTML(fl,q);
   const catOf=p=>(String(p.product_category||'').trim())||'Uncategorized';
   const byCat={};
   fl.forEach(p=>{ (byCat[catOf(p)]=byCat[catOf(p)]||[]).push(p); });
@@ -1739,18 +1739,18 @@ function renderCampBody(){
   Object.keys(byCat).forEach(k=>{ catTotal[k]=byCat[k].reduce((s,p)=>s+(tetoBy[p.id]||0),0); });
   const grandTotal=Object.values(catTotal).reduce((s,v)=>s+v,0)||0;
   const catKeys=Object.keys(byCat).sort((a,b)=>catTotal[b]-catTotal[a]);
-  if(!catKeys.length) return `<div id="campBody"><div class="empty">${(q||CAMP_FILTER_ACT||CAMP_FILTER_CAT)?'No campaigns match the current search/filters.':'No campaigns for your access.'}</div></div>`;
+  if(!catKeys.length) return `<div id="fundBody"><div class="empty">${(q||FUND_FILTER_ACT||FUND_FILTER_CAT)?'No funds match the current search/filters.':'No funds for your access.'}</div></div>`;
   const sections=catKeys.map(ck=>{
     const m=catMeta(ck);
-    const camps=byCat[ck].slice().sort((a,b)=>(LC_ORDER[campLifecycle(a)]-LC_ORDER[campLifecycle(b)])||((tetoBy[b.id]||0)-(tetoBy[a.id]||0)));
+    const funds=byCat[ck].slice().sort((a,b)=>(LC_ORDER[fundLifecycle(a)]-LC_ORDER[fundLifecycle(b)])||((tetoBy[b.id]||0)-(tetoBy[a.id]||0)));
     const tot=catTotal[ck], pct=grandTotal?(tot/grandTotal*100):0;
-    const collapsed=!!CAMP_COLLAPSED[ck]&&!q;
+    const collapsed=!!FUND_COLLAPSED[ck]&&!q;
     return `<div style="background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-      <div onclick="campToggleCat('${esc(ck)}')" style="padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer" onmouseover="this.style.background='var(--paper-2)'" onmouseout="this.style.background=''">
+      <div onclick="fundToggleCat('${esc(ck)}')" style="padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer" onmouseover="this.style.background='var(--paper-2)'" onmouseout="this.style.background=''">
         <span class="ich" style="background:${m.bg};color:${m.c}">${icn(m.icon,15)}</span>
         <span style="min-width:0">
           <b style="font-family:'Hanken Grotesk',sans-serif;font-size:13.5px;display:block">${esc(ck)}${m.label!==ck?` <span style=\"font-weight:500;color:var(--txt-3);font-size:11.5px\">· ${m.label}</span>`:''}</b>
-          <span style="font-size:11px;color:var(--txt-3);font-weight:600">${camps.length} campaign${camps.length===1?'':'s'}</span>
+          <span style="font-size:11px;color:var(--txt-3);font-weight:600">${funds.length} fund${funds.length===1?'':'s'}</span>
         </span>
         <span style="flex:1"></span>
         <span style="display:flex;align-items:center;gap:8px;width:200px;flex-shrink:0" title="Share of the total budgeted">
@@ -1760,10 +1760,10 @@ function renderCampBody(){
         <span class="mono" style="font-size:12.5px;font-weight:700;color:var(--ink);width:110px;text-align:right;flex-shrink:0">${BRL(tot)}</span>
         <span style="color:var(--txt-3);display:flex;transform:rotate(${collapsed?'-90deg':'0deg'});transition:transform .15s">${icn('chev',14)}</span>
       </div>
-      ${collapsed?'':campCatBody(camps,m)}
+      ${collapsed?'':fundCatBody(funds,m)}
     </div>`;
   }).join('');
-  return `<div id="campBody" style="display:flex;flex-direction:column;gap:13px">${sections}</div>`;
+  return `<div id="fundBody" style="display:flex;flex-direction:column;gap:13px">${sections}</div>`;
 }
 /* ===== Category view: activity columns (fixed, aligned across categories) + compact cards ===== */
 const ACT_COL_ORDER=['Campaign','FEE','KOL','AON','Communication'];
@@ -1778,25 +1778,25 @@ function orderActs(keys){
   const set=[...new Set(keys)];
   return set.sort((a,b)=>{ let ia=ACT_COL_ORDER.indexOf(a), ib=ACT_COL_ORDER.indexOf(b); if(ia<0)ia=99; if(ib<0)ib=99; return ia-ib||a.localeCompare(b); });
 }
-function campGlobalActs(){
-  const {list}=CAMP_CTX||{list:[]};
+function fundGlobalActs(){
+  const {list}=FUND_CTX||{list:[]};
   return orderActs(list.map(actKey));
 }
-function campGlobalCats(){
-  const {list}=CAMP_CTX||{list:[]};
+function fundGlobalCats(){
+  const {list}=FUND_CTX||{list:[]};
   return [...new Set(list.map(p=>(String(p.product_category||'').trim())||'Uncategorized'))].sort();
 }
-/* Itemized campaign row — one per campaign, grouped by activity. This is the
+/* Itemized fund row — one per fund, grouped by activity. This is the
    same look Overview used before its category accordion was simplified down
    to per-activity totals (item 11): meta line (period dots · agency ·
    activity) + a single-color progress bar matching the category color, and
-   the row itself opens the shared campaign detail modal (the one source of
+   the row itself opens the shared fund detail modal (the one source of
    truth used everywhere: List, Kanban, Overview, Budgets & Fees). */
-function campItemRowHTML(p,m){
-  const {tetoBy,consBy,compBy,pendBy}=CAMP_CTX;
+function fundItemRowHTML(p,m){
+  const {tetoBy,consBy,compBy,pendBy}=FUND_CTX;
   const tot=tetoBy[p.id]||0, cons=consBy[p.id]||0, comp=compBy[p.id]||0, pnd=pendBy[p.id]||0;
   const rawc=tot?(cons+comp+pnd)/tot*100:0, over=rawc>100.5, near=!over&&rawc>=90;
-  const lc=campLifecycle(p);
+  const lc=fundLifecycle(p);
   /* The figures live inside the bar rather than on their own line above it —
      one band instead of two, which is what makes the row thin. The fill is a
      soft tint of the category colour so the ink on top stays legible whether
@@ -1813,57 +1813,57 @@ function campItemRowHTML(p,m){
         <span style="margin-left:auto;color:${over?'#bf0008':near?'#9c6404':'var(--txt)'}">${tot?Math.round(rawc)+'%':'—'}</span>
       </span>
     </span>`;
-  return `<div class="camp-item" onclick="openCampDetail('${esc(p.id)}')" style="padding:7px 6px;cursor:pointer;border-bottom:1px solid ${m.bg};${lc==='done'?'opacity:.62;':''}" onmouseover="this.style.background='${m.bg}'" onmouseout="this.style.background=''">
+  return `<div class="camp-item" onclick="openFundDetail('${esc(p.id)}')" style="padding:7px 6px;cursor:pointer;border-bottom:1px solid ${m.bg};${lc==='done'?'opacity:.62;':''}" onmouseover="this.style.background='${m.bg}'" onmouseout="this.style.background=''">
     <div style="display:flex;align-items:center;gap:10px">
       <span style="flex:1;min-width:0;font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span>
-      ${campRestrBadgeHTML(p)}${campBadgeHTML(p)}
+      ${fundRestrBadgeHTML(p)}${fundBadgeHTML(p)}
       ${bar}
     </div>
-    ${campMetaLineHTML(p,m.c)}
+    ${fundMetaLineHTML(p,m.c)}
   </div>`;
 }
-function campItemGroupsHTML(camps,m){
-  const {tetoBy}=CAMP_CTX;
-  const byAct={}; camps.forEach(p=>{ (byAct[actKey(p)]=byAct[actKey(p)]||[]).push(p); });
+function fundItemGroupsHTML(funds,m){
+  const {tetoBy}=FUND_CTX;
+  const byAct={}; funds.forEach(p=>{ (byAct[actKey(p)]=byAct[actKey(p)]||[]).push(p); });
   const acts=orderActs(Object.keys(byAct));
   return acts.map((a,i)=>{
-    const grp=byAct[a].slice().sort((x,y)=>(LC_ORDER[campLifecycle(x)]-LC_ORDER[campLifecycle(y)])||((tetoBy[y.id]||0)-(tetoBy[x.id]||0)));
+    const grp=byAct[a].slice().sort((x,y)=>(LC_ORDER[fundLifecycle(x)]-LC_ORDER[fundLifecycle(y)])||((tetoBy[y.id]||0)-(tetoBy[x.id]||0)));
     const am=actMeta(a);
     return `<div style="padding:10px 12px 7px;background:var(--paper-2);${i>0?'border-top:1px solid var(--line);':''}display:flex;align-items:center;gap:8px">
       <span style="display:inline-flex;align-items:center;gap:5px;font-family:'Hanken Grotesk',sans-serif;font-weight:800;font-size:11.5px;color:${am.color||'var(--txt-1)'};background:#fff;border:1px solid var(--line-2);border-radius:20px;padding:3px 10px 3px 8px">${icn(am.icon,12)}${esc(actColLabel(a))}</span>
-      <span style="font-weight:500;color:var(--txt-3);font-size:11px">${grp.length} campaign${grp.length===1?'':'s'}</span>
-    </div>${grp.map(p=>campItemRowHTML(p,m)).join('')}`;
+      <span style="font-weight:500;color:var(--txt-3);font-size:11px">${grp.length} fund${grp.length===1?'':'s'}</span>
+    </div>${grp.map(p=>fundItemRowHTML(p,m)).join('')}`;
   }).join('');
 }
-function campCatBody(camps,m){
+function fundCatBody(funds,m){
   return `<div style="padding:2px 16px 10px;border-top:1px solid var(--line);background:var(--paper-2)">
-    <div style="background:#fff;border-radius:10px;overflow:hidden">${campItemGroupsHTML(camps,m)}</div>
+    <div style="background:#fff;border-radius:10px;overflow:hidden">${fundItemGroupsHTML(funds,m)}</div>
   </div>`;
 }
 
-/* ===== Campaign lifecycle + alternative views (list / timeline) ===== */
+/* ===== Fund lifecycle + alternative views (list / timeline) ===== */
 const LC_ORDER={over:0,near:1,active:2,pending:3,done:4};
-function campLastMonth(pid){
-  const ms=Object.keys(campMonthlyTotals(pid));
+function fundLastMonth(pid){
+  const ms=Object.keys(fundMonthlyTotals(pid));
   (DATA.pos||[]).forEach(po=>{ if(po.fund_id===pid&&po.competencia&&!['REJEITADA','CANCELADA'].includes(po.status)) ms.push(String(po.competencia).slice(0,7)); });
   ms.sort(); return ms[ms.length-1]||'';
 }
-function campLifecycle(p){
-  if(!CAMP_CTX) return 'active';
+function fundLifecycle(p){
+  if(!FUND_CTX) return 'active';
   if(p.aprovacao_status==='PENDENTE') return 'pending';
-  const {tetoBy,consBy,compBy,pendBy}=CAMP_CTX;
+  const {tetoBy,consBy,compBy,pendBy}=FUND_CTX;
   const teto=tetoBy[p.id]||0, tot=(consBy[p.id]||0)+(compBy[p.id]||0)+(pendBy[p.id]||0);
   const pct=teto?tot/teto*100:0;
-  const lastM=campLastMonth(p.id), nowM=new Date().toISOString().slice(0,7);
+  const lastM=fundLastMonth(p.id), nowM=new Date().toISOString().slice(0,7);
   if(teto&&pct>=99.5&&lastM&&lastM<nowM) return 'done';
   if(teto&&pct>100.5) return 'over';
   if(teto&&pct>=90) return 'near';
   return 'active';
 }
-function campBadgeHTML(p){
-  const {tetoBy,consBy,compBy,pendBy}=CAMP_CTX;
+function fundBadgeHTML(p){
+  const {tetoBy,consBy,compBy,pendBy}=FUND_CTX;
   const teto=tetoBy[p.id]||0, tot=(consBy[p.id]||0)+(compBy[p.id]||0)+(pendBy[p.id]||0);
-  const pctTot=teto?tot/teto*100:0, lc=campLifecycle(p);
+  const pctTot=teto?tot/teto*100:0, lc=fundLifecycle(p);
   const base='font-size:10px;font-weight:700;border-radius:20px;padding:3px 9px;white-space:nowrap;flex-shrink:0;display:inline-flex;align-items:center;gap:4px';
   if(lc==='done') return `<span style="${base};background:var(--slate-bg);color:#494c54">${icn('check',10)} Completed</span>`;
   if(lc==='over') return `<span style="${base};background:#fbe4e1;color:#bf0008">${icn('alert',11)} ${Math.round(pctTot)}% over</span>`;
@@ -1879,10 +1879,10 @@ function fmtCompactBRL(n){
   if(abs>=1000) return Math.round(n/1000)+'k';
   return String(Math.round(n));
 }
-function campTimelineHTML(fl,q){
-  const {tetoBy}=CAMP_CTX;
-  const rows=fl.filter(p=>p.aprovacao_status==='APROVADO').map(p=>{const mt=campMonthlyTotals(p.id);const months=Object.keys(mt).sort();return {p,mt,months,teto:tetoBy[p.id]||0};}).filter(r=>r.months.length);
-  if(!rows.length) return `<div id="campBody"><div class="empty">${q?'No campaigns match "'+esc(q)+'".':'No approved campaigns with monthly values to plot.'}</div></div>`;
+function fundTimelineHTML(fl,q){
+  const {tetoBy}=FUND_CTX;
+  const rows=fl.filter(p=>p.aprovacao_status==='APROVADO').map(p=>{const mt=fundMonthlyTotals(p.id);const months=Object.keys(mt).sort();return {p,mt,months,teto:tetoBy[p.id]||0};}).filter(r=>r.months.length);
+  if(!rows.length) return `<div id="fundBody"><div class="empty">${q?'No funds match "'+esc(q)+'".':'No approved funds with monthly values to plot.'}</div></div>`;
   const allM=[...new Set(rows.flatMap(r=>r.months))].sort();
   const axis=[]; let cm=allM[0]; const endM=allM[allM.length-1];
   while(cm<=endM&&axis.length<36){ axis.push(cm); const y=+cm.slice(0,4), mo=+cm.slice(5,7); cm=mo===12?(y+1)+'-01':cm.slice(0,4)+'-'+String(mo+1).padStart(2,'0'); }
@@ -1893,15 +1893,15 @@ function campTimelineHTML(fl,q){
   const headCells=axis.map(mm=>`<div style="flex:1;min-width:0;padding:8px 2px;text-align:center;font-family:var(--mono);font-size:9.5px;font-weight:700;color:${mm===nowM?'#fff':(mm<nowM?'#a4aab5':'var(--txt-3)')};background:${mm===nowM?'var(--ink)':'transparent'};border-right:1px solid #edeff4;white-space:nowrap;overflow:hidden">${fmtMes(mm+'-01')}</div>`).join('');
   const trs=rows.map(r=>{
     const m=catMeta(String(r.p.product_category||'').trim()||'Uncategorized');
-    const lc=campLifecycle(r.p);
+    const lc=fundLifecycle(r.p);
     const first=r.months[0], last=r.months[r.months.length-1];
     const cells=axis.map(mm=>{
       const cfg=+r.mt[mm]||0, inSpan=mm>=first&&mm<=last;
-      const used=campMonthUsed(r.p.id,mm);
+      const used=fundMonthUsed(r.p.id,mm);
       const rl=mm===first?'5px':'0', rr=mm===last?'5px':'0';
       // used>cfg also flags the no-cap-but-spent case (cfg 0, used > 0).
       const isNow=mm===nowM, past=mm<nowM, over=used>cfg+0.5;
-      const pastDone=past&&cfg>0&&campMonthCons(r.p.id,mm)>=cfg-0.5;
+      const pastDone=past&&cfg>0&&fundMonthCons(r.p.id,mm)>=cfg-0.5;
       // The bar is a track + a fill: the track is what was CONFIGURED for the
       // month, the fill is what has been USED against it, so the fill always
       // reads against its own track. Colour weight follows TIME, not size: a
@@ -1926,8 +1926,8 @@ function campTimelineHTML(fl,q){
         <span class="mono" style="font-size:8px;font-weight:800;color:${over?'var(--po)':(past?'var(--txt-3)':'var(--txt-2)')};line-height:1.15;white-space:nowrap">${used?fmtCompactBRL(used):'—'}</span>`:''}
       </div>`;
     }).join('');
-    const usedTot=r.months.reduce((s,mm)=>s+campMonthUsed(r.p.id,mm),0);
-    return `<div onclick="openCampDetail('${esc(r.p.id)}')" style="display:flex;border-bottom:1px solid #edeff4;cursor:pointer;${lc==='done'?'opacity:.55':''}" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
+    const usedTot=r.months.reduce((s,mm)=>s+fundMonthUsed(r.p.id,mm),0);
+    return `<div onclick="openFundDetail('${esc(r.p.id)}')" style="display:flex;border-bottom:1px solid #edeff4;cursor:pointer;${lc==='done'?'opacity:.55':''}" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
       <div style="width:230px;flex-shrink:0;padding:8px 14px;border-right:1px solid var(--line);min-width:0;display:flex;align-items:center;gap:8px">
         <span style="width:8px;height:8px;border-radius:2px;background:${m.c};flex-shrink:0"></span>
         <span style="min-width:0"><span style="font-weight:600;font-size:12.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.p.nome)}</span><span style="font-size:10.5px;color:var(--txt-3);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.p.agencia||'—')} · ${fmtMes(first+'-01')} → ${fmtMes(last+'-01')}${lc==='done'?' · completed':''}</span></span>
@@ -1937,10 +1937,10 @@ function campTimelineHTML(fl,q){
     </div>`;
   }).join('');
   const grandTotal=rows.reduce((s,r)=>s+r.teto,0);
-  const grandUsed=rows.reduce((s,r)=>s+r.months.reduce((a,mm)=>a+campMonthUsed(r.p.id,mm),0),0);
+  const grandUsed=rows.reduce((s,r)=>s+r.months.reduce((a,mm)=>a+fundMonthUsed(r.p.id,mm),0),0);
   const totCells=axis.map(mm=>{
     const tot=rows.reduce((s,r)=>s+(+r.mt[mm]||0),0);
-    const totUsed=rows.reduce((s,r)=>s+campMonthUsed(r.p.id,mm),0);
+    const totUsed=rows.reduce((s,r)=>s+fundMonthUsed(r.p.id,mm),0);
     const isNow=mm===nowM, past=mm<nowM;
     return `<div style="flex:1;min-width:0;padding:6px 2px;text-align:center;font-family:var(--mono);font-size:9.5px;background:${isNow?'rgba(18,115,207,.09)':'transparent'};border-right:1px solid #edeff4;white-space:nowrap;overflow:hidden" title="${esc(fmtMes(mm+'-01')+' · configured '+(tot?BRL(tot):'—')+' · used '+(totUsed?BRL(totUsed):'—'))}"><div style="font-weight:700;color:${past?'#9199a6':'var(--txt-3)'};line-height:1.2">${tot?fmtCompactBRL(tot):'—'}</div><div style="font-weight:800;color:${totUsed>tot+0.5?'var(--po)':(past?'var(--txt-3)':'var(--txt-2)')};line-height:1.2">${totUsed?fmtCompactBRL(totUsed):'—'}</div></div>`;
   }).join('');
@@ -1949,9 +1949,9 @@ function campTimelineHTML(fl,q){
     <div style="flex:1;display:flex;min-width:0">${totCells}</div>
     <div class="mono" style="width:112px;flex-shrink:0;padding:8px 14px;border-left:1px solid var(--line);display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:1px"><span style="font-size:11.5px;font-weight:800">${BRL(grandTotal)}</span><span style="font-size:10px;font-weight:800;color:${grandUsed>grandTotal+0.5?'var(--po)':'var(--txt-3)'}">${BRL(grandUsed)}</span></div>
   </div>`;
-  return `<div id="campBody" style="background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
+  return `<div id="fundBody" style="background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
     <div style="display:flex;border-bottom:1px solid var(--line);background:var(--paper-2)">
-      <div style="width:230px;flex-shrink:0;padding:9px 14px;${th};border-right:1px solid var(--line);display:flex;align-items:center">Campaign</div>
+      <div style="width:230px;flex-shrink:0;padding:9px 14px;${th};border-right:1px solid var(--line);display:flex;align-items:center">Fund</div>
       <div style="flex:1;display:flex;min-width:0">${headCells}</div>
       <div style="width:112px;flex-shrink:0;padding:9px 14px;${th};border-left:1px solid var(--line);display:flex;align-items:center;justify-content:flex-end;text-align:right">Configured<br>Used</div>
     </div>
@@ -1968,8 +1968,8 @@ function campTimelineHTML(fl,q){
   </div>`;
 }
 
-/* Detalhe da campanha — cap × PO por mês (mostra de qual mês cada PO consome) */
-function openCampDetail(pid){
+/* Detalhe do Fund — cap × PO por mês (mostra de qual mês cada PO consome) */
+function openFundDetail(pid){
   const p=DATA.poProjetos.find(x=>x.id===pid); if(!p)return;
   const capByM={};
   DATA.tetos.filter(t=>t.fund_id===pid).forEach(t=>{const m=String(t.competencia).slice(0,7);capByM[m]=(capByM[m]||0)+(+t.teto||0);});
@@ -2017,7 +2017,7 @@ function openCampDetail(pid){
     const consM=lst.filter(po=>!['REJEITADA','CANCELADA'].includes(po.status)).reduce((s,po)=>s+(+po.valor||0),0);
     const over=cap&&consM>cap; const cur=m===mNowD;
     const st=cur?'background:var(--ink);color:#fff;border:1px solid var(--ink)':(over?'background:#fbe4e1;border:1px solid #f2c4bf;color:#bf0008':'background:var(--paper-2);border:1px solid var(--line);color:var(--txt-2)');
-    return `<button class="mono" style="font-size:11.5px;font-weight:700;border-radius:8px;padding:5px 11px;cursor:pointer;${st}" onclick="campDrawerJump('${m}')">${fmtMes(m+'-01')}${over?' '+Math.round(consM/cap*100)+'%':''}</button>`;
+    return `<button class="mono" style="font-size:11.5px;font-weight:700;border-radius:8px;padding:5px 11px;cursor:pointer;${st}" onclick="fundDrawerJump('${m}')">${fmtMes(m+'-01')}${over?' '+Math.round(consM/cap*100)+'%':''}</button>`;
   }).join('');
   const alertHTML=(rawTot>=90&&!allPos.some(po=>po.status==='CONCLUIDA'))?`<div style="display:flex;align-items:center;gap:10px;background:#fbf0d8;border:1px solid #ecd9a4;border-radius:9px;padding:8px 12px;margin-top:12px;font-size:12px;color:#7a5200"><span style="width:7px;height:7px;border-radius:50%;background:#d68a04;flex-shrink:0"></span>No PO completed yet — check with the agency before approving new ones.</div>`:'';
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:820px">
@@ -2031,14 +2031,14 @@ function openCampDetail(pid){
         <span class="stat-num" style="font-weight:700;color:${overT?'#bf0008':nearT?'#9c6404':'var(--txt-1)'}">${Math.round(rawTot)}% committed</span>
         <span style="color:var(--txt-2)">balance <b>${BRL(saldoTot)}</b> of ${BRL(totCap)}</span>
       </div>
-      ${(()=>{const k=campRestr(p); if(!k)return ''; const r=RESTR_META[k];
+      ${(()=>{const k=fundRestr(p); if(!k)return ''; const r=RESTR_META[k];
         const cut=(p.restricao_valor!=null&&+p.restricao_valor>0)?`<b class="mono">${BRL(+p.restricao_valor)}</b> of the budget was cut`:(k==='CORTADA'?'The remaining balance was cut':'No new POs can be requested');
         return `<div style="display:flex;align-items:flex-start;gap:10px;background:${r.bg};border:1px solid ${r.bd};border-radius:9px;padding:10px 12px;margin-top:12px;font-size:12px;color:${r.c}">
           <span style="display:flex;flex-shrink:0;margin-top:1px">${icn(r.icon,14)}</span>
-          <span><b>${r.t}</b> — ${cut}. The budget figures below are unchanged, on purpose: they are the record of what this campaign was given.${p.restricao_motivo?`<div style="margin-top:3px;font-weight:600">${esc(p.restricao_motivo)}</div>`:''}${p.restricao_em?`<div style="margin-top:2px;opacity:.75">since ${fmtDataBR(p.restricao_em)}</div>`:''}</span>
+          <span><b>${r.t}</b> — ${cut}. The budget figures below are unchanged, on purpose: they are the record of what this fund was given.${p.restricao_motivo?`<div style="margin-top:3px;font-weight:600">${esc(p.restricao_motivo)}</div>`:''}${p.restricao_em?`<div style="margin-top:2px;opacity:.75">since ${fmtDataBR(p.restricao_em)}</div>`:''}</span>
         </div>`;})()}
-      ${(()=>{const pd=campCapPedido(p); if(pd==null)return '';
-        const cur=campCapAprovado(p.id)||0;
+      ${(()=>{const pd=fundCapPedido(p); if(pd==null)return '';
+        const cur=fundCapAprovado(p.id)||0;
         return `<div style="display:flex;align-items:flex-start;gap:10px;background:var(--blue-bg);border:1px solid #bcd9f5;border-radius:9px;padding:10px 12px;margin-top:12px;font-size:12px;color:#0e5ba6">
           <span style="display:flex;flex-shrink:0;margin-top:1px">${icn('coins',14)}</span>
           <span style="flex:1"><b>Cap increase requested</b> — from <b class="mono">${BRL(cur)}</b> to <b class="mono">${BRL(pd)}</b>.${p.cap_pedido_motivo?`<div style="margin-top:3px;font-weight:600">${esc(p.cap_pedido_motivo)}</div>`:''}${p.cap_pedido_em?`<div style="margin-top:2px;opacity:.75">asked ${fmtDataBR(p.cap_pedido_em)}</div>`:''}</span>
@@ -2048,11 +2048,11 @@ function openCampDetail(pid){
       ${months.length>1?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">${chips}</div>`:''}
     </div>
     <div class="modal-b">${summary}<div style="font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin:2px 0 10px">Month by month</div>${blocks}</div>
-    <div class="modal-f">${CC_DRILL_BACK?`<button class="btn-ghost" onclick="ccDrillBack()">← Back to breakdown</button>`:'<span></span>'}<div style="display:flex;gap:10px">${canRestrict()?`<button class="btn-ghost" onclick="openCampRestricao('${esc(p.id)}')">${campRestr(p)?'Restriction…':'Cut / block'}</button>`:''}${(demoWritable(PO_ACCESS)&&!campRestr(p))?`<button class="btn-acc" style="background:var(--po)" onclick="openReqPO('${esc(p.id)}')">+ Request PO</button>`:''}${((['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly())?`<button class="btn-ghost" onclick="openCampValues('${esc(p.id)}')">Edit monthly values</button><button class="btn-ghost" onclick="openCampEdit('${esc(p.id)}')">Edit category</button>`:''}<button class="btn-ghost" onclick="closeModal()">Close</button></div></div>
+    <div class="modal-f">${CC_DRILL_BACK?`<button class="btn-ghost" onclick="ccDrillBack()">← Back to breakdown</button>`:'<span></span>'}<div style="display:flex;gap:10px">${canRestrict()?`<button class="btn-ghost" onclick="openCampRestricao('${esc(p.id)}')">${fundRestr(p)?'Restriction…':'Cut / block'}</button>`:''}${(demoWritable(PO_ACCESS)&&!fundRestr(p))?`<button class="btn-acc" style="background:var(--po)" onclick="openReqPO('${esc(p.id)}')">+ Request PO</button>`:''}${((['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly())?`<button class="btn-ghost" onclick="openCampValues('${esc(p.id)}')">Edit monthly values</button><button class="btn-ghost" onclick="openCampEdit('${esc(p.id)}')">Edit category</button>`:''}<button class="btn-ghost" onclick="closeModal()">Close</button></div></div>
   </div></div>`;
 }
 
-function campDrawerJump(m){
+function fundDrawerJump(m){
   const el=document.getElementById('cd-'+m); if(!el)return;
   const box=el.closest('.modal-b'); if(!box)return;
   box.scrollTop+=el.getBoundingClientRect().top-box.getBoundingClientRect().top-8;
@@ -2060,7 +2060,7 @@ function campDrawerJump(m){
 
 /* ============================================================
    MONTH-END BALANCE REALLOCATION — a closed month's unused cap can be
-   moved forward: fully to next month, split evenly across the campaign's
+   moved forward: fully to next month, split evenly across the fund's
    remaining registered months, or manual per-month amounts. Adds new
    tetos/rateio_alocacao rows (additive — the closed month's own record is
    untouched, everything here is summed by fund_id+competencia elsewhere
@@ -2068,7 +2068,7 @@ function campDrawerJump(m){
    ============================================================ */
 let REALLOC=null; // {pid,fromMonth,balance,mode,splitCount,rows:[{id,mes,valor}]}
 /* Fresh, server-side reread of a month's unused balance — mirrors
-   campPastUnallocatedBalance()'s definition exactly (cap minus every PO not
+   fundPastUnallocatedBalance()'s definition exactly (cap minus every PO not
    REJEITADA/CANCELADA) but bypasses the in-memory DATA cache, which is only
    as current as this browser tab's last load/reload. Used by submitRealloc
    as a right-before-write staleness check. */
@@ -2084,27 +2084,27 @@ async function reallocFetchCurrentBalance(pid,fromMonth){
   const committed=(poRows||[]).filter(po=>!['REJEITADA','CANCELADA'].includes(po.status)).reduce((s,po)=>s+(+po.valor||0),0);
   return r2(cap-committed);
 }
-function campNextCalMonth(m){ const y=+m.slice(0,4), mo=+m.slice(5,7); return mo===12?(y+1)+'-01':m.slice(0,4)+'-'+String(mo+1).padStart(2,'0'); }
-function campFutureRegisteredMonths(pid,afterM){ return Object.keys(campMonthlyTotals(pid)).filter(m=>m>afterM).sort(); }
+function fundNextCalMonth(m){ const y=+m.slice(0,4), mo=+m.slice(5,7); return mo===12?(y+1)+'-01':m.slice(0,4)+'-'+String(mo+1).padStart(2,'0'); }
+function fundFutureRegisteredMonths(pid,afterM){ return Object.keys(fundMonthlyTotals(pid)).filter(m=>m>afterM).sort(); }
 function openReallocModal(pid,fromMonth,balance){
   const p=DATA.poProjetos.find(x=>x.id===pid); if(!p)return;
-  const future=campFutureRegisteredMonths(pid,fromMonth);
-  REALLOC={pid,fromMonth,balance:+balance,mode:'next',splitCount:Math.max(future.length,3),rows:[{id:uid(),mes:campNextCalMonth(fromMonth),valor:r2(balance)}]};
+  const future=fundFutureRegisteredMonths(pid,fromMonth);
+  REALLOC={pid,fromMonth,balance:+balance,mode:'next',splitCount:Math.max(future.length,3),rows:[{id:uid(),mes:fundNextCalMonth(fromMonth),valor:r2(balance)}]};
   renderReallocModal();
 }
 function reallocSetMode(mode){ if(!REALLOC)return; REALLOC.mode=mode; renderReallocModal(); }
 function reallocSetSplitCount(v){ if(!REALLOC)return; REALLOC.splitCount=Math.max(1,Math.min(24,+v||1)); renderReallocModal(); }
 function reallocManualSet(id,k,v){ const r=REALLOC&&REALLOC.rows.find(x=>x.id===id); if(r)r[k]=v; }
-function reallocManualAdd(){ if(!REALLOC)return; const last=REALLOC.rows[REALLOC.rows.length-1]; REALLOC.rows.push({id:uid(),mes:last?campNextCalMonth(last.mes):campNextCalMonth(REALLOC.fromMonth),valor:''}); renderReallocModal(); }
+function reallocManualAdd(){ if(!REALLOC)return; const last=REALLOC.rows[REALLOC.rows.length-1]; REALLOC.rows.push({id:uid(),mes:last?fundNextCalMonth(last.mes):fundNextCalMonth(REALLOC.fromMonth),valor:''}); renderReallocModal(); }
 function reallocManualDel(id){ if(!REALLOC)return; REALLOC.rows=REALLOC.rows.filter(x=>x.id!==id); renderReallocModal(); }
 function reallocPreviewRows(){
   if(!REALLOC)return [];
   const {mode,fromMonth,balance,splitCount,pid}=REALLOC;
-  if(mode==='next') return [{mes:campNextCalMonth(fromMonth),valor:r2(balance)}];
+  if(mode==='next') return [{mes:fundNextCalMonth(fromMonth),valor:r2(balance)}];
   if(mode==='split'){
-    const future=campFutureRegisteredMonths(pid,fromMonth);
+    const future=fundFutureRegisteredMonths(pid,fromMonth);
     let months=future;
-    if(!months.length){ months=[]; let m=fromMonth; for(let i=0;i<splitCount;i++){ m=campNextCalMonth(m); months.push(m); } }
+    if(!months.length){ months=[]; let m=fromMonth; for(let i=0;i<splitCount;i++){ m=fundNextCalMonth(m); months.push(m); } }
     const n=months.length||1, each=r2(Math.floor(balance/n*100)/100);
     return months.map((m,i)=>({mes:m,valor:i===n-1?r2(balance-each*(n-1)):each}));
   }
@@ -2116,7 +2116,7 @@ function renderReallocModal(){
   const preview=reallocPreviewRows();
   const sum=preview.reduce((s,r)=>s+(+r.valor||0),0);
   const mismatch=mode==='manual'&&r2(sum)!==r2(balance);
-  const future=campFutureRegisteredMonths(REALLOC.pid,fromMonth);
+  const future=fundFutureRegisteredMonths(REALLOC.pid,fromMonth);
   const modeCard=(id,title,desc)=>`<label style="display:flex;align-items:flex-start;gap:10px;border:1.5px solid ${mode===id?'var(--po)':'var(--line)'};background:${mode===id?'#fff8f7':'#fff'};border-radius:11px;padding:11px 13px;cursor:pointer">
     <input type="radio" name="reallocMode" ${mode===id?'checked':''} onchange="reallocSetMode('${id}')" style="margin-top:2px;accent-color:var(--po);flex-shrink:0">
     <span><b style="font-size:13px;display:block">${title}</b><span style="font-size:11.5px;color:var(--txt-3)">${desc}</span></span>
@@ -2138,7 +2138,7 @@ function renderReallocModal(){
     <div class="modal-b">
       <div style="font-size:12.5px;color:var(--txt-3);margin-bottom:14px">${fmtMes(fromMonth+'-01')} closed with <b class="mono" style="color:var(--txt)">${BRL(balance)}</b> unused. Choose how to move it forward — the amount is added to the future months' caps and deducted from ${fmtMes(fromMonth+'-01')}, so the total budget stays the same.</div>
       <div style="display:flex;flex-direction:column;gap:8px">
-        ${modeCard('next','Add fully to next month',`Everything goes to ${fmtMes(campNextCalMonth(fromMonth)+'-01')}.`)}
+        ${modeCard('next','Add fully to next month',`Everything goes to ${fmtMes(fundNextCalMonth(fromMonth)+'-01')}.`)}
         ${modeCard('split','Distribute equally','Spread evenly across the following months.')}
         ${modeCard('manual','Manual','Pick the months and amounts yourself.')}
       </div>
@@ -2149,7 +2149,7 @@ function renderReallocModal(){
     <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeRealloc()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitRealloc()">Reallocate</button></div></div>
   </div></div>`;
 }
-function closeRealloc(){ const pid=REALLOC&&REALLOC.pid; REALLOC=null; if(pid) openCampDetail(pid); else closeModal(); }
+function closeRealloc(){ const pid=REALLOC&&REALLOC.pid; REALLOC=null; if(pid) openFundDetail(pid); else closeModal(); }
 /* tetos has UNIQUE(fund_id,competencia) — a target month that already has a
    cap must be UPDATED (existing + amount), never inserted a second time. */
 async function reallocCreditTetos(pid,targets){
@@ -2206,7 +2206,7 @@ async function submitRealloc(){
        user whose page hadn't refreshed re-opened this same month's balance
        and submitted again, crediting the destination month twice while the
        source month — already at 0 — just clamped, hiding the problem). The
-       modal's REALLOC.balance was captured whenever the page/campaign was
+       modal's REALLOC.balance was captured whenever the page/fund was
        last loaded; re-derive the SAME balance fresh from the server right
        before writing and refuse if it no longer matches — this is exactly
        what would have caught it. */
@@ -2218,7 +2218,7 @@ async function submitRealloc(){
     }
     if(p.rateio){
       const cats=[...new Set((DATA.rateio||[]).filter(r=>r.fund_id===p.id).map(r=>r.categoria))];
-      if(!cats.length){ toast('Cannot resolve rateio categories for this campaign.'); return; }
+      if(!cats.length){ toast('Cannot resolve rateio categories for this fund.'); return; }
       const totalByCat={}; (DATA.rateio||[]).filter(r=>r.fund_id===p.id&&r.competencia&&String(r.competencia).slice(0,7)===REALLOC.fromMonth).forEach(r=>{ totalByCat[r.categoria]=(totalByCat[r.categoria]||0)+(+r.valor||0); });
       const totAll=Object.values(totalByCat).reduce((a,b)=>a+b,0)||1;
       const rows=[];
@@ -2245,44 +2245,44 @@ async function submitRealloc(){
   }catch(e){ toastErr(e); }
 }
 
-/* Edit the campaign's month-by-month values. For a normal / integral campaign
-   the values are the category caps (tetos). For a rateio campaign, the value
+/* Edit the fund's month-by-month values. For a normal / integral fund
+   the values are the category caps (tetos). For a rateio fund, the value
    entered per month is the TOTAL, re-split across the rateio categories. */
-let CAMPVAL=null;
+let FUNDVAL=null;
 function openCampValues(pid){
   const p=DATA.poProjetos.find(x=>x.id===pid); if(!p)return;
-  const totals=campMonthlyTotals(pid);
+  const totals=fundMonthlyTotals(pid);
   const rows=Object.keys(totals).sort().map(m=>({id:uid(),mes:m,valor:totals[m]}));
   if(!rows.length) rows.push({id:uid(),mes:new Date().toISOString().slice(0,7),valor:''});
-  CAMPVAL={id:pid,rateio:!!p.rateio,qual:(p.rateio?recoverQual(pid):''),rows};
+  FUNDVAL={id:pid,rateio:!!p.rateio,qual:(p.rateio?recoverQual(pid):''),rows};
   renderCampValues();
 }
-function campValRowSet(id,k,v){ const r=CAMPVAL&&CAMPVAL.rows.find(x=>x.id===id); if(r)r[k]=v; }
+function fundValRowSet(id,k,v){ const r=FUNDVAL&&FUNDVAL.rows.find(x=>x.id===id); if(r)r[k]=v; }
 /* R$ entry mask. Digits go in from the right — typing 1234 gives 12,34 — which
    is how people actually key money in, and it makes a malformed amount
    impossible to submit. Storage stays a plain number; only the field is
    formatted. */
 const moneyFmt=n=>(+n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 const moneyParse=s=>{ const d=String(s==null?'':s).replace(/\D/g,''); return d?(+d)/100:0; };
-/* The campaign's approved ceiling. A stored fact, fixed when the campaign is
+/* The fund's approved ceiling. A stored fact, fixed when the fund is
    approved — never derived from what it currently holds.
 
    The derived version this replaces (category budget minus the other
-   campaigns, floored at the campaign's own total) moved with the very edit it
+   funds, floored at the fund's own total) moved with the very edit it
    was meant to validate: raising a month raised the ceiling with it, so it
    could never report an overage, and pulling the months back down only ever
    showed a growing surplus against a number that had already drifted up.
 
-   Falls back to what the campaign holds today when cap_aprovado is missing — a
-   campaign still pending approval — so the box degrades to "no ceiling news"
+   Falls back to what the fund holds today when cap_aprovado is missing — a
+   fund still pending approval — so the box degrades to "no ceiling news"
    rather than to a ceiling of zero. */
-function campCapAprovado(pid){
+function fundCapAprovado(pid){
   const p=(DATA.poProjetos||[]).find(x=>x.id===pid);
   if(!p) return null;
   if(p.cap_aprovado!=null&&p.cap_aprovado!=='') return +p.cap_aprovado;
-  return Object.values(campMonthlyTotals(pid)).reduce((s,v)=>s+v,0);
+  return Object.values(fundMonthlyTotals(pid)).reduce((s,v)=>s+v,0);
 }
-function campCapPedido(p){ return (p&&p.cap_pedido!=null&&p.cap_pedido!=='')?+p.cap_pedido:null; }
+function fundCapPedido(p){ return (p&&p.cap_pedido!=null&&p.cap_pedido!=='')?+p.cap_pedido:null; }
 /* Raising a cap is an approval, lowering it is not. Giving budget back needs
    nobody's permission; taking more does. So marketing files a request and an
    admin/manager decides, while an admin/manager can set the cap directly —
@@ -2291,12 +2291,12 @@ let CAPEDIT=null;
 function openCapEdit(pid){
   const p=DATA.poProjetos.find(x=>x.id===pid); if(!p)return;
   if(!canRestrict()){ toast('Only marketing managers or admin can set the cap.'); return; }
-  CAPEDIT={id:pid,mode:'set',valor:campCapAprovado(pid)||0,motivo:''};
+  CAPEDIT={id:pid,mode:'set',valor:fundCapAprovado(pid)||0,motivo:''};
   renderCapForm();
 }
 function openCapPedido(pid){
   const p=DATA.poProjetos.find(x=>x.id===pid); if(!p)return;
-  CAPEDIT={id:pid,mode:'ask',valor:campCapAprovado(pid)||0,motivo:''};
+  CAPEDIT={id:pid,mode:'ask',valor:fundCapAprovado(pid)||0,motivo:''};
   renderCapForm();
 }
 function capSet(k,v){ if(CAPEDIT)CAPEDIT[k]=v; }
@@ -2304,11 +2304,11 @@ function capMoney(el){ const v=moneyParse(el.value); CAPEDIT.valor=v; el.value=v
 function renderCapForm(){
   if(!CAPEDIT)return;
   const p=DATA.poProjetos.find(x=>x.id===CAPEDIT.id)||{};
-  const cur=campCapAprovado(CAPEDIT.id)||0;
-  const alloc=Object.values(campMonthlyTotals(CAPEDIT.id)).reduce((s,v)=>s+v,0);
+  const cur=fundCapAprovado(CAPEDIT.id)||0;
+  const alloc=Object.values(fundMonthlyTotals(CAPEDIT.id)).reduce((s,v)=>s+v,0);
   const ask=CAPEDIT.mode==='ask';
   const delta=(+CAPEDIT.valor||0)-cur;
-  /* Lowering below what the months already hold would leave the campaign
+  /* Lowering below what the months already hold would leave the fund
      instantly over its own cap, so it's refused here rather than saved into an
      impossible state. */
   const below=!ask&&(+CAPEDIT.valor||0)<alloc-0.005;
@@ -2330,7 +2330,7 @@ function renderCapForm(){
 }
 async function submitCapPedido(){
   if(!CAPEDIT)return; if(viewOnly()){toast(roMsg());return;}
-  const cur=campCapAprovado(CAPEDIT.id)||0;
+  const cur=fundCapAprovado(CAPEDIT.id)||0;
   if(!(+CAPEDIT.valor>cur+0.005)){ toast('Ask for more than the current cap — to lower it, just reduce the months.'); return; }
   if(!String(CAPEDIT.motivo||'').trim()){ toast('Describe why you need more.'); return; }
   try{
@@ -2341,7 +2341,7 @@ async function submitCapPedido(){
 }
 async function submitCapEdit(){
   if(!CAPEDIT)return; if(viewOnly()){toast(roMsg());return;}
-  const alloc=Object.values(campMonthlyTotals(CAPEDIT.id)).reduce((s,v)=>s+v,0);
+  const alloc=Object.values(fundMonthlyTotals(CAPEDIT.id)).reduce((s,v)=>s+v,0);
   if(+CAPEDIT.valor<alloc-0.005){ toast('The months already allocate more than that. Reduce them first.'); return; }
   try{
     const {error}=await SBPO.from('funds').update({cap_aprovado:r2(+CAPEDIT.valor),cap_pedido:null,cap_pedido_motivo:null,cap_pedido_em:null}).eq('id',CAPEDIT.id);
@@ -2353,7 +2353,7 @@ async function decidirCapPedido(pid,ok){
   if(viewOnly()){toast(roMsg());return;}
   if(!canRestrict()){ toast('Only marketing managers or admin can decide this.'); return; }
   const p=DATA.poProjetos.find(x=>x.id===pid); if(!p)return;
-  const pedido=campCapPedido(p); if(pedido==null)return;
+  const pedido=fundCapPedido(p); if(pedido==null)return;
   try{
     const patch=ok?{cap_aprovado:r2(pedido),cap_pedido:null,cap_pedido_motivo:null,cap_pedido_em:null}
                   :{cap_pedido:null,cap_pedido_motivo:null,cap_pedido_em:null};
@@ -2361,15 +2361,15 @@ async function decidirCapPedido(pid,ok){
     await reloadPOAll(); toast(ok?`Cap raised to ${BRL(pedido)} ✓`:'Cap request rejected'); go(SCREEN);
   }catch(e){ toastErr(e); }
 }
-function campValAddRow(){ if(!CAMPVAL)return; const last=CAMPVAL.rows[CAMPVAL.rows.length-1]; CAMPVAL.rows.push({id:uid(),mes:last?last.mes:new Date().toISOString().slice(0,7),valor:''}); renderCampValues(); }
-function campValDelRow(id){ if(!CAMPVAL)return; CAMPVAL.rows=CAMPVAL.rows.filter(x=>x.id!==id); renderCampValues(); }
+function fundValAddRow(){ if(!FUNDVAL)return; const last=FUNDVAL.rows[FUNDVAL.rows.length-1]; FUNDVAL.rows.push({id:uid(),mes:last?last.mes:new Date().toISOString().slice(0,7),valor:''}); renderCampValues(); }
+function fundValDelRow(id){ if(!FUNDVAL)return; FUNDVAL.rows=FUNDVAL.rows.filter(x=>x.id!==id); renderCampValues(); }
 /* Live balance without re-rendering: a repaint on every keystroke would take
    the caret out of the field being typed into. Only the three nodes that can
    change get patched. */
-function campValSync(){
-  if(!CAMPVAL)return;
-  const total=CAMPVAL.rows.reduce((s,r)=>s+(+r.valor||0),0);
-  const cap=campCapAprovado(CAMPVAL.id);
+function fundValSync(){
+  if(!FUNDVAL)return;
+  const total=FUNDVAL.rows.reduce((s,r)=>s+(+r.valor||0),0);
+  const cap=fundCapAprovado(FUNDVAL.id);
   const el=id=>document.getElementById(id);
   if(el('cvTotal')) el('cvTotal').textContent=BRL(total);
   const over=cap!=null&&total>cap+0.005;
@@ -2383,24 +2383,24 @@ function campValSync(){
   const btn=el('cvSave');
   if(btn){ btn.disabled=over; btn.style.opacity=over?'.5':''; btn.style.cursor=over?'not-allowed':'pointer'; }
 }
-function campValMoney(id,el){
+function fundValMoney(id,el){
   const v=moneyParse(el.value);
-  campValRowSet(id,'valor',v);
+  fundValRowSet(id,'valor',v);
   el.value=v?moneyFmt(v):'';
-  campValSync();
+  fundValSync();
 }
 function renderCampValues(){
-  if(!CAMPVAL)return; const p=DATA.poProjetos.find(x=>x.id===CAMPVAL.id)||{};
-  const cap=campCapAprovado(CAMPVAL.id);
-  const pedido=campCapPedido(p);
-  const total=CAMPVAL.rows.reduce((s,r)=>s+(+r.valor||0),0);
+  if(!FUNDVAL)return; const p=DATA.poProjetos.find(x=>x.id===FUNDVAL.id)||{};
+  const cap=fundCapAprovado(FUNDVAL.id);
+  const pedido=fundCapPedido(p);
+  const total=FUNDVAL.rows.reduce((s,r)=>s+(+r.valor||0),0);
   const bal=cap!=null?cap-total:null;
   const over=bal!=null&&bal<-0.005;
   const capBox=cap!=null?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
       <div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--paper-2)">
-        <div style="font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em">Cap for this campaign</div>
+        <div style="font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em">Cap for this fund</div>
         <div class="mono" style="font-size:15px;font-weight:800;margin-top:3px">${BRL(cap)}</div>
-        <div style="font-size:10.5px;color:var(--txt-3);margin-top:2px">${p.cap_aprovado!=null?'fixed when the campaign was approved':'not approved yet — using the current total'}</div>
+        <div style="font-size:10.5px;color:var(--txt-3);margin-top:2px">${p.cap_aprovado!=null?'fixed when the fund was approved':'not approved yet — using the current total'}</div>
       </div>
       <div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--paper-2)">
         <div id="cvBalLbl" style="font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em">${over?'Over the cap':'Still available'}</div>
@@ -2411,19 +2411,19 @@ function renderCampValues(){
     <div id="cvWarn" class="banner" style="display:${over?'':'none'};margin-bottom:12px;background:var(--red-bg);border-color:#f2c4bf;color:#7d1a14">The months add up to more than the approved cap. Reduce them to save${canRestrict()?'':', or ask for an increase'}.</div>
     ${pedido!=null?`<div class="banner" style="margin-bottom:12px;background:var(--blue-bg);border-color:#bcd9f5;color:#0e5ba6">An increase to <b class="mono">${BRL(pedido)}</b> has been requested and is awaiting a decision. Until it's approved the cap above is what applies.</div>`:''}
     ${canRestrict()
-      ? `<div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="chip-btn" onclick="openCapEdit('${esc(CAMPVAL.id)}')">Change approved cap…</button></div>`
-      : `<div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="chip-btn" onclick="openCapPedido('${esc(CAMPVAL.id)}')">Request a higher cap…</button></div>`}`
-   :`<div class="banner" style="margin-bottom:12px">This campaign has no approved cap yet, so nothing is enforced here.</div>`;
+      ? `<div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="chip-btn" onclick="openCapEdit('${esc(FUNDVAL.id)}')">Change approved cap…</button></div>`
+      : `<div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="chip-btn" onclick="openCapPedido('${esc(FUNDVAL.id)}')">Request a higher cap…</button></div>`}`
+   :`<div class="banner" style="margin-bottom:12px">This fund has no approved cap yet, so nothing is enforced here.</div>`;
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:520px">
     <div class="modal-h"><h3>Monthly values — ${esc(p.nome||'')}</h3><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">
-      ${CAMPVAL.rateio?`<div class="banner" style="margin-bottom:12px">Rateio campaign — the value you type per month is the <b>total</b>, split across ${esc(CAMPVAL.qual||'the rateio')} categories on save.</div>`:''}
+      ${FUNDVAL.rateio?`<div class="banner" style="margin-bottom:12px">Rateio fund — the value you type per month is the <b>total</b>, split across ${esc(FUNDVAL.qual||'the rateio')} categories on save.</div>`:''}
       ${capBox}
       <div style="border:1px solid var(--line);border-radius:12px;overflow:hidden">
         <div style="padding:10px 14px;background:#fafbfd;border-bottom:1px solid var(--line);font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">Month-by-month values</div>
         <div style="padding:10px 14px;display:flex;flex-direction:column;gap:8px">
-          ${CAMPVAL.rows.map(r=>`<div style="display:flex;align-items:center;gap:9px"><input type="month" value="${esc(r.mes)}" onchange="campValRowSet('${r.id}','mes',this.value)" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font:inherit;font-size:12.5px"><span style="flex:1;position:relative;display:flex;align-items:center"><span style="position:absolute;left:10px;font-size:12px;color:var(--txt-3);pointer-events:none">R$</span><input type="text" inputmode="numeric" value="${(+r.valor||0)?moneyFmt(r.valor):''}" oninput="campValMoney('${r.id}',this)" placeholder="0,00" style="width:100%;padding:8px 10px 8px 32px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font:inherit;font-size:12.5px;text-align:right" class="mono"></span><button class="chip-btn" onclick="campValDelRow('${r.id}')">✕</button></div>`).join('')}
-          <button class="btn-ghost" onclick="campValAddRow()" style="align-self:flex-start;margin-top:2px">+ Add month</button>
+          ${FUNDVAL.rows.map(r=>`<div style="display:flex;align-items:center;gap:9px"><input type="month" value="${esc(r.mes)}" onchange="fundValRowSet('${r.id}','mes',this.value)" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font:inherit;font-size:12.5px"><span style="flex:1;position:relative;display:flex;align-items:center"><span style="position:absolute;left:10px;font-size:12px;color:var(--txt-3);pointer-events:none">R$</span><input type="text" inputmode="numeric" value="${(+r.valor||0)?moneyFmt(r.valor):''}" oninput="fundValMoney('${r.id}',this)" placeholder="0,00" style="width:100%;padding:8px 10px 8px 32px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font:inherit;font-size:12.5px;text-align:right" class="mono"></span><button class="chip-btn" onclick="fundValDelRow('${r.id}')">✕</button></div>`).join('')}
+          <button class="btn-ghost" onclick="fundValAddRow()" style="align-self:flex-start;margin-top:2px">+ Add month</button>
         </div>
         <div style="padding:11px 14px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:13px">Total</b><span id="cvTotal" class="mono" style="font-size:15px;font-weight:800">${BRL(total)}</span></div>
       </div>
@@ -2433,12 +2433,12 @@ function renderCampValues(){
 }
 async function submitCampValues(){
   if(viewOnly()){toast(roMsg());return;}
-  if(!CAMPVAL)return; const cv=CAMPVAL;
+  if(!FUNDVAL)return; const cv=FUNDVAL;
   const rows=cv.rows.filter(r=>r.mes&&(+r.valor||0)>0);
   if(!rows.length){ toast('Add at least one month with a value.'); return; }
   // Re-check the cap here too: the button is disabled while over, but the cap
   // is derived from data that a background refresh can move under the modal.
-  const limit=campCapAprovado(cv.id);
+  const limit=fundCapAprovado(cv.id);
   const total=rows.reduce((s,r)=>s+(+r.valor||0),0);
   if(limit!=null&&total>limit+0.005){ toast(`Over the approved cap by ${BRL(total-limit)} — reduce the months, or request an increase.`); return; }
   try{
@@ -2468,16 +2468,16 @@ async function submitCampValues(){
       const tetos=rows.map(r=>({fund_id:cv.id,competencia:r.mes+'-01',teto:r2(+r.valor),definido_por:'portal'}));
       const {error}=await SBPO.from('tetos').insert(tetos); if(error)throw error;
     }
-    CAMPVAL=null; toast('Values updated ✓'); closeModal(); await reloadPOAll(); goCostCenter();
+    FUNDVAL=null; toast('Values updated ✓'); closeModal(); await reloadPOAll(); goCostCenter();
   }catch(e){ toastErr(e); }
 }
 
-/* Edit an existing campaign — reassign it to the correct PRODUCT CATEGORY
+/* Edit an existing fund — reassign it to the correct PRODUCT CATEGORY
    (TV/AC/MOB/REF/WG/LABG) so the budget the value belongs to is unambiguous.
    Values/months are untouched; only classification + name/agency change. */
-let CAMPEDIT=null;
+let FUNDEDIT=null;
 function guessCat(str){ const s=String(str||'').toUpperCase(); for(const c of PRODUCT_CATS){ if(new RegExp('(^|[^A-Z])'+c+'([^A-Z]|$)').test(s)) return c; } return ''; }
-function campMonthlyTotals(pid){
+function fundMonthlyTotals(pid){
   const m={};
   DATA.tetos.filter(t=>t.fund_id===pid).forEach(t=>{const k=String(t.competencia).slice(0,7);m[k]=(m[k]||0)+(+t.teto||0);});
   DATA.rateio.filter(r=>r.fund_id===pid).forEach(r=>{const k=String(r.competencia).slice(0,7);m[k]=(m[k]||0)+(+r.valor||0);});
@@ -2485,7 +2485,7 @@ function campMonthlyTotals(pid){
 }
 function recoverQual(pid){
   // Prefer the persisted rateio type (deterministic). Fall back to the old
-  // heuristic only for legacy campaigns saved before rateio_tipo existed.
+  // heuristic only for legacy funds saved before rateio_tipo existed.
   const p=(DATA.poProjetos||[]).find(x=>x.id===pid);
   if(p&&p.rateio_tipo) return p.rateio_tipo;
   const cs=new Set((DATA.rateio||[]).filter(r=>r.fund_id===pid&&r.categoria).map(r=>r.categoria));
@@ -2497,45 +2497,45 @@ function recoverQual(pid){
 function openCampEdit(pid){
   const p=DATA.poProjetos.find(x=>x.id===pid); if(!p)return;
   const feeMode = p.activity==='FEE' ? (p.rateio ? 'split' : 'whole') : 'shared';
-  CAMPEDIT={id:pid,nome:p.nome||'',agencia:p.agencia||'',activity:p.activity||'Campaign',cat:guessCat(p.product_category||p.nome),rateio:!!p.rateio,qual:(feeMode==='split'?recoverQual(pid):''),feeMode:feeMode};
+  FUNDEDIT={id:pid,nome:p.nome||'',agencia:p.agencia||'',activity:p.activity||'Campaign',cat:guessCat(p.product_category||p.nome),rateio:!!p.rateio,qual:(feeMode==='split'?recoverQual(pid):''),feeMode:feeMode};
   renderCampEditForm();
 }
-function campEditSet(k,v){ if(CAMPEDIT)CAMPEDIT[k]=v; }
-function campEditActivity(v){ if(!CAMPEDIT)return; CAMPEDIT.activity=v; renderCampEditForm(); }
+function fundEditSet(k,v){ if(FUNDEDIT)FUNDEDIT[k]=v; }
+function fundEditActivity(v){ if(!FUNDEDIT)return; FUNDEDIT.activity=v; renderCampEditForm(); }
 function renderCampEditForm(){
-  if(!CAMPEDIT)return; const ce=CAMPEDIT; const ags=agencyOpts(); const isFee=ce.activity==='FEE';
+  if(!FUNDEDIT)return; const ce=FUNDEDIT; const ags=agencyOpts(); const isFee=ce.activity==='FEE';
   const catOpts=`<option value="" ${ce.cat===''?'selected':''}>— pick category —</option>`+PRODUCT_CATS.map(c=>`<option value="${c}" ${ce.cat===c?'selected':''}>${c}</option>`).join('');
-  const classField = `<div class="field full" style="margin-top:6px"><label>Product category <span style="font-weight:600;color:var(--txt-3)">${isFee?'(100% of this fee goes here — e.g. TV, AC…)':'(the budget this campaign consumes)'}</span></label><select onchange="campEditSet('cat',this.value)">${catOpts}</select>${isFee?'<div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">Splitting a fee across categories (e.g. TV/AC/LABG) is now done automatically when requesting the PO, using the agency\'s configured percentages — no separate rateio campaign needed.</div>':''}</div>`;
+  const classField = `<div class="field full" style="margin-top:6px"><label>Product category <span style="font-weight:600;color:var(--txt-3)">${isFee?'(100% of this fee goes here — e.g. TV, AC…)':'(the budget this fund consumes)'}</span></label><select onchange="fundEditSet('cat',this.value)">${catOpts}</select>${isFee?'<div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">Splitting a fee across categories (e.g. TV/AC/LABG) is now done automatically when requesting the PO, using the agency\'s configured percentages — no separate rateio fund needed.</div>':''}</div>`;
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:520px">
-    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--po);flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Edit campaign</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Set which budget(s) this value belongs to</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--po);flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Edit fund</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Set which budget(s) this value belongs to</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">
-      <div class="field full"><label>Campaign name</label><input value="${esc(ce.nome)}" onchange="campEditSet('nome',this.value)" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
+      <div class="field full"><label>Fund name</label><input value="${esc(ce.nome)}" onchange="fundEditSet('nome',this.value)" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
       <div class="fgrid" style="margin-top:14px">
-        <div class="field"><label>Activity</label><select onchange="campEditActivity(this.value)">${ACT_OPTS.map(a=>`<option ${ce.activity===a?'selected':''}>${a}</option>`).join('')}</select></div>
-        <div class="field"><label>Agency</label><select onchange="campEditSet('agencia',this.value)">${ags.map(a=>`<option ${ce.agencia===a?'selected':''}>${esc(a)}</option>`).join('')}${ags.length?'':'<option value="">—</option>'}</select></div>
+        <div class="field"><label>Activity</label><select onchange="fundEditActivity(this.value)">${ACT_OPTS.map(a=>`<option ${ce.activity===a?'selected':''}>${a}</option>`).join('')}</select></div>
+        <div class="field"><label>Agency</label><select onchange="fundEditSet('agencia',this.value)">${ags.map(a=>`<option ${ce.agencia===a?'selected':''}>${esc(a)}</option>`).join('')}${ags.length?'':'<option value="">—</option>'}</select></div>
       </div>
       ${classField}
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">Was: <b>${esc((DATA.poProjetos.find(x=>x.id===ce.id)||{}).product_category||'—')}</b>. Months and total value stay the same.</div>
     </div>
-    <div class="modal-f"><span>${(PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarCampanha('${esc(ce.id)}')">Delete campaign</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitCampEdit()">Save</button></div></div>
+    <div class="modal-f"><span>${(PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarFund('${esc(ce.id)}')">Delete fund</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitFundEdit()">Save</button></div></div>
   </div></div>`;
 }
-async function submitCampEdit(){
+async function submitFundEdit(){
   if(viewOnly()){toast(roMsg());return;}
-  if(!CAMPEDIT)return; const ce=CAMPEDIT; const isFee=ce.activity==='FEE';
-  if(!ce.nome.trim()){ toast('Give the campaign a name.'); return; }
+  if(!FUNDEDIT)return; const ce=FUNDEDIT; const isFee=ce.activity==='FEE';
+  if(!ce.nome.trim()){ toast('Give the fund a name.'); return; }
   if(!PRODUCT_CATS.includes(ce.cat)){ toast('Pick a product category (TV/AC/MOB/REF/WG/LABG).'); return; }
   try{
     if(false){
     }else{
-      // normal campaign OR integral fee (100% to a single category, e.g. Fee MOB)
+      // normal fund OR integral fee (100% to a single category, e.g. Fee MOB)
       await SBPO.from('rateio_alocacao').delete().eq('fund_id',ce.id); // in case it was split before
       let cc='',account='',account_desc='';
       try{ const {data:cls}=await SBPO.rpc('classificar',{p_d:ce.cat,p_e:ce.activity||'',p_f:''}); const c=(cls&&cls[0])||{}; cc=c.cc||''; account=c.account||''; account_desc=c.descricao||''; }catch(e){}
       const {error}=await SBPO.from('funds').update({nome:ce.nome.trim(),agencia:ce.agencia||null,activity:ce.activity||null,rateio:false,rateio_tipo:null,product_category:ce.cat,cc,account,account_desc}).eq('id',ce.id);
       if(error)throw error;
     }
-    CAMPEDIT=null; toast('Campaign updated ✓'); closeModal(); await reloadPOAll(); goCostCenter();
+    FUNDEDIT=null; toast('Fund updated ✓'); closeModal(); await reloadPOAll(); goCostCenter();
   }catch(e){ toastErr(e); }
 }
 
@@ -2580,14 +2580,14 @@ function renderPOs(){
   const filt=`<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
     <div style="position:relative;flex:1;max-width:260px;min-width:170px">
       <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--txt-3);display:flex">${icn('search',13)}</span>
-      <input id="poFq" oninput="renderPOsFilter()" placeholder="Search PO, campaign…" style="width:100%;padding:8px 10px 8px 32px;border-radius:9px;border:1px solid var(--line-2);background:#fff;font-size:12.5px;font-family:inherit;outline:none">
+      <input id="poFq" oninput="renderPOsFilter()" placeholder="Search PO, fund…" style="width:100%;padding:8px 10px 8px 32px;border-radius:9px;border:1px solid var(--line-2);background:#fff;font-size:12.5px;font-family:inherit;outline:none">
     </div>
-    <select id="poFcamp" onchange="renderPOsFilter()" style="padding:8px 12px;border:1px solid var(--line-2);border-radius:9px;background:#fff;font-size:12.5px;font-weight:600;color:var(--txt-2)"><option value="">All campaigns</option>${DATA.poProjetos.map(p=>`<option value="${p.id}">${esc(p.nome)}</option>`).join('')}</select>
+    <select id="poFcamp" onchange="renderPOsFilter()" style="padding:8px 12px;border:1px solid var(--line-2);border-radius:9px;background:#fff;font-size:12.5px;font-weight:600;color:var(--txt-2)"><option value="">All funds</option>${DATA.poProjetos.map(p=>`<option value="${p.id}">${esc(p.nome)}</option>`).join('')}</select>
     <select id="poFag" onchange="renderPOsFilter()" style="padding:8px 12px;border:1px solid var(--line-2);border-radius:9px;background:#fff;font-size:12.5px;font-weight:600;color:var(--txt-2)"><option value="">All agencies</option>${ags.map(a=>`<option>${esc(a)}</option>`).join('')}</select>
     <select id="poFst" onchange="renderPOsFilter()" style="padding:8px 12px;border:1px solid var(--line-2);border-radius:9px;background:#fff;font-size:12.5px;font-weight:600;color:var(--txt-2)"><option value="">All statuses</option>${Object.keys(PO_STATUS).map(k=>`<option value="${k}">${PO_STATUS[k].t}</option>`).join('')}</select>
   </div>`;
   const head=`<div style="display:grid;grid-template-columns:1.4fr 1fr .8fr .9fr 1fr .8fr 1.1fr 1.1fr;gap:10px;padding:11px 17px;background:#fafbfd;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">
-    <span>Campaign</span><span>Agency</span><span>Month</span><span style="text-align:right">Value</span><span>Payment</span><span>PO nº</span><span>Status</span><span>Action</span></div>`;
+    <span>Fund</span><span>Agency</span><span>Month</span><span style="text-align:right">Value</span><span>Payment</span><span>PO nº</span><span>Status</span><span>Action</span></div>`;
   const rowHTML=po=>{const s=PO_STATUS[po.status]||{t:po.status,c:'s-slate',icon:''};const pend=['SOLICITADA','EM_APROVACAO'].includes(po.status);const est=poEstimativaPagamento(po);
     const grouped=po._sib&&po._sib.length>1;
     const label=grouped?poGroupLabel(po._sib):(nomeBy[po.fund_id]||'—');
@@ -2640,8 +2640,8 @@ function renderPOs(){
     <div class="po-empty-filter" style="display:none;padding:30px 16px;text-align:center;color:var(--txt-3);font-size:12.5px">No POs match your filters in this phase — try another tab above.</div>
   </div>`:'<div class="empty">No POs found for your access.</div>';
   // PO-only agency contacts (agencia_nivel='po') don't get this — it surfaces
-  // campaign budget totals (tetoPend) and category/activity planning info,
-  // which is exactly the Overview/Campaigns-level detail this sub-level is
+  // fund budget totals (tetoPend) and category/activity planning info,
+  // which is exactly the Overview/Funds-level detail this sub-level is
   // scoped away from everywhere else. Same restriction, just enforced here
   // too since this banner renders unconditionally on the one screen they do see.
   const isPoOnly=PAPEL==='agencia'&&AGENCIA_NIVEL==='po';
@@ -2649,14 +2649,14 @@ function renderPOs(){
   const canAprovaCamp=demoWritable(['admin','marketing','financeiro'].includes(PAPEL)||isManager);
   const tetoPend={};
   if(projPend.length){ DATA.tetos.forEach(t=>tetoPend[t.fund_id]=(tetoPend[t.fund_id]||0)+(+t.teto||0)); DATA.rateio.forEach(r=>tetoPend[r.fund_id]=(tetoPend[r.fund_id]||0)+(+r.valor||0)); }
-  const campPend=projPend.length?`<div style="background:#fff;border:1px solid #f2c4bf;border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05);margin-bottom:16px">
-    <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">Campaigns awaiting approval</b><span style="background:var(--po);color:#fff;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800">${projPend.length}</span></div>
+  const fundPend=projPend.length?`<div style="background:#fff;border:1px solid #f2c4bf;border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05);margin-bottom:16px">
+    <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">Funds awaiting approval</b><span style="background:var(--po);color:#fff;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800">${projPend.length}</span></div>
     <div style="padding:12px 16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">${projPend.map(p=>`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;background:#fafbfd">
       <div style="display:flex;justify-content:space-between;gap:10px"><b style="font-size:13px">${esc(p.nome)}</b><span class="mono" style="font-size:12px">${BRL(tetoPend[p.id]||0)}</span></div>
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">${esc(p.agencia||'')} · ${esc(p.product_category||'')} · ${esc(p.activity||'')}</div>
       ${canAprovaCamp?`<div style="display:flex;gap:7px;margin-top:10px"><button onclick="aprovarCamp('${esc(p.id)}')" style="padding:7px 14px;border-radius:8px;border:none;background:var(--po);color:#fff;font-weight:700;font-size:12px;cursor:pointer">Approve</button><button onclick="rejeitarCamp('${esc(p.id)}')" style="padding:7px 14px;border-radius:8px;border:1px solid var(--line-2);background:#fff;color:var(--txt-2);font-weight:700;font-size:12px;cursor:pointer">Reject</button></div>`:''}
     </div>`).join('')}</div></div>`:'';
-  return campPend+filt+tabsHTML+`<div id="poBody">${body}</div>
+  return fundPend+filt+tabsHTML+`<div id="poBody">${body}</div>
     <div style="font-size:11.5px;color:var(--txt-3);margin-top:10px">Lifecycle: request → approve → issue nº → invoice (NF + evidence) → validate. Approve/Reject is live for admin and marketing.</div>`;
 }
 let PO_TAB=null;
@@ -2692,25 +2692,25 @@ async function rejeitarPO(id){
   }catch(e){ toastErr(e); }
 }
 async function aprovarCamp(id){
-  if(DEMO_MODE){ const p=DATA.poProjetos.find(x=>x.id===id); if(p)p.aprovacao_status='APROVADO'; toast('Campaign approved ✓ (demo)'); go(SCREEN); return; }
+  if(DEMO_MODE){ const p=DATA.poProjetos.find(x=>x.id===id); if(p)p.aprovacao_status='APROVADO'; toast('Fund approved ✓ (demo)'); go(SCREEN); return; }
   if(viewOnly()){toast(roMsg());return;}
   try{
     const {error}=await SBPO.rpc('aprovar_fund',{p_fund:id}); if(error)throw error;
     /* Freeze the ceiling at approval. From here the monthly values may be
        redistributed or reduced freely, but the total can only grow through an
        approved request — which is the whole point of approving an opening. */
-    const cap=r2(Object.values(campMonthlyTotals(id)).reduce((s,v)=>s+v,0));
+    const cap=r2(Object.values(fundMonthlyTotals(id)).reduce((s,v)=>s+v,0));
     try{ await SBPO.from('funds').update({cap_aprovado:cap}).eq('id',id); }
     catch(e2){ console.warn('cap_aprovado on approval:',(e2&&e2.message)||e2); }
-    toast(`Campaign approved ✓ — cap fixed at ${BRL(cap)}`); await reloadPOAll(); go(SCREEN);
+    toast(`Fund approved ✓ — cap fixed at ${BRL(cap)}`); await reloadPOAll(); go(SCREEN);
   }
   catch(e){ toastErr(e); }
 }
 async function rejeitarCamp(id){
-  const motivo=prompt('Reason for rejecting the campaign:'); if(motivo===null)return;
-  if(DEMO_MODE){ DATA.poProjetos=DATA.poProjetos.filter(x=>x.id!==id); toast('Campaign rejected (demo)'); go(SCREEN); return; }
+  const motivo=prompt('Reason for rejecting the fund:'); if(motivo===null)return;
+  if(DEMO_MODE){ DATA.poProjetos=DATA.poProjetos.filter(x=>x.id!==id); toast('Fund rejected (demo)'); go(SCREEN); return; }
   if(viewOnly()){toast(roMsg());return;}
-  try{ const {error}=await SBPO.rpc('rejeitar_fund',{p_fund:id,p_motivo:motivo}); if(error)throw error; toast('Campaign rejected'); await reloadPOAll(); go(SCREEN); }
+  try{ const {error}=await SBPO.rpc('rejeitar_fund',{p_fund:id,p_motivo:motivo}); if(error)throw error; toast('Fund rejected'); await reloadPOAll(); go(SCREEN); }
   catch(e){ toastErr(e); }
 }
 
@@ -2806,7 +2806,7 @@ function renderPODetailModal(){
   const cell=(l,v)=>`<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--paper-2)"><div style="font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">${l}</div><div style="font-size:13.5px;font-weight:600;margin-top:3px">${v}</div></div>`;
   const sections=[];
   if(poFieldVisible('solicitacao',po)){
-    sections.push(`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">${cell('Campaign',esc(label))}${cell('Agency',esc(po.agencia||'—'))}${cell('Month',fmtMes(po.competencia))}${cell('Value',BRL(total))}</div>`);
+    sections.push(`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">${cell('Fund',esc(label))}${cell('Agency',esc(po.agencia||'—'))}${cell('Month',fmtMes(po.competencia))}${cell('Value',BRL(total))}</div>`);
     if(po.descricao) sections.push(`<div style="font-size:12.5px;color:var(--txt-2);margin:-4px 0 12px">${esc(po.descricao)}</div>`);
   }
   if(grouped){
@@ -3741,9 +3741,9 @@ function approvalsPendingCount(){
   return projPend+posPend.length;
 }
 function notifGoProjeto(projId,tipo){
-  const screen=(tipo==='projeto_pendente')?'approvals':'campaigns';
+  const screen=(tipo==='projeto_pendente')?'approvals':'funds';
   go(screen);
-  if(screen==='campaigns') setTimeout(()=>openCampDetail(projId),80);
+  if(screen==='funds') setTimeout(()=>openFundDetail(projId),80);
 }
 function renderNotif(){
   const all=buildNotifList();
@@ -3784,9 +3784,9 @@ function renderNotif(){
 let REQ=null; // {mode:'single'|'split', fund_id, splitAg, meses:[{competencia,teto}], competencia, valor, descricao}
 function poNome(id){ const p=DATA.poProjetos.find(x=>x.id===id); return p?p.nome:'—'; }
 /* Fee rateio (percentuais fixos por agência) — cada categoria já aponta para
-   a campanha real que consome aquele budget (Fee - <agência> TV/AC/LABG…).
+   o fund real que consome aquele budget (Fee - <agência> TV/AC/LABG…).
    Ao solicitar uma PO de Fee, o valor total é dividido pelos percentuais
-   configurados e uma PO é criada em cada campanha correspondente. */
+   configurados e uma PO é criada em cada fund correspondente. */
 function feeSplitGroups(){
   const byAg={};
   (DATA.fee||[]).forEach(f=>{ if(!f.agencia||!f.categoria)return; (byAg[f.agencia]=byAg[f.agencia]||[]).push(f); });
@@ -3825,99 +3825,99 @@ function consumoMes(pid,comp){
 }
 function projMonths(pid){ return DATA.tetos.filter(t=>t.fund_id===pid).map(t=>({competencia:String(t.competencia).slice(0,10),teto:+t.teto})).sort((a,b)=>a.competencia.localeCompare(b.competencia)); }
 function reqOptions(){
-  // cut / frozen campaigns are not offered as PO targets at all
-  let projs=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO'&&!campRestr(p));
+  // cut / frozen funds are not offered as PO targets at all
+  let projs=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO'&&!fundRestr(p));
   if(PAPEL==='agencia'&&MINHA_AGENCIA) projs=projs.filter(p=>p.agencia===MINHA_AGENCIA);
   const groups=feeSplitGroups().filter(g=>!(PAPEL==='agencia'&&MINHA_AGENCIA)||g.agencia===MINHA_AGENCIA);
   const splitIds=new Set(groups.flatMap(g=>g.splits.map(s=>s.fund_id)));
-  // the individual TV/AC/LABG fee campaigns are requested through their agency's split group, not directly
+  // the individual TV/AC/LABG fee funds are requested through their agency's split group, not directly
   const single=projs.filter(p=>!splitIds.has(p.id));
   return {single,groups};
 }
 /* ============================================================
    BUDGET CUT / SPENDING FREEZE
    ------------------------------------------------------------
-   A campaign can be marked CORTADA (its money was withdrawn) or BLOQUEADA
+   A fund can be marked CORTADA (its money was withdrawn) or BLOQUEADA
    (spending is frozen) WITHOUT its budget figure changing. Nothing here
-   touches tetos or rateio_alocacao: the campaign keeps the cap it was given,
-   and the restriction is a separate fact recorded on the campaign. That way
-   "what was this campaign given" and "what may still be spent" stay two
+   touches tetos or rateio_alocacao: the fund keeps the cap it was given,
+   and the restriction is a separate fact recorded on the fund. That way
+   "what was this fund given" and "what may still be spent" stay two
    different questions — reducing the cap would destroy the first answer to
    express the second, and the year's allocation history with it.
 
-   It does bite, though: a restricted campaign can't have new POs requested
+   It does bite, though: a restricted fund can't have new POs requested
    against it. A freeze that only changes a colour is decoration.
    ============================================================ */
 const RESTR_META={
   CORTADA:{t:'Budget cut',short:'Cut',c:'#bf0008',bg:'#fbe4e1',bd:'#f2c4bf',icon:'alert'},
   BLOQUEADA:{t:'Spending blocked',short:'Blocked',c:'#7a5200',bg:'#fbf0d8',bd:'#ecd9a4',icon:'lock'}
 };
-function campRestr(p){ return (p&&RESTR_META[p.restricao])?p.restricao:null; }
+function fundRestr(p){ return (p&&RESTR_META[p.restricao])?p.restricao:null; }
 function canRestrict(){ return (['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly(); }
-function campRestrBadgeHTML(p){
-  const k=campRestr(p); if(!k)return '';
+function fundRestrBadgeHTML(p){
+  const k=fundRestr(p); if(!k)return '';
   const r=RESTR_META[k];
   return `<span title="${esc(p.restricao_motivo||r.t)}" style="font-size:10px;font-weight:800;border-radius:20px;padding:3px 9px;white-space:nowrap;flex-shrink:0;display:inline-flex;align-items:center;gap:4px;background:${r.bg};color:${r.c}">${icn(r.icon,10)} ${r.short}</span>`;
 }
-let CAMPRESTR=null;
+let FUNDRESTR=null;
 function openCampRestricao(pid){
   const p=DATA.poProjetos.find(x=>x.id===pid); if(!p)return;
   if(!canRestrict()){ toast('Only marketing managers or admin can do this.'); return; }
-  CAMPRESTR={id:pid,tipo:p.restricao||'BLOQUEADA',valor:p.restricao_valor!=null?+p.restricao_valor:'',motivo:p.restricao_motivo||''};
+  FUNDRESTR={id:pid,tipo:p.restricao||'BLOQUEADA',valor:p.restricao_valor!=null?+p.restricao_valor:'',motivo:p.restricao_motivo||''};
   renderCampRestricao();
 }
-function campRestrSet(k,v){ if(CAMPRESTR)CAMPRESTR[k]=v; if(k==='tipo')renderCampRestricao(); }
-function campRestrMoney(el){ const v=moneyParse(el.value); CAMPRESTR.valor=v; el.value=v?moneyFmt(v):''; }
+function fundRestrSet(k,v){ if(FUNDRESTR)FUNDRESTR[k]=v; if(k==='tipo')renderCampRestricao(); }
+function fundRestrMoney(el){ const v=moneyParse(el.value); FUNDRESTR.valor=v; el.value=v?moneyFmt(v):''; }
 function renderCampRestricao(){
-  if(!CAMPRESTR)return;
-  const p=DATA.poProjetos.find(x=>x.id===CAMPRESTR.id)||{};
-  const cap=Object.values(campMonthlyTotals(CAMPRESTR.id)).reduce((s,v)=>s+v,0);
-  const cur=campRestr(p);
-  const opt=(k)=>{const r=RESTR_META[k];const on=CAMPRESTR.tipo===k;
-    return `<button onclick="campRestrSet('tipo','${k}')" style="flex:1;text-align:left;padding:11px 13px;border-radius:10px;border:1.5px solid ${on?r.c:'var(--line-2)'};background:${on?r.bg:'#fff'};cursor:pointer">
+  if(!FUNDRESTR)return;
+  const p=DATA.poProjetos.find(x=>x.id===FUNDRESTR.id)||{};
+  const cap=Object.values(fundMonthlyTotals(FUNDRESTR.id)).reduce((s,v)=>s+v,0);
+  const cur=fundRestr(p);
+  const opt=(k)=>{const r=RESTR_META[k];const on=FUNDRESTR.tipo===k;
+    return `<button onclick="fundRestrSet('tipo','${k}')" style="flex:1;text-align:left;padding:11px 13px;border-radius:10px;border:1.5px solid ${on?r.c:'var(--line-2)'};background:${on?r.bg:'#fff'};cursor:pointer">
       <div style="display:flex;align-items:center;gap:7px;font-weight:800;font-size:12.5px;color:${on?r.c:'var(--txt)'}">${icn(r.icon,13)} ${r.t}</div>
       <div style="font-size:11px;color:var(--txt-2);margin-top:3px">${k==='CORTADA'?'The money was taken back. The budget figure stays as a record.':'No new POs may be requested. The budget stays available on paper.'}</div>
     </button>`;};
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:520px">
     <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:#bf0008;flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Restrict spending</h3><div style="font-size:12px;color:var(--txt-3)">${esc(p.nome||'')} · budget ${BRL(cap)}</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">
-      <div class="banner" style="margin-bottom:12px">The campaign's budget of <b class="mono">${BRL(cap)}</b> is not reduced by this — the monthly values stay exactly as they are. Only its spending status changes.</div>
+      <div class="banner" style="margin-bottom:12px">The fund's budget of <b class="mono">${BRL(cap)}</b> is not reduced by this — the monthly values stay exactly as they are. Only its spending status changes.</div>
       <div style="display:flex;gap:9px;margin-bottom:14px">${opt('CORTADA')}${opt('BLOQUEADA')}</div>
-      ${CAMPRESTR.tipo==='CORTADA'?`<div class="field"><label>Amount cut <span style="font-weight:600;color:var(--txt-3)">(optional — leave empty for the whole balance)</span></label><span style="position:relative;display:flex;align-items:center"><span style="position:absolute;left:11px;font-size:12px;color:var(--txt-3);pointer-events:none">R$</span><input type="text" inputmode="numeric" value="${CAMPRESTR.valor?moneyFmt(CAMPRESTR.valor):''}" oninput="campRestrMoney(this)" placeholder="0,00" class="mono" style="width:100%;padding:9px 11px 9px 34px;text-align:right"></span></div>`:''}
-      <div class="field"><label>Reason</label><textarea rows="3" oninput="campRestrSet('motivo',this.value)" placeholder="Why is this campaign being ${CAMPRESTR.tipo==='CORTADA'?'cut':'blocked'}?">${esc(CAMPRESTR.motivo)}</textarea></div>
+      ${FUNDRESTR.tipo==='CORTADA'?`<div class="field"><label>Amount cut <span style="font-weight:600;color:var(--txt-3)">(optional — leave empty for the whole balance)</span></label><span style="position:relative;display:flex;align-items:center"><span style="position:absolute;left:11px;font-size:12px;color:var(--txt-3);pointer-events:none">R$</span><input type="text" inputmode="numeric" value="${FUNDRESTR.valor?moneyFmt(FUNDRESTR.valor):''}" oninput="fundRestrMoney(this)" placeholder="0,00" class="mono" style="width:100%;padding:9px 11px 9px 34px;text-align:right"></span></div>`:''}
+      <div class="field"><label>Reason</label><textarea rows="3" oninput="fundRestrSet('motivo',this.value)" placeholder="Why is this fund being ${FUNDRESTR.tipo==='CORTADA'?'cut':'blocked'}?">${esc(FUNDRESTR.motivo)}</textarea></div>
     </div>
     <div class="modal-f"><span>${cur?`<button class="btn-ghost" onclick="liftCampRestricao()">Lift restriction</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:#bf0008" onclick="submitCampRestricao()">Apply</button></div></div>
   </div></div>`;
 }
 async function submitCampRestricao(){
-  if(!CAMPRESTR)return;
+  if(!FUNDRESTR)return;
   if(viewOnly()){toast(roMsg());return;}
-  const cr=CAMPRESTR;
+  const cr=FUNDRESTR;
   if(!String(cr.motivo||'').trim()){ toast('Describe the reason.'); return; }
   try{
     const patch={restricao:cr.tipo,restricao_valor:(cr.tipo==='CORTADA'&&+cr.valor>0)?r2(+cr.valor):null,
                  restricao_motivo:String(cr.motivo).trim(),restricao_em:new Date().toISOString()};
     const {error}=await SBPO.from('funds').update(patch).eq('id',cr.id); if(error)throw error;
-    CAMPRESTR=null; closeModal(); await reloadPOAll();
+    FUNDRESTR=null; closeModal(); await reloadPOAll();
     toast(patch.restricao==='CORTADA'?'Budget marked as cut ✓':'Spending blocked ✓');
     goCostCenter();
   }catch(e){ toastErr(e); }
 }
 async function liftCampRestricao(){
-  if(!CAMPRESTR)return;
+  if(!FUNDRESTR)return;
   if(viewOnly()){toast(roMsg());return;}
-  const id=CAMPRESTR.id;
+  const id=FUNDRESTR.id;
   try{
     const {error}=await SBPO.from('funds').update({restricao:null,restricao_valor:null,restricao_motivo:null,restricao_em:null}).eq('id',id);
     if(error)throw error;
-    CAMPRESTR=null; closeModal(); await reloadPOAll(); toast('Restriction lifted ✓'); goCostCenter();
+    FUNDRESTR=null; closeModal(); await reloadPOAll(); toast('Restriction lifted ✓'); goCostCenter();
   }catch(e){ toastErr(e); }
 }
 function openReqPO(pid){
-  // A cut or frozen campaign takes no new spending — this is where the
+  // A cut or frozen fund takes no new spending — this is where the
   // restriction stops being cosmetic.
   if(pid){
-    const rp=DATA.poProjetos.find(x=>x.id===pid), rk=campRestr(rp);
+    const rp=DATA.poProjetos.find(x=>x.id===pid), rk=fundRestr(rp);
     if(rk){ toast(`"${rp.nome}" is ${RESTR_META[rk].short.toLowerCase()} — no new POs can be requested.`); return; }
   }
   const {single,groups}=reqOptions();
@@ -3970,8 +3970,8 @@ function renderReqPO(){
   if(!REQ)return;
   const {single,groups}=reqOptions();
   const isSplit=REQ.mode==='split'&&groups.length;
-  const campOpts=`${single.map(p=>`<option value="${p.id}" ${REQ.fund_id===p.id?'selected':''}>${esc(p.nome)}${p.agencia?' · '+esc(p.agencia):''}</option>`).join('')}${groups.map(g=>`<option value="FEE::${esc(g.agencia)}" ${REQ.fund_id==='FEE::'+g.agencia?'selected':''}>Fee — ${esc(g.agencia)} (split ${g.splits.map(s=>s.categoria).join('/')})</option>`).join('')}`;
-  const campField=`<div class="field"><label>Campaign</label><select onchange="reqSet('fund_id',this.value)">${campOpts||'<option value="">—</option>'}</select></div>`;
+  const fundOpts=`${single.map(p=>`<option value="${p.id}" ${REQ.fund_id===p.id?'selected':''}>${esc(p.nome)}${p.agencia?' · '+esc(p.agencia):''}</option>`).join('')}${groups.map(g=>`<option value="FEE::${esc(g.agencia)}" ${REQ.fund_id==='FEE::'+g.agencia?'selected':''}>Fee — ${esc(g.agencia)} (split ${g.splits.map(s=>s.categoria).join('/')})</option>`).join('')}`;
+  const fundField=`<div class="field"><label>Fund</label><select onchange="reqSet('fund_id',this.value)">${fundOpts||'<option value="">—</option>'}</select></div>`;
   let body;
   if(isSplit){
     const rows=reqSplitBreakdown();
@@ -3979,11 +3979,11 @@ function renderReqPO(){
     const estoura=rows.some(r=>r.saldo<-0.001);
     body=`
       <div class="field"><label>Description</label><input value="${esc(REQ.descricao)}" onchange="reqSet('descricao',this.value)" placeholder="e.g. Agency fee — July"></div>
-      ${campField}
+      ${fundField}
       <div class="field"><label>Month to allocate</label><select onchange="reqSet('competencia',this.value)">${REQ.meses.length?REQ.meses.map(m=>`<option value="${m.competencia}" ${REQ.competencia===m.competencia?'selected':''}>${fmtMes(m.competencia)}</option>`).join(''):'<option value="">No common month across TV/AC/LABG</option>'}</select></div>
       <div class="field"><label>Total value (R$)</label><input type="number" min="0" step="100" value="${esc(REQ.valor)}" onchange="reqSet('valor',this.value)" placeholder="0,00"></div>
       <div style="border:1px solid var(--line);border-radius:11px;overflow:hidden;margin-bottom:14px">
-        <div style="padding:9px 13px;background:#fafbfd;border-bottom:1px solid var(--line);font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">Split by fixed percentage — same fee percentuals, one PO per campaign</div>
+        <div style="padding:9px 13px;background:#fafbfd;border-bottom:1px solid var(--line);font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">Split by fixed percentage — same fee percentuals, one PO per fund</div>
         <div style="padding:10px 13px;display:flex;flex-direction:column;gap:8px">
           ${rows.map(r=>`<div style="display:flex;align-items:center;gap:10px;font-size:12.5px">
             <span style="width:52px;font-weight:700;color:var(--txt-2)">${esc(r.categoria)}</span>
@@ -4002,7 +4002,7 @@ function renderReqPO(){
     const val=+REQ.valor||0, estoura=val>saldo+0.001;
     body=`
       <div class="field"><label>Description</label><input value="${esc(REQ.descricao)}" onchange="reqSet('descricao',this.value)" placeholder="e.g. Video production, paid media…"></div>
-      ${campField}
+      ${fundField}
       <div class="field"><label>Month to allocate (as opened in the project)</label>
         <select onchange="reqSet('competencia',this.value)">${REQ.meses.length?REQ.meses.map(m=>`<option value="${m.competencia}" ${REQ.competencia===m.competencia?'selected':''}>${fmtMes(m.competencia)} — cap ${BRL(m.teto)}</option>`).join(''):'<option value="">Project has no months registered</option>'}</select>
         ${REQ.competencia?`<div style="font-size:11.5px;color:${estoura?'var(--red)':'var(--txt-3)'};margin-top:5px">Month balance: <b class="mono">${BRL(saldo)}</b> (cap ${BRL(teto)} − consumed ${BRL(cons)})</div>`:''}</div>
@@ -4053,7 +4053,7 @@ async function submitReqPO(){
     }catch(e){ toastErr(e); }
     return;
   }
-  if(!REQ.fund_id){ toast('Choose the campaign.'); return; }
+  if(!REQ.fund_id){ toast('Choose the fund.'); return; }
   if(!REQ.competencia){ toast('Choose the allocation month.'); return; }
   const val=+REQ.valor||0; if(val<=0){ toast('Enter a value.'); return; }
   const ag=(PAPEL==='agencia'&&MINHA_AGENCIA)?MINHA_AGENCIA:(DATA.poProjetos.find(p=>p.id===REQ.fund_id)||{}).agencia||'';
@@ -4137,7 +4137,7 @@ async function submitPOEdit(){
   }catch(e){ toastErr(e); }
 }
 
-/* ===== DELETE (admin only) — POs, campaigns, budgets ===== */
+/* ===== DELETE (admin only) — POs, funds, budgets ===== */
 async function deletarPO(id){
   if(viewOnly()){toast(roMsg());return;}
   if(PAPEL!=='admin'){ toast('Only admin can delete.'); return; }
@@ -4151,21 +4151,21 @@ async function deletarPO(id){
     POEDIT=null; closeModal(); await reloadPO(); await reloadNotif(); go(SCREEN); toast('PO deleted.');
   }catch(e){ toastErr(e); }
 }
-async function deletarCampanha(id){
+async function deletarFund(id){
   if(viewOnly()){toast(roMsg());return;}
   if(PAPEL!=='admin'){ toast('Only admin can delete.'); return; }
   const p=DATA.poProjetos.find(x=>x.id===id)||{};
   const nPos=DATA.pos.filter(x=>x.fund_id===id).length;
-  if(!confirm('Delete campaign "'+(p.nome||'')+'"?\n\nThis also deletes its '+nPos+' PO(s) and all monthly caps/rateio.\n\nThis cannot be undone.'))return;
+  if(!confirm('Delete fund "'+(p.nome||'')+'"?\n\nThis also deletes its '+nPos+' PO(s) and all monthly caps/rateio.\n\nThis cannot be undone.'))return;
   try{ const {error}=await SBPO.rpc('excluir_fund',{p_fund:id}); if(error)throw error;
-    CAMPEDIT=null; closeModal(); await reloadPOAll(); goCostCenter(); toast('Campaign deleted.');
+    FUNDEDIT=null; closeModal(); await reloadPOAll(); goCostCenter(); toast('Fund deleted.');
   }catch(e){ toastErr(e); }
 }
 async function deletarOrcamento(id){
   if(viewOnly()){toast(roMsg());return;}
   if(PAPEL!=='admin'){ toast('Only admin can delete.'); return; }
   const o=(DATA.orcamentos||[]).find(x=>x.id===id)||{};
-  if(!confirm('Delete budget "'+(o.nome||o.product_category||'')+'"?\n\nOnly possible if no campaign is linked to it.\n\nThis cannot be undone.'))return;
+  if(!confirm('Delete budget "'+(o.nome||o.product_category||'')+'"?\n\nOnly possible if no fund is linked to it.\n\nThis cannot be undone.'))return;
   try{ const {error}=await SBPO.rpc('excluir_orcamento',{p_orc:id}); if(error)throw error;
     ORC=null; closeModal(); await reloadPOAll(); go('budgets'); toast('Budget deleted.');
   }catch(e){ toastErr(e); }
@@ -4433,7 +4433,7 @@ function renderAgencyWork(){
   }
   const th=(col,label)=>`<th onclick="agworkSortClick('${col}')" style="cursor:pointer;user-select:none">${sortLbl(AGWORK_SORT,col,label)}</th>`;
   return `<div class="banner" style="background:var(--violet-bg);border-color:#cfc2f0;color:#5535ad">${icn('lock',12)} Read-only — you see the work assigned to your agency${MINHA_AGENCIA?' ('+esc(MINHA_AGENCIA)+')':''}.</div>
-    <div class="tbl-wrap"><table><thead><tr>${th('nome','Campaign')}${th('cat','Category')}${th('act','Activity')}</tr></thead><tbody>
+    <div class="tbl-wrap"><table><thead><tr>${th('nome','Fund')}${th('cat','Category')}${th('act','Activity')}</tr></thead><tbody>
     ${list.length?list.map(p=>`<tr><td style="font-weight:600">${esc(p.nome)}</td><td>${esc(p.product_category||'—')}</td><td>${esc(p.activity||'—')}</td></tr>`).join(''):'<tr><td colspan="3"><div class="empty">No assigned work.</div></td></tr>'}
   </tbody></table></div>`;
 }
@@ -4450,14 +4450,14 @@ function sortLbl(state,col,label){
   return `${esc(label)}<span style="font-size:8px;color:var(--accent);margin-left:3px;visibility:${active?'visible':'hidden'}">${active&&state.dir<0?'▼':'▲'}</span>`;
 }
 const CC_STICKY_W=62+92+96+170; // s0+s1+s2+s3 — must track the .cc-tbl widths
-/* Where an edit made from the campaign detail lands: the cost-center table,
+/* Where an edit made from the fund detail lands: the cost-center table,
    scrolled into view. That table is the reconciliation surface — after moving
-   a campaign's money you want to see which Extrato line moved — but it is
+   a fund's money you want to see which Extrato line moved — but it is
    admin/finance/manager only, so anyone else keeps the old destination
    instead of being sent to a screen they can't read. */
 function goCostCenter(){
   const canSee=effIsManager()||['admin','financeiro'].includes(effPapel());
-  if(!canSee){ go('campaigns'); return; }
+  if(!canSee){ go('funds'); return; }
   go('budgets');
   // after the repaint, put the table on screen rather than the page top
   setTimeout(()=>{
@@ -4484,7 +4484,7 @@ function ccJumpNow(){ ccScrollTo('smooth'); }
 
    Besides the budget/consumption totals it keeps `det` — the individual PO
    slices behind every (account, month) consumption figure. For a rateio
-   campaign a single PO lands on several accounts, so each slice carries the
+   fund a single PO lands on several accounts, so each slice carries the
    ratio it was split by and the resulting share, and the shares of one cell
    always add back up to that cell's consumption.
    ============================================================ */
@@ -4530,7 +4530,7 @@ const CC_LAYOUT=[
   ['1603122014','32202171','KOL - Influencers ( WG launch 1)'],
   ['1603122014','32202171','KOL - Influencers ( WG launch 2)']
 ];
-/* Descriptions drift between the layout and what campaigns actually carry —
+/* Descriptions drift between the layout and what funds actually carry —
    "Always on (media and production)" vs "…(TV)", "SQD Mini LED" vs
    "SQD Miniled". Comparing on letters and digits only, minus a trailing
    category tag, matches those without hand-maintaining aliases. */
@@ -4598,7 +4598,7 @@ function ccCategories(){
 }
 function ccAggregate(opt){
   const fee=DATA.fee||[];
-  const campsAll=(DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO');
+  const fundsAll=(DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO');
   const accKey=(cc,acc,desc)=>`${cc||''}|${acc||''}|${desc||''}`;
   const accMap={};
   const slot=(key,cc,acc,desc,cat)=>{
@@ -4607,9 +4607,9 @@ function ccAggregate(opt){
     return a;
   };
   const addDet=(a,m,entry)=>{ (a.det[m]=a.det[m]||[]).push(entry); };
-  /* Budget side of the same idea: which campaigns make up the figure in the
-     Budget column. One line per campaign+category rather than per underlying
-     record, since a campaign can carry several monthly caps for one month. */
+  /* Budget side of the same idea: which funds make up the figure in the
+     Budget column. One line per fund+category rather than per underlying
+     record, since a fund can carry several monthly caps for one month. */
   const addDetB=(a,m,proj,categoria,valor)=>{
     const list=(a.detB[m]=a.detB[m]||[]);
     const hit=list.find(e=>e.proj.id===proj.id&&e.categoria===categoria);
@@ -4620,7 +4620,7 @@ function ccAggregate(opt){
     if(CC_FILTER.scope==='nolabg'&&c===CC_LABG) return false;
     return !CC_FILTER.cat||c===CC_FILTER.cat;
   };
-  campsAll.forEach(p=>{
+  fundsAll.forEach(p=>{
     const consByMonth={}, posByMonth={};
     DATA.pos.filter(po=>po.fund_id===p.id&&CC_CONS_ST.includes(po.status)).forEach(po=>{
       const m=String(po.competencia).slice(0,7);
@@ -4674,7 +4674,7 @@ function ccAggregate(opt){
   const all=Object.values(accMap);
   /* A row is Matriz (LABG) when every category feeding it is LABG — not when
      it sits on one hardcoded cost center. LABG spends through more than one
-     (1109123033, 1109123018, and campaigns with no cost center at all), so
+     (1109123033, 1109123018, and funds with no cost center at all), so
      reading it off the contributions is what actually catches them. */
   all.forEach(a=>{
     a.isLabg=a.cats.size?Array.from(a.cats).every(c=>c===CC_LABG):CC_TAIL.includes(String(a.cc||'').trim());
@@ -4708,7 +4708,7 @@ function ccAggregate(opt){
   return {accRows,monthList};
 }
 /* Drill-down for one cell: what adds up to it. `kind` picks the side —
-   "cons" lists the POs behind a Cons. figure, "budget" the campaigns behind a
+   "cons" lists the POs behind a Cons. figure, "budget" the funds behind a
    Budget figure. Addressed by position in the table the user is looking at
    (CC_VIEW is written by the renderer, so sorting and filtering are already
    applied) rather than by a cc|account|description key, which is free text
@@ -4718,9 +4718,9 @@ function ccDrill(rowIdx,monIdx,kind){
   if(!a||!m)return;
   return (kind==='budget'?ccDrillBudget:ccDrillCons)(a,m);
 }
-/* Where a drill-down was opened from, so the campaign detail it hands off to
+/* Where a drill-down was opened from, so the fund detail it hands off to
    can offer a way back. Held as the row's key rather than its index, and
-   replayed through a fresh render, because the campaign screen can change the
+   replayed through a fresh render, because the fund screen can change the
    numbers underneath (reallocating a balance) and rows can move. Cleared by
    closeModal(), so the back button only exists inside an open chain. */
 let CC_DRILL_BACK=null;
@@ -4742,7 +4742,7 @@ function ccDrillCons(a,m){
   const split=det.some(d=>d.ratio<0.9999);
   CC_DRILL_BACK={key:a.key,m,kind:'cons'};
   const cols=`1.5fr 1fr .8fr ${split?'.7fr ':''}.8fr`;
-  const head=`<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:8px 12px;background:var(--paper-2);border-radius:9px 9px 0 0;font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em"><span>PO</span><span>Campaign</span><span>Status</span>${split?'<span style="text-align:right">Split</span>':''}<span style="text-align:right">Value</span></div>`;
+  const head=`<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:8px 12px;background:var(--paper-2);border-radius:9px 9px 0 0;font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em"><span>PO</span><span>Fund</span><span>Status</span>${split?'<span style="text-align:right">Split</span>':''}<span style="text-align:right">Value</span></div>`;
   const rows=det.map(d=>{
     const po=d.po, s=PO_STATUS[po.status]||{t:po.status,c:'s-slate'};
     return `<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:9px 12px;border-bottom:1px solid #edeff4;font-size:12px;align-items:center">
@@ -4758,16 +4758,16 @@ function ccDrillCons(a,m){
     <div class="modal-b">
       <div style="display:flex;align-items:baseline;gap:16px;margin-bottom:12px">
         <span style="flex-shrink:0;white-space:nowrap"><b class="mono" style="font-size:21px;font-weight:800">${BRL(total)}</b><span style="font-size:11.5px;color:var(--txt-3);margin-left:8px">${det.length} PO${det.length>1?'s':''}</span></span>
-        ${split?'<span style="font-size:11.5px;color:var(--txt-3);text-align:right">Split values — a rateio campaign spreads each PO across several accounts by its configured share.</span>':''}
+        ${split?'<span style="font-size:11.5px;color:var(--txt-3);text-align:right">Split values — a rateio fund spreads each PO across several accounts by its configured share.</span>':''}
       </div>
       <div style="border:1px solid var(--line);border-radius:10px;overflow:hidden">${head}${rows}</div>
     </div>
   </div></div>`;
 }
-/* Budget side: the campaigns whose monthly cap (or rateio allocation) makes
+/* Budget side: the funds whose monthly cap (or rateio allocation) makes
    up the figure. Consumption is shown alongside each one so an over- or
-   under-spending campaign is visible without leaving the modal — the numbers
-   come from the same slices the Cons. cell sums, filtered to that campaign. */
+   under-spending fund is visible without leaving the modal — the numbers
+   come from the same slices the Cons. cell sums, filtered to that fund. */
 function ccDrillBudget(a,m){
   const det=(a.detB[m]||[]).slice().sort((x,y)=>y.valor-x.valor);
   if(!det.length)return;
@@ -4776,10 +4776,10 @@ function ccDrillBudget(a,m){
   (a.det[m]||[]).forEach(d=>{ consBy[d.proj.id]=(consBy[d.proj.id]||0)+d.share; });
   CC_DRILL_BACK={key:a.key,m,kind:'budget'};
   const cols='1.6fr .5fr .9fr .9fr .9fr';
-  const head=`<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:8px 12px;background:var(--paper-2);border-radius:9px 9px 0 0;font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em"><span>Campaign</span><span>Cat.</span><span style="text-align:right">Budget</span><span style="text-align:right">Cons.</span><span style="text-align:right">Balance</span></div>`;
+  const head=`<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:8px 12px;background:var(--paper-2);border-radius:9px 9px 0 0;font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em"><span>Fund</span><span>Cat.</span><span style="text-align:right">Budget</span><span style="text-align:right">Cons.</span><span style="text-align:right">Balance</span></div>`;
   const rows=det.map(d=>{
     const c=consBy[d.proj.id]||0, bal=d.valor-c;
-    return `<div class="cc-camp-row" onclick="openCampDetail('${esc(d.proj.id)}')" title="Open campaign" style="display:grid;grid-template-columns:${cols};gap:10px;padding:9px 12px;border-bottom:1px solid #edeff4;font-size:12px;align-items:center">
+    return `<div class="cc-camp-row" onclick="openFundDetail('${esc(d.proj.id)}')" title="Open fund" style="display:grid;grid-template-columns:${cols};gap:10px;padding:9px 12px;border-bottom:1px solid #edeff4;font-size:12px;align-items:center">
       <span style="min-width:0"><b style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.proj.nome||'—')}</b><span style="font-size:10.5px;color:var(--txt-3)">${esc(d.proj.agencia||'—')}${d.proj.rateio?' · rateio '+esc(d.proj.rateio_tipo||''):''}</span></span>
       <span style="font-size:11px;font-weight:700;color:var(--txt-2)">${esc(d.categoria||'—')}</span>
       <span class="mono" style="text-align:right;font-weight:700">${BRL(d.valor)}</span>
@@ -4791,8 +4791,8 @@ function ccDrillBudget(a,m){
     ${ccDrillHead(a,m,'Budget','#0c7048')}
     <div class="modal-b">
       <div style="display:flex;align-items:baseline;gap:16px;margin-bottom:12px">
-        <span style="flex-shrink:0;white-space:nowrap"><b class="mono" style="font-size:21px;font-weight:800">${BRL(total)}</b><span style="font-size:11.5px;color:var(--txt-3);margin-left:8px">${det.length} campaign${det.length>1?'s':''}</span></span>
-        <span style="font-size:11.5px;color:var(--txt-3);text-align:right">Budget is the monthly cap for a direct campaign, or the rateio allocation for a split one.</span>
+        <span style="flex-shrink:0;white-space:nowrap"><b class="mono" style="font-size:21px;font-weight:800">${BRL(total)}</b><span style="font-size:11.5px;color:var(--txt-3);margin-left:8px">${det.length} fund${det.length>1?'s':''}</span></span>
+        <span style="font-size:11.5px;color:var(--txt-3);text-align:right">Budget is the monthly cap for a direct fund, or the rateio allocation for a split one.</span>
       </div>
       <div style="border:1px solid var(--line);border-radius:10px;overflow:hidden">${head}${rows}</div>
     </div>
@@ -4822,7 +4822,7 @@ function ccPOExportRows(nfDates){
         'Descrição da conta':a.desc||'—',
         'Nº da PO':po.numero_po||'—',
         'Nº da NF':po.nf_numero||'—',
-        'Campanha':d.proj.nome||'—',
+        'Fund':d.proj.nome||'—',
         'Agência':po.agencia||'—',
         'Status':st.t||po.status,
         '% do rateio':Math.round(d.ratio*10000)/100
@@ -4911,7 +4911,7 @@ function feeSplitBlock(only){
   const accountsBlock=`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05);margin-top:16px">
     <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line)">
       <div style="display:flex;align-items:center;gap:10px"><b style="flex:1;min-width:0;font-family:'Hanken Grotesk',sans-serif;font-size:14px">Cost center / account — monthly budget, consumption &amp; balance</b>${hasNow?`<button class="chip-btn" onclick="ccJumpNow()" style="display:inline-flex;align-items:center;gap:5px;flex-shrink:0">${icn('calendar',12)} Current month</button>`:''}<button class="chip-btn" onclick="exportCostCenterXLSX()" style="display:inline-flex;align-items:center;gap:5px;flex-shrink:0">${icn('download',12)} Export Excel</button></div>
-      <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">click a header to sort · click a <b style="font-weight:700;color:var(--txt-2)">Budget</b> figure for the campaigns behind it, a <b style="font-weight:700;color:var(--txt-2)">Cons.</b> figure for the POs · scroll sideways — Cat./Cost center/Account/Description stay fixed${ccFilterOn()?` · <b style="font-weight:700;color:var(--accent-deep)">${ccFilterLabel()}</b> — totals and the export follow the filter`:''}</div>
+      <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">click a header to sort · click a <b style="font-weight:700;color:var(--txt-2)">Budget</b> figure for the funds behind it, a <b style="font-weight:700;color:var(--txt-2)">Cons.</b> figure for the POs · scroll sideways — Cat./Cost center/Account/Description stay fixed${ccFilterOn()?` · <b style="font-weight:700;color:var(--accent-deep)">${ccFilterLabel()}</b> — totals and the export follow the filter`:''}</div>
       ${ccFilterBar()}
     </div>
     ${accRows.length?`<div class="cc-wrap"><table class="cc-tbl">
@@ -4937,7 +4937,7 @@ function feeSplitBlock(only){
         <td class="s3" style="font-size:12px" title="${esc(a.desc||'')}">${esc(a.desc||'—')}</td>
         ${monthList.map((m,i)=>{const b=a.months[m]||0,c=a.cons[m]||0,s=b-c;
           const nb=(a.detB[m]||[]).length, nc=(a.det[m]||[]).length;
-          const budCell=b&&nb?`<td class="num msep cc-drill cc-drill-b${band(i)}${nowCls(m)}" onclick="ccDrill(${ri},${i},'budget')" title="${nb} campaign${nb>1?'s':''} — click to see them">${BRL(b)}</td>`:`<td class="num msep${band(i)}${nowCls(m)}" style="color:var(--txt-3)">${b?BRL(b):'—'}</td>`;
+          const budCell=b&&nb?`<td class="num msep cc-drill cc-drill-b${band(i)}${nowCls(m)}" onclick="ccDrill(${ri},${i},'budget')" title="${nb} fund${nb>1?'s':''} — click to see them">${BRL(b)}</td>`:`<td class="num msep${band(i)}${nowCls(m)}" style="color:var(--txt-3)">${b?BRL(b):'—'}</td>`;
           const consCell=c&&nc?`<td class="num cc-drill${band(i)}${nowCls(m)}" onclick="ccDrill(${ri},${i},'cons')" title="${nc} PO${nc>1?'s':''} — click to see them">${BRL(c)}</td>`:`<td class="num${band(i)}${nowCls(m)}" style="font-weight:600">${c?BRL(c):'—'}</td>`;
           return `${budCell}${consCell}<td class="num${band(i)}${nowCls(m)}" style="font-weight:700;color:${s<0?'var(--po)':'var(--txt)'}">${(b||c)?BRL(s):'—'}</td>`;}).join('')}
         <td class="num msep" style="color:var(--txt-3);background:#fafbfd">${BRL(totB)}</td><td class="num" style="font-weight:600;background:#fafbfd">${BRL(totC)}</td><td class="num" style="font-weight:800;background:#fafbfd;color:${totS<0?'var(--po)':'var(--txt)'}">${BRL(totS)}</td>
@@ -4996,27 +4996,27 @@ function boPeriodBar(){
     ${segGroup('Scope',scopeSeg('all','Total','Every category, including Matriz (LABG)')+scopeSeg('nolabg','Excl. LABG','Hide Matriz (LABG) from every number on this screen'))}
   </div>`;
 }
-/* Month "bolinhas": one dot per campaign month, filled when that month is fully
+/* Month "bolinhas": one dot per fund month, filled when that month is fully
    consumed (completed), amber when in progress, hollow when not started. */
-function campMonthCons(pid,m){ return (DATA.pos||[]).filter(po=>po.fund_id===pid&&String(po.competencia).slice(0,7)===m&&CONS.includes(po.status)).reduce((s,po)=>s+(+po.valor||0),0); }
+function fundMonthCons(pid,m){ return (DATA.pos||[]).filter(po=>po.fund_id===pid&&String(po.competencia).slice(0,7)===m&&CONS.includes(po.status)).reduce((s,po)=>s+(+po.valor||0),0); }
 /* "Used" in the sense the rest of the app means it: everything committed
    against the month's cap — invoiced (CONS), approved/issued (COMP) and still
-   awaiting approval (PEND) — which is exactly what the campaign drawer
-   subtracts to show a month's balance. campMonthCons() above is the narrower
+   awaiting approval (PEND) — which is exactly what the fund drawer
+   subtracts to show a month's balance. fundMonthCons() above is the narrower
    "already invoiced" figure; don't mix them or the timeline and the drawer
    will disagree about the same month. */
-function campMonthUsed(pid,m){ return (DATA.pos||[]).filter(po=>po.fund_id===pid&&String(po.competencia).slice(0,7)===m&&(CONS.includes(po.status)||COMP.includes(po.status)||PEND.includes(po.status))).reduce((s,po)=>s+(+po.valor||0),0); }
-function campMonthCap(pid,m){ let c=0; (DATA.tetos||[]).forEach(t=>{if(t.fund_id===pid&&String(t.competencia).slice(0,7)===m)c+=(+t.teto||0);}); (DATA.rateio||[]).forEach(r=>{if(r.fund_id===pid&&String(r.competencia).slice(0,7)===m)c+=(+r.valor||0);}); return c; }
+function fundMonthUsed(pid,m){ return (DATA.pos||[]).filter(po=>po.fund_id===pid&&String(po.competencia).slice(0,7)===m&&(CONS.includes(po.status)||COMP.includes(po.status)||PEND.includes(po.status))).reduce((s,po)=>s+(+po.valor||0),0); }
+function fundMonthCap(pid,m){ let c=0; (DATA.tetos||[]).forEach(t=>{if(t.fund_id===pid&&String(t.competencia).slice(0,7)===m)c+=(+t.teto||0);}); (DATA.rateio||[]).forEach(r=>{if(r.fund_id===pid&&String(r.competencia).slice(0,7)===m)c+=(+r.valor||0);}); return c; }
 /* Past months whose cap still has unused balance (cap minus everything
    committed against it, invoiced or not) — the set a "Reallocate" prompt
    should surface. Used both by the drawer's per-month button and by the
    Overview alert that makes the feature discoverable. */
-function campPastUnallocatedBalance(pid){
+function fundPastUnallocatedBalance(pid){
   const nowM=new Date().toISOString().slice(0,7);
-  const months=Object.keys(campMonthlyTotals(pid)).filter(m=>m<nowM).sort();
+  const months=Object.keys(fundMonthlyTotals(pid)).filter(m=>m<nowM).sort();
   const out=[];
   months.forEach(m=>{
-    const cap=campMonthCap(pid,m);
+    const cap=fundMonthCap(pid,m);
     if(!cap)return;
     const committed=(DATA.pos||[]).filter(po=>po.fund_id===pid&&String(po.competencia).slice(0,7)===m&&!['REJEITADA','CANCELADA'].includes(po.status)).reduce((s,po)=>s+(+po.valor||0),0);
     const saldo=cap-committed;
@@ -5024,38 +5024,38 @@ function campPastUnallocatedBalance(pid){
   });
   return out;
 }
-/* The 12 calendar months of the campaign's year — the dots strip is always a
+/* The 12 calendar months of the fund's year — the dots strip is always a
    full year; only months with an allocated cap are shown, the rest are kept
    as invisible placeholders so the strip stays 12 wide and aligned. */
-function campYearMonths(pid){
-  const keys=Object.keys(campMonthlyTotals(pid)).sort();
+function fundYearMonths(pid){
+  const keys=Object.keys(fundMonthlyTotals(pid)).sort();
   const yr=keys.length?keys[0].slice(0,4):String(new Date().getFullYear());
   return Array.from({length:12},(_,i)=>yr+'-'+String(i+1).padStart(2,'0'));
 }
-/* Labeled dots (bigger, month name underneath) — used in the Campaigns-screen detail panel. */
-function campPeriodDotsHTML(pid,col){
-  return campYearMonths(pid).map(m=>{
-    const cap=campMonthCap(pid,m);
+/* Labeled dots (bigger, month name underneath) — used in the Funds-screen detail panel. */
+function fundPeriodDotsHTML(pid,col){
+  return fundYearMonths(pid).map(m=>{
+    const cap=fundMonthCap(pid,m);
     if(!cap) return `<span style="display:inline-flex;flex-direction:column;align-items:center;gap:4px" title="${fmtMes(m+'-01')} · no budget allocated"><span style="width:17px;height:17px;border-radius:50%;background:#c7cdd8;border:1.5px solid #a7aec0"></span><span style="font-size:9px;color:var(--txt-3);font-family:var(--mono);font-weight:600">${fmtMes(m+'-01')}</span></span>`;
-    const cons=campMonthCons(pid,m);
+    const cons=fundMonthCons(pid,m);
     const done=cap>0&&cons>=cap-0.5, partial=!done&&cons>0;
     const bg=done?col:(partial?'#cf8a16':'#fff'), bd=done?col:(partial?'#cf8a16':'var(--line-2)');
     return `<span style="display:inline-flex;flex-direction:column;align-items:center;gap:4px"><span title="${fmtMes(m+'-01')} · ${done?'completed':partial?'in progress':'not started'}" style="width:17px;height:17px;border-radius:50%;background:${bg};border:1.5px solid ${bd};display:grid;place-items:center;color:#fff">${done?icn('check',10,2.6):''}</span><span style="font-size:9px;color:${done?'var(--txt-2)':'var(--txt-3)'};font-family:var(--mono);font-weight:600">${fmtMes(m+'-01')}</span></span>`;
   }).join('');
 }
 /* Compact CONNECTED dots (small circles joined by a line segment, no labels)
-   — used inline in campaign meta rows (Overview, Budgets & Fees). */
-function campPeriodDotsConnectedHTML(pid,col){
-  const months=campYearMonths(pid);
+   — used inline in fund meta rows (Overview, Budgets & Fees). */
+function fundPeriodDotsConnectedHTML(pid,col){
+  const months=fundYearMonths(pid);
   return `<span style="display:inline-flex;align-items:center" title="Period (full year — allocated months highlighted)">${months.map((m,i)=>{
-    const cap=campMonthCap(pid,m);
+    const cap=fundMonthCap(pid,m);
     const last=i===months.length-1;
-    const nextCap=last?0:campMonthCap(pid,months[i+1]);
+    const nextCap=last?0:fundMonthCap(pid,months[i+1]);
     let dot;
     if(!cap){ // gray dot — month with no budget allocated
       dot=`<span title="${fmtMes(m+'-01')} · no budget allocated" style="width:12px;height:12px;border-radius:50%;background:#c7cdd8;border:1.5px solid #a7aec0;flex-shrink:0"></span>`;
     }else{
-      const cons=campMonthCons(pid,m);
+      const cons=fundMonthCons(pid,m);
       const done=cap>0&&cons>=cap-0.5, partial=!done&&cons>0;
       const bg=done?col:(partial?'#cf8a16':'#fff'), bd=done?col:(partial?'#cf8a16':'var(--line-2)');
       dot=`<span title="${fmtMes(m+'-01')} · ${done?'completed':partial?'in progress':'not started'}" style="width:12px;height:12px;border-radius:50%;background:${bg};border:1.5px solid ${bd};display:inline-flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0">${done?icn('check',7,3):''}</span>`;
@@ -5063,14 +5063,14 @@ function campPeriodDotsConnectedHTML(pid,col){
     // Colored connector only between two allocated months; any link touching a
     // gray (no-budget) month stays neutral gray.
     const bothAllocated=cap>0&&nextCap>0;
-    const cons=cap>0?campMonthCons(pid,m):0;
+    const cons=cap>0?fundMonthCons(pid,m):0;
     const doneCol=bothAllocated&&cons>=cap-0.5;
     const connector=last?'':`<span style="width:9px;height:2px;background:${doneCol?col:'var(--line-2)'};flex-shrink:0"></span>`;
     return dot+connector;
   }).join('')}</span>`;
 }
-/* Meta line: connected period dots · agency · activity — between a campaign's
-   name and its consumption bar (Overview + Budgets & Fees campaign rows). */
+/* Meta line: connected period dots · agency · activity — between a fund's
+   name and its consumption bar (Overview + Budgets & Fees fund rows). */
 /* Small colored pill — used to turn agency/activity/category from plain
    "· text ·" separators into scannable tags (each keeps its own color so
    the three kinds of info stay visually distinct at a glance). */
@@ -5078,19 +5078,19 @@ function metaTagHTML(icon,label,fg,bg){
   if(!label)return'';
   return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;color:${fg};background:${bg};border-radius:20px;padding:3px 9px 3px 7px;white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis;flex-shrink:0">${icon?icn(icon,10):''}${esc(label)}</span>`;
 }
-function campMetaLineHTML(p,col){
+function fundMetaLineHTML(p,col){
   const am=actMeta(p.activity);
   const cm=catMeta(String(p.product_category||'').trim()||'Uncategorized');
   return `<div style="display:flex;align-items:center;gap:6px;margin:4px 0 0;flex-wrap:wrap">
-    ${campPeriodDotsConnectedHTML(p.id,col)}
+    ${fundPeriodDotsConnectedHTML(p.id,col)}
     ${metaTagHTML('building',p.agencia,'#5535ad','#ece6fa')}
     ${metaTagHTML(am.icon,am.label,'#0e5ba6','#e0eefb')}
     ${metaTagHTML(cm.icon,cm.label,cm.c,cm.bg)}
   </div>`;
 }
-/* Purchase orders for one campaign, with status badges — shared by the
-   Campaigns-screen detail panel and the Budgets & Fees campaign dropdown. */
-function campPOsListHTML(p){
+/* Purchase orders for one fund, with status badges — shared by the
+   Funds-screen detail panel and the Budgets & Fees fund dropdown. */
+function fundPOsListHTML(p){
   let pos=(DATA.pos||[]).filter(po=>po.fund_id===p.id);
   if(PAPEL==='agencia'&&MINHA_AGENCIA) pos=pos.filter(po=>po.agencia===MINHA_AGENCIA);
   pos.sort((a,b)=>String(b.competencia||'').localeCompare(String(a.competencia||'')));
@@ -5100,14 +5100,14 @@ function campPOsListHTML(p){
     <span class="badge ${s.c}" style="font-size:10.5px;flex-shrink:0"><span class="d"></span>${s.t}</span>
     <span class="mono" style="font-size:12px;font-weight:700;width:96px;text-align:right;flex-shrink:0">${BRL(po.valor)}</span>
   </div>`;};
-  return pos.length?pos.map(poRow).join(''):emptyState('receipt','No purchase orders yet','POs requested for this campaign will show up here.');
+  return pos.length?pos.map(poRow).join(''):emptyState('receipt','No purchase orders yet','POs requested for this fund will show up here.');
 }
 /* ============================================================
    OVERVIEW — BY ACCOUNT (32202171 / 32202169)
    Exactly two blocks, one per accounting account, each with a 100% share bar
    split by product category / cost center and an expandable value breakdown.
    Reads the same sources as the Cost center / account table in Budgets & Fees
-   (projetos.account for single-category campaigns, fee_rateio for rateio ones)
+   (projetos.account for single-category funds, fee_rateio for rateio ones)
    and honours the Overview period filter and LABG scope. Purely presentational
    — no new math.
    ============================================================ */
@@ -5132,14 +5132,14 @@ function boScopeKeep(cat){ return BO_SCOPE!=='nolabg'||String(cat||'')!=='LABG';
    cost-center table; honours the Overview period filter and LABG scope. */
 function accBreakdownData(){
   const fee=DATA.fee||[];
-  let camps=(DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO');
-  if(effPapel()==='agencia'&&effAgencia()) camps=camps.filter(p=>p.agencia===effAgencia());
+  let funds=(DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO');
+  if(effPapel()==='agencia'&&effAgencia()) funds=funds.filter(p=>p.agencia===effAgencia());
   const map={};
   const bucket=(acc,cat)=>{
     const a=map[acc]=map[acc]||{acc,cats:{}};
     return a.cats[cat]=a.cats[cat]||{cat,b:0,cons:0,comp:0,pend:0};
   };
-  camps.forEach(p=>{
+  funds.forEach(p=>{
     const poM={};
     (DATA.pos||[]).forEach(po=>{
       if(po.fund_id!==p.id||!boInPeriod(po.competencia))return;
@@ -5231,29 +5231,29 @@ function accountsOverviewBlock(){
   </div>`;
 }
 function renderBudgetOverview(isBalance){
-  let camps=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO');
-  if(effPapel()==='agencia'&&effAgencia()) camps=camps.filter(p=>p.agencia===effAgencia());
-  camps=camps.filter(p=>boScopeKeep(p.product_category));
+  let funds=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO');
+  if(effPapel()==='agencia'&&effAgencia()) funds=funds.filter(p=>p.agencia===effAgencia());
+  funds=funds.filter(p=>boScopeKeep(p.product_category));
   const tetoBy={},consBy={},compBy={},pendBy={};
   DATA.tetos.forEach(t=>{if(!boInPeriod(t.competencia))return;tetoBy[t.fund_id]=(tetoBy[t.fund_id]||0)+(+t.teto||0);});
   DATA.rateio.forEach(r=>{if(!boInPeriod(r.competencia))return;tetoBy[r.fund_id]=(tetoBy[r.fund_id]||0)+(+r.valor||0);});
   DATA.pos.forEach(po=>{if(!boInPeriod(po.competencia))return;const v=+po.valor||0;if(CONS.includes(po.status))consBy[po.fund_id]=(consBy[po.fund_id]||0)+v;else if(COMP.includes(po.status))compBy[po.fund_id]=(compBy[po.fund_id]||0)+v;else if(PEND.includes(po.status))pendBy[po.fund_id]=(pendBy[po.fund_id]||0)+v;});
-  const campIds=new Set(camps.map(c=>c.id));
-  let orcado=0,consumido=0,compTot=0,pend=0; camps.forEach(p=>{orcado+=tetoBy[p.id]||0;consumido+=consBy[p.id]||0;compTot+=compBy[p.id]||0;pend+=pendBy[p.id]||0;});
+  const fundIds=new Set(funds.map(c=>c.id));
+  let orcado=0,consumido=0,compTot=0,pend=0; funds.forEach(p=>{orcado+=tetoBy[p.id]||0;consumido+=consBy[p.id]||0;compTot+=compBy[p.id]||0;pend+=pendBy[p.id]||0;});
   const saldo=orcado-consumido-compTot-pend;
   // barra do mês corrente
   const mNow=(BO_PER.mode==='month'&&BO_PER.val)?BO_PER.val:new Date().toISOString().slice(0,7);
-  let capMes=0; DATA.tetos.forEach(t=>{if(campIds.has(t.fund_id)&&String(t.competencia).slice(0,7)===mNow)capMes+=(+t.teto||0);});
-  DATA.rateio.forEach(r=>{if(campIds.has(r.fund_id)&&String(r.competencia).slice(0,7)===mNow)capMes+=(+r.valor||0);});
-  let consMes=0,compMes=0,penMes=0; DATA.pos.forEach(po=>{if(!campIds.has(po.fund_id)||String(po.competencia).slice(0,7)!==mNow)return;const v=+po.valor||0;if(CONS.includes(po.status))consMes+=v;else if(COMP.includes(po.status))compMes+=v;else if(PEND.includes(po.status))penMes+=v;});
+  let capMes=0; DATA.tetos.forEach(t=>{if(fundIds.has(t.fund_id)&&String(t.competencia).slice(0,7)===mNow)capMes+=(+t.teto||0);});
+  DATA.rateio.forEach(r=>{if(fundIds.has(r.fund_id)&&String(r.competencia).slice(0,7)===mNow)capMes+=(+r.valor||0);});
+  let consMes=0,compMes=0,penMes=0; DATA.pos.forEach(po=>{if(!fundIds.has(po.fund_id)||String(po.competencia).slice(0,7)!==mNow)return;const v=+po.valor||0;if(CONS.includes(po.status))consMes+=v;else if(COMP.includes(po.status))compMes+=v;else if(PEND.includes(po.status))penMes+=v;});
   const balMes=capMes-consMes-compMes-penMes;
   const consPctM=capMes?Math.min(100,consMes/capMes*100):0, compPctM=capMes?Math.min(100-consPctM,compMes/capMes*100):0, penPctM=capMes?Math.min(100-consPctM-compPctM,penMes/capMes*100):0;
   const stat=(l,v,col)=>`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;padding:14px 16px;box-shadow:0 1px 2px rgba(20,22,28,.05)"><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-2);font-weight:700">${l}</div><div class="mono stat-num" style="font-size:19px;font-weight:700;margin-top:7px;color:${col}">${v}</div></div>`;
   const isMkt=effPapel()==='marketing'&&!effIsManager();
   const isFin=effPapel()==='financeiro'&&!effIsManager();
   const isAg=effPapel()==='agencia'&&!effIsManager();
-  const HIDE_MONEY=isMkt; // marketing sees campaign progress but not budget values
-  // Finance: only the cost-center table (no hero, no campaign accordions)
+  const HIDE_MONEY=isMkt; // marketing sees fund progress but not budget values
+  // Finance: only the cost-center table (no hero, no fund accordions)
   if(isFin) return `<div style="margin-bottom:2px">${feeSplitBlock('accounts')}</div>`;
   /* Category row: collapsed shows the usual thin bar+%+money; expanded drops the
      %/money summary and shows ONE general bar for the whole category — 3x the
@@ -5263,23 +5263,23 @@ function renderBudgetOverview(isBalance){
   const pctPend=orcado?Math.min(100-pctCons-pctComp,pend/orcado*100):0;
   const hasConclBy={}; DATA.pos.forEach(po=>{ if(po.status==='CONCLUIDA') hasConclBy[po.fund_id]=true; });
   const alerts=[];
-  camps.forEach(p=>{ const tot=tetoBy[p.id]||0; if(!tot)return; const comprometido=(consBy[p.id]||0)+(compBy[p.id]||0)+(pendBy[p.id]||0); const pct=comprometido/tot*100;
+  funds.forEach(p=>{ const tot=tetoBy[p.id]||0; if(!tot)return; const comprometido=(consBy[p.id]||0)+(compBy[p.id]||0)+(pendBy[p.id]||0); const pct=comprometido/tot*100;
     if(comprometido>tot) alerts.push({sev:'over',html:`<b>${esc(p.nome)}</b> went over its cap — ${BRL(comprometido)} committed of ${BRL(tot)}.`,id:p.id});
     else if(pct>=90&&!hasConclBy[p.id]) alerts.push({sev:'near',html:`<b>${esc(p.nome)}</b> has committed ${Math.round(pct)}% of its budget and no PO has been completed yet.`,id:p.id});
   });
-  if(['admin','marketing'].includes(PAPEL)||isManager) camps.forEach(p=>{
-    const opps=campPastUnallocatedBalance(p.id); if(!opps.length)return;
+  if(['admin','marketing'].includes(PAPEL)||isManager) funds.forEach(p=>{
+    const opps=fundPastUnallocatedBalance(p.id); if(!opps.length)return;
     const total=opps.reduce((s,o)=>s+o.saldo,0), last=opps[opps.length-1];
     alerts.push({sev:'realloc',html:`<b>${esc(p.nome)}</b> has ${BRL(total)} unused from ${opps.length>1?opps.length+' closed months':fmtMes(last.mes+'-01')} — reallocate it forward.`,id:p.id,mes:last.mes,saldo:last.saldo});
   });
   const ALERT_SEV={over:{bg:'#fbe4e1',bd:'#f2c4bf',dot:'#bf0008',fg:'#7d1a14',btn:'#bf0008'},near:{bg:'#fbf0d8',bd:'#ecd9a4',dot:'#d68a04',fg:'#7a5200',btn:'#9c6404'},realloc:{bg:'var(--blue-bg)',bd:'#bcd9f5',dot:'#0e5ba6',fg:'#0e5ba6',btn:'#0e5ba6'}};
-  const alertsHTML=alerts.length?`<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px">${alerts.slice(0,4).map(a=>{const s=ALERT_SEV[a.sev]||ALERT_SEV.near;const action=a.sev==='realloc'?`openReallocModal('${esc(a.id)}','${a.mes}',${a.saldo})`:`openCampDetail('${esc(a.id)}')`;return `<div style="display:flex;align-items:center;gap:12px;background:${s.bg};border:1px solid ${s.bd};border-radius:12px;padding:11px 16px"><span style="width:8px;height:8px;border-radius:50%;background:${s.dot};flex-shrink:0"></span><span style="flex:1;font-size:13px;color:${s.fg}">${a.html}</span><button style="font-size:12px;font-weight:700;color:${s.btn};white-space:nowrap" onclick="${action}">${a.sev==='realloc'?'Reallocate →':'View campaign →'}</button></div>`;}).join('')}</div>`:'';
+  const alertsHTML=alerts.length?`<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px">${alerts.slice(0,4).map(a=>{const s=ALERT_SEV[a.sev]||ALERT_SEV.near;const action=a.sev==='realloc'?`openReallocModal('${esc(a.id)}','${a.mes}',${a.saldo})`:`openFundDetail('${esc(a.id)}')`;return `<div style="display:flex;align-items:center;gap:12px;background:${s.bg};border:1px solid ${s.bd};border-radius:12px;padding:11px 16px"><span style="width:8px;height:8px;border-radius:50%;background:${s.dot};flex-shrink:0"></span><span style="flex:1;font-size:13px;color:${s.fg}">${a.html}</span><button style="font-size:12px;font-weight:700;color:${s.btn};white-space:nowrap" onclick="${action}">${a.sev==='realloc'?'Reallocate →':'View fund →'}</button></div>`;}).join('')}</div>`:'';
   const heroStat=(l,v,c,tt)=>`<div title="${tt||''}"><div style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3)">${l}</div><div class="mono stat-num" style="font-size:17px;font-weight:700;margin-top:2px;color:${c||'var(--txt)'}">${v}</div></div>`;
   const hero=`<div style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px 24px;box-shadow:0 1px 2px rgba(20,22,28,.05)">
       <div style="display:flex;align-items:flex-end;gap:36px;flex-wrap:wrap">
         <div title="Cap minus consumed, committed and awaiting approval"><div style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3)">Available</div><div class="mono stat-num" style="font-size:32px;font-weight:700;letter-spacing:-.02em;margin-top:2px;color:${saldo<0?'var(--po)':'#16a06a'}">${BRL(saldo)}</div></div>
         <div style="display:flex;gap:28px;padding-bottom:5px;flex-wrap:wrap">
-          ${heroStat(isBalance?'Allocated':'Budgeted',BRL(orcado),null,'Sum of the monthly caps of approved campaigns in the period')}
+          ${heroStat(isBalance?'Allocated':'Budgeted',BRL(orcado),null,'Sum of the monthly caps of approved funds in the period')}
           ${heroStat('Consumed',BRL(consumido)+` <span style="font-size:12px;color:var(--txt-3);font-weight:500">· ${Math.round(pctCons)}%</span>`,null,'POs invoiced, validated or completed')}
           ${heroStat('Committed',BRL(compTot),'var(--violet)','POs approved / issued, not yet invoiced')}
           ${heroStat('Awaiting approval',BRL(pend),'var(--amber-ink)','POs requested, pending decision')}
@@ -5294,11 +5294,11 @@ function renderBudgetOverview(isBalance){
         <span style="display:flex;align-items:center;gap:6px" title="POs requested, pending decision"><span style="width:9px;height:9px;border-radius:3px;background:var(--amber)"></span>Awaiting approval</span>
         <span style="display:flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:3px;background:#dcf2e7;border:1px solid #b9e2cc"></span>Available</span>
       </div>
-      ${(()=>{if(isAg)return '';const totOrc=(DATA.orcamentos||[]).reduce((s,o)=>s+(+o.valor_total||0),0);const diff=totOrc-orcado;return (BO_PER.mode==='all'&&totOrc&&Math.abs(diff)>=1)?`<div style="margin-top:10px;font-size:11.5px;color:var(--txt-3)">Registered budgets total <b class="mono">${BRL(totOrc)}</b> — ${diff>0?`<b class="mono">${BRL(diff)}</b> not yet allocated to campaigns`:`<b class="mono">${BRL(-diff)}</b> allocated above the registered budgets`}.</div>`:''})()}
+      ${(()=>{if(isAg)return '';const totOrc=(DATA.orcamentos||[]).reduce((s,o)=>s+(+o.valor_total||0),0);const diff=totOrc-orcado;return (BO_PER.mode==='all'&&totOrc&&Math.abs(diff)>=1)?`<div style="margin-top:10px;font-size:11.5px;color:var(--txt-3)">Registered budgets total <b class="mono">${BRL(totOrc)}</b> — ${diff>0?`<b class="mono">${BRL(diff)}</b> not yet allocated to funds`:`<b class="mono">${BRL(-diff)}</b> allocated above the registered budgets`}.</div>`:''})()}
     </div>`;
   if(isMkt){
-    // Marketing: campaigns only, progress without budget values
-    const mktAlerts=alerts.length?`<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px">${alerts.slice(0,4).map(a=>{const s=ALERT_SEV[a.sev]||ALERT_SEV.near;const p=camps.find(x=>x.id===a.id)||{};const txt=a.sev==='over'?`<b>${esc(p.nome)}</b> is over its cap.`:`<b>${esc(p.nome)}</b> is close to its cap and has no completed PO yet.`;return `<div style="display:flex;align-items:center;gap:12px;background:${s.bg};border:1px solid ${s.bd};border-radius:12px;padding:11px 16px"><span style="width:8px;height:8px;border-radius:50%;background:${s.dot};flex-shrink:0"></span><span style="flex:1;font-size:13px;color:${s.fg}">${txt}</span><button style="font-size:12px;font-weight:700;color:${s.btn};white-space:nowrap" onclick="openCampDetail('${esc(a.id)}')">View campaign →</button></div>`;}).join('')}</div>`:'';
+    // Marketing: funds only, progress without budget values
+    const mktAlerts=alerts.length?`<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px">${alerts.slice(0,4).map(a=>{const s=ALERT_SEV[a.sev]||ALERT_SEV.near;const p=funds.find(x=>x.id===a.id)||{};const txt=a.sev==='over'?`<b>${esc(p.nome)}</b> is over its cap.`:`<b>${esc(p.nome)}</b> is close to its cap and has no completed PO yet.`;return `<div style="display:flex;align-items:center;gap:12px;background:${s.bg};border:1px solid ${s.bd};border-radius:12px;padding:11px 16px"><span style="width:8px;height:8px;border-radius:50%;background:${s.dot};flex-shrink:0"></span><span style="flex:1;font-size:13px;color:${s.fg}">${txt}</span><button style="font-size:12px;font-weight:700;color:${s.btn};white-space:nowrap" onclick="openFundDetail('${esc(a.id)}')">View fund →</button></div>`;}).join('')}</div>`:'';
     return boPeriodBar()+mktAlerts+boPiePanel(true);
   }
   const chartPanel=`<div class="panel"><div class="panel-h"><h3>Monthly evolution</h3><span class="tag">cap · consumed · committed · awaiting approval</span></div>
@@ -5351,13 +5351,13 @@ function renderBudgetOverview(isBalance){
 const BO_ACT_COLOR={Campaign:'#2a78d6',FEE:'#eb6834',KOL:'#1baf7a',AON:'#eda100',Communication:'#e87ba4',Other:'#4a3aa7'};
 const BO_PIE_TAIL='#8a90a0';
 function boPieData(){
-  let camps=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO');
-  if(effPapel()==='agencia'&&effAgencia()) camps=camps.filter(p=>p.agencia===effAgencia());
-  camps=camps.filter(p=>boScopeKeep(p.product_category));
-  const ids=new Set(camps.map(c=>c.id));
+  let funds=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO');
+  if(effPapel()==='agencia'&&effAgencia()) funds=funds.filter(p=>p.agencia===effAgencia());
+  funds=funds.filter(p=>boScopeKeep(p.product_category));
+  const ids=new Set(funds.map(c=>c.id));
   const catOf={}; DATA.poProjetos.forEach(p=>{catOf[p.id]=String(p.product_category||'').trim();});
-  /* Category attribution mirrors the Overview's own: a plain campaign's caps
-     count under its category, a rateio campaign's allocation under the
+  /* Category attribution mirrors the Overview's own: a plain fund's caps
+     count under its category, a rateio fund's allocation under the
      category each slice was booked to. */
   const byCat={};
   (DATA.tetos||[]).forEach(t=>{ if(!ids.has(t.fund_id)||!boInPeriod(t.competencia))return; const c=catOf[t.fund_id]; if(c&&boScopeKeep(c)) byCat[c]=(byCat[c]||0)+(+t.teto||0); });
@@ -5365,7 +5365,7 @@ function boPieData(){
   const allocBy={};
   (DATA.tetos||[]).forEach(t=>{ if(!boInPeriod(t.competencia))return; allocBy[t.fund_id]=(allocBy[t.fund_id]||0)+(+t.teto||0); });
   (DATA.rateio||[]).forEach(r=>{ if(!boInPeriod(r.competencia))return; allocBy[r.fund_id]=(allocBy[r.fund_id]||0)+(+r.valor||0); });
-  const byAct={}; camps.forEach(p=>{ const k=actKey(p); byAct[k]=(byAct[k]||0)+(allocBy[p.id]||0); });
+  const byAct={}; funds.forEach(p=>{ const k=actKey(p); byAct[k]=(byAct[k]||0)+(allocBy[p.id]||0); });
   const shape=(obj,labelOf,colorOf)=>{
     let items=Object.keys(obj).filter(k=>obj[k]>0.005).map(k=>({k,label:labelOf(k),v:obj[k],color:colorOf(k)}));
     items.sort((a,b)=>b.v-a.v);
@@ -5432,19 +5432,19 @@ function buildOverviewPies(){
 }
 function buildOverviewMonthlyChart(isBalance){
   const el=document.getElementById('chartMonthly'); if(!el||!window.Chart)return;
-  let camps=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO');
-  if(effPapel()==='agencia'&&effAgencia()) camps=camps.filter(p=>p.agencia===effAgencia());
-  camps=camps.filter(p=>boScopeKeep(p.product_category));
-  const campIds=new Set(camps.map(c=>c.id));
+  let funds=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO');
+  if(effPapel()==='agencia'&&effAgencia()) funds=funds.filter(p=>p.agencia===effAgencia());
+  funds=funds.filter(p=>boScopeKeep(p.product_category));
+  const fundIds=new Set(funds.map(c=>c.id));
   const months=new Set();
-  DATA.tetos.forEach(t=>{if(campIds.has(t.fund_id))months.add(String(t.competencia).slice(0,7));});
-  DATA.rateio.forEach(r=>{if(campIds.has(r.fund_id))months.add(String(r.competencia).slice(0,7));});
-  DATA.pos.forEach(po=>{if(campIds.has(po.fund_id)&&po.competencia)months.add(String(po.competencia).slice(0,7));});
+  DATA.tetos.forEach(t=>{if(fundIds.has(t.fund_id))months.add(String(t.competencia).slice(0,7));});
+  DATA.rateio.forEach(r=>{if(fundIds.has(r.fund_id))months.add(String(r.competencia).slice(0,7));});
+  DATA.pos.forEach(po=>{if(fundIds.has(po.fund_id)&&po.competencia)months.add(String(po.competencia).slice(0,7));});
   const ml=Array.from(months).sort().filter(boMonthIn);
-  const lanc=ml.map(m=>{let v=0; DATA.tetos.forEach(t=>{if(campIds.has(t.fund_id)&&String(t.competencia).slice(0,7)===m)v+=(+t.teto||0);}); DATA.rateio.forEach(r=>{if(campIds.has(r.fund_id)&&String(r.competencia).slice(0,7)===m)v+=(+r.valor||0);}); return v;});
-  const reqd=ml.map(m=>{let v=0; DATA.pos.forEach(po=>{if(campIds.has(po.fund_id)&&String(po.competencia).slice(0,7)===m&&PEND.includes(po.status))v+=(+po.valor||0);}); return v;});
-  const cons=ml.map(m=>{let v=0; DATA.pos.forEach(po=>{if(campIds.has(po.fund_id)&&String(po.competencia).slice(0,7)===m&&CONS.includes(po.status))v+=(+po.valor||0);}); return v;});
-  const comp=ml.map(m=>{let v=0; DATA.pos.forEach(po=>{if(campIds.has(po.fund_id)&&String(po.competencia).slice(0,7)===m&&COMP.includes(po.status))v+=(+po.valor||0);}); return v;});
+  const lanc=ml.map(m=>{let v=0; DATA.tetos.forEach(t=>{if(fundIds.has(t.fund_id)&&String(t.competencia).slice(0,7)===m)v+=(+t.teto||0);}); DATA.rateio.forEach(r=>{if(fundIds.has(r.fund_id)&&String(r.competencia).slice(0,7)===m)v+=(+r.valor||0);}); return v;});
+  const reqd=ml.map(m=>{let v=0; DATA.pos.forEach(po=>{if(fundIds.has(po.fund_id)&&String(po.competencia).slice(0,7)===m&&PEND.includes(po.status))v+=(+po.valor||0);}); return v;});
+  const cons=ml.map(m=>{let v=0; DATA.pos.forEach(po=>{if(fundIds.has(po.fund_id)&&String(po.competencia).slice(0,7)===m&&CONS.includes(po.status))v+=(+po.valor||0);}); return v;});
+  const comp=ml.map(m=>{let v=0; DATA.pos.forEach(po=>{if(fundIds.has(po.fund_id)&&String(po.competencia).slice(0,7)===m&&COMP.includes(po.status))v+=(+po.valor||0);}); return v;});
   _charts.push(new Chart(el,{type:'bar',data:{labels:ml.map(m=>fmtMes(m+'-01')),datasets:[
     {label:isBalance?'Allocated':'Month cap',data:lanc,backgroundColor:'#d9d6cc',borderRadius:5},
     {label:'Consumed',data:cons,backgroundColor:'#1273cf',borderRadius:5},
@@ -5452,26 +5452,26 @@ function buildOverviewMonthlyChart(isBalance){
     {label:'Awaiting approval',data:reqd,backgroundColor:'#d68a04',borderRadius:5}
   ]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,ticks:{callback:v=>BRL0(v)}}},plugins:{legend:{position:'bottom'}}}}));
 }
-let CAMP_PO_OPEN={};
-function toggleCampPO(id){ CAMP_PO_OPEN[id]=!CAMP_PO_OPEN[id]; go(SCREEN); }
-/* Budgets & Fees — same category/campaign accordion as the Overview list
-   (icon+name+bar+%+money, thick category bar when expanded, campaign rows
-   sorted by activity), but each campaign row is itself expandable and opens
+let FUND_PO_OPEN={};
+function toggleCampPO(id){ FUND_PO_OPEN[id]=!FUND_PO_OPEN[id]; go(SCREEN); }
+/* Budgets & Fees — same category/fund accordion as the Overview list
+   (icon+name+bar+%+money, thick category bar when expanded, fund rows
+   sorted by activity), but each fund row is itself expandable and opens
    its related POs (with status) right there in the dropdown. */
 let BUDGET_CAT='';
 function budgetSetCat(c){ BUDGET_CAT=c; go('budgets'); }
 /* Bar chart of the active category's activities (cap vs consumed vs committed).
-   Clicking a bar jumps to the Campaigns screen filtered by that activity. */
+   Clicking a bar jumps to the Funds screen filtered by that activity. */
 function buildBudgetActivityChart(){
   const el=document.getElementById('chartBudgetAct'); if(!el||!window.Chart)return;
-  let camps=(DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO');
-  if(effPapel()==='agencia'&&effAgencia()) camps=camps.filter(p=>p.agencia===effAgencia());
-  camps=camps.filter(p=>(String(p.product_category||'').trim()||'Uncategorized')===BUDGET_CAT);
+  let funds=(DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO');
+  if(effPapel()==='agencia'&&effAgencia()) funds=funds.filter(p=>p.agencia===effAgencia());
+  funds=funds.filter(p=>(String(p.product_category||'').trim()||'Uncategorized')===BUDGET_CAT);
   const tetoBy={},consBy={},compBy={};
   DATA.tetos.forEach(t=>{tetoBy[t.fund_id]=(tetoBy[t.fund_id]||0)+(+t.teto||0);});
   DATA.rateio.forEach(r=>{tetoBy[r.fund_id]=(tetoBy[r.fund_id]||0)+(+r.valor||0);});
   DATA.pos.forEach(po=>{const v=+po.valor||0;if(CONS.includes(po.status))consBy[po.fund_id]=(consBy[po.fund_id]||0)+v;else if(COMP.includes(po.status))compBy[po.fund_id]=(compBy[po.fund_id]||0)+v;});
-  const byAct={}; camps.forEach(p=>{const k=actKey(p);(byAct[k]=byAct[k]||[]).push(p);});
+  const byAct={}; funds.forEach(p=>{const k=actKey(p);(byAct[k]=byAct[k]||[]).push(p);});
   const order=Object.keys(byAct).sort((a,b)=>{let ia=ACT_COL_ORDER.indexOf(a),ib=ACT_COL_ORDER.indexOf(b);if(ia<0)ia=99;if(ib<0)ib=99;return ia-ib||a.localeCompare(b);});
   if(!order.length)return;
   const cap=order.map(k=>byAct[k].reduce((s,p)=>s+(tetoBy[p.id]||0),0));
@@ -5481,20 +5481,20 @@ function buildBudgetActivityChart(){
     {label:'Cap',data:cap,backgroundColor:'#d9d6cc',borderRadius:5},
     {label:'Consumed',data:cons,backgroundColor:'#1273cf',borderRadius:5},
     {label:'Committed',data:comp,backgroundColor:'#6d4bd1',borderRadius:5}
-  ]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,ticks:{callback:v=>BRL0(v)}}},plugins:{legend:{position:'bottom'}},onClick:(e,els)=>{if(els&&els.length){jumpToCampaigns(BUDGET_CAT,order[els[0].index]);}}}}));
+  ]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,ticks:{callback:v=>BRL0(v)}}},plugins:{legend:{position:'bottom'}},onClick:(e,els)=>{if(els&&els.length){jumpToFunds(BUDGET_CAT,order[els[0].index]);}}}}));
 }
 function renderBudgets(){
   const orcs=DATA.orcamentos||[];
   const canBudget=(isManager||PAPEL==='admin')&&!viewOnly();
   const canSensitive=effIsManager()||['admin','financeiro'].includes(effPapel());
-  let camps=(DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO');
-  if(effPapel()==='agencia'&&effAgencia()) camps=camps.filter(p=>p.agencia===effAgencia());
+  let funds=(DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO');
+  if(effPapel()==='agencia'&&effAgencia()) funds=funds.filter(p=>p.agencia===effAgencia());
   const tetoBy={},consBy={},compBy={},pendBy={};
   DATA.tetos.forEach(t=>{tetoBy[t.fund_id]=(tetoBy[t.fund_id]||0)+(+t.teto||0);});
   DATA.rateio.forEach(r=>{tetoBy[r.fund_id]=(tetoBy[r.fund_id]||0)+(+r.valor||0);});
   DATA.pos.forEach(po=>{const v=+po.valor||0;if(CONS.includes(po.status))consBy[po.fund_id]=(consBy[po.fund_id]||0)+v;else if(COMP.includes(po.status))compBy[po.fund_id]=(compBy[po.fund_id]||0)+v;else if(PEND.includes(po.status))pendBy[po.fund_id]=(pendBy[po.fund_id]||0)+v;});
-  // Group approved campaigns by product category and tie each to its budget (orc).
-  const byCat={}; camps.forEach(p=>{ const k=(String(p.product_category||'').trim()||'Uncategorized'); (byCat[k]=byCat[k]||[]).push(p); });
+  // Group approved funds by product category and tie each to its budget (orc).
+  const byCat={}; funds.forEach(p=>{ const k=(String(p.product_category||'').trim()||'Uncategorized'); (byCat[k]=byCat[k]||[]).push(p); });
   const orcByCat={}; orcs.forEach(o=>{ if(o.product_category) orcByCat[o.product_category]=o; });
   const catSet=new Set([...Object.keys(byCat),...orcs.map(o=>o.product_category).filter(Boolean)]);
   const catKeys=Array.from(catSet).sort((a,b)=>{let ia=PRODUCT_CATS.indexOf(a),ib=PRODUCT_CATS.indexOf(b);if(ia<0)ia=99;if(ib<0)ib=99;return ia-ib||a.localeCompare(b);});
@@ -5519,10 +5519,10 @@ function renderBudgets(){
   const actOrder=Object.keys(byAct).sort((a,b)=>{let ia=ACT_COL_ORDER.indexOf(a),ib=ACT_COL_ORDER.indexOf(b);if(ia<0)ia=99;if(ib<0)ib=99;return ia-ib||a.localeCompare(b);});
   const ACT_LBL={Campaign:'Campaign',FEE:'Fee',KOL:'KOLs',AON:'AON',Communication:'Communication'};
   const actCard=k=>{const items=byAct[k];const a=sums(items);const rc=a.tot?(a.cons+a.comp+a.pnd)/a.tot*100:0;const ov=rc>100.5,nr=!ov&&rc>=90;const cC=a.tot?Math.min(100,a.cons/a.tot*100):0,cM=a.tot?Math.min(100-cC,a.comp/a.tot*100):0,cP=a.tot?Math.min(100-cC-cM,a.pnd/a.tot*100):0;
-    return `<div onclick="jumpToCampaigns('${esc(BUDGET_CAT)}','${esc(k)}')" title="Open ${esc(ACT_LBL[k]||actColLabel(k))} campaigns in this category" style="background:#fff;border:1px solid var(--line);border-radius:var(--r-md);padding:14px 16px;cursor:pointer;box-shadow:var(--sh-1);transition:box-shadow var(--fast) var(--ease),transform var(--fast) var(--ease)" onmouseover="this.style.boxShadow='var(--sh-2)';this.style.transform='translateY(-1px)'" onmouseout="this.style.boxShadow='var(--sh-1)';this.style.transform=''">
+    return `<div onclick="jumpToFunds('${esc(BUDGET_CAT)}','${esc(k)}')" title="Open ${esc(ACT_LBL[k]||actColLabel(k))} funds in this category" style="background:#fff;border:1px solid var(--line);border-radius:var(--r-md);padding:14px 16px;cursor:pointer;box-shadow:var(--sh-1);transition:box-shadow var(--fast) var(--ease),transform var(--fast) var(--ease)" onmouseover="this.style.boxShadow='var(--sh-2)';this.style.transform='translateY(-1px)'" onmouseout="this.style.boxShadow='var(--sh-1)';this.style.transform=''">
       <div style="display:flex;align-items:center;gap:10px">
         <span class="ich" style="width:26px;height:26px;background:${m.bg};color:${m.c};flex-shrink:0">${icn(actMeta(k).icon,13)}</span>
-        <span style="flex:1;min-width:0"><b style="font-size:13.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ACT_LBL[k]||actColLabel(k))}</b><span style="font-size:10.5px;color:var(--txt-3);font-weight:600">${items.length} campaign${items.length===1?'':'s'}</span></span>
+        <span style="flex:1;min-width:0"><b style="font-size:13.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ACT_LBL[k]||actColLabel(k))}</b><span style="font-size:10.5px;color:var(--txt-3);font-weight:600">${items.length} fund${items.length===1?'':'s'}</span></span>
         <span class="pct" style="font-weight:800;color:${ov?'#bf0008':nr?'#9c6404':'var(--txt-2)'}">${Math.round(rc)}%</span>
         <span style="color:var(--txt-3);display:flex">${icn('chev',14)}</span>
       </div>
@@ -5532,31 +5532,31 @@ function renderBudgets(){
   const activeHTML=`<div style="background:#fff;border:1px solid var(--line);border-radius:var(--r-md);padding:16px 18px;box-shadow:var(--sh-1);margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
         <span class="ich" style="width:34px;height:34px;background:${m.bg};color:${m.c};flex-shrink:0">${icn(m.icon,17)}</span>
-        <span style="flex:1;min-width:150px"><b style="font-family:var(--sans);font-size:var(--fs-lg);display:block">${esc(orc?(orc.nome||m.label):m.label)}</b><span style="font-size:var(--fs-eyebrow);color:var(--txt-3);font-weight:600">${list.length} campaign${list.length===1?'':'s'} · budget ${BRL(budgetTot)}</span></span>
+        <span style="flex:1;min-width:150px"><b style="font-family:var(--sans);font-size:var(--fs-lg);display:block">${esc(orc?(orc.nome||m.label):m.label)}</b><span style="font-size:var(--fs-eyebrow);color:var(--txt-3);font-weight:600">${list.length} fund${list.length===1?'':'s'} · budget ${BRL(budgetTot)}</span></span>
         <span class="mono" style="font-size:var(--fs-sm);color:var(--txt-2);text-align:right;white-space:nowrap" title="Consumed + committed / cap">${BRL(t.cons+t.comp)} <span style="color:var(--txt-3)">/ ${BRL(t.tot)}</span></span>
         <span class="pct" style="font-weight:800;font-size:var(--fs-base);color:${over?'#bf0008':near?'#9c6404':'var(--txt)'}">${Math.round(raw)}%</span>
         ${canBudget&&orc?`<button class="chip-btn" onclick="event.stopPropagation();openOrcEdit('${esc(orc.id)}')">Edit budget</button>`:''}
-        <button onclick="jumpToCampaigns('${esc(BUDGET_CAT)}','')" style="background:${m.c};padding:8px 14px;border-radius:9px;color:#fff;font-weight:700;font-size:12px;cursor:pointer;border:none">View campaigns →</button>
+        <button onclick="jumpToFunds('${esc(BUDGET_CAT)}','')" style="background:${m.c};padding:8px 14px;border-radius:9px;color:#fff;font-weight:700;font-size:12px;cursor:pointer;border:none">View funds →</button>
       </div>
       <div style="font-size:var(--fs-eyebrow);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--txt-3);margin-bottom:6px">Main activities — consumed vs committed vs cap</div>
-      <div style="height:280px">${actOrder.length?'<canvas id="chartBudgetAct"></canvas>':'<div class="banner">No campaigns in this category yet.</div>'}</div>
+      <div style="height:280px">${actOrder.length?'<canvas id="chartBudgetAct"></canvas>':'<div class="banner">No funds in this category yet.</div>'}</div>
     </div>
-    ${actOrder.length?`<div style="font-size:var(--fs-eyebrow);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--txt-3);margin:0 2px 10px">Activity groups · tap to open in Campaigns</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px">${actOrder.map(actCard).join('')}</div>`:''}`;
+    ${actOrder.length?`<div style="font-size:var(--fs-eyebrow);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--txt-3);margin:0 2px 10px">Activity groups · tap to open in Funds</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px">${actOrder.map(actCard).join('')}</div>`:''}`;
   return header+tabsHTML+activeHTML+`<div style="margin-top:24px">${fee}</div>`;
 }
 /* Export (read-only) — mirrors renderBudgets' own aggregation exactly, transcribes
-   what that screen already displays per campaign, never recomputes new business values. */
+   what that screen already displays per fund, never recomputes new business values. */
 function budgetExportRows(){
   const canSensitive=effIsManager()||['admin','financeiro'].includes(effPapel());
   const fee=DATA.fee||[];
-  let camps=(DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO');
-  if(effPapel()==='agencia'&&effAgencia()) camps=camps.filter(p=>p.agencia===effAgencia());
+  let funds=(DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO');
+  if(effPapel()==='agencia'&&effAgencia()) funds=funds.filter(p=>p.agencia===effAgencia());
   const tetoBy={},consBy={},compBy={},pendBy={};
   DATA.tetos.forEach(t=>{tetoBy[t.fund_id]=(tetoBy[t.fund_id]||0)+(+t.teto||0);});
   DATA.rateio.forEach(r=>{tetoBy[r.fund_id]=(tetoBy[r.fund_id]||0)+(+r.valor||0);});
   DATA.pos.forEach(po=>{const v=+po.valor||0;if(CONS.includes(po.status))consBy[po.fund_id]=(consBy[po.fund_id]||0)+v;else if(COMP.includes(po.status))compBy[po.fund_id]=(compBy[po.fund_id]||0)+v;else if(PEND.includes(po.status))pendBy[po.fund_id]=(pendBy[po.fund_id]||0)+v;});
   const orcs=DATA.orcamentos||[];
-  const byOrc={}; camps.forEach(p=>{ const k=p.orcamento_id||'—'; (byOrc[k]=byOrc[k]||[]).push(p); });
+  const byOrc={}; funds.forEach(p=>{ const k=p.orcamento_id||'—'; (byOrc[k]=byOrc[k]||[]).push(p); });
   const rows=[];
   orcs.forEach(o=>{
     (byOrc[o.id]||[]).forEach(p=>{
@@ -5704,7 +5704,7 @@ function renderPersonModal(){
       </div>
       ${isAgencia?`<div class="field full" style="margin-top:2px"><label>Access level</label>
         <select onchange="personSet('agencia_nivel',this.value)">
-          <option value="completo" ${PERSON.agencia_nivel==='completo'?'selected':''}>Full — Work + Overview/Campaigns/Budgets/POs</option>
+          <option value="completo" ${PERSON.agencia_nivel==='completo'?'selected':''}>Full — Work + Overview/Funds/Budgets/POs</option>
           <option value="po" ${PERSON.agencia_nivel==='po'?'selected':''}>PO only — sees only POs & Approvals, notified only when a PO number is issued</option>
         </select>
       </div>`:''}
@@ -5763,7 +5763,7 @@ async function deletarPessoa(userId){
 }
 
 /* ============================================================
-   CRIAÇÃO — Campanha (atividade, rateio, distribuição mensal) + Orçamento
+   CRIAÇÃO — Fund (atividade, rateio, distribuição mensal) + Orçamento
    ============================================================ */
 async function reloadPOAll(){
   try{
@@ -5782,53 +5782,53 @@ function agencyOpts(){
   (TEAM||[]).forEach(m=>{if(m.empresa&&m.empresa!=='TCL'&&m.empresa!=='Equipe')s.add(m.empresa);});
   return [...s].sort();
 }
-let CAMP=null;
+let FUND=null;
 const ACT_OPTS=['Campaign','FEE','KOL','AON','Communication'];
 function rateioTipos(){ const s=new Set((DATA.fee||[]).map(f=>f.tipo).filter(Boolean)); return [...s]; }
-function openCampNew(){
+function openFundNew(){
   const o0=(DATA.orcamentos||[])[0];
   const nowM=new Date().toISOString().slice(0,7);
-  CAMP={nome:'',orcamento_id:o0?o0.id:'',agencia:(agencyOpts()[0]||''),activity:'Campaign',rows:[{id:uid(),mes:nowM,valor:''}]};
+  FUND={nome:'',orcamento_id:o0?o0.id:'',agencia:(agencyOpts()[0]||''),activity:'Campaign',rows:[{id:uid(),mes:nowM,valor:''}]};
   renderCampForm();
 }
-function campSet(k,v){ if(!CAMP)return; CAMP[k]=v; renderCampForm(); }
-function campRowSet(id,k,v){ const r=CAMP.rows.find(x=>x.id===id); if(r)r[k]=v; }
-function campAddRow(){ const last=CAMP.rows[CAMP.rows.length-1]; const nm=last?last.mes:new Date().toISOString().slice(0,7); CAMP.rows.push({id:uid(),mes:nm,valor:''}); renderCampForm(); }
-function campDelRow(id){ CAMP.rows=CAMP.rows.filter(x=>x.id!==id); renderCampForm(); }
+function fundSet(k,v){ if(!FUND)return; FUND[k]=v; renderCampForm(); }
+function fundRowSet(id,k,v){ const r=FUND.rows.find(x=>x.id===id); if(r)r[k]=v; }
+function fundAddRow(){ const last=FUND.rows[FUND.rows.length-1]; const nm=last?last.mes:new Date().toISOString().slice(0,7); FUND.rows.push({id:uid(),mes:nm,valor:''}); renderCampForm(); }
+function fundDelRow(id){ FUND.rows=FUND.rows.filter(x=>x.id!==id); renderCampForm(); }
 function renderCampForm(){
-  if(!CAMP)return;
-  const orcs=DATA.orcamentos||[]; const orc=orcs.find(o=>o.id===CAMP.orcamento_id);
+  if(!FUND)return;
+  const orcs=DATA.orcamentos||[]; const orc=orcs.find(o=>o.id===FUND.orcamento_id);
   const cat=orc?(orc.product_category||orc.nome||''):'';
-  const total=CAMP.rows.reduce((s,r)=>s+(+r.valor||0),0);
+  const total=FUND.rows.reduce((s,r)=>s+(+r.valor||0),0);
   const ags=agencyOpts(); const tipos=rateioTipos();
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:600px">
-    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--po);flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>New campaign</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Activity → rateio → manual monthly distribution over the period</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--po);flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>New fund</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Activity → rateio → manual monthly distribution over the period</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">
-      <div class="field full"><label>Campaign name</label><input value="${esc(CAMP.nome)}" onchange="CAMP.nome=this.value" placeholder="e.g. Mini LED Push" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
+      <div class="field full"><label>Fund name</label><input value="${esc(FUND.nome)}" onchange="FUND.nome=this.value" placeholder="e.g. Mini LED Push" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
       <div class="fgrid" style="margin-top:14px">
-        <div class="field"><label>Activity</label><select onchange="campSet('activity',this.value)">${ACT_OPTS.map(a=>`<option ${CAMP.activity===a?'selected':''}>${a}</option>`).join('')}</select></div>
-        <div class="field"><label>Agency</label><select onchange="CAMP.agencia=this.value">${ags.map(a=>`<option ${CAMP.agencia===a?'selected':''}>${esc(a)}</option>`).join('')}${ags.length?'':'<option value="">—</option>'}</select></div>
+        <div class="field"><label>Activity</label><select onchange="fundSet('activity',this.value)">${ACT_OPTS.map(a=>`<option ${FUND.activity===a?'selected':''}>${a}</option>`).join('')}</select></div>
+        <div class="field"><label>Agency</label><select onchange="FUND.agencia=this.value">${ags.map(a=>`<option ${FUND.agencia===a?'selected':''}>${esc(a)}</option>`).join('')}${ags.length?'':'<option value="">—</option>'}</select></div>
       </div>
-      <div class="field full"><label>Category <span style="font-weight:600;color:var(--txt-3)">(defines which budget funds it)</span></label><select onchange="campSet('orcamento_id',this.value)">${orcs.map(o=>`<option value="${o.id}" ${CAMP.orcamento_id===o.id?'selected':''}>${esc(o.nome||o.product_category)}</option>`).join('')||'<option value="">— no budget —</option>'}</select>${/fee/i.test(CAMP.activity||'')?'<div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">Splitting a fee across categories (TV/AC/LABG…) is now done automatically when requesting the PO — create one campaign per category instead of a shared rateio.</div>':''}</div>
+      <div class="field full"><label>Category <span style="font-weight:600;color:var(--txt-3)">(defines which budget funds it)</span></label><select onchange="fundSet('orcamento_id',this.value)">${orcs.map(o=>`<option value="${o.id}" ${FUND.orcamento_id===o.id?'selected':''}>${esc(o.nome||o.product_category)}</option>`).join('')||'<option value="">— no budget —</option>'}</select>${/fee/i.test(FUND.activity||'')?'<div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">Splitting a fee across categories (TV/AC/LABG…) is now done automatically when requesting the PO — create one fund per category instead of a shared rateio.</div>':''}</div>
       <div style="border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:6px">
         <div style="padding:10px 14px;background:#fafbfd;border-bottom:1px solid var(--line);font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">Budget distribution by month — manual</div>
         <div style="padding:10px 14px;display:flex;flex-direction:column;gap:8px">
-          ${CAMP.rows.map(r=>`<div style="display:flex;align-items:center;gap:9px"><input type="month" value="${esc(r.mes)}" onchange="campRowSet('${r.id}','mes',this.value)" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font:inherit;font-size:12.5px"><input type="number" min="0" step="100" value="${esc(r.valor)}" onchange="campRowSet('${r.id}','valor',this.value)" placeholder="R$ 0" style="flex:1;padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font:inherit;font-size:12.5px;text-align:right" class="mono"><button class="chip-btn" onclick="campDelRow('${r.id}')">✕</button></div>`).join('')}
-          <button class="btn-ghost" onclick="campAddRow()" style="align-self:flex-start;margin-top:2px">+ Add month</button>
+          ${FUND.rows.map(r=>`<div style="display:flex;align-items:center;gap:9px"><input type="month" value="${esc(r.mes)}" onchange="fundRowSet('${r.id}','mes',this.value)" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font:inherit;font-size:12.5px"><input type="number" min="0" step="100" value="${esc(r.valor)}" onchange="fundRowSet('${r.id}','valor',this.value)" placeholder="R$ 0" style="flex:1;padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font:inherit;font-size:12.5px;text-align:right" class="mono"><button class="chip-btn" onclick="fundDelRow('${r.id}')">✕</button></div>`).join('')}
+          <button class="btn-ghost" onclick="fundAddRow()" style="align-self:flex-start;margin-top:2px">+ Add month</button>
         </div>
         <div style="padding:11px 14px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:13px">Total caps (sum of months)</b><span class="mono" style="font-size:15px;font-weight:800">${BRL(total)}</span></div>
       </div>
     </div>
-    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitCamp()">Create campaign</button></div></div>
+    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitFund()">Create fund</button></div></div>
   </div></div>`;
 }
-async function submitCamp(){
-  if(!CAMP)return;
-  if(!CAMP.nome.trim()){ toast('Give the campaign a name.'); return; }
-  if(!CAMP.orcamento_id){ toast('Choose a budget.'); return; }
-  const rows=CAMP.rows.filter(r=>r.mes&&(+r.valor||0)>0);
+async function submitFund(){
+  if(!FUND)return;
+  if(!FUND.nome.trim()){ toast('Give the fund a name.'); return; }
+  if(!FUND.orcamento_id){ toast('Choose a budget.'); return; }
+  const rows=FUND.rows.filter(r=>r.mes&&(+r.valor||0)>0);
   if(!rows.length){ toast('Add at least one month with a value.'); return; }
-  const orc=(DATA.orcamentos||[]).find(o=>o.id===CAMP.orcamento_id); const cat=orc?(orc.product_category||orc.nome||''):'';
+  const orc=(DATA.orcamentos||[]).find(o=>o.id===FUND.orcamento_id); const cat=orc?(orc.product_category||orc.nome||''):'';
   // Same over-budget check the server enforces at approval time (aprovar_projeto),
   // surfaced here instead so the requester sees the block immediately when trying
   // to save — not later, as a surprise to whoever approves it.
@@ -5837,7 +5837,7 @@ async function submitCamp(){
     const pEnd=orc.periodo_fim?String(orc.periodo_fim).slice(0,10):null;
     const inPeriod=mYYYYMM=>{ const d=mYYYYMM+'-01'; return (!pStart||d>=pStart)&&(!pEnd||d<=pEnd); };
     const vAloc=rows.filter(r=>inPeriod(r.mes)).reduce((s,r)=>s+(+r.valor||0),0);
-    const approvedIds=new Set((DATA.poProjetos||[]).filter(p=>p.orcamento_id===CAMP.orcamento_id&&p.aprovacao_status==='APROVADO').map(p=>p.id));
+    const approvedIds=new Set((DATA.poProjetos||[]).filter(p=>p.orcamento_id===FUND.orcamento_id&&p.aprovacao_status==='APROVADO').map(p=>p.id));
     const vUsado=(DATA.tetos||[]).filter(t=>approvedIds.has(t.fund_id)&&inPeriod(String(t.competencia).slice(0,7))).reduce((s,t)=>s+(+t.teto||0),0);
     const total=+orc.valor_total||0;
     if(vAloc+vUsado>total+0.5){
@@ -5847,16 +5847,16 @@ async function submitCamp(){
   }
   if(DEMO_MODE){
     const pid='demo-p-'+uid();
-    DATA.poProjetos.push({id:pid,nome:CAMP.nome.trim(),agencia:CAMP.agencia||null,orcamento_id:CAMP.orcamento_id,product_category:cat,activity:CAMP.activity||null,rateio:false,aprovacao_status:'PENDENTE',dono:(currentUser&&currentUser.email)||''});
+    DATA.poProjetos.push({id:pid,nome:FUND.nome.trim(),agencia:FUND.agencia||null,orcamento_id:FUND.orcamento_id,product_category:cat,activity:FUND.activity||null,rateio:false,aprovacao_status:'PENDENTE',dono:(currentUser&&currentUser.email)||''});
     rows.forEach(r=>DATA.tetos.push({fund_id:pid,competencia:r.mes+'-01',teto:r2(+r.valor)}));
-    toast('Campaign created ✓ (demo — now awaiting approval)'); closeModal(); go('campaigns');
+    toast('Fund created ✓ (demo — now awaiting approval)'); closeModal(); go('funds');
     return;
   }
   if(viewOnly()){toast(roMsg());return;}
   try{
     let cc='',account='',account_desc='';
-    try{ const {data:cls}=await SBPO.rpc('classificar',{p_d:cat,p_e:CAMP.activity||'',p_f:''}); const c=(cls&&cls[0])||{}; cc=c.cc||''; account=c.account||''; account_desc=c.descricao||''; }catch(e){}
-    const campos={nome:CAMP.nome.trim(),agencia:CAMP.agencia||null,orcamento_id:CAMP.orcamento_id,product_category:cat,activity:CAMP.activity||null,cc,account,account_desc,rateio:false,rateio_tipo:null,criado_por:'portal'};
+    try{ const {data:cls}=await SBPO.rpc('classificar',{p_d:cat,p_e:FUND.activity||'',p_f:''}); const c=(cls&&cls[0])||{}; cc=c.cc||''; account=c.account||''; account_desc=c.descricao||''; }catch(e){}
+    const campos={nome:FUND.nome.trim(),agencia:FUND.agencia||null,orcamento_id:FUND.orcamento_id,product_category:cat,activity:FUND.activity||null,cc,account,account_desc,rateio:false,rateio_tipo:null,criado_por:'portal'};
     const {data:proj,error}=await SBPO.from('funds').insert(campos).select().single();
     if(error)throw error;
     const pid=proj.id;
@@ -5864,12 +5864,12 @@ async function submitCamp(){
       const tetos=rows.map(r=>({fund_id:pid,competencia:r.mes+'-01',teto:r2(+r.valor),definido_por:'portal'}));
       const {error:e2}=await SBPO.from('tetos').upsert(tetos,{onConflict:'fund_id,competencia'}); if(e2)throw e2;
     }
-    toast('Campaign created ✓'); closeModal(); await reloadPOAll(); go('campaigns');
+    toast('Fund created ✓'); closeModal(); await reloadPOAll(); go('funds');
   }catch(e){ toastErr(e); }
 }
 
 let ORC=null;
-window.deletarOrcamento=deletarOrcamento;window.deletarCampanha=deletarCampanha;window.deletarPO=deletarPO;
+window.deletarOrcamento=deletarOrcamento;window.deletarFund=deletarFund;window.deletarPO=deletarPO;
 /* Budgets are strictly one per product category — fixed list, no duplicates. */
 function usedCats(){ return new Set((DATA.orcamentos||[]).map(o=>String(o.product_category||o.nome||'').trim().toUpperCase()).filter(Boolean)); }
 function openOrcNew(){ const nowM=new Date().toISOString().slice(0,7); const free=PRODUCT_CATS.filter(c=>!usedCats().has(c)); ORC={id:null,cat:free[0]||'',valor:'',ini:nowM,fim:nowM}; renderOrcForm(); }
@@ -5902,7 +5902,7 @@ async function submitOrc(){
   const cat=String(ORC.cat||'').trim().toUpperCase();
   const val=+ORC.valor||0; if(val<0){ toast('Enter a valid value.'); return; }
   // Block lowering an existing budget below what's already allocated to its
-  // approved campaigns — same idea as the campaign-side check in submitCamp():
+  // approved funds — same idea as the fund-side check in submitFund():
   // surface it here, at save time, instead of leaving the budget silently
   // inconsistent (total < committed).
   if(ORC.id){
@@ -5911,7 +5911,7 @@ async function submitOrc(){
     const inPeriod=comp=>{ const d=String(comp).slice(0,10); return (!pStart||d>=pStart)&&(!pEnd||d<=pEnd); };
     const vUsado=(DATA.tetos||[]).filter(t=>approvedIds.has(t.fund_id)&&inPeriod(t.competencia)).reduce((s,t)=>s+(+t.teto||0),0);
     if(val<vUsado-0.5){
-      toast(`Can't set the total below ${BRL(vUsado)} — that's already allocated to approved campaigns in this budget.`);
+      toast(`Can't set the total below ${BRL(vUsado)} — that's already allocated to approved funds in this budget.`);
       return;
     }
   }
