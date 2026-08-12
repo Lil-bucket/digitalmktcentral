@@ -974,11 +974,22 @@ async function boot(){
   try{
     if(new URLSearchParams(location.search).get('demo')==='1'){ startDemo(); return; }
   }catch(e){}
+  let gateMsg;
   try{
     const {data}=await SBPO.auth.getSession();
-    if(data&&data.session&&data.session.user){onSignedIn(data.session.user);return;}
+    if(data&&data.session&&data.session.user){
+      /* getSession() hands back whatever localStorage holds — an expired
+         refresh token included. Booting on that leaves the app looking
+         signed in while every query comes back 400 InvalidJWT and nothing
+         on screen says why. getUser() validates against the server, so a
+         dead session lands on the sign-in gate instead of a zombie app. */
+      const {error:dead}=await SBPO.auth.getUser();
+      if(!dead){ onSignedIn(data.session.user); return; }
+      try{ await SBPO.auth.signOut({scope:'local'}); }catch(e){}
+      gateMsg='Session expired. Sign in again.';
+    }
   }catch(e){}
-  showGate();
+  showGate(gateMsg);
   SBPO.auth.onAuthStateChange((ev,sess)=>{
     if(sess&&sess.user){if(!booted)setTimeout(()=>onSignedIn(sess.user),0);}
     else if(ev==='SIGNED_OUT'){booted=false;showGate('Session ended. Sign in again.');}
