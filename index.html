@@ -444,7 +444,7 @@ function roMsg(){ return DEMO_MODE?'Demo mode — sandbox with fake data, nothin
    write action stays hidden in demo (plain !viewOnly()) since it isn't
    locally simulated. */
 function demoWritable(cond){ return cond&&(DEMO_MODE||!viewOnly()); }
-let DATA={projetos:[], orcamentos:[], poProjetos:[], pos:[], tetos:[], rateio:[], notif:[], mencoes:[], pessoas:[], fee:[], ccLayout:[], campanhas:[], campanhaCategorias:[]};
+let DATA={projetos:[], orcamentos:[], poProjetos:[], pos:[], tetos:[], rateio:[], notif:[], mencoes:[], pessoas:[], fee:[], ccLayout:[], campanhas:[]};
 let TEAM=[];
 let SCREEN='dash';
 
@@ -1062,7 +1062,6 @@ const Q_BUDGET=()=>[
   SBPO.rpc('listar_pessoas'),
   SBPO.from('fee_rateio').select('agencia,tipo,categoria,percentual,cc,account,descricao'),
   SBPO.from('campanhas').select('*'),
-  SBPO.from('campanha_categorias').select('campanha_id,categoria'),
   /* Extrato row order. Readable by marketing/finance/admin only, which is a
      superset of who can see the cost-center table; for anyone else the query
      comes back empty and ccLayoutIndex() falls back to CC_LAYOUT. */
@@ -1090,7 +1089,7 @@ async function loadAll(){
     STAGE_DESCS=Object.assign({},STAGE_DESCS_DEFAULT,s.stageDescs||{});
   }
   if(!wantPO)return;
-  const [orc,prj,pos,tet,rat,nt,pes,fee,camp,campCat,lay]=r.slice(2);
+  const [orc,prj,pos,tet,rat,nt,pes,fee,camp,lay]=r.slice(2);
   DATA.orcamentos=tookOr(orc,DATA.orcamentos);
   DATA.poProjetos=(prj&&prj.error)?DATA.poProjetos:((prj.data||[]).filter(p=>p.aprovacao_status!=='REJEITADO'));
   DATA.pos=tookOr(pos,DATA.pos);
@@ -1101,7 +1100,6 @@ async function loadAll(){
   DATA.fee=tookOr(fee,DATA.fee);
   DATA.ccLayout=tookOr(lay,DATA.ccLayout);
   DATA.campanhas=tookOr(camp,DATA.campanhas);
-  DATA.campanhaCategorias=tookOr(campCat,DATA.campanhaCategorias);
 }
 
 /* ============================================================
@@ -4239,16 +4237,21 @@ async function deletarOrcamento(id){
 /* ============================================================
    CAMPANHAS — grouping layer above Fund. A campanha bundles one or more
    funds (DATA.poProjetos, via funds.campanha_id) under a name/budget/owner,
-   tagged with the categories it spans (campanha_categorias). Nothing here
+   whose categories are read back off those funds. Nothing here
    changes how a Fund itself is stored or rendered — it only adds an
    optional parent and a screen that rolls several funds up into one card.
    ============================================================ */
-const CAMP_CATS=['TV','AC','Mobile','Monitor','Home Appliances','LABG'];
 function campStatusMeta(s){
   return ({planejada:{t:'Planned',c:'s-blue'},ativa:{t:'Active',c:'s-green'},encerrada:{t:'Closed',c:'s-slate'}})[s]||{t:s||'—',c:'s-slate'};
 }
+/* Categories are read off the linked funds rather than stored on the
+   campanha: the fund already carries product_category (and the budget that
+   funds it), so a second hand-kept copy here could only ever drift out of
+   step with what the funds actually say. */
 function campCategorias(campId){
-  return (DATA.campanhaCategorias||[]).filter(c=>c.campanha_id===campId).map(c=>c.categoria);
+  const s=new Set();
+  campFunds(campId).forEach(f=>{ const c=String(f.product_category||'').trim(); if(c)s.add(c); });
+  return [...s].sort();
 }
 function campFunds(campId){
   return (DATA.poProjetos||[]).filter(p=>p.campanha_id===campId);
@@ -4292,22 +4295,15 @@ function renderCampanhasList(){
 function openCampanhaDetail(id){ openCampanhaEdit(id); }
 let CAMPEDIT=null;
 function openCampanhaNew(){
-  const o0=(DATA.orcamentos||[])[0];
-  CAMPEDIT={id:null,nome:'',budget_id:o0?o0.id:'',responsavel:'',status:'planejada',descricao:'',cats:[],funds:[]};
+  CAMPEDIT={id:null,nome:'',responsavel:'',status:'planejada',funds:[]};
   renderCampanhaForm();
 }
 function openCampanhaEdit(id){
   const c=(DATA.campanhas||[]).find(x=>x.id===id); if(!c)return;
-  CAMPEDIT={id:c.id,nome:c.nome||'',budget_id:c.budget_id||'',responsavel:c.responsavel||'',status:c.status||'planejada',descricao:c.descricao||'',cats:campCategorias(c.id),funds:campFunds(c.id).map(f=>f.id)};
+  CAMPEDIT={id:c.id,nome:c.nome||'',responsavel:c.responsavel||'',status:c.status||'planejada',funds:campFunds(c.id).map(f=>f.id)};
   renderCampanhaForm();
 }
 function campEditSet(k,v){ if(CAMPEDIT)CAMPEDIT[k]=v; }
-function campEditToggleCat(cat){
-  if(!CAMPEDIT)return;
-  const i=CAMPEDIT.cats.indexOf(cat);
-  if(i<0) CAMPEDIT.cats.push(cat); else CAMPEDIT.cats.splice(i,1);
-  renderCampanhaForm();
-}
 function campEditToggleFund(fid){
   if(!CAMPEDIT)return;
   const i=CAMPEDIT.funds.indexOf(fid);
@@ -4335,22 +4331,18 @@ function campFundPickerHTML(ce){
 }
 function renderCampanhaForm(){
   if(!CAMPEDIT)return; const ce=CAMPEDIT; const editing=!!ce.id;
-  const orcs=DATA.orcamentos||[];
   const statusOpts=['planejada','ativa','encerrada'].map(s=>`<option value="${s}" ${ce.status===s?'selected':''}>${campStatusMeta(s).t}</option>`).join('');
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:560px">
-    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--po);flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>${editing?'Edit campaign':'New campaign'}</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Groups one or more funds under a name, budget and owner</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--po);flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>${editing?'Edit campaign':'New campaign'}</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Groups one or more funds under a name and owner</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">
       <div class="field full"><label>Campaign name</label><input value="${esc(ce.nome)}" onchange="campEditSet('nome',this.value)" placeholder="e.g. Back to School 2026" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
       <div class="fgrid" style="margin-top:14px">
-        <div class="field"><label>Budget</label><select onchange="campEditSet('budget_id',this.value)">${orcs.map(o=>`<option value="${o.id}" ${ce.budget_id===o.id?'selected':''}>${esc(o.nome||o.product_category)}</option>`).join('')||'<option value="">— no budget —</option>'}</select></div>
+        <div class="field"><label>Responsible</label><input value="${esc(ce.responsavel)}" onchange="campEditSet('responsavel',this.value)" placeholder="Owner name" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
         <div class="field"><label>Status</label><select onchange="campEditSet('status',this.value)">${statusOpts}</select></div>
       </div>
-      <div class="field full" style="margin-top:14px"><label>Responsible</label><input value="${esc(ce.responsavel)}" onchange="campEditSet('responsavel',this.value)" placeholder="Owner name" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
-      <div class="field full" style="margin-top:14px"><label>Categories</label>
-        <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:4px">${CAMP_CATS.map(cat=>`<button type="button" onclick="campEditToggleCat('${cat}')" style="padding:6px 12px;border-radius:20px;border:1px solid ${ce.cats.includes(cat)?'var(--po)':'var(--line-2)'};background:${ce.cats.includes(cat)?'#fbe4e1':'#fff'};color:${ce.cats.includes(cat)?'#bf0008':'var(--txt-2)'};font-size:12px;font-weight:700;cursor:pointer">${cat}</button>`).join('')}</div>
+      <div class="field full" style="margin-top:14px"><label>Funds <span style="font-weight:600;color:var(--txt-3)">(${ce.funds.length} selected)</span></label>${campFundPickerHTML(ce)}
+        <div style="font-size:11px;color:var(--txt-3);margin-top:7px">Budget and categories come from the linked funds.</div>
       </div>
-      <div class="field full" style="margin-top:14px"><label>Description</label><textarea onchange="campEditSet('descricao',this.value)" rows="3" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13px;resize:vertical">${esc(ce.descricao)}</textarea></div>
-      <div class="field full" style="margin-top:14px"><label>Funds <span style="font-weight:600;color:var(--txt-3)">(${ce.funds.length} selected)</span></label>${campFundPickerHTML(ce)}</div>
     </div>
     <div class="modal-f"><span>${(editing&&PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarCampanha('${esc(ce.id)}')">Delete campaign</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitCampanha()">${editing?'Save':'Create campaign'}</button></div></div>
   </div></div>`;
@@ -4361,20 +4353,14 @@ async function submitCampanha(){
   if(!ce.nome.trim()){ toast('Give the campaign a name.'); return; }
   try{
     let campId=ce.id;
+    const campos={nome:ce.nome.trim(),responsavel:ce.responsavel||null,status:ce.status};
     if(campId){
-      const {error}=await SBPO.from('campanhas').update({nome:ce.nome.trim(),budget_id:ce.budget_id||null,responsavel:ce.responsavel||null,status:ce.status,descricao:ce.descricao||null}).eq('id',campId);
+      const {error}=await SBPO.from('campanhas').update(campos).eq('id',campId);
       if(error)throw error;
     }else{
-      const {data,error}=await SBPO.from('campanhas').insert({nome:ce.nome.trim(),budget_id:ce.budget_id||null,responsavel:ce.responsavel||null,status:ce.status,descricao:ce.descricao||null}).select().single();
+      const {data,error}=await SBPO.from('campanhas').insert(campos).select().single();
       if(error)throw error;
       campId=data.id;
-    }
-    // Simplest correct approach given the low row counts: wipe this campanha's
-    // category rows and re-insert the selected set, rather than diffing.
-    await SBPO.from('campanha_categorias').delete().eq('campanha_id',campId);
-    if(ce.cats.length){
-      const {error:e2}=await SBPO.from('campanha_categorias').insert(ce.cats.map(cat=>({campanha_id:campId,categoria:cat})));
-      if(e2)throw e2;
     }
     // Link/unlink funds to match the picker: anything checked gets campanha_id
     // set to this campanha; anything that was linked here but got unchecked
@@ -4400,7 +4386,6 @@ async function deletarCampanha(id){
   if(nFunds){ toast(`Remova o vínculo dos ${nFunds} fund(s) antes de excluir "${c.nome||''}".`); return; }
   if(!confirm('Delete campaign "'+(c.nome||'')+'"?\n\nThis cannot be undone.'))return;
   try{
-    await SBPO.from('campanha_categorias').delete().eq('campanha_id',id);
     const {error}=await SBPO.from('campanhas').delete().eq('id',id);
     if(error)throw error;
     CAMPEDIT=null; closeModal(); await reloadPOAll(); go('campanhas'); toast('Campaign deleted.');
@@ -6004,17 +5989,16 @@ async function deletarPessoa(userId){
    ============================================================ */
 async function reloadPOAll(){
   try{
-    const [orc,prj,pos,tet,rat,camp,campCat]=await Promise.all([
+    const [orc,prj,pos,tet,rat,camp]=await Promise.all([
       SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
       SBPO.from('funds').select('id,nome,agencia,orcamento_id,product_category,activity,fund_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em,campanha_id'),
       SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
       SBPO.from('tetos').select('fund_id,competencia,teto'),
       SBPO.from('rateio_alocacao').select('fund_id,competencia,valor,categoria'),
-      SBPO.from('campanhas').select('*'),
-      SBPO.from('campanha_categorias').select('campanha_id,categoria')
+      SBPO.from('campanhas').select('*')
     ]);
     DATA.orcamentos=orc.data||[]; DATA.poProjetos=(prj.data||[]).filter(p=>p.aprovacao_status!=='REJEITADO'); DATA.pos=pos.data||[]; DATA.tetos=tet.data||[]; DATA.rateio=rat.data||[];
-    DATA.campanhas=camp.data||DATA.campanhas; DATA.campanhaCategorias=campCat.data||DATA.campanhaCategorias;
+    DATA.campanhas=camp.data||DATA.campanhas;
   }catch(e){ console.error('reloadPOAll:',e); }
 }
 function agencyOpts(){
