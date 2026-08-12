@@ -4325,7 +4325,7 @@ function campFundPickerHTML(ce){
     const checked=ce.funds.includes(f.id);
     const elsewhere=f.campanha_id&&f.campanha_id!==ce.id?(DATA.campanhas||[]).find(c=>c.id===f.campanha_id):null;
     return `<label style="display:flex;align-items:center;gap:9px;padding:7px 4px;cursor:pointer;border-bottom:1px solid var(--line)">
-      <input type="checkbox" ${checked?'checked':''} onchange="campEditToggleFund('${esc(f.id)}')" style="flex-shrink:0">
+      <input type="checkbox" ${checked?'checked':''} onchange="campEditToggleFund('${esc(f.id)}')" style="flex-shrink:0;width:auto;margin:0">
       <span style="flex:1;min-width:0;font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.nome)}</span>
       <span style="font-size:10.5px;color:var(--txt-3);flex-shrink:0">${esc(f.agencia||'—')}</span>
       ${elsewhere?`<span class="badge s-amber" style="flex-shrink:0;font-size:9.5px;padding:1px 7px">reassign from ${esc(elsewhere.nome)}</span>`:''}
