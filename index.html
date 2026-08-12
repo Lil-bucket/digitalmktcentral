@@ -1146,7 +1146,7 @@ const B_LABELS={bo:'Overview',budgets:'Budgets',funds:'Funds',campanhas:'Campaig
 const ROLE_NAV={
   admin:      {work:['dash','board','list','timeline','team','weekly','mytasks'], budget:['bo','budgets','campanhas','funds','pos','people']},
   marketing:  {work:['dash','board','list','timeline','weekly','mytasks'],        budget:['bo','campanhas','funds','pos']},
-  financeiro: {work:[],                                                          budget:['bo','campanhas','funds','pos']},
+  financeiro: {work:[],                                                          budget:['bo','funds','pos']},
   agencia:    {work:['board','list','timeline'],                                 budget:['bo','funds','pos']}
 };
 const PANEL_ONLY_WORK=['dash','board','list','timeline','weekly','mytasks'];
@@ -4282,12 +4282,12 @@ function openCampanhaDetail(id){ openCampanhaEdit(id); }
 let CAMPEDIT=null;
 function openCampanhaNew(){
   const o0=(DATA.orcamentos||[])[0];
-  CAMPEDIT={id:null,nome:'',budget_id:o0?o0.id:'',responsavel:'',status:'planejada',descricao:'',cats:[]};
+  CAMPEDIT={id:null,nome:'',budget_id:o0?o0.id:'',responsavel:'',status:'planejada',descricao:'',cats:[],funds:[]};
   renderCampanhaForm();
 }
 function openCampanhaEdit(id){
   const c=(DATA.campanhas||[]).find(x=>x.id===id); if(!c)return;
-  CAMPEDIT={id:c.id,nome:c.nome||'',budget_id:c.budget_id||'',responsavel:c.responsavel||'',status:c.status||'planejada',descricao:c.descricao||'',cats:campCategorias(c.id)};
+  CAMPEDIT={id:c.id,nome:c.nome||'',budget_id:c.budget_id||'',responsavel:c.responsavel||'',status:c.status||'planejada',descricao:c.descricao||'',cats:campCategorias(c.id),funds:campFunds(c.id).map(f=>f.id)};
   renderCampanhaForm();
 }
 function campEditSet(k,v){ if(CAMPEDIT)CAMPEDIT[k]=v; }
@@ -4296,6 +4296,31 @@ function campEditToggleCat(cat){
   const i=CAMPEDIT.cats.indexOf(cat);
   if(i<0) CAMPEDIT.cats.push(cat); else CAMPEDIT.cats.splice(i,1);
   renderCampanhaForm();
+}
+function campEditToggleFund(fid){
+  if(!CAMPEDIT)return;
+  const i=CAMPEDIT.funds.indexOf(fid);
+  if(i<0) CAMPEDIT.funds.push(fid); else CAMPEDIT.funds.splice(i,1);
+  renderCampanhaForm();
+}
+/* Fund picker for the campanha form: every approved/pending fund not rejected,
+   flagging the ones already linked elsewhere so picking them here reassigns
+   them (mirrors how the Fund form's own Campaign dropdown works, just from
+   the other side). */
+function campFundPickerHTML(ce){
+  const list=(DATA.poProjetos||[]).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+  if(!list.length) return '<div style="font-size:12px;color:var(--txt-3)">No funds yet.</div>';
+  const rows=list.map(f=>{
+    const checked=ce.funds.includes(f.id);
+    const elsewhere=f.campanha_id&&f.campanha_id!==ce.id?(DATA.campanhas||[]).find(c=>c.id===f.campanha_id):null;
+    return `<label style="display:flex;align-items:center;gap:9px;padding:7px 4px;cursor:pointer;border-bottom:1px solid var(--line)">
+      <input type="checkbox" ${checked?'checked':''} onchange="campEditToggleFund('${esc(f.id)}')" style="flex-shrink:0">
+      <span style="flex:1;min-width:0;font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.nome)}</span>
+      <span style="font-size:10.5px;color:var(--txt-3);flex-shrink:0">${esc(f.agencia||'—')}</span>
+      ${elsewhere?`<span class="badge s-amber" style="flex-shrink:0;font-size:9.5px;padding:1px 7px">reassign from ${esc(elsewhere.nome)}</span>`:''}
+    </label>`;
+  }).join('');
+  return `<div style="max-height:220px;overflow-y:auto;border:1px solid var(--line-2);border-radius:9px;padding:0 8px">${rows}</div>`;
 }
 function renderCampanhaForm(){
   if(!CAMPEDIT)return; const ce=CAMPEDIT; const editing=!!ce.id;
@@ -4314,7 +4339,7 @@ function renderCampanhaForm(){
         <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:4px">${CAMP_CATS.map(cat=>`<button type="button" onclick="campEditToggleCat('${cat}')" style="padding:6px 12px;border-radius:20px;border:1px solid ${ce.cats.includes(cat)?'var(--po)':'var(--line-2)'};background:${ce.cats.includes(cat)?'#fbe4e1':'#fff'};color:${ce.cats.includes(cat)?'#bf0008':'var(--txt-2)'};font-size:12px;font-weight:700;cursor:pointer">${cat}</button>`).join('')}</div>
       </div>
       <div class="field full" style="margin-top:14px"><label>Description</label><textarea onchange="campEditSet('descricao',this.value)" rows="3" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13px;resize:vertical">${esc(ce.descricao)}</textarea></div>
-      ${editing?`<div style="font-size:11.5px;color:var(--txt-3);margin-top:10px">${campFunds(ce.id).length} fund(s) linked. Link/unlink funds from each fund's edit form.</div>`:''}
+      <div class="field full" style="margin-top:14px"><label>Funds <span style="font-weight:600;color:var(--txt-3)">(${ce.funds.length} selected)</span></label>${campFundPickerHTML(ce)}</div>
     </div>
     <div class="modal-f"><span>${(editing&&PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarCampanha('${esc(ce.id)}')">Delete campaign</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitCampanha()">${editing?'Save':'Create campaign'}</button></div></div>
   </div></div>`;
@@ -4339,6 +4364,19 @@ async function submitCampanha(){
     if(ce.cats.length){
       const {error:e2}=await SBPO.from('campanha_categorias').insert(ce.cats.map(cat=>({campanha_id:campId,categoria:cat})));
       if(e2)throw e2;
+    }
+    // Link/unlink funds to match the picker: anything checked gets campanha_id
+    // set to this campanha; anything that was linked here but got unchecked
+    // (including funds reassigned away in this same edit) gets nulled out.
+    const toLink=ce.funds;
+    const toUnlink=(DATA.poProjetos||[]).filter(f=>f.campanha_id===campId&&!toLink.includes(f.id)).map(f=>f.id);
+    if(toLink.length){
+      const {error:e3}=await SBPO.from('funds').update({campanha_id:campId}).in('id',toLink);
+      if(e3)throw e3;
+    }
+    if(toUnlink.length){
+      const {error:e4}=await SBPO.from('funds').update({campanha_id:null}).in('id',toUnlink);
+      if(e4)throw e4;
     }
     CAMPEDIT=null; toast(ce.id?'Campaign updated ✓':'Campaign created ✓'); closeModal(); await reloadPOAll(); go('campanhas');
   }catch(e){ toastErr(e); }
