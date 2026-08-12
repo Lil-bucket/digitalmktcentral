@@ -4261,15 +4261,29 @@ function campFunds(campId){
    summed across every fund that belongs to this campanha instead of one. */
 function campTotals(campId){
   const ids=new Set(campFunds(campId).map(p=>p.id));
-  let teto=0,cons=0,comp=0;
+  let teto=0,cons=0,comp=0,pend=0;
   DATA.tetos.forEach(t=>{ if(ids.has(t.fund_id)) teto+=(+t.teto||0); });
   DATA.rateio.forEach(r=>{ if(ids.has(r.fund_id)) teto+=(+r.valor||0); });
-  DATA.pos.forEach(po=>{ if(!ids.has(po.fund_id))return; const v=+po.valor||0; if(CONS.includes(po.status))cons+=v; else if(COMP.includes(po.status))comp+=v; });
-  return {teto,cons,comp};
+  DATA.pos.forEach(po=>{ if(!ids.has(po.fund_id))return; const v=+po.valor||0;
+    if(CONS.includes(po.status))cons+=v; else if(COMP.includes(po.status))comp+=v; else if(PEND.includes(po.status))pend+=v; });
+  return {teto,cons,comp,pend};
+}
+/* Same three buckets as campTotals, kept per fund so the detail view can
+   show each fund's own figures without recomputing the split twice. */
+function campFundStats(funds){
+  const ids=new Set(funds.map(f=>f.id));
+  const cap={},cons={},comp={},pend={};
+  DATA.tetos.forEach(t=>{ if(ids.has(t.fund_id)) cap[t.fund_id]=(cap[t.fund_id]||0)+(+t.teto||0); });
+  DATA.rateio.forEach(r=>{ if(ids.has(r.fund_id)) cap[r.fund_id]=(cap[r.fund_id]||0)+(+r.valor||0); });
+  DATA.pos.forEach(po=>{ if(!ids.has(po.fund_id))return; const v=+po.valor||0;
+    if(CONS.includes(po.status)) cons[po.fund_id]=(cons[po.fund_id]||0)+v;
+    else if(COMP.includes(po.status)) comp[po.fund_id]=(comp[po.fund_id]||0)+v;
+    else if(PEND.includes(po.status)) pend[po.fund_id]=(pend[po.fund_id]||0)+v; });
+  return {cap,cons,comp,pend};
 }
 function campanhaGaugeHTML(campId,width){
   const t=campTotals(campId);
-  return fundGaugeHTML(t.teto,t.cons,t.comp,0,'#e20613',width||220);
+  return fundGaugeHTML(t.teto,t.cons,t.comp,t.pend,'#e20613',width||220);
 }
 function renderCampanhasList(){
   let list=(DATA.campanhas||[]).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
@@ -4292,7 +4306,61 @@ function renderCampanhasList(){
   }).join('');
   return `<div style="background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">${rows}</div>`;
 }
-function openCampanhaDetail(id){ openCampanhaEdit(id); }
+/* Campaign detail: the roll-up header (same segmented bar the fund detail
+   uses, summed across the campaign) over the list of linked funds, each row
+   carrying its own figures and opening the existing fund detail on click. */
+function openCampanhaDetail(id){
+  const c=(DATA.campanhas||[]).find(x=>x.id===id); if(!c)return;
+  const funds=campFunds(id).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+  const t=campTotals(id), sm=campStatusMeta(c.status), cats=campCategorias(id);
+  const used=t.cons+t.comp+t.pend;
+  const pct=t.teto?used/t.teto*100:0, over=pct>100.5, near=!over&&pct>=90;
+  const st=campFundStats(funds);
+  const canEdit=['admin','marketing'].includes(PAPEL)&&!viewOnly();
+
+  const num=(l,v,col)=>`<div style="flex:1;min-width:96px"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3);font-weight:700">${l}</div><div class="mono" style="font-size:14px;font-weight:700;margin-top:3px;color:${col||'var(--txt)'}">${v}</div></div>`;
+
+  const rows=funds.length?funds.map(f=>{
+    const cap=st.cap[f.id]||0, cn=st.cons[f.id]||0, cm=st.comp[f.id]||0, pd=st.pend[f.id]||0;
+    const am=actMeta(f.activity), km=catMeta(String(f.product_category||'').trim()||'Uncategorized');
+    return `<div onclick="openFundDetail('${esc(f.id)}')" style="padding:11px 14px;border-bottom:1px solid var(--line);cursor:pointer" onmouseover="this.style.background='var(--paper-2)'" onmouseout="this.style.background=''">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span style="flex:1;min-width:180px">
+          <b style="font-size:13px;display:block">${esc(f.nome)}</b>
+          <span style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:5px">${metaTagHTML('building',f.agencia||'—','#5535ad','#ece6fa')}${metaTagHTML(am.icon,am.label,'#0e5ba6','#e0eefb')}${metaTagHTML(km.icon,km.label,km.c,km.bg)}${f.aprovacao_status==='PENDENTE'?'<span class="badge s-amber" style="font-size:9.5px;padding:1px 7px">Pending approval</span>':''}</span>
+        </span>
+        ${fundGaugeHTML(cap,cn,cm,pd,'#e20613',230)}
+      </div>
+      <div style="display:flex;gap:14px;margin-top:9px;flex-wrap:wrap">
+        ${num('Cap',BRL(cap))}${num('Consumed',BRL(cn),'var(--blue)')}${num('Committed',BRL(cm),'var(--violet)')}${num('Awaiting',BRL(pd),'var(--amber)')}${num('Balance',BRL(cap-cn-cm-pd),cap-cn-cm-pd<0?'#bf0008':'var(--green)')}
+      </div>
+    </div>`;
+  }).join(''):`<div class="empty">No funds linked yet.${canEdit?' Use Edit campaign to link them.':''}</div>`;
+
+  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:820px">
+    <div style="padding:18px 22px 16px;border-bottom:1px solid var(--line)">
+      <div style="display:flex;align-items:flex-start;gap:10px">
+        <div style="flex:1;min-width:0">
+          <h3 style="font-size:16px">${esc(c.nome)}</h3>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px">
+            <span class="badge ${sm.c}"><span class="d"></span>${sm.t}</span>
+            ${metaTagHTML('',c.responsavel||'No owner set','#5535ad','#ece6fa')}
+            ${metaTagHTML('folder',funds.length+' fund'+(funds.length===1?'':'s'),'#494c54','var(--slate-bg)')}
+            ${cats.map(k=>{const km=catMeta(k);return metaTagHTML(km.icon,km.label,km.c,km.bg);}).join('')}
+          </div>
+        </div>
+        <button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button>
+      </div>
+      <div style="display:flex;height:12px;border-radius:6px;overflow:hidden;background:#edeff4;margin-top:13px" title="Consumed · committed · awaiting approval"><span class="seg-fill" style="width:${t.teto?Math.min(100,t.cons/t.teto*100):0}%;background:${over?'var(--po)':'var(--blue)'}"></span><span class="seg-fill" style="width:${t.teto?Math.min(100,t.comp/t.teto*100):0}%;background:var(--violet)"></span><span class="seg-fill" style="width:${t.teto?Math.min(100,t.pend/t.teto*100):0}%;background:var(--amber)"></span></div>
+      <div style="display:flex;justify-content:space-between;margin-top:7px;font-size:12px" class="mono">
+        <span class="stat-num" style="font-weight:700;color:${over?'#bf0008':near?'#9c6404':'var(--txt-1)'}">${t.teto?Math.round(pct):0}% committed</span>
+        <span style="color:var(--txt-2)">balance <b>${BRL(t.teto-used)}</b> of ${BRL(t.teto)}</span>
+      </div>
+    </div>
+    <div class="modal-b" style="padding:0">${rows}</div>
+    <div class="modal-f"><span style="font-size:11px;color:var(--txt-3)">Click a fund for its month-by-month detail.</span><div style="display:flex;gap:10px">${canEdit?`<button class="btn-ghost" onclick="openCampanhaEdit('${esc(id)}')">Edit campaign</button>`:''}<button class="btn-acc" style="background:var(--po)" onclick="closeModal()">Close</button></div></div>
+  </div></div>`;
+}
 let CAMPEDIT=null;
 function openCampanhaNew(){
   CAMPEDIT={id:null,nome:'',responsavel:'',status:'planejada',funds:[]};
