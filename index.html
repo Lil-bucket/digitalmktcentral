@@ -1079,7 +1079,7 @@ async function loadAll(){
     STAGE_DESCS=Object.assign({},STAGE_DESCS_DEFAULT,s.stageDescs||{});
   }
   if(!wantPO)return;
-  const [orc,prj,pos,tet,rat,nt,pes,fee,lay,camp,campCat]=r.slice(2);
+  const [orc,prj,pos,tet,rat,nt,pes,fee,camp,campCat,lay]=r.slice(2);
   DATA.orcamentos=tookOr(orc,DATA.orcamentos);
   DATA.poProjetos=(prj&&prj.error)?DATA.poProjetos:((prj.data||[]).filter(p=>p.aprovacao_status!=='REJEITADO'));
   DATA.pos=tookOr(pos,DATA.pos);
