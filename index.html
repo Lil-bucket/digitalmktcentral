@@ -1651,7 +1651,12 @@ const CAT_META={
 const catMeta=k=>CAT_META[k]||{c:'#59606e',bg:'#edeff4',icon:'folder',label:k};
 const ACT_META={KOL:{icon:'mic',label:'KOL / Influencer'},FEE:{icon:'clipboard',label:'Agency fee'},AON:{icon:'radio',label:'Always On'},Campaings:{icon:'megaphone',label:'Campaign'},Campaign:{icon:'megaphone',label:'Campaign'}};
 const actMeta=a=>ACT_META[a]||{icon:'tag',label:a||'—'};
-let FUND_Q='', FUND_COLLAPSED={};
+/* Both accordions on this screen — funds by category and funds by campanha —
+   start closed and open like a dropdown. Expanded-by-default meant reaching
+   the second campanha took a full page of scrolling through the first one's
+   funds. Searching or filtering opens whatever matches, so a query never
+   hides its own results. */
+let FUND_Q='', FUND_OPEN={};
 let FUND_VIEW=(function(){try{const v=localStorage.getItem('fund_view')||'cat';return v==='list'?'cat':v;}catch(e){return 'cat';}})();
 let FUND_FILTER_ACT='', FUND_FILTER_CAT='';
 function fundSetView(v){ FUND_VIEW=v; try{localStorage.setItem('fund_view',v);}catch(e){} go('funds'); }
@@ -1671,7 +1676,10 @@ function fundSearch(v){
   const b=document.getElementById('fundBody'); if(b) b.outerHTML=renderCampBody();
   const k=document.getElementById('fundKpis'); if(k) k.outerHTML=fundKpisHTML();
 }
-function fundToggleCat(ck){ FUND_COLLAPSED[ck]=!FUND_COLLAPSED[ck]; const b=document.getElementById('fundBody'); if(b){ b.outerHTML=renderCampBody(); } }
+function fundToggleCat(ck){ FUND_OPEN[ck]=!FUND_OPEN[ck]; const b=document.getElementById('fundBody'); if(b){ b.outerHTML=renderCampBody(); } }
+/* A search or an active filter forces every section open — otherwise the
+   matching funds would sit inside boxes the user still has to hunt for. */
+function fundForcedOpen(){ return !!FUND_Q||!!FUND_FILTER_ACT||!!FUND_FILTER_CAT; }
 /* Headline numbers for the funds on screen — fundVisible(), not the whole
    table. An agency login counts its own funds; narrowing to a category or
    typing in the search narrows the totals with it, so the numbers always
@@ -1762,13 +1770,13 @@ function renderCampBody(){
     const m=catMeta(ck);
     const funds=byCat[ck].slice().sort((a,b)=>(LC_ORDER[fundLifecycle(a)]-LC_ORDER[fundLifecycle(b)])||((tetoBy[b.id]||0)-(tetoBy[a.id]||0)));
     const tot=catTotal[ck], pct=grandTotal?(tot/grandTotal*100):0;
-    const collapsed=!!FUND_COLLAPSED[ck]&&!q;
-    return `<div style="background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-      <div onclick="fundToggleCat('${esc(ck)}')" style="padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer" onmouseover="this.style.background='var(--paper-2)'" onmouseout="this.style.background=''">
-        <span class="ich" style="background:${m.bg};color:${m.c}">${icn(m.icon,15)}</span>
+    const open=!!FUND_OPEN[ck]||fundForcedOpen();
+    return `<div style="background:#fff;border:1px solid ${open?m.c+'55':'var(--line)'};border-radius:14px;overflow:hidden;box-shadow:${open?'0 3px 10px rgba(20,22,28,.07)':'0 1px 2px rgba(20,22,28,.05)'};transition:border-color .15s,box-shadow .15s">
+      <div role="button" tabindex="0" aria-expanded="${open}" onclick="fundToggleCat('${esc(ck)}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();fundToggleCat('${esc(ck)}')}" style="padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;background:${open?m.bg:''}" onmouseover="this.style.background='${open?m.bg:'var(--paper-2)'}'" onmouseout="this.style.background='${open?m.bg:''}'">
+        <span class="ich" style="background:${open?'#fff':m.bg};color:${m.c}">${icn(m.icon,15)}</span>
         <span style="min-width:0">
           <b style="font-family:'Hanken Grotesk',sans-serif;font-size:13.5px;display:block">${esc(ck)}${m.label!==ck?` <span style=\"font-weight:500;color:var(--txt-3);font-size:11.5px\">· ${m.label}</span>`:''}</b>
-          <span style="font-size:11px;color:var(--txt-3);font-weight:600">${funds.length} fund${funds.length===1?'':'s'}</span>
+          <span style="font-size:11px;color:var(--txt-3);font-weight:600">${funds.length} fund${funds.length===1?'':'s'}${open?'':' · click to open'}</span>
         </span>
         <span style="flex:1"></span>
         <span style="display:flex;align-items:center;gap:8px;width:200px;flex-shrink:0" title="Share of the total budgeted">
@@ -1776,9 +1784,9 @@ function renderCampBody(){
           <span class="pct">${pct.toFixed(1)}%</span>
         </span>
         <span class="mono" style="font-size:12.5px;font-weight:700;color:var(--ink);width:110px;text-align:right;flex-shrink:0">${BRL(tot)}</span>
-        <span style="color:var(--txt-3);display:flex;transform:rotate(${collapsed?'-90deg':'0deg'});transition:transform .15s">${icn('chev',14)}</span>
+        <span style="color:${open?m.c:'var(--txt-3)'};display:flex;transform:rotate(${open?'0deg':'-90deg'});transition:transform .15s">${icn('chev',14)}</span>
       </div>
-      ${collapsed?'':fundCatBody(funds,m)}
+      ${open?fundCatBody(funds,m):''}
     </div>`;
   }).join('');
   return `<div id="fundBody" style="display:flex;flex-direction:column;gap:13px">${sections}</div>`;
@@ -1788,7 +1796,8 @@ function renderCampBody(){
    the end for funds that carry no campanha_id (standalone/historical). Reuses
    fundItemGroupsHTML/fundItemRowHTML/fundGaugeHTML — no new row markup. ===== */
 function fundCampBodyHTML(fl){
-  const m={c:'var(--po)',bg:'#fbe4e1'};
+  // bd is spelled out because c is a CSS var here — "var(--po)33" is not a colour.
+  const m={c:'var(--po)',bg:'#fbe4e1',bd:'#f2c4bf'};
   const byCamp={}; const avulsos=[];
   fl.forEach(p=>{ if(p.campanha_id) (byCamp[p.campanha_id]=byCamp[p.campanha_id]||[]).push(p); else avulsos.push(p); });
   const campIds=Object.keys(byCamp).sort((a,b)=>{
@@ -1799,17 +1808,17 @@ function fundCampBodyHTML(fl){
   const section=(key,label,funds,sub)=>{
     const t=campTotals(key==='__avulsos'?null:key);
     const tot=funds.reduce((s,p)=>s+((FUND_CTX.tetoBy[p.id])||0),0);
-    const collapsed=!!FUND_COLLAPSED['camp:'+key];
-    return `<div style="background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-      <div onclick="fundToggleCat('camp:${esc(key)}')" style="padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer" onmouseover="this.style.background='var(--paper-2)'" onmouseout="this.style.background=''">
+    const open=!!FUND_OPEN['camp:'+key]||fundForcedOpen();
+    return `<div style="background:#fff;border:1px solid ${open?'#f2c4bf':'var(--line)'};border-radius:14px;overflow:hidden;box-shadow:${open?'0 3px 10px rgba(20,22,28,.07)':'0 1px 2px rgba(20,22,28,.05)'};transition:border-color .15s,box-shadow .15s">
+      <div role="button" tabindex="0" aria-expanded="${open}" onclick="fundToggleCat('camp:${esc(key)}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();fundToggleCat('camp:${esc(key)}')}" style="padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;background:${open?m.bg:''}" onmouseover="this.style.background='${open?m.bg:'var(--paper-2)'}'" onmouseout="this.style.background='${open?m.bg:''}'">
         <span style="min-width:0;flex:1">
           <b style="font-family:'Hanken Grotesk',sans-serif;font-size:13.5px;display:block">${esc(label)}</b>
-          <span style="font-size:11px;color:var(--txt-3);font-weight:600">${funds.length} fund${funds.length===1?'':'s'}${sub?' · '+esc(sub):''}</span>
+          <span style="font-size:11px;color:var(--txt-3);font-weight:600">${funds.length} fund${funds.length===1?'':'s'}${sub?' · '+esc(sub):''}${open?'':' · click to open'}</span>
         </span>
         ${key!=='__avulsos'?fundGaugeHTML(t.teto,t.cons,t.comp,0,'var(--po)',220):`<span class="mono" style="font-size:12.5px;font-weight:700;color:var(--ink)">${BRL(tot)}</span>`}
-        <span style="color:var(--txt-3);display:flex;transform:rotate(${collapsed?'-90deg':'0deg'});transition:transform .15s">${icn('chev',14)}</span>
+        <span style="color:${open?'var(--po)':'var(--txt-3)'};display:flex;transform:rotate(${open?'0deg':'-90deg'});transition:transform .15s">${icn('chev',14)}</span>
       </div>
-      ${collapsed?'':fundCatBody(funds,m)}
+      ${open?fundCatBody(funds,m):''}
     </div>`;
   };
   const sections=campIds.map(cid=>{
@@ -1875,7 +1884,7 @@ function fundItemRowHTML(p,m){
      it sits over the filled or the empty part; a saturated leading edge keeps
      the bar reading as coloured. */
   const bar=fundGaugeHTML(tot,cons,comp,pnd,m.c,270);
-  return `<div class="camp-item" onclick="openFundDetail('${esc(p.id)}')" style="padding:7px 6px;cursor:pointer;border-bottom:1px solid ${m.bg};${lc==='done'?'opacity:.62;':''}" onmouseover="this.style.background='${m.bg}'" onmouseout="this.style.background=''">
+  return `<div class="camp-item" onclick="openFundDetail('${esc(p.id)}')" style="padding:7px 14px;cursor:pointer;border-bottom:1px solid ${m.bg};${lc==='done'?'opacity:.62;':''}" onmouseover="this.style.background='${m.bg}'" onmouseout="this.style.background=''">
     <div style="display:flex;align-items:center;gap:10px">
       <span style="flex:1;min-width:0;font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span>
       ${fundRestrBadgeHTML(p)}${fundBadgeHTML(p)}
@@ -1884,6 +1893,9 @@ function fundItemRowHTML(p,m){
     ${fundMetaLineHTML(p,m.c)}
   </div>`;
 }
+/* Hairline in the section's colour. The category palette is hex, so an alpha
+   suffix works; the campanha view paints with var(--po) and passes m.bd. */
+function fundBandBorder(m){ return m.bd||m.c+'33'; }
 function fundItemGroupsHTML(funds,m){
   const {tetoBy}=FUND_CTX;
   const byAct={}; funds.forEach(p=>{ (byAct[actKey(p)]=byAct[actKey(p)]||[]).push(p); });
@@ -1891,15 +1903,27 @@ function fundItemGroupsHTML(funds,m){
   return acts.map((a,i)=>{
     const grp=byAct[a].slice().sort((x,y)=>(LC_ORDER[fundLifecycle(x)]-LC_ORDER[fundLifecycle(y)])||((tetoBy[y.id]||0)-(tetoBy[x.id]||0)));
     const am=actMeta(a);
-    return `<div style="padding:10px 12px 7px;background:var(--paper-2);${i>0?'border-top:1px solid var(--line);':''}display:flex;align-items:center;gap:8px">
-      <span style="display:inline-flex;align-items:center;gap:5px;font-family:'Hanken Grotesk',sans-serif;font-weight:800;font-size:11.5px;color:${am.color||'var(--txt-1)'};background:#fff;border:1px solid var(--line-2);border-radius:20px;padding:3px 10px 3px 8px">${icn(am.icon,12)}${esc(actColLabel(a))}</span>
-      <span style="font-weight:500;color:var(--txt-3);font-size:11px">${grp.length} fund${grp.length===1?'':'s'}</span>
+    /* The activity break is a full-width band in the section's colour, not a
+       chip floating on a grey strip: inside an open box it is the only thing
+       separating Campaign money from Fee money, so it has to survive being
+       scrolled past — hence sticky, and hence the group's own cap on the
+       right, which is the number people were scrolling back up to find. */
+    const gTot=grp.reduce((s,p)=>s+(tetoBy[p.id]||0),0);
+    const bd=fundBandBorder(m);
+    return `<div style="position:sticky;top:0;z-index:3;padding:9px 14px;background:${m.bg};${i>0?`border-top:1px solid ${bd};`:''}border-bottom:1px solid ${bd};box-shadow:inset 4px 0 0 ${m.c};display:flex;align-items:center;gap:9px">
+      <span style="display:flex;color:${m.c};flex-shrink:0">${icn(am.icon,14)}</span>
+      <b style="font-family:'Hanken Grotesk',sans-serif;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:${m.c}">${esc(actColLabel(a))}</b>
+      <span style="font-weight:600;color:${m.c};opacity:.72;font-size:11px">${grp.length} fund${grp.length===1?'':'s'}</span>
+      <span style="flex:1"></span>
+      <span class="mono" style="font-size:11.5px;font-weight:800;color:${m.c}" title="Cap budgeted for this activity">${BRL(gTot)}</span>
     </div>${grp.map(p=>fundItemRowHTML(p,m)).join('')}`;
   }).join('');
 }
+/* An open box scrolls inside itself instead of pushing every other category
+   or campanha off the page — the activity bands stay pinned while it does. */
 function fundCatBody(funds,m){
   return `<div style="padding:2px 16px 10px;border-top:1px solid var(--line);background:var(--paper-2)">
-    <div style="background:#fff;border-radius:10px;overflow:hidden">${fundItemGroupsHTML(funds,m)}</div>
+    <div style="background:#fff;border-radius:10px;overflow-y:auto;overflow-x:hidden;max-height:min(58vh,470px);border:1px solid ${fundBandBorder(m)}">${fundItemGroupsHTML(funds,m)}</div>
   </div>`;
 }
 
