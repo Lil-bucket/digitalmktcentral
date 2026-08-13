@@ -5687,10 +5687,14 @@ function renderBudgetOverview(isBalance){
   const balMes=capMes-consMes-compMes-penMes;
   const consPctM=capMes?Math.min(100,consMes/capMes*100):0, compPctM=capMes?Math.min(100-consPctM,compMes/capMes*100):0, penPctM=capMes?Math.min(100-consPctM-compPctM,penMes/capMes*100):0;
   const stat=(l,v,col)=>`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;padding:14px 16px;box-shadow:0 1px 2px rgba(20,22,28,.05)"><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--txt-2);font-weight:700">${l}</div><div class="mono stat-num" style="font-size:19px;font-weight:700;margin-top:7px;color:${col}">${v}</div></div>`;
-  const isMkt=effPapel()==='marketing'&&!effIsManager();
   const isFin=effPapel()==='financeiro'&&!effIsManager();
   const isAg=effPapel()==='agencia'&&!effIsManager();
-  const HIDE_MONEY=isMkt; // marketing sees fund progress but not budget values
+  /* Marketing used to get a cut-down Overview — funds and progress, no money —
+     and no Budget overview band at all. It now sees the same figures everyone
+     else does: the hero, the monthly chart, the month balance and the pies
+     with values. The accounting band (GROUP 2) stays gated by showAccounts,
+     the same line drawn on the Budgets screen. */
+  const HIDE_MONEY=false;
   // Finance: only the cost-center table (no hero, no fund accordions)
   if(isFin) return `<div style="margin-bottom:2px">${feeSplitBlock('accounts')}</div>`;
   /* Category row: collapsed shows the usual thin bar+%+money; expanded drops the
@@ -5737,11 +5741,6 @@ function renderBudgetOverview(isBalance){
       </div>
       ${(()=>{if(isAg)return '';const totOrc=(DATA.orcamentos||[]).reduce((s,o)=>s+(+o.valor_total||0),0);const diff=totOrc-orcado;return (BO_PER.mode==='all'&&totOrc&&Math.abs(diff)>=1)?`<div style="margin-top:10px;font-size:11.5px;color:var(--txt-3)">Registered budgets total <b class="mono">${BRL(totOrc)}</b> — ${diff>0?`<b class="mono">${BRL(diff)}</b> not yet allocated to funds`:`<b class="mono">${BRL(-diff)}</b> allocated above the registered budgets`}.</div>`:''})()}
     </div>`;
-  if(isMkt){
-    // Marketing: funds only, progress without budget values
-    const mktAlerts=alerts.length?`<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px">${alerts.slice(0,4).map(a=>{const s=ALERT_SEV[a.sev]||ALERT_SEV.near;const p=funds.find(x=>x.id===a.id)||{};const txt=a.sev==='over'?`<b>${esc(p.nome)}</b> is over its cap.`:`<b>${esc(p.nome)}</b> is close to its cap and has no completed PO yet.`;return `<div style="display:flex;align-items:center;gap:12px;background:${s.bg};border:1px solid ${s.bd};border-radius:12px;padding:11px 16px"><span style="width:8px;height:8px;border-radius:50%;background:${s.dot};flex-shrink:0"></span><span style="flex:1;font-size:13px;color:${s.fg}">${txt}</span><button style="font-size:12px;font-weight:700;color:${s.btn};white-space:nowrap" onclick="openFundDetail('${esc(a.id)}')">View fund →</button></div>`;}).join('')}</div>`:'';
-    return boPeriodBar()+mktAlerts+boPiePanel(true);
-  }
   const chartPanel=`<div class="panel"><div class="panel-h"><h3>Monthly evolution</h3><span class="tag">cap · consumed · committed · awaiting approval</span></div>
       <div style="padding:18px;height:280px"><canvas id="chartMonthly"></canvas></div>
     </div>`;
@@ -5961,7 +5960,13 @@ function renderBudgets(){
   const list=byCat[BUDGET_CAT]||[];
   const orc=orcByCat[BUDGET_CAT];
   const t=sums(list); const raw=t.tot?(t.cons+t.comp+t.pnd)/t.tot*100:0; const over=raw>100.5,near=!over&&raw>=90;
-  const budgetTot=orc?(+orc.valor_total||0):t.tot;
+  /* "Budget" on screen means the sum of the funds' caps — that is what the
+     word means here. It used to show orcamentos.valor_total when a budget was
+     registered, so this line read one number while every figure under it added
+     up to another. valor_total keeps its real job: the ceiling checked when a
+     fund is created or approved, not a headline. */
+  const budgetTot=t.tot;
+  const orcTot=orc?(+orc.valor_total||0):0;
   const byAct={}; list.forEach(p=>{const k=actKey(p);(byAct[k]=byAct[k]||[]).push(p);});
   const actOrder=Object.keys(byAct).sort((a,b)=>{let ia=ACT_COL_ORDER.indexOf(a),ib=ACT_COL_ORDER.indexOf(b);if(ia<0)ia=99;if(ib<0)ib=99;return ia-ib||a.localeCompare(b);});
   const ACT_LBL={Campaign:'Campaign',FEE:'Fee',KOL:'KOLs',AON:'AON',Communication:'Communication'};
@@ -5979,7 +5984,7 @@ function renderBudgets(){
   const activeHTML=`<div style="background:#fff;border:1px solid var(--line);border-radius:var(--r-md);padding:16px 18px;box-shadow:var(--sh-1);margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
         <span class="ich" style="width:34px;height:34px;background:${m.bg};color:${m.c};flex-shrink:0">${icn(m.icon,17)}</span>
-        <span style="flex:1;min-width:150px"><b style="font-family:var(--sans);font-size:var(--fs-lg);display:block">${esc(orc?catKeyLabel(orc.nome||m.label):m.label)}</b><span style="font-size:var(--fs-eyebrow);color:var(--txt-3);font-weight:600">${list.length} fund${list.length===1?'':'s'} · budget ${BRL(budgetTot)}</span></span>
+        <span style="flex:1;min-width:150px"><b style="font-family:var(--sans);font-size:var(--fs-lg);display:block">${esc(orc?catKeyLabel(orc.nome||m.label):m.label)}</b><span style="font-size:var(--fs-eyebrow);color:var(--txt-3);font-weight:600">${list.length} fund${list.length===1?'':'s'} · budget ${BRL(budgetTot)}${orcTot?` <span title="Ceiling registered for this category — checked when a fund is created or approved">· ceiling ${BRL(orcTot)}</span>`:''}</span></span>
         <span class="mono" style="font-size:var(--fs-sm);color:var(--txt-2);text-align:right;white-space:nowrap" title="Consumed + committed / cap">${BRL(t.cons+t.comp)} <span style="color:var(--txt-3)">/ ${BRL(t.tot)}</span></span>
         <span class="pct" style="font-weight:800;font-size:var(--fs-base);color:${over?'#bf0008':near?'#9c6404':'var(--txt)'}">${Math.round(raw)}%</span>
         ${canBudget&&orc?`<button class="chip-btn" onclick="event.stopPropagation();openOrcEdit('${esc(orc.id)}')">Edit budget</button>`:''}
