@@ -4274,6 +4274,9 @@ async function deletarOrcamento(id){
    changes how a Fund itself is stored or rendered — it only adds an
    optional parent and a screen that rolls several funds up into one card.
    ============================================================ */
+// Remembered like FUND_VIEW, so switching screens and coming back keeps the view.
+let CAMPANHA_VIEW=(function(){try{return localStorage.getItem('campanha_view')||'list';}catch(e){return 'list';}})();
+function campanhaSetView(v){ CAMPANHA_VIEW=v; try{localStorage.setItem('campanha_view',v);}catch(e){} go('campanhas'); }
 function campStatusMeta(s){
   return ({planejada:{t:'Planned',c:'s-blue'},ativa:{t:'Active',c:'s-green'},encerrada:{t:'Closed',c:'s-slate'}})[s]||{t:s||'—',c:'s-slate'};
 }
@@ -4313,6 +4316,124 @@ function campFundStats(funds){
     else if(COMP.includes(po.status)) comp[po.fund_id]=(comp[po.fund_id]||0)+v;
     else if(PEND.includes(po.status)) pend[po.fund_id]=(pend[po.fund_id]||0)+v; });
   return {cap,cons,comp,pend};
+}
+/* Monthly split of a campanha's budget: its funds' monthly caps summed, and
+   what each month has actually taken. Same two numbers per month the fund
+   timeline plots, one level up — a campanha has no monthly cap of its own,
+   it is whatever its funds were given for that month. */
+function campMonthlyTotals(campId){
+  const m={};
+  campFunds(campId).forEach(f=>{ const mt=fundMonthlyTotals(f.id); Object.keys(mt).forEach(k=>{ m[k]=(m[k]||0)+mt[k]; }); });
+  return m;
+}
+function campMonthUsed(campId,mm){
+  return campFunds(campId).reduce((s,f)=>s+fundMonthUsed(f.id,mm),0);
+}
+/* One month cell, shared by the Campaigns timeline and the month strip in the
+   campaign detail so the two never drift apart. Track = configured for the
+   month, fill = used against it. Colour weight follows TIME, not size: a
+   closed month is settled history and stays washed out, the current month and
+   everything ahead carry full colour — those are the ones still actionable.
+   Over-cap keeps its red in closed months, only a notch weaker. */
+function campMonthCellHTML(mm,cfg,used,o){
+  const nowM=new Date().toISOString().slice(0,7);
+  const {maxVal=1,first='',last='',col='var(--po)',showFigures=true}=o||{};
+  const inSpan=(!first||mm>=first)&&(!last||mm<=last);
+  const isNow=mm===nowM, past=mm<nowM, over=used>cfg+0.5;
+  const rl=mm===first?'5px':'0', rr=mm===last?'5px':'0';
+  const trackBg=cfg?col:(inSpan?'#e9ebf1':'transparent');
+  const trackOp=cfg?(past?0.08+0.10*cfg/maxVal:0.60+0.30*cfg/maxVal):(past?0.4:1);
+  const fillPct=cfg?Math.min(100,used/cfg*100):(used?100:0);
+  const fillOp=past?(over?0.75:0.26):1;
+  const tip=`${fmtMes(mm+'-01')} · configured ${cfg?BRL(cfg):'—'} · used ${used?BRL(used):'—'}${cfg?' · balance '+BRL(cfg-used):''}${over?' · over cap':''}`;
+  return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-right:1px solid #f2f3f7;padding:3px 1px;background:${isNow?'rgba(18,115,207,.09)':'transparent'}" title="${esc(tip)}">
+    <span style="display:block;position:relative;width:100%;height:14px;border-radius:${rl} ${rr} ${rr} ${rl};overflow:hidden">
+      <span style="position:absolute;inset:0;background:${trackBg};opacity:${trackOp.toFixed(2)}"></span>
+      ${(cfg||used)?`<span style="position:absolute;left:0;top:0;bottom:0;width:${fillPct.toFixed(1)}%;background:${over?'var(--po)':col};opacity:${fillOp}"></span>`:''}
+    </span>
+    ${(showFigures&&(cfg||used))?`<span class="mono" style="font-size:8px;font-weight:600;color:${past?'#9199a6':'var(--txt-3)'};line-height:1.15;white-space:nowrap">${cfg?fmtCompactBRL(cfg):'—'}</span>
+    <span class="mono" style="font-size:8px;font-weight:800;color:${over?'var(--po)':(past?'var(--txt-3)':'var(--txt-2)')};line-height:1.15;white-space:nowrap">${used?fmtCompactBRL(used):'—'}</span>`:''}
+  </div>`;
+}
+/* Month axis covering every month the given campanhas touch, gaps included —
+   an empty month between two funded ones is information, not something to
+   skip. Capped at 36 columns, past which the row stops being readable. */
+function campMonthAxis(mtList){
+  const all=[...new Set(mtList.flatMap(mt=>Object.keys(mt)))].sort();
+  if(!all.length) return [];
+  const axis=[]; let cm=all[0]; const endM=all[all.length-1];
+  while(cm<=endM&&axis.length<36){ axis.push(cm); const y=+cm.slice(0,4), mo=+cm.slice(5,7); cm=mo===12?(y+1)+'-01':cm.slice(0,4)+'-'+String(mo+1).padStart(2,'0'); }
+  return axis;
+}
+function campanhaTimelineHTML(list){
+  const nowM=new Date().toISOString().slice(0,7);
+  const rows=list.map(c=>{
+    const mt=campMonthlyTotals(c.id);
+    const months=Object.keys(mt).sort();
+    return {c,mt,months,teto:campTotals(c.id).teto};
+  }).filter(r=>r.months.length);
+  if(!rows.length) return `<div class="empty">No campaign has monthly values yet — a campaign's months come from the monthly caps of the funds linked to it.</div>`;
+  const axis=campMonthAxis(rows.map(r=>r.mt));
+  const maxVal=Math.max(1,...rows.flatMap(r=>Object.values(r.mt).map(v=>+v||0)));
+  rows.sort((a,b)=>a.months[0].localeCompare(b.months[0])||b.teto-a.teto);
+  const th='font-family:var(--mono);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3)';
+  const headCells=axis.map(mm=>`<div style="flex:1;min-width:0;padding:8px 2px;text-align:center;font-family:var(--mono);font-size:9.5px;font-weight:700;color:${mm===nowM?'#fff':(mm<nowM?'#a4aab5':'var(--txt-3)')};background:${mm===nowM?'var(--ink)':'transparent'};border-right:1px solid #edeff4;white-space:nowrap;overflow:hidden">${fmtMes(mm+'-01')}</div>`).join('');
+  const trs=rows.map(r=>{
+    const first=r.months[0], last=r.months[r.months.length-1];
+    const sm=campStatusMeta(r.c.status);
+    const cells=axis.map(mm=>campMonthCellHTML(mm,+r.mt[mm]||0,campMonthUsed(r.c.id,mm),{maxVal,first,last,col:'var(--po)'})).join('');
+    const usedTot=r.months.reduce((s,mm)=>s+campMonthUsed(r.c.id,mm),0);
+    return `<div onclick="openCampanhaDetail('${esc(r.c.id)}')" style="display:flex;border-bottom:1px solid #edeff4;cursor:pointer;${r.c.status==='encerrada'?'opacity:.6':''}" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
+      <div style="width:230px;flex-shrink:0;padding:8px 14px;border-right:1px solid var(--line);min-width:0;display:flex;align-items:center;gap:8px">
+        <span style="width:8px;height:8px;border-radius:2px;background:var(--po);flex-shrink:0"></span>
+        <span style="min-width:0"><span style="font-weight:600;font-size:12.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.c.nome)}</span><span style="font-size:10.5px;color:var(--txt-3);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(sm.t)} · ${campFunds(r.c.id).length} fund${campFunds(r.c.id).length===1?'':'s'} · ${fmtMes(first+'-01')} → ${fmtMes(last+'-01')}</span></span>
+      </div>
+      <div style="flex:1;display:flex;min-width:0;align-items:stretch">${cells}</div>
+      <div class="mono" style="width:112px;flex-shrink:0;padding:8px 14px;border-left:1px solid var(--line);display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:1px"><span style="font-size:11.5px;font-weight:700">${BRL(r.teto)}</span><span style="font-size:10px;font-weight:800;color:${usedTot>r.teto+0.5?'var(--po)':'var(--txt-3)'}">${BRL(usedTot)}</span></div>
+    </div>`;
+  }).join('');
+  const grandTotal=rows.reduce((s,r)=>s+r.teto,0);
+  const grandUsed=rows.reduce((s,r)=>s+r.months.reduce((a,mm)=>a+campMonthUsed(r.c.id,mm),0),0);
+  const totCells=axis.map(mm=>{
+    const tot=rows.reduce((s,r)=>s+(+r.mt[mm]||0),0);
+    const totUsed=rows.reduce((s,r)=>s+campMonthUsed(r.c.id,mm),0);
+    const isNow=mm===nowM, past=mm<nowM;
+    return `<div style="flex:1;min-width:0;padding:6px 2px;text-align:center;font-family:var(--mono);font-size:9.5px;background:${isNow?'rgba(18,115,207,.09)':'transparent'};border-right:1px solid #edeff4;white-space:nowrap;overflow:hidden" title="${esc(fmtMes(mm+'-01')+' · configured '+(tot?BRL(tot):'—')+' · used '+(totUsed?BRL(totUsed):'—'))}"><div style="font-weight:700;color:${past?'#9199a6':'var(--txt-3)'};line-height:1.2">${tot?fmtCompactBRL(tot):'—'}</div><div style="font-weight:800;color:${totUsed>tot+0.5?'var(--po)':(past?'var(--txt-3)':'var(--txt-2)')};line-height:1.2">${totUsed?fmtCompactBRL(totUsed):'—'}</div></div>`;
+  }).join('');
+  return `<div style="background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
+    <div style="display:flex;border-bottom:1px solid var(--line);background:var(--paper-2)">
+      <div style="width:230px;flex-shrink:0;padding:9px 14px;${th};border-right:1px solid var(--line);display:flex;align-items:center">Campaign</div>
+      <div style="flex:1;display:flex;min-width:0">${headCells}</div>
+      <div style="width:112px;flex-shrink:0;padding:9px 14px;${th};border-left:1px solid var(--line);text-align:right;display:flex;align-items:center;justify-content:flex-end">Cap / used</div>
+    </div>
+    ${trs}
+    <div style="display:flex;border-top:2px solid var(--line);background:var(--paper-2)">
+      <div style="width:230px;flex-shrink:0;padding:8px 14px;${th};border-right:1px solid var(--line);display:flex;align-items:center">Total by month</div>
+      <div style="flex:1;display:flex;min-width:0">${totCells}</div>
+      <div class="mono" style="width:112px;flex-shrink:0;padding:8px 14px;border-left:1px solid var(--line);display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:1px"><span style="font-size:11.5px;font-weight:800">${BRL(grandTotal)}</span><span style="font-size:10px;font-weight:800;color:${grandUsed>grandTotal+0.5?'var(--po)':'var(--txt-3)'}">${BRL(grandUsed)}</span></div>
+    </div>
+  </div>`;
+}
+/* The same split for one campanha, for its detail modal: no name column, the
+   figures under each month, and the row reads left to right as the plan. */
+function campanhaMonthStripHTML(campId){
+  const mt=campMonthlyTotals(campId);
+  const months=Object.keys(mt).sort();
+  if(!months.length) return '';
+  const axis=campMonthAxis([mt]);
+  const maxVal=Math.max(1,...Object.values(mt).map(v=>+v||0));
+  const first=months[0], last=months[months.length-1];
+  const nowM=new Date().toISOString().slice(0,7);
+  const head=axis.map(mm=>`<div style="flex:1;min-width:0;padding:5px 2px;text-align:center;font-family:var(--mono);font-size:9px;font-weight:700;color:${mm===nowM?'#fff':(mm<nowM?'#a4aab5':'var(--txt-3)')};background:${mm===nowM?'var(--ink)':'transparent'};border-right:1px solid #edeff4;white-space:nowrap;overflow:hidden">${fmtMes(mm+'-01')}</div>`).join('');
+  const cells=axis.map(mm=>campMonthCellHTML(mm,+mt[mm]||0,campMonthUsed(campId,mm),{maxVal,first,last,col:'var(--po)'})).join('');
+  return `<div style="border:1px solid var(--line);border-radius:11px;overflow:hidden;margin-bottom:14px">
+    <div style="padding:9px 12px;background:var(--paper-2);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px">
+      <span style="font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">Budget by month</span>
+      <span style="font-size:11px;color:var(--txt-3)">cap on top, used underneath — summed across this campaign's funds</span>
+    </div>
+    <div style="display:flex;border-bottom:1px solid #edeff4;background:#fff">${head}</div>
+    <div style="display:flex;align-items:stretch;background:#fff">${cells}</div>
+  </div>`;
 }
 function campanhaGaugeHTML(campId,width){
   const t=campTotals(campId);
@@ -4398,6 +4519,11 @@ function renderCampanhasList(){
   // with no campaign" is the whole picture and the only number worth showing.
   const kpis=campanhasKpisHTML(list);
   if(!list.length) return kpis+`<div class="empty">No campaigns yet. Campaigns group one or more funds under a name, budget and owner — create one and link funds to it from the fund form.</div>`;
+  const viewBar=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+    <div style="display:flex;gap:6px">${[['list','List'],['tl','Timeline']].map(v=>`<button onclick="campanhaSetView('${v[0]}')" style="padding:8px 13px;border-radius:8px;border:1px solid ${CAMPANHA_VIEW===v[0]?'var(--po)':'var(--line-2)'};background:${CAMPANHA_VIEW===v[0]?'#fbe4e1':'#fff'};color:${CAMPANHA_VIEW===v[0]?'#bf0008':'var(--txt-2)'};font-size:12px;font-weight:700;cursor:pointer">${v[1]}</button>`).join('')}</div>
+    <span style="font-size:11.5px;color:var(--txt-3)">${CAMPANHA_VIEW==='tl'?'Row = campaign · each month shows the cap its funds carry and what was used against it. Click a row to open.':'Click a campaign for its funds and its month-by-month split.'}</span>
+  </div>`;
+  if(CAMPANHA_VIEW==='tl') return kpis+viewBar+campanhaTimelineHTML(list);
   const rows=list.map(c=>{
     const cats=campCategorias(c.id);
     const funds=campFunds(c.id);
@@ -4414,7 +4540,7 @@ function renderCampanhasList(){
       </div>
     </div>`;
   }).join('');
-  return kpis+`<div style="background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">${rows}</div>`;
+  return kpis+viewBar+`<div style="background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">${rows}</div>`;
 }
 /* Campaign detail: the roll-up header (same segmented bar the fund detail
    uses, summed across the campaign) over the list of linked funds, each row
@@ -4467,7 +4593,7 @@ function openCampanhaDetail(id){
         <span style="color:var(--txt-2)">balance <b>${BRL(t.teto-used)}</b> of ${BRL(t.teto)}</span>
       </div>
     </div>
-    <div class="modal-b" style="padding:0">${rows}</div>
+    <div class="modal-b" style="padding:0">${(function(){const strip=campanhaMonthStripHTML(id);return strip?`<div style="padding:16px 18px 2px">${strip}</div>`:'';})()}${rows}</div>
     <div class="modal-f"><span style="font-size:11px;color:var(--txt-3)">Click a fund for its month-by-month detail.</span><div style="display:flex;gap:10px">${canEdit?`<button class="btn-ghost" onclick="openCampanhaEdit('${esc(id)}')">Edit campaign</button>`:''}<button class="btn-acc" style="background:var(--po)" onclick="closeModal()">Close</button></div></div>
   </div></div>`;
 }
