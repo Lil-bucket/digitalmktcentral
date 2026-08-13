@@ -1154,7 +1154,7 @@ const W_LABELS={dash:'Dashboard',board:'Board',list:'List',timeline:'Timeline',t
 const B_LABELS={bo:'Overview',budgets:'Budgets',funds:'Funds',campanhas:'Campaigns',pos:'POs & Approvals',approvals:'Approvals',podesk:'PO Desk',people:'People & Roles',reqpo:'Request PO',mypos:'My POs',balance:'Balance'};
 const ROLE_NAV={
   admin:      {work:['dash','board','list','timeline','team','weekly','mytasks'], budget:['bo','budgets','campanhas','funds','pos','people']},
-  marketing:  {work:['dash','board','list','timeline','weekly','mytasks'],        budget:['bo','campanhas','funds','pos']},
+  marketing:  {work:['dash','board','list','timeline','weekly','mytasks'],        budget:['bo','budgets','campanhas','funds','pos']},
   financeiro: {work:[],                                                          budget:['bo','funds','pos']},
   agencia:    {work:['board','list','timeline'],                                 budget:['bo','funds','pos']}
 };
@@ -5940,7 +5940,13 @@ function renderBudgets(){
   const catSet=new Set([...Object.keys(byCat),...orcs.map(o=>o.product_category).filter(Boolean)]);
   const catKeys=Array.from(catSet).sort((a,b)=>{let ia=PRODUCT_CATS.indexOf(a),ib=PRODUCT_CATS.indexOf(b);if(ia<0)ia=99;if(ib<0)ib=99;return ia-ib||a.localeCompare(b);});
   const header=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><b style="font-family:var(--sans);font-size:var(--fs-base)">Budget categories</b>${canBudget?'<button class="chip-btn" onclick="openOrcNew()">+ New budget</button>':''}</div>`;
-  const fee=canSensitive?feeSplitBlock():'<div class="banner">Cost center / account / description splits are restricted to Admin and Finance.</div>';
+  /* Marketing reaches this screen too now, and gets the categories in full —
+     caps, consumption, the activity chart and the activity cards. What it does
+     not get is the Rateios block and the cost center / account table: those are
+     the accounting layer, Admin and Finance work. Rendered as nothing rather
+     than as a "restricted" banner — a banner explaining an absence is just a
+     second thing to read on a screen that is complete without it. */
+  const fee=canSensitive?feeSplitBlock():'';
   if(!catKeys.length) return header+'<div class="banner">No budgets registered.</div>'+fee;
   if(!catKeys.includes(BUDGET_CAT)) BUDGET_CAT=catKeys[0];
   const sums=l=>({tot:l.reduce((s,p)=>s+(tetoBy[p.id]||0),0),cons:l.reduce((s,p)=>s+(consBy[p.id]||0),0),comp:l.reduce((s,p)=>s+(compBy[p.id]||0),0),pnd:l.reduce((s,p)=>s+(pendBy[p.id]||0),0)});
@@ -5983,7 +5989,7 @@ function renderBudgets(){
       <div style="height:280px">${actOrder.length?'<canvas id="chartBudgetAct"></canvas>':'<div class="banner">No funds in this category yet.</div>'}</div>
     </div>
     ${actOrder.length?`<div style="font-size:var(--fs-eyebrow);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--txt-3);margin:0 2px 10px">Activity groups · tap to open in Funds</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px">${actOrder.map(actCard).join('')}</div>`:''}`;
-  return header+tabsHTML+activeHTML+`<div style="margin-top:24px">${fee}</div>`;
+  return header+tabsHTML+activeHTML+(fee?`<div style="margin-top:24px">${fee}</div>`:'');
 }
 /* Export (read-only) — mirrors renderBudgets' own aggregation exactly, transcribes
    what that screen already displays per fund, never recomputes new business values. */
