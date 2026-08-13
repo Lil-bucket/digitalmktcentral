@@ -1598,7 +1598,7 @@ function renderKanban(){
           ${bt?`<span style="display:inline-flex;align-items:center;gap:5px;font-size:9.5px;font-weight:800;color:${bt.color};background:${bt.color}18;border-radius:20px;padding:2px 8px;margin-bottom:6px">${esc(bt.name)}</span>`:''}
           <div style="font-weight:600;font-size:13px;line-height:1.3">${esc(p.nome)}</div>
           <div style="font-size:11px;color:var(--txt-3);margin-top:5px">${esc(p.partner||p.marca||'')}</div>
-          ${cats.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${cats.slice(0,3).map(c=>`<span style="font-size:9.5px;font-weight:700;color:var(--txt-2);background:var(--paper);border:1px solid var(--line-2);border-radius:20px;padding:2px 7px">${esc(c)}</span>`).join('')}${cats.length>3?`<span style="font-size:9.5px;font-weight:700;color:var(--txt-3);padding:2px 4px">+${cats.length-3}</span>`:''}</div>`:''}
+          ${cats.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${cats.slice(0,3).map(c=>`<span style="font-size:9.5px;font-weight:700;color:var(--txt-2);background:var(--paper);border:1px solid var(--line-2);border-radius:20px;padding:2px 7px">${esc(catKeyLabel(c))}</span>`).join('')}${cats.length>3?`<span style="font-size:9.5px;font-weight:700;color:var(--txt-3);padding:2px 4px">+${cats.length-3}</span>`:''}</div>`:''}
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px"><span style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:20px;background:${hp.bg};color:${hp.fg}"><span style="width:6px;height:6px;border-radius:50%;background:${hp.dot}"></span>${hp.name}</span><span class="avatar" style="width:22px;height:22px;background:${avColor(respName(p.resp))};font-size:9.5px" title="${esc(respName(p.resp)||'')}">${initials(respName(p.resp))}</span></div>
           <div class="pbar" style="margin-top:9px"><span style="width:${pr}%;background:${hp.dot}"></span></div>
           <div style="font-size:10.5px;color:var(--txt-3);font-weight:600;margin-top:6px">${tt} task(s) · due ${di.txt}</div></div>`;
@@ -1618,7 +1618,7 @@ function renderAprovacoes(){
     <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">Funds awaiting approval</b>${projPend.length?`<span style="background:var(--po);color:#fff;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800">${projPend.length}</span>`:''}</div>
     <div style="padding:12px 16px;display:flex;flex-direction:column;gap:10px">${projPend.length?projPend.map(p=>`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;background:#fafbfd">
       <div style="display:flex;justify-content:space-between;gap:10px"><b style="font-size:13px">${esc(p.nome)}</b><span class="mono" style="font-size:12px">${BRL(tetoBy[p.id]||0)}</span></div>
-      <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">${esc(p.agencia||'')} · ${esc(p.product_category||'')} · ${esc(p.activity||'')}</div>
+      <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">${esc(p.agencia||'')} · ${esc(catKeyLabel(p.product_category||''))} · ${esc(actColLabel(actKey(p)))}</div>
       ${canAprova?`<div style="display:flex;gap:7px;margin-top:10px"><button onclick="aprovarCamp('${esc(p.id)}')" style="padding:7px 14px;border-radius:8px;border:none;background:var(--po);color:#fff;font-weight:700;font-size:12px;cursor:pointer">Approve</button><button onclick="rejeitarCamp('${esc(p.id)}')" style="padding:7px 14px;border-radius:8px;border:1px solid var(--line-2);background:#fff;color:var(--txt-2);font-weight:700;font-size:12px;cursor:pointer">Reject</button></div>`:''}
     </div>`).join(''):'<div class="empty">No pending funds.</div>'}</div></div>`;
   const poCol=`<div style="background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
@@ -1649,7 +1649,15 @@ const CAT_META={
   MON: {c:'#7c3aed', bg:'#efe9fd', icon:'monitor', label:'Monitors'}
 };
 const catMeta=k=>CAT_META[k]||{c:'#59606e',bg:'#edeff4',icon:'folder',label:k};
-const ACT_META={KOL:{icon:'mic',label:'KOL / Influencer'},FEE:{icon:'clipboard',label:'Agency fee'},AON:{icon:'radio',label:'Always On'},Campaings:{icon:'megaphone',label:'Campaign'},Campaign:{icon:'megaphone',label:'Campaign'}};
+/* Display-only rename. The stored key stays 'WG' — funds, orcamentos, rateio
+   and the Extrato layout descriptions all key off it, so renaming for real is
+   a migration across four tables, not a label change. catKeyLabel is what the
+   screen says; everything that reads, writes, filters or groups still uses the
+   key. It also handles the ' + ' join ccAggregate makes when two categories
+   land on one account line. */
+const CAT_ALIAS={WG:'WM'};
+const catKeyLabel=k=>String(k||'').split(' + ').map(x=>CAT_ALIAS[x.trim()]||x).join(' + ');
+const ACT_META={KOL:{icon:'mic',label:'KOL / Influencer'},FEE:{icon:'clipboard',label:'Agency fee'},AON:{icon:'radio',label:'Always On'},Campaings:{icon:'megaphone',label:'Paid Media'},Campaign:{icon:'megaphone',label:'Paid Media'}};
 const actMeta=a=>ACT_META[a]||{icon:'tag',label:a||'—'};
 /* Both accordions on this screen — funds by category and funds by campanha —
    start closed and open like a dropdown. Expanded-by-default meant reaching
@@ -1732,7 +1740,7 @@ function renderFunds(){
       </select>
       <select onchange="fundSetFilter('cat',this.value)" style="padding:7px 10px;border-radius:8px;border:1px solid ${FUND_FILTER_CAT?'var(--po)':'var(--line-2)'};background:#fff;font-size:12px;font-weight:600;color:var(--txt-2)">
         <option value="">All categories</option>
-        ${fundGlobalCats().map(c=>`<option value="${esc(c)}" ${FUND_FILTER_CAT===c?'selected':''}>${esc(c)}</option>`).join('')}
+        ${fundGlobalCats().map(c=>`<option value="${esc(c)}" ${FUND_FILTER_CAT===c?'selected':''}>${esc(catKeyLabel(c))}</option>`).join('')}
       </select>
       ${(FUND_FILTER_ACT||FUND_FILTER_CAT)?`<button onclick="fundSetFilter('act','');fundSetFilter('cat','')" style="border:none;background:none;color:var(--po);font-size:12px;font-weight:700;cursor:pointer">Clear filters</button>`:''}
     </div>
@@ -1775,7 +1783,7 @@ function renderCampBody(){
       <div role="button" tabindex="0" aria-expanded="${open}" onclick="fundToggleCat('${esc(ck)}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();fundToggleCat('${esc(ck)}')}" style="padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;background:${open?m.bg:''}" onmouseover="this.style.background='${open?m.bg:'var(--paper-2)'}'" onmouseout="this.style.background='${open?m.bg:''}'">
         <span class="ich" style="background:${open?'#fff':m.bg};color:${m.c}">${icn(m.icon,15)}</span>
         <span style="min-width:0">
-          <b style="font-family:'Hanken Grotesk',sans-serif;font-size:13.5px;display:block">${esc(ck)}${m.label!==ck?` <span style=\"font-weight:500;color:var(--txt-3);font-size:11.5px\">· ${m.label}</span>`:''}</b>
+          <b style="font-family:'Hanken Grotesk',sans-serif;font-size:13.5px;display:block">${esc(catKeyLabel(ck))}${m.label!==ck?` <span style=\"font-weight:500;color:var(--txt-3);font-size:11.5px\">· ${m.label}</span>`:''}</b>
           <span style="font-size:11px;color:var(--txt-3);font-weight:600">${funds.length} fund${funds.length===1?'':'s'}${open?'':' · click to open'}</span>
         </span>
         <span style="flex:1"></span>
@@ -1831,7 +1839,8 @@ function fundCampBodyHTML(fl){
 }
 /* ===== Category view: activity columns (fixed, aligned across categories) + compact cards ===== */
 const ACT_COL_ORDER=['Campaign','FEE','KOL','AON','Communication'];
-function actColLabel(a){ return ({Campaign:'Campaign',FEE:'Fee',KOL:'KOL',AON:'AON',Communication:'Comms'})[a]||a||'Other'; }
+// Display-only, same deal as CAT_ALIAS: funds.activity still stores 'Campaign'.
+function actColLabel(a){ return ({Campaign:'Paid Media',FEE:'Fee',KOL:'KOL',AON:'AON',Communication:'Comms'})[a]||a||'Other'; }
 // "Campaings" is a legacy misspelling that exists in some older records — fold
 // it into "Campaign" so it doesn't show up as a second, visually-identical
 // column (both render the same label via ACT_META, but were never the same
@@ -2597,7 +2606,7 @@ function renderCampEditForm(){
     <div class="modal-b">
       <div class="field full"><label>Fund name</label><input value="${esc(ce.nome)}" onchange="fundEditSet('nome',this.value)" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
       <div class="fgrid" style="margin-top:14px">
-        <div class="field"><label>Activity</label><select onchange="fundEditActivity(this.value)">${ACT_OPTS.map(a=>`<option ${ce.activity===a?'selected':''}>${a}</option>`).join('')}</select></div>
+        <div class="field"><label>Activity</label><select onchange="fundEditActivity(this.value)">${ACT_OPTS.map(a=>`<option value="${esc(a)}" ${ce.activity===a?'selected':''}>${esc(actColLabel(a))}</option>`).join('')}</select></div>
         <div class="field"><label>Agency</label><select onchange="fundEditSet('agencia',this.value)">${ags.map(a=>`<option ${ce.agencia===a?'selected':''}>${esc(a)}</option>`).join('')}${ags.length?'':'<option value="">—</option>'}</select></div>
       </div>
       <div class="field full" style="margin-top:14px"><label>Campaign <span style="font-weight:600;color:var(--txt-3)">(optional grouping)</span></label><select onchange="fundEditSet('campanha_id',this.value)"><option value="" ${!ce.campanha_id?'selected':''}>— none —</option>${(DATA.campanhas||[]).map(c=>`<option value="${c.id}" ${ce.campanha_id===c.id?'selected':''}>${esc(c.nome)}</option>`).join('')}</select></div>
@@ -2740,7 +2749,7 @@ function renderPOs(){
     <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">Funds awaiting approval</b><span style="background:var(--po);color:#fff;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800">${projPend.length}</span></div>
     <div style="padding:12px 16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">${projPend.map(p=>`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;background:#fafbfd">
       <div style="display:flex;justify-content:space-between;gap:10px"><b style="font-size:13px">${esc(p.nome)}</b><span class="mono" style="font-size:12px">${BRL(tetoPend[p.id]||0)}</span></div>
-      <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">${esc(p.agencia||'')} · ${esc(p.product_category||'')} · ${esc(p.activity||'')}</div>
+      <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">${esc(p.agencia||'')} · ${esc(catKeyLabel(p.product_category||''))} · ${esc(actColLabel(actKey(p)))}</div>
       ${canAprovaCamp?`<div style="display:flex;gap:7px;margin-top:10px"><button onclick="aprovarCamp('${esc(p.id)}')" style="padding:7px 14px;border-radius:8px;border:none;background:var(--po);color:#fff;font-weight:700;font-size:12px;cursor:pointer">Approve</button><button onclick="rejeitarCamp('${esc(p.id)}')" style="padding:7px 14px;border-radius:8px;border:1px solid var(--line-2);background:#fff;color:var(--txt-2);font-weight:700;font-size:12px;cursor:pointer">Reject</button></div>`:''}
     </div>`).join('')}</div></div>`:'';
   return fundPend+filt+tabsHTML+`<div id="poBody">${body}</div>
@@ -3681,7 +3690,7 @@ function renderProjModal(){
         <div class="field"><label>Project type <span style="font-weight:600;color:var(--txt-3)">(sets activity template &amp; filters)</span></label><select onchange="pmPTipo(this.value)" ${dis}><option value="">Select…</option>${BUSINESS_TYPES.map(b=>`<option value="${b.id}" ${EDIT.ptipo===b.id?'selected':''}>${b.name}</option>`).join('')}</select></div>
         <div class="field"><label>Due date</label><input type="date" value="${esc(EDIT.prazo||'')}" onchange="pmSet('prazo',this.value)" ${dis}></div>
       </div>
-      <div class="field full" style="margin-top:14px"><label>Categories <span style="font-weight:600;color:var(--txt-3)">(product categories — multi-select)</span></label><div style="display:flex;flex-wrap:wrap;gap:6px">${CAT_CHIPS.map(c=>{const on=(EDIT.categorias||[]).includes(c);return `<button ${dis} onclick="pmToggleCat('${esc(c)}')" style="padding:6px 13px;border-radius:18px;border:1px solid ${on?'var(--accent)':'var(--line-2)'};background:${on?'#fff2ee':'#fff'};color:${on?'var(--accent-deep)':'var(--txt-2)'};font-weight:700;font-size:12px;cursor:pointer">${esc(c)}</button>`;}).join('')}</div></div>
+      <div class="field full" style="margin-top:14px"><label>Categories <span style="font-weight:600;color:var(--txt-3)">(product categories — multi-select)</span></label><div style="display:flex;flex-wrap:wrap;gap:6px">${CAT_CHIPS.map(c=>{const on=(EDIT.categorias||[]).includes(c);return `<button ${dis} onclick="pmToggleCat('${esc(c)}')" style="padding:6px 13px;border-radius:18px;border:1px solid ${on?'var(--accent)':'var(--line-2)'};background:${on?'#fff2ee':'#fff'};color:${on?'var(--accent-deep)':'var(--txt-2)'};font-weight:700;font-size:12px;cursor:pointer">${esc(catKeyLabel(c))}</button>`;}).join('')}</div></div>
       <div class="field full"><label>Brand</label><div style="display:flex;flex-wrap:wrap;gap:6px">${BRAND_CHIPS.map(b=>{const on=EDIT.marca===b;return `<button ${dis} onclick="pmSet('marca','${esc(b)}');renderProjModal()" style="padding:6px 13px;border-radius:18px;border:1px solid ${on?'var(--accent)':'var(--line-2)'};background:${on?'#fff2ee':'#fff'};color:${on?'var(--accent-deep)':'var(--txt-2)'};font-weight:700;font-size:12px;cursor:pointer">${esc(b)}</button>`;}).join('')}</div></div>
       ${!EDIT._new?`<div style="display:flex;align-items:center;gap:12px;margin:14px 0 14px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:16px">${prog}%</b><span class="pbar" style="flex:1"><span style="width:${prog}%;background:${healthPill(EDIT.status||autoStatus(EDIT)).dot}"></span></span><span style="font-size:11.5px;color:var(--txt-3);font-weight:600">${done}/${tasks.length} tasks done</span></div>`:''}
       <div style="border:1px solid var(--line);border-radius:11px;overflow:hidden;margin-bottom:14px">
@@ -4309,9 +4318,47 @@ function campanhaGaugeHTML(campId,width){
   const t=campTotals(campId);
   return fundGaugeHTML(t.teto,t.cons,t.comp,t.pend,'#e20613',width||220);
 }
+/* Headline numbers for the Campaigns screen. Three things this screen was
+   silent about: what the campaigns add up to, how much money is sitting
+   unspent inside campaigns already closed (nobody is going to spend it, so it
+   is the first place to look for budget to move), and how much is riding on
+   funds nobody grouped under a campaign — the blind spot the grouping layer
+   was added to close. Same buckets campTotals() uses, so these agree with the
+   gauge on every row underneath. */
+function campanhasKpisHTML(list){
+  let teto=0,cons=0,comp=0,pend=0;
+  let closedN=0, closedSaldo=0;
+  list.forEach(c=>{
+    const t=campTotals(c.id);
+    teto+=t.teto; cons+=t.cons; comp+=t.comp; pend+=t.pend;
+    if(c.status==='encerrada'){
+      const saldo=t.teto-(t.cons+t.comp+t.pend);
+      if(saldo>0.5){ closedN++; closedSaldo+=saldo; }
+    }
+  });
+  const soltos=(DATA.poProjetos||[]).filter(p=>!p.campanha_id&&p.aprovacao_status==='APROVADO');
+  const ids=new Set(soltos.map(p=>p.id));
+  let soltosTeto=0;
+  DATA.tetos.forEach(t=>{ if(ids.has(t.fund_id)) soltosTeto+=(+t.teto||0); });
+  DATA.rateio.forEach(r=>{ if(ids.has(r.fund_id)) soltosTeto+=(+r.valor||0); });
+  const usado=cons+comp+pend;
+  const pct=teto?usado/teto*100:0, over=pct>100.5, near=!over&&pct>=90;
+  const stat=(l,v,col,sub,tip)=>`<div class="kpi"${tip?` title="${esc(tip)}"`:''}><span class="bar" style="background:${col}"></span><div class="lbl">${l}</div><div class="num" style="font-size:19px;margin-top:7px">${v}</div>${sub?`<div style="font-size:11px;color:var(--txt-3);font-weight:600;margin-top:3px">${sub}</div>`:''}</div>`;
+  return `<div style="margin-bottom:18px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px">
+      ${stat('Campaigns budgeted',BRL(teto),'#10131a',`${list.length} campaign${list.length===1?'':'s'}`)}
+      ${stat('Consumed',BRL(cons),'var(--po)',`${Math.round(pct)}% of the cap committed`,'Consumed POs only — the % also counts committed and awaiting-approval')}
+      ${stat('Committed',BRL(comp),'var(--violet)',pend?`+ ${BRL(pend)} awaiting approval`:'')}
+      ${stat('Closed with balance',BRL(closedSaldo),'var(--amber)',`${closedN} closed campaign${closedN===1?'':'s'} still holding budget`,'Campaigns marked Closed whose cap was never fully spent')}
+      ${stat('Funds with no campaign',BRL(soltosTeto),'#59606e',`${soltos.length} fund${soltos.length===1?'':'s'} ungrouped`,'Approved funds carrying no campanha_id — not counted in the totals to the left')}
+    </div>
+    ${(over||near)?`<div style="font-size:11.5px;color:${over?'#bf0008':'#9c6404'};font-weight:600;margin-top:7px">Campaigns are at ${Math.round(pct)}% of their combined cap.</div>`:''}
+  </div>`;
+}
 function renderCampanhasList(){
   let list=(DATA.campanhas||[]).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
   if(!list.length) return `<div class="empty">No campaigns yet. Campaigns group one or more funds under a name, budget and owner — create one and link funds to it from the fund form.</div>`;
+  const kpis=campanhasKpisHTML(list);
   const rows=list.map(c=>{
     const cats=campCategorias(c.id);
     const funds=campFunds(c.id);
@@ -4322,13 +4369,13 @@ function renderCampanhasList(){
           <b style="font-family:'Hanken Grotesk',sans-serif;font-size:13.5px;display:block">${esc(c.nome)}</b>
           <span style="font-size:11px;color:var(--txt-3);font-weight:600">${esc(c.responsavel||'No owner set')} · ${funds.length} fund${funds.length===1?'':'s'}</span>
         </span>
-        <span style="display:flex;gap:5px;flex-wrap:wrap;max-width:260px">${cats.length?cats.map(cat=>`<span class="badge s-blue" style="font-size:10px;padding:2px 8px">${esc(cat)}</span>`).join(''):'<span style="font-size:11px;color:var(--txt-3)">No categories</span>'}</span>
+        <span style="display:flex;gap:5px;flex-wrap:wrap;max-width:260px">${cats.length?cats.map(cat=>`<span class="badge s-blue" style="font-size:10px;padding:2px 8px">${esc(catKeyLabel(cat))}</span>`).join(''):'<span style="font-size:11px;color:var(--txt-3)">No categories</span>'}</span>
         <span class="badge ${sm.c}" style="flex-shrink:0"><span class="d"></span>${sm.t}</span>
         ${campanhaGaugeHTML(c.id,220)}
       </div>
     </div>`;
   }).join('');
-  return `<div style="background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">${rows}</div>`;
+  return kpis+`<div style="background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">${rows}</div>`;
 }
 /* Campaign detail: the roll-up header (same segmented bar the fund detail
    uses, summed across the campaign) over the list of linked funds, each row
@@ -4396,11 +4443,19 @@ function openCampanhaEdit(id){
   renderCampanhaForm();
 }
 function campEditSet(k,v){ if(CAMPEDIT)CAMPEDIT[k]=v; }
+/* Ticking a fund repaints the whole form (the picker's "reassign from…" badges
+   and the linked count both move), which used to throw the scrollable list
+   back to the top — so picking the 12th fund meant scrolling down to it again
+   for the 13th. Carry the scroll offset across the repaint. */
 function campEditToggleFund(fid){
   if(!CAMPEDIT)return;
   const i=CAMPEDIT.funds.indexOf(fid);
   if(i<0) CAMPEDIT.funds.push(fid); else CAMPEDIT.funds.splice(i,1);
+  const box=document.getElementById('campFundPicker');
+  const top=box?box.scrollTop:0;
   renderCampanhaForm();
+  const again=document.getElementById('campFundPicker');
+  if(again) again.scrollTop=top;
 }
 /* Fund picker for the campanha form: every approved/pending fund not rejected,
    flagging the ones already linked elsewhere so picking them here reassigns
@@ -4419,7 +4474,7 @@ function campFundPickerHTML(ce){
       ${elsewhere?`<span class="badge s-amber" style="flex-shrink:0;font-size:9.5px;padding:1px 7px">reassign from ${esc(elsewhere.nome)}</span>`:''}
     </label>`;
   }).join('');
-  return `<div style="max-height:220px;overflow-y:auto;border:1px solid var(--line-2);border-radius:9px;padding:0 8px">${rows}</div>`;
+  return `<div id="campFundPicker" style="max-height:220px;overflow-y:auto;border:1px solid var(--line-2);border-radius:9px;padding:0 8px">${rows}</div>`;
 }
 function renderCampanhaForm(){
   if(!CAMPEDIT)return; const ce=CAMPEDIT; const editing=!!ce.id;
@@ -4898,7 +4953,7 @@ function ccSetCat(c){ CC_FILTER.cat=c; go(SCREEN); }
 function ccFilterLabel(){
   const b=[];
   if(CC_FILTER.scope==='nolabg') b.push('Matriz (LABG) excluded');
-  if(CC_FILTER.cat) b.push(esc(CC_FILTER.cat)+' only');
+  if(CC_FILTER.cat) b.push(esc(catKeyLabel(CC_FILTER.cat))+' only');
   return b.join(' · ');
 }
 /* Categories that actually appear in the data, in the canonical product order,
@@ -4909,6 +4964,13 @@ function ccCategories(){
   (DATA.rateio||[]).forEach(r=>r.categoria&&s.add(r.categoria));
   const seen=Array.from(s);
   return PRODUCT_CATS.filter(c=>seen.includes(c)).concat(seen.filter(c=>!PRODUCT_CATS.includes(c)).sort());
+}
+/* Colour for a cost-center row's category. a.cat is the joined form when two
+   categories share an account line, so a mixed line gets the neutral tint
+   rather than one of its halves pretending to speak for both. */
+function ccRowCat(a){
+  const parts=String(a.cat||'').split(' + ').map(s=>s.trim()).filter(Boolean);
+  return parts.length===1?catMeta(parts[0]):{c:'var(--txt-2)',bg:'var(--paper-2)'};
 }
 function ccAggregate(opt){
   const fee=DATA.fee||[];
@@ -5047,7 +5109,7 @@ function ccDrillBack(){
   ccDrill(ri,mi,b.kind);
 }
 function ccDrillHead(a,m,title,tint){
-  return `<div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:${tint};flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>${title} · ${esc(fmtMes(m+'-01'))}</h3><div style="font-size:12px;color:var(--txt-3)">${a.cat?esc(a.cat)+' · ':''}<span class="mono">${esc(a.cc||'—')}</span> · <span class="mono">${esc(a.acc||'—')}</span>${a.desc?' · '+esc(a.desc):''}</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>`;
+  return `<div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:${tint};flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>${title} · ${esc(fmtMes(m+'-01'))}</h3><div style="font-size:12px;color:var(--txt-3)">${a.cat?esc(catKeyLabel(a.cat))+' · ':''}<span class="mono">${esc(a.cc||'—')}</span> · <span class="mono">${esc(a.acc||'—')}</span>${a.desc?' · '+esc(a.desc):''}</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>`;
 }
 function ccDrillCons(a,m){
   const det=(a.det[m]||[]).slice().sort((x,y)=>y.share-x.share);
@@ -5171,7 +5233,7 @@ function ccFilterBar(){
   const cats=ccCategories().filter(c=>CC_FILTER.scope!=='nolabg'||c!==CC_LABG);
   const sel=`<select onchange="ccSetCat(this.value)" style="padding:5px 9px;border:1px solid var(--line);border-radius:9px;background:#fff;font-size:11.5px;font-weight:600;color:var(--txt-2)">
     <option value=""${CC_FILTER.cat?'':' selected'}>All categories</option>
-    ${cats.map(c=>`<option value="${esc(c)}"${CC_FILTER.cat===c?' selected':''}>${esc(c)}</option>`).join('')}
+    ${cats.map(c=>`<option value="${esc(c)}"${CC_FILTER.cat===c?' selected':''}>${esc(catKeyLabel(c))}</option>`).join('')}
   </select>`;
   const clear=ccFilterOn()?`<button class="chip-btn" onclick="ccClearFilter()" style="font-size:11px;padding:5px 10px">Clear filter</button>`:'';
   return `<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:9px">${group('Scope',scope)}${group('Category',sel)}${clear}</div>`;
@@ -5244,9 +5306,21 @@ function feeSplitBlock(only){
         </tr>
       </thead>
       <tbody>
-      ${accRows.map((a,ri)=>{const{totB,totC,totS}=a;return `<tr>
-        <td class="s0" style="font-weight:700;font-size:11px" title="${esc(a.cat||'')}">${esc(a.cat||'—')}</td>
-        <td class="mono s1" title="${esc(a.cc||'')}">${esc(a.cc||'—')}</td>
+      ${accRows.map((a,ri)=>{const{totB,totC,totS}=a;
+        /* Every line of the same category carries that category's colour, so
+           a block of TV rows reads as one block while scrolling sideways
+           through twelve months of figures. Only the frozen Cat. cell is
+           tinted — tinting the whole row would fight the month banding and
+           the negative-balance red. */
+        const cm=ccRowCat(a);
+        /* A blank cost center is data, not a rendering gap: classificar()
+           returned an account and a description but no CC for this fund (all
+           LABG lines plus one WG one, as of 2026-08). Say so instead of
+           printing a bare dash that reads like a bug. */
+        const noCC=!String(a.cc||'').trim();
+        return `<tr>
+        <td class="s0" style="font-weight:700;font-size:11px;background:${cm.bg};color:${cm.c};box-shadow:inset 3px 0 0 ${cm.c}" title="${esc(catKeyLabel(a.cat)||'')}">${esc(catKeyLabel(a.cat)||'—')}</td>
+        <td class="mono s1" title="${noCC?'No cost center on the fund behind this line — classificar() returned an account and description only':esc(a.cc||'')}">${noCC?'<span style="font-family:var(--sans);font-size:10px;font-weight:700;color:#9c6404;background:#fbf0d8;border:1px solid #ecd9a4;border-radius:20px;padding:1px 7px;white-space:nowrap">no CC</span>':esc(a.cc)}</td>
         <td class="mono s2" title="${esc(a.acc||'')}">${esc(a.acc||'—')}</td>
         <td class="s3" style="font-size:12px" title="${esc(a.desc||'')}">${esc(a.desc||'—')}</td>
         ${monthList.map((m,i)=>{const b=a.months[m]||0,c=a.cons[m]||0,s=b-c;
@@ -5846,7 +5920,7 @@ function renderBudgets(){
   const activeHTML=`<div style="background:#fff;border:1px solid var(--line);border-radius:var(--r-md);padding:16px 18px;box-shadow:var(--sh-1);margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
         <span class="ich" style="width:34px;height:34px;background:${m.bg};color:${m.c};flex-shrink:0">${icn(m.icon,17)}</span>
-        <span style="flex:1;min-width:150px"><b style="font-family:var(--sans);font-size:var(--fs-lg);display:block">${esc(orc?(orc.nome||m.label):m.label)}</b><span style="font-size:var(--fs-eyebrow);color:var(--txt-3);font-weight:600">${list.length} fund${list.length===1?'':'s'} · budget ${BRL(budgetTot)}</span></span>
+        <span style="flex:1;min-width:150px"><b style="font-family:var(--sans);font-size:var(--fs-lg);display:block">${esc(orc?catKeyLabel(orc.nome||m.label):m.label)}</b><span style="font-size:var(--fs-eyebrow);color:var(--txt-3);font-weight:600">${list.length} fund${list.length===1?'':'s'} · budget ${BRL(budgetTot)}</span></span>
         <span class="mono" style="font-size:var(--fs-sm);color:var(--txt-2);text-align:right;white-space:nowrap" title="Consumed + committed / cap">${BRL(t.cons+t.comp)} <span style="color:var(--txt-3)">/ ${BRL(t.tot)}</span></span>
         <span class="pct" style="font-weight:800;font-size:var(--fs-base);color:${over?'#bf0008':near?'#9c6404':'var(--txt)'}">${Math.round(raw)}%</span>
         ${canBudget&&orc?`<button class="chip-btn" onclick="event.stopPropagation();openOrcEdit('${esc(orc.id)}')">Edit budget</button>`:''}
@@ -5878,7 +5952,7 @@ function budgetExportRows(){
       const rawc=tot?(cons+comp+pnd)/tot*100:0;
       const status=rawc>100.5?'Estourado':rawc>=90?'Próximo do limite':'Dentro do orçamento';
       const row={
-        'Categoria': o.nome||o.product_category||'—',
+        'Categoria': catKeyLabel(o.nome||o.product_category||'—'),
         'Projeto': p.nome||'',
         'Fornecedor': p.agencia||'',
         'Atividade': actColLabel(actKey(p)),
@@ -5908,7 +5982,7 @@ function costCenterExportRows(){
   if(!canSensitive) return null;
   const {accRows,monthList}=ccAggregate();
   const rows=accRows.map(a=>{
-    const row={'Categoria':a.cat||'—','Centro de custo':a.cc||'—','Conta':a.acc||'—','Descrição':a.desc||'—'};
+    const row={'Categoria':catKeyLabel(a.cat||'—'),'Centro de custo':a.cc||'—','Conta':a.acc||'—','Descrição':a.desc||'—'};
     let totB=0,totC=0;
     monthList.forEach(m=>{
       const b=a.months[m]||0, c=a.cons[m]||0, label=fmtMes(m+'-01');
@@ -6122,7 +6196,7 @@ function renderCampForm(){
     <div class="modal-b">
       <div class="field full"><label>Fund name</label><input value="${esc(FUND.nome)}" onchange="FUND.nome=this.value" placeholder="e.g. Mini LED Push" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
       <div class="fgrid" style="margin-top:14px">
-        <div class="field"><label>Activity</label><select onchange="fundSet('activity',this.value)">${ACT_OPTS.map(a=>`<option ${FUND.activity===a?'selected':''}>${a}</option>`).join('')}</select></div>
+        <div class="field"><label>Activity</label><select onchange="fundSet('activity',this.value)">${ACT_OPTS.map(a=>`<option value="${esc(a)}" ${FUND.activity===a?'selected':''}>${esc(actColLabel(a))}</option>`).join('')}</select></div>
         <div class="field"><label>Agency</label><select onchange="FUND.agencia=this.value">${ags.map(a=>`<option ${FUND.agencia===a?'selected':''}>${esc(a)}</option>`).join('')}${ags.length?'':'<option value="">—</option>'}</select></div>
       </div>
       <div class="field full" style="margin-top:14px"><label>Campaign <span style="font-weight:600;color:var(--txt-3)">(optional grouping)</span></label><select onchange="FUND.campanha_id=this.value"><option value="" ${!FUND.campanha_id?'selected':''}>— none —</option>${(DATA.campanhas||[]).map(c=>`<option value="${c.id}" ${FUND.campanha_id===c.id?'selected':''}>${esc(c.nome)}</option>`).join('')}</select></div>
@@ -6195,7 +6269,7 @@ function renderOrcForm(){
   if(!ORC)return;
   const editing=!!ORC.id;
   const used=usedCats(); const free=PRODUCT_CATS.filter(c=>!used.has(c));
-  const opts=free.length?free.map(c=>`<option value="${esc(c)}" ${ORC.cat===c?'selected':''}>${esc(c)}</option>`).join(''):'';
+  const opts=free.length?free.map(c=>`<option value="${esc(c)}" ${ORC.cat===c?'selected':''}>${esc(catKeyLabel(c))}</option>`).join(''):'';
   const catField=editing
     ? `<div class="field"><label>Product category</label><input value="${esc(ORC.cat)}" disabled style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:#f3f4f6;font:inherit;font-size:13.5px;color:var(--txt-2)"></div>`
     : `<div class="field"><label>Product category <span style="font-weight:600;color:var(--txt-3)">(one budget per category)</span></label><select onchange="ORC.cat=this.value">${opts}</select></div>`;
