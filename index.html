@@ -201,6 +201,96 @@
   .field input,.field select,.field textarea{width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px;color:var(--txt);outline:none;transition:border-color var(--fast),box-shadow var(--fast),background var(--fast)}
   .field input::placeholder,.field textarea::placeholder{color:var(--txt-3)}
   .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent);background:#fff;box-shadow:var(--ring)}
+
+  /* ===== ACTIVITY PLANNER (project modal) =====
+     One column template shared by the header, the activity rows and the
+     sub-item rows, so every date lands under its own heading. Rows stay real
+     elements (not display:contents) because they are drag targets. */
+  .atv-wrap{--atv-cols:34px 20px minmax(140px,1fr) 118px 112px 112px 132px 78px 46px;
+    border:1px solid var(--line);border-radius:var(--r-md);background:var(--card);margin-bottom:14px}
+  .atv-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:11px 14px;border-bottom:1px solid var(--line);background:var(--paper-2);border-radius:var(--r-md) var(--r-md) 0 0}
+  .atv-top b{font-family:var(--sans);font-size:var(--fs-sm)}
+  .atv-top .sub{font-size:var(--fs-xs);color:var(--txt-3);font-weight:600}
+  .atv-hd,.atv-row{display:grid;grid-template-columns:var(--atv-cols);column-gap:8px;align-items:center;padding:0 12px}
+  .atv-hd{border-bottom:1px solid var(--line)}
+  .atv-hd>span{font-size:var(--fs-eyebrow);font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;padding:7px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .atv-row{border-bottom:1px solid #f0f2f6;min-height:38px;transition:background var(--fast) var(--ease)}
+  .atv-row:hover{background:var(--paper-2)}
+  .atv-row.drop-tgt{background:var(--accent-soft);box-shadow:inset 0 2px 0 var(--accent)}
+  .atv-row.is-sub{background:#fcfdff}
+  .atv-row.is-sub:hover{background:var(--paper-2)}
+  .atv-num{position:relative;align-self:stretch;font-family:var(--mono);font-size:10px;color:var(--txt-3);display:grid;place-items:center;user-select:none}
+  .atv-num .n{transition:opacity var(--fast)}
+  .atv-grip{position:absolute;inset:0;opacity:0;color:var(--txt-3);cursor:grab;display:grid;place-items:center;transition:opacity var(--fast)}
+  .atv-row:hover .atv-grip{opacity:1}
+  .atv-row:hover .atv-num .n{opacity:0}
+  .atv-check{width:17px;height:17px;border-radius:5px;border:1.5px solid var(--line-2);background:#fff;color:#fff;font-size:10px;font-weight:800;display:grid;place-items:center;padding:0;line-height:1;flex-shrink:0}
+  .atv-check:hover{border-color:var(--green)}
+  .atv-check.on{background:var(--green);border-color:var(--green)}
+  /* Borderless-until-touched fields: 40 boxed inputs in one panel reads as
+     noise; the box appears on hover and focus, where it means something. */
+  .atv-in{width:100%;min-width:0;padding:6px 8px;border:1px solid transparent;border-radius:var(--r-xs);background:transparent;font:inherit;font-size:var(--fs-sm);font-weight:600;color:var(--txt);outline:none;transition:border-color var(--fast),background var(--fast),box-shadow var(--fast)}
+  .atv-in:hover:not(:disabled){border-color:var(--line-2)}
+  .atv-in:focus{border-color:var(--accent);background:#fff;box-shadow:var(--ring)}
+  .atv-in:disabled{color:var(--txt-2);cursor:default}
+  .atv-in::placeholder{color:var(--txt-3);font-weight:500}
+  .atv-in.done{text-decoration:line-through;color:var(--txt-3)}
+  .atv-in.d8{font-family:var(--mono);font-size:var(--fs-xs);font-weight:500;color:var(--txt-2)}
+  /* An unset date shows nothing but its calendar affordance — forty rows of
+     "dd/mm/yyyy" is noise, and the field still announces itself on hover. */
+  .atv-in.d8.empty::-webkit-datetime-edit{color:transparent}
+  .atv-in.d8.empty:hover::-webkit-datetime-edit,.atv-in.d8.empty:focus::-webkit-datetime-edit{color:var(--txt-3)}
+  .atv-in.d8::-webkit-calendar-picker-indicator{opacity:.4;cursor:pointer;padding:0}
+  .atv-in.d8:hover::-webkit-calendar-picker-indicator,.atv-in.d8:focus::-webkit-calendar-picker-indicator{opacity:.8}
+  .atv-in.d8.late{color:var(--red);font-weight:700}
+  .atv-in.d8.warn{color:var(--amber-ink);font-weight:700}
+  .atv-in.mini{font-size:var(--fs-xs);font-weight:500;color:var(--txt-2)}
+  .atv-name{display:flex;align-items:center;gap:4px;min-width:0}
+  .atv-sub-tick{color:var(--line-2);flex-shrink:0;display:inline-flex}
+  .atv-dep{display:flex;align-items:center;gap:4px;min-width:0}
+  .dep-chip{display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:var(--r-pill);background:var(--slate-bg);color:var(--txt-2);font-family:var(--mono);font-size:10px;font-weight:700;white-space:nowrap;border:1px solid transparent}
+  .dep-chip:hover{border-color:var(--line-2);color:var(--txt)}
+  .dep-chip.warn{background:var(--amber-bg);color:var(--amber-ink)}
+  .dep-add{width:21px;height:21px;flex-shrink:0;border-radius:6px;border:1px dashed var(--line-2);color:var(--txt-3);font-size:13px;line-height:1;display:grid;place-items:center;padding:0}
+  .dep-add:hover{border-style:solid;border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+  .dep-none{font-size:var(--fs-xs);color:var(--txt-3)}
+  .atv-prog{display:flex;align-items:center;gap:6px}
+  .atv-prog .pct{font-family:var(--mono);font-size:var(--fs-xs);font-weight:700;color:var(--txt-2);min-width:30px;text-align:right}
+  .atv-act{display:flex;align-items:center;justify-content:flex-end;gap:2px}
+  .atv-ico{width:22px;height:22px;border-radius:6px;color:var(--txt-3);display:grid;place-items:center;padding:0;flex-shrink:0}
+  .atv-ico:hover{background:var(--paper);color:var(--txt)}
+  .atv-ico.open{color:var(--accent);background:var(--accent-soft)}
+  .atv-ico.del:hover{background:var(--red-bg);color:var(--red)}
+  .atv-chev{transition:transform var(--med) var(--ease)}
+  .atv-ico.open .atv-chev{transform:rotate(90deg)}
+  .atv-panel{padding:10px 12px 12px calc(34px + 20px + 16px);background:var(--paper-2);border-bottom:1px solid #f0f2f6}
+  .atv-panel-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:9px}
+  .atv-panel-row label{font-size:var(--fs-eyebrow);font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em}
+  .atv-panel select,.atv-panel input[type=number]{padding:5px 8px;border:1px solid var(--line-2);border-radius:7px;background:#fff;font:inherit;font-size:var(--fs-sm)}
+  .atv-add{display:flex;align-items:center;gap:8px;padding:8px 12px 8px calc(34px + 20px + 16px);border-radius:0 0 var(--r-md) var(--r-md)}
+  .atv-add input{flex:1;min-width:0;padding:7px 10px;border:1px dashed var(--line-2);border-radius:var(--r-xs);background:transparent;font:inherit;font-size:var(--fs-sm);font-weight:600;outline:none;transition:border-color var(--fast),background var(--fast),box-shadow var(--fast)}
+  .atv-add input:hover{border-color:#b9bfcc}
+  .atv-add input:focus{border-style:solid;border-color:var(--accent);background:#fff;box-shadow:var(--ring)}
+  .atv-add .hint{font-size:var(--fs-xs);color:var(--txt-3);white-space:nowrap}
+  .atv-empty{padding:22px 16px;text-align:center;font-size:var(--fs-sm);color:var(--txt-2)}
+  /* Dependency picker — fixed-position so it escapes the modal body's own
+     scroll container instead of being clipped by it. */
+  .dep-pop{position:fixed;z-index:120;width:290px;max-height:264px;overflow-y:auto;background:var(--card);border:1px solid var(--line-2);border-radius:var(--r-sm);box-shadow:var(--sh-2);padding:5px}
+  .dep-pop .hd{font-size:var(--fs-eyebrow);font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;padding:7px 9px 6px}
+  .dep-opt{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:7px 9px;border-radius:7px;font-size:var(--fs-sm);font-weight:600;color:var(--txt)}
+  .dep-opt:hover{background:var(--paper)}
+  .dep-opt .ix{font-family:var(--mono);font-size:10px;color:var(--txt-3);flex-shrink:0}
+  .dep-opt .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dep-opt.on{background:var(--accent-soft);color:var(--accent-deep)}
+  .dep-opt:disabled{opacity:.55;cursor:not-allowed}
+  .dep-pop .none{padding:12px 9px;font-size:var(--fs-sm);color:var(--txt-3)}
+  /* Narrow viewports scroll the planner sideways rather than dropping the
+     Owner and Starts-after columns: hiding them would leave dependencies
+     with no editor at all on a laptop screen. */
+  .atv-scroll{overflow-x:auto;border-radius:0 0 var(--r-md) var(--r-md)}
+  .atv-scroll>*{min-width:840px}
+  @media (prefers-reduced-motion:reduce){ .atv-chev,.atv-row,.atv-grip{transition:none} }
+
   .btn-acc{padding:10px 18px;border-radius:10px;background:var(--accent);color:#fff;font-weight:700;font-size:13.5px;box-shadow:var(--sh-1)}
   .btn-acc:hover{filter:brightness(.9) saturate(1.05)}
   .btn-acc:active{transform:scale(.98)}
@@ -569,11 +659,40 @@ function isTagged(p){
    tagged on the project can add, rename, reorder and delete its activities.
    The main project fields (name, type, due date, categories, brand) and
    "Delete project" stay gated behind canEdit(). */
-function canEditAtividades(p){ return canEdit(p)||(effPapel()==='marketing'&&isTagged(p)); }
+function canEditAtividades(p){ return canEdit(p)||(effPapel()==='marketing'&&isTagged(p))||(effPapel()==='agencia'&&projHasAgencia(p,effAgencia())); }
+/* The agency roster the Work module offers when assigning a project to one or
+   more agencies. Drawn from the same two sources the Budget module already
+   trusts — the people roster (perfis) and the funds' own agencia column —
+   union whatever is already stored on projects, so an agency that was tagged
+   before it had a login (or after it lost one) never silently disappears from
+   the chips of the projects that reference it. */
+function workAgencias(){
+  const set=new Set();
+  (DATA.pessoas||[]).forEach(pe=>{ if(pe.papel==='agencia'&&pe.agencia) set.add(pe.agencia); });
+  (DATA.poProjetos||[]).forEach(f=>{ if(f.agencia) set.add(f.agencia); });
+  (DATA.projetos||[]).forEach(p=>{ (projAgencias(p)||[]).forEach(a=>set.add(a)); });
+  return [...set].filter(Boolean).sort();
+}
+/* One reader for "which agencies is this project shared with". `agencies` is
+   the current field (multi-select chips on the project modal); `partner` and
+   `agencia` are single-value fields written by older versions, kept readable
+   so pre-existing projects stay visible to the agency they were assigned to. */
+function projAgencias(p){
+  if(!p) return [];
+  const out=(p.agencies||[]).slice();
+  [p.partner,p.agencia].forEach(a=>{ if(a&&!out.includes(a)) out.push(a); });
+  return out;
+}
+function projHasAgencia(p,ag){ return !!(ag&&projAgencias(p).includes(ag)); }
+/* An agency login sees a project when it is assigned to that agency, or when
+   the person themself is tagged on it — "conforme a agência e o usuário".
+   Everyone else sees everything; RLS on act_projects is deliberately open to
+   any authenticated user, so this is a scoping rule, not a security boundary. */
 function visProjs(){
-  if(PAPEL==='agencia'&&MINHA_AGENCIA){
+  const ag=effAgencia();
+  if(effPapel()==='agencia'&&ag){
     const meEmail=((currentUser&&currentUser.email)||'').toLowerCase();
-    return DATA.projetos.filter(p=>p.partner===MINHA_AGENCIA||p.agencia===MINHA_AGENCIA||(p.agencies||[]).includes(MINHA_AGENCIA)||(p.envolvidos||[]).some(x=>(x.email||'').toLowerCase()===meEmail));
+    return DATA.projetos.filter(p=>projHasAgencia(p,ag)||(p.envolvidos||[]).some(x=>(x.email||'').toLowerCase()===meEmail));
   }
   return DATA.projetos;
 }
@@ -620,6 +739,9 @@ const ICONS={
   megaphone:'<path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',
   tag:'<path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4Z"/><circle cx="7.5" cy="7.5" r=".5"/>',
   chev:'<path d="m6 9 6 6 6-6"/>',
+  chevR:'<path d="m9 18 6-6-6-6"/>',
+  trash:'<path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>',
+  arrowR:'<path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>',
   grip:'<circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/>',
   refresh:'<path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4"/>',
   link:'<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'
@@ -830,9 +952,26 @@ function seedDemoData(){
     {nome:'[DEMO] Retail POS Materials',tipo:'trade',ptipo:'midia',partner:'Mindshare',resp:'Eva Martins',etapa:'briefing',status:'bloqueado',prazo:D(2026,9,5)},
     {nome:'[DEMO] PR Media Outreach',tipo:'livre',ptipo:'pr',partner:'Vizeu',resp:'Ana Ramos',etapa:'concluido',status:'concluido',prazo:D(2026,6,15)}
   ];
-  const projetos=projSeed.map((p,i)=>({id:'demo-proj-'+i,nome:p.nome,tipo:p.tipo,ptipo:p.ptipo,partner:p.partner,marca:p.partner,resp:p.resp,owner:'demo@example.com',prazo:p.prazo,inicio:D(2026,6,1),
-    tasks:typeOf(p.tipo).tasks.map((n,ti)=>({id:'demo-task-'+i+'-'+ti,n,done:ti<(stages.indexOf(p.etapa)+1)*1.4,fim:p.prazo,status:'no_prazo',pct:0,obs:'',resp:'',subs:[]})),
-    logs:[],envolvidos:[],categorias:[],etapa:p.etapa,etapa_override:p.etapa,status:p.status}));
+  /* Activities are laid out as a real chain — each one starts the day after
+     the previous one is due — so the planner, the conflict flag and the
+     timeline all have something truthful to draw. A flat list sharing one due
+     date (what the seed used to produce) collapses every bar onto one day. */
+  const projetos=projSeed.map((p,i)=>{
+    const names=typeOf(p.tipo).tasks;
+    const span=Math.max(3,Math.floor(60/Math.max(1,names.length)));
+    const doneN=Math.round((stages.indexOf(p.etapa)+1)*1.4);
+    let cursor=D(2026,6,1);
+    const tasks=names.map((n,ti)=>{
+      const inicio=ti?dAdd(cursor,1):cursor;
+      const fim=dAdd(inicio,span-1);
+      cursor=fim;
+      const done=ti<doneN;
+      return {id:'demo-task-'+i+'-'+ti,n,done,inicio,fim:(ti===names.length-1?p.prazo:fim),
+        dep:ti?['demo-task-'+i+'-'+(ti-1)]:[],status:done?'concluido':'no_prazo',pct:done?100:0,obs:'',resp:'',subs:[]};
+    });
+    return {id:'demo-proj-'+i,nome:p.nome,tipo:p.tipo,ptipo:p.ptipo,partner:p.partner,agencies:[p.partner],marca:p.partner,resp:p.resp,owner:'demo@example.com',prazo:p.prazo,inicio:D(2026,6,1),
+      tasks,logs:[],envolvidos:[],categorias:[],etapa:p.etapa,etapa_override:p.etapa,status:p.status};
+  });
 
   // agencia_nivel mirrors what listar_pessoas() returns for real — without it
   // the demo can't show the PO-only carve-outs (no Work nav, not taggable).
@@ -1043,7 +1182,13 @@ async function loadPapel(){
    recomputes "Late" against today's date, not against whenever this tab
    happened to be opened. */
 function normProjeto(p){
-  p.tasks=(p.tasks||p.atividades||p.activities||p.checklist||[]).map(t=>({...t, n:t.n||t.nome||t.titulo||t.title||'', done:!!t.done, fim:t.fim||t.due||'', status:t.status||(t.done?'concluido':'no_prazo'), pct:t.pct!=null?t.pct:(t.done?100:0), obs:t.obs||t.nota||'', subs:t.subs||t.subitens||[]}));
+  /* `inicio` (start date) and `dep` (finish-to-start predecessors) are newer
+     than most stored rows — default them here so every render site can read
+     t.inicio / t.dep without guarding, and so a project written by an older
+     version doesn't need a migration to open. */
+  const normSub=s=>({...s, n:s.n||s.nome||'', done:!!s.done, inicio:s.inicio||'', fim:s.fim||s.due||'', dep:Array.isArray(s.dep)?s.dep:(s.dep?[s.dep]:[]), resp:s.resp||'', obs:s.obs||''});
+  p.tasks=(p.tasks||p.atividades||p.activities||p.checklist||[]).map(t=>({...t, n:t.n||t.nome||t.titulo||t.title||'', done:!!t.done, inicio:t.inicio||'', fim:t.fim||t.due||'', dep:Array.isArray(t.dep)?t.dep:(t.dep?[t.dep]:[]), status:t.status||(t.done?'concluido':'no_prazo'), pct:t.done?100:(t.pct!=null?t.pct:0), obs:t.obs||t.nota||'', subs:(t.subs||t.subitens||[]).map(normSub)}));
+  p.agencies=Array.isArray(p.agencies)?p.agencies:[];
   p.logs=(p.logs||p.updates||[]).map(l=>({...l, txt:l.txt||l.texto||l.mensagem||l.msg||'', autor:l.autor||l.author||l.by||'', t:l.t||l.data||l.date||''}));
   p.etapa=effectiveEtapa(p); p.status=autoStatus(p);
   return p;
@@ -1156,7 +1301,7 @@ const ROLE_NAV={
   admin:      {work:['dash','board','list','timeline','team','weekly','mytasks'], budget:['bo','budgets','campanhas','funds','pos','people']},
   marketing:  {work:['dash','board','list','timeline','weekly','mytasks'],        budget:['bo','budgets','campanhas','funds','pos']},
   financeiro: {work:[],                                                          budget:['bo','funds','pos']},
-  agencia:    {work:['board','list','timeline'],                                 budget:['bo','funds','pos']}
+  agencia:    {work:['dash','board','list','timeline','mytasks'],               budget:['bo','funds','pos']}
 };
 const PANEL_ONLY_WORK=['dash','board','list','timeline','weekly','mytasks'];
 const GLOBAL_NAV=['notif'];
@@ -1233,8 +1378,12 @@ function setViewAs(v){
   else VIEW_AS={type:'role',value:v.slice(2)};
   go(SCREEN);
 }
+/* Shown on Budget AND Work screens: since visProjs() now scopes the Work
+   module by agency, an admin simulating an agency must be able to see (and
+   leave) that state from the very screens it changes, instead of finding the
+   project list mysteriously short. */
 function viewAsBarHTML(screen,meta){
-  if(!(isManager||PAPEL==='admin')||meta.mod!=='budget'||screen==='people') return '';
+  if(!(isManager||PAPEL==='admin')||screen==='people'||screen==='notif') return '';
   const ags=viewAsAgencias();
   const cur=VIEW_AS?(VIEW_AS.type==='agencia'?'ag:'+VIEW_AS.value:'r:'+VIEW_AS.value):'';
   const roleLbl={marketing:'Marketing',financeiro:'Finance'};
@@ -1264,7 +1413,10 @@ function go(screen){
   if(['dash','board','list','timeline'].includes(screen)){
     const statusChip=STATUS_FILTER?`<button onclick="setStatusFilter('')" style="padding:8px 12px;border-radius:9px;border:1px solid var(--line-2);background:#fff;font-size:12px;font-weight:600;color:var(--txt-2);margin-right:8px">Status: ${esc(statusOf(STATUS_FILTER).name)} ✕</button>`:'';
     const exportBtn=screen==='list'?'<button class="btn-ghost" onclick="exportWorkXLSX()">Exportar Excel</button>':'';
-    $('#ctaBox').innerHTML=`${['dash','board','list'].includes(screen)?ptipoFilterHTML():''}${statusChip}${exportBtn}<button class="btn-ghost" onclick="openStageGuide()">Stage guide</button><button class="btn-acc" onclick="openProjNew()">+ New project</button>`;
+    /* Agencies read and work the projects shared with them; creating a project
+       stays with the internal profiles that own the pipeline. */
+    const canNewProj=effPapel()!=='agencia'&&!VIEW_AS;
+    $('#ctaBox').innerHTML=`${['dash','board','list'].includes(screen)?ptipoFilterHTML():''}${statusChip}${exportBtn}<button class="btn-ghost" onclick="openStageGuide()">Stage guide</button>${canNewProj?'<button class="btn-acc" onclick="openProjNew()">+ New project</button>':''}`;
   } else if(screen==='funds'&&demoWritable(['admin','marketing'].includes(PAPEL))){
     $('#ctaBox').innerHTML='<button class="btn-acc" style="background:var(--po)" onclick="openFundNew()">+ New fund</button>';
   } else if(screen==='campanhas'&&demoWritable(['admin','marketing'].includes(PAPEL))){
@@ -1317,7 +1469,7 @@ let _charts=[];
 function destroyCharts(){_charts.forEach(c=>{try{c.destroy();}catch(e){}});_charts=[];}
 function buildDashCharts(){
   const el=document.getElementById('chartStatus'); if(!el||!window.Chart)return;
-  const list=DATA.projetos;
+  const list=projList(); // same scoped list the KPIs above the chart count
   const defs=[['On track','no_prazo','#16a06a'],['At risk','atencao','#d68a04'],['Late','atrasado','#e0392b'],['Blocked','bloqueado','#6d4bd1'],['Completed','concluido','#59606e']];
   const vals=defs.map(d=>list.filter(p=>p.status===d[1]).length);
   _charts.push(new Chart(el,{type:'doughnut',data:{labels:defs.map(d=>d[0]),datasets:[{data:vals,backgroundColor:defs.map(d=>d[2]),borderWidth:2,borderColor:'#fff'}]},options:{cutout:'62%',plugins:{legend:{position:'right',labels:{font:{family:'Hanken Grotesk',size:12},boxWidth:12,padding:10}}}}}));
@@ -1419,18 +1571,19 @@ function renderProjetos(){
     return c*PROJ_SORT.dir;
   });
   if(!list.length)return '<div class="empty">No projects found.</div>';
+  const canDup=effPapel()!=='agencia'&&!VIEW_AS;
   return `<div style="background:#fff;border:1px solid var(--line);border-radius:13px;box-shadow:0 1px 2px rgba(20,22,28,.05)">
     <div style="display:grid;grid-template-columns:1.7fr 1fr 1.1fr 1fr 1.2fr .7fr .5fr;gap:10px;padding:11px 17px;background:#fafbfd;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;position:sticky;top:var(--sticky-top,73px);z-index:5;border-radius:13px 13px 0 0">
       ${sortTh(PROJ_SORT,'name','Project','projSortHeaderClick')}${sortTh(PROJ_SORT,'owner','Owner','projSortHeaderClick')}${sortTh(PROJ_SORT,'stage','Stage','projSortHeaderClick')}${sortTh(PROJ_SORT,'health','Health','projSortHeaderClick')}${sortTh(PROJ_SORT,'progress','Progress','projSortHeaderClick')}${sortTh(PROJ_SORT,'due','Due','projSortHeaderClick')}<span></span></div>
     ${list.map(p=>{const stg=stageOf(p.etapa);const hp=healthPill(p.status);const di=deadlineInfo(p);const pr=computeProg(p);const bt=businessTypeOf(p.ptipo);
       return `<div class="proj-row" onclick="openProj('${esc(p.id)}')" style="display:grid;grid-template-columns:1.7fr 1fr 1.1fr 1fr 1.2fr .7fr .5fr;gap:10px;padding:13px 17px;border-bottom:1px solid #edeff4;align-items:center;font-size:13px;cursor:pointer" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
-        <span style="min-width:0"><span style="font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span><span style="font-size:11px;color:var(--txt-3);display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${bt?`<span style="font-weight:800;color:${bt.color}">${esc(bt.name)}</span> · `:''}${esc(p.partner||p.marca||'')}${(p.categorias||[]).length?` · ${esc((p.categorias||[]).join(', '))}`:''}</span></span>
+        <span style="min-width:0"><span style="font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span><span style="font-size:11px;color:var(--txt-3);display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${bt?`<span style="font-weight:800;color:${bt.color}">${esc(bt.name)}</span> · `:''}${esc(projAgencias(p).join(', ')||p.marca||'')}${(p.categorias||[]).length?` · ${esc((p.categorias||[]).join(', '))}`:''}</span></span>
         <span style="display:flex;align-items:center;gap:7px;min-width:0"><span class="avatar" style="background:${avColor(respName(p.resp))};width:22px;height:22px;font-size:9.5px">${initials(respName(p.resp))}</span><span style="color:var(--txt-2);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(respName(p.resp)||'—')}</span></span>
         <span style="color:var(--txt-2);font-size:12.5px">${stg.name}</span>
         <span><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;background:${hp.bg};color:${hp.fg}"><span style="width:6px;height:6px;border-radius:50%;background:${hp.dot}"></span>${hp.name}</span></span>
         <span style="display:flex;align-items:center;gap:8px"><span class="pbar" style="flex:1;min-width:40px"><span style="width:${pr}%;background:${hp.dot}"></span></span><span class="pct">${pr}%</span></span>
         <span class="mono" style="font-size:11.5px;color:${di.color}">${di.txt}</span>
-        <span style="text-align:right"><button onclick="event.stopPropagation();dupProj('${esc(p.id)}')" title="Duplicate project" style="border:none;background:none;color:var(--txt-3);cursor:pointer;padding:4px;display:inline-flex">${icn('copy',14)}</button></span>
+        <span style="text-align:right">${canDup?`<button onclick="event.stopPropagation();dupProj('${esc(p.id)}')" title="Duplicate project" style="border:none;background:none;color:var(--txt-3);cursor:pointer;padding:4px;display:inline-flex">${icn('copy',14)}</button>`:''}</span>
       </div>`;
     }).join('')}</div>`;
 }
@@ -1458,26 +1611,36 @@ async function openProj(id){
    Progress-specific state (done/pct/status, sub-item completion, comment log)
    resets fresh; the due date/start carry over as a starting point to edit. */
 function dupProj(id){
+  if(effPapel()==='agencia'||VIEW_AS){ toast(VIEW_AS?roMsg():'Only the internal team can create projects.'); return; }
   const src=DATA.projetos.find(x=>x.id===id); if(!src)return;
   const clone=JSON.parse(JSON.stringify(src));
   clone.id=uid();
   clone.nome=(src.nome||'Project')+' (copy)';
   clone.owner=(currentUser&&currentUser.email)||clone.owner;
   clone.resp=(currentUser&&currentUser.email)||clone.resp;
+  /* New ids all round, so `dep` has to be re-pointed at them in a second
+     pass — copying the arrays verbatim would leave every link aimed at the
+     original project's activities, i.e. silently broken. */
+  const idMap={};
   clone.tasks=(clone.tasks||[]).map(t=>{
-    const nt={...t,id:uid(),done:false,pct:0,subs:(t.subs||[]).map(s=>({...s,id:uid(),done:false}))};
+    const nid=uid(); idMap[t.id]=nid;
+    const subs=(t.subs||[]).map(s=>{ const sid=uid(); idMap[s.id]=sid; return {...s,id:sid,done:false}; });
+    const nt={...t,id:nid,done:false,pct:0,subs};
     nt.status=autoAtvStatus(nt);
     return nt;
   });
+  const remap=arr=>(arr||[]).map(d=>idMap[d]).filter(Boolean);
+  clone.tasks.forEach(t=>{ t.dep=remap(t.dep); (t.subs||[]).forEach(s=>{ s.dep=remap(s.dep); }); });
   clone.logs=[];
   delete clone.etapa_override;
   openProjModal(clone, true);
 }
 function openProjNew(){
+  if(effPapel()==='agencia'||VIEW_AS){ toast(VIEW_AS?roMsg():'Only the internal team can create projects.'); return; }
   const t=TYPES[0];
   const proj={id:uid(),nome:'',tipo:t.id,ptipo:'',partner:'',resp:(currentUser&&currentUser.email)||'',owner:(currentUser&&currentUser.email)||'',prazo:'',inicio:'',
-    tasks:t.tasks.map(n=>({id:uid(),n,done:false,fim:'',status:'no_prazo',pct:0,obs:'',resp:'',subs:[]})),
-    logs:[],envolvidos:[],categorias:[],marca:''};
+    tasks:t.tasks.map(n=>newAtv(n)),
+    logs:[],envolvidos:[],categorias:[],agencies:[],marca:''};
   openProjModal(proj, true);
 }
 /* Export (read-only) — one row per project already in projList() (respects the
@@ -1566,6 +1729,7 @@ async function dropOnStage(ev,stageId){
   if(!pid)return;
   const p=DATA.projetos.find(x=>x.id===pid); if(!p)return;
   if(p.etapa===stageId)return;
+  if(VIEW_AS){ toast(roMsg()); return; }
   if(!canEdit(p)){ toast('You can\'t move this project.'); return; }
   const prevEtapa=p.etapa, prevOverride=p.etapa_override, prevStatus=p.status, prevLogs=(p.logs||[]).slice();
   const stg=STAGES.find(s=>s.id===stageId);
@@ -1597,7 +1761,7 @@ function renderKanban(){
           ${projHasSubs(p)?`<button onclick="event.stopPropagation();openProjTimeline('${esc(p.id)}')" title="View timeline" style="position:absolute;top:10px;right:10px;border:1px solid var(--line-2);background:#fff;color:var(--txt-2);border-radius:7px;padding:3px 7px;cursor:pointer;display:inline-flex">${icn('calendar',12)}</button>`:''}
           ${bt?`<span style="display:inline-flex;align-items:center;gap:5px;font-size:9.5px;font-weight:800;color:${bt.color};background:${bt.color}18;border-radius:20px;padding:2px 8px;margin-bottom:6px">${esc(bt.name)}</span>`:''}
           <div style="font-weight:600;font-size:13px;line-height:1.3">${esc(p.nome)}</div>
-          <div style="font-size:11px;color:var(--txt-3);margin-top:5px">${esc(p.partner||p.marca||'')}</div>
+          <div style="font-size:11px;color:var(--txt-3);margin-top:5px">${esc(projAgencias(p).join(', ')||p.marca||'')}</div>
           ${cats.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${cats.slice(0,3).map(c=>`<span style="font-size:9.5px;font-weight:700;color:var(--txt-2);background:var(--paper);border:1px solid var(--line-2);border-radius:20px;padding:2px 7px">${esc(catKeyLabel(c))}</span>`).join('')}${cats.length>3?`<span style="font-size:9.5px;font-weight:700;color:var(--txt-3);padding:2px 4px">+${cats.length-3}</span>`:''}</div>`:''}
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px"><span style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:20px;background:${hp.bg};color:${hp.fg}"><span style="width:6px;height:6px;border-radius:50%;background:${hp.dot}"></span>${hp.name}</span><span class="avatar" style="width:22px;height:22px;background:${avColor(respName(p.resp))};font-size:9.5px" title="${esc(respName(p.resp)||'')}">${initials(respName(p.resp))}</span></div>
           <div class="pbar" style="margin-top:9px"><span style="width:${pr}%;background:${hp.dot}"></span></div>
@@ -3096,11 +3260,17 @@ async function rejeitarFatPO(){
    ============================================================ */
 let EDIT=null;
 function closeModal(){
-  $('#modalMount').innerHTML=''; EDIT=null; PODETAIL=null; PM_OPEN=false; CC_DRILL_BACK=null;
+  $('#modalMount').innerHTML=''; EDIT=null; PODETAIL=null; PM_OPEN=false; CC_DRILL_BACK=null; DEP_POP=null; PM_REFOCUS=null;
   // A refresh that landed while this modal was open held its repaint back.
   if(SYNC_DEFERRED){ SYNC_DEFERRED=false; syncRerender(); }
 }
-document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&$('#modalMount').firstElementChild) closeModal(); });
+/* Escape peels one layer at a time: an open dependency picker first, the
+   modal only once nothing is layered on top of it. */
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape'||!$('#modalMount').firstElementChild)return;
+  if(DEP_POP){ pmDepClosePop(); return; }
+  closeModal();
+});
 function tasksKey(){ return 'po_ptasks_'+((currentUser&&currentUser.email)||'anon'); }
 /* Personal tasks live in Supabase (painel · tarefas_pessoais, RLS per email).
    localStorage is an offline cache; on first load, local tasks migrate to the server. */
@@ -3245,6 +3415,26 @@ function renderNotes(){
 function pmSet(k,v){ if(EDIT)EDIT[k]=v; }
 function pmType(v){ if(!EDIT)return; EDIT.tipo=v; if(EDIT._new){ const t=typeOf(v); EDIT.tasks=t.tasks.map(n=>({id:uid(),n,done:false,fim:'',status:'no_prazo',pct:0,obs:'',resp:'',subs:[]})); } renderProjModal(); }
 function pmToggleCat(c){ if(!EDIT)return; EDIT.categorias=EDIT.categorias||[]; const i=EDIT.categorias.indexOf(c); if(i<0)EDIT.categorias.push(c); else EDIT.categorias.splice(i,1); renderProjModal(); }
+/* Assigning a project to an agency is what makes it appear in that agency's
+   Work module (visProjs) — so the chips say so, rather than reading as a
+   cosmetic label. Read-only for anyone who can't edit the project's main
+   fields; an agency login sees which agencies share the project but can't
+   add or remove itself. */
+function pmToggleAgencia(a){
+  if(!EDIT||!canEdit(EDIT))return;
+  EDIT.agencies=EDIT.agencies||[];
+  const i=EDIT.agencies.indexOf(a);
+  if(i<0)EDIT.agencies.push(a); else EDIT.agencies.splice(i,1);
+  renderProjModal();
+}
+function pmAgenciasHTML(ED){
+  const all=workAgencias(), on=projAgencias(EDIT);
+  if(!all.length) return '<div style="font-size:12.5px;color:var(--txt-3)">No agency profiles registered yet.</div>';
+  return `<div style="display:flex;flex-wrap:wrap;gap:6px">${all.map(a=>{
+    const sel=on.includes(a);
+    return `<button ${ED?'':'disabled'} onclick="pmToggleAgencia('${esc(a)}')" style="display:inline-flex;align-items:center;gap:6px;padding:6px 13px;border-radius:18px;border:1px solid ${sel?'var(--violet)':'var(--line-2)'};background:${sel?'var(--violet-bg)':'#fff'};color:${sel?'#4a2fa0':'var(--txt-2)'};font-weight:700;font-size:12px;cursor:${ED?'pointer':'default'}">${sel?icn('check',11):''}${esc(a)}</button>`;
+  }).join('')}</div>${on.length?'':'<div style="font-size:11.5px;color:var(--txt-3);margin-top:6px">Not shared with any agency — only the internal team sees it.</div>'}`;
+}
 function atv(tid){ return (EDIT.tasks||[]).find(t=>t.id===tid); }
 /* Activity status now follows progress instead of needing a manual pick for
    every change — done (or 100%) always means Completed, an overdue
@@ -3264,6 +3454,10 @@ function pmAtvSet(tid,k,v){
   t[k]=(k==='pct')?Math.max(0,Math.min(100,+v||0)):v;
   if(k==='pct') t.done=t.pct>=100;
   if(k!=='status') t.status=autoAtvStatus(t);
+  // A date or a status can turn a row late, or a link into a conflict — both
+  // are drawn from derived state, so the panel has to repaint. Text fields
+  // (name, note) commit on blur and deliberately don't, to avoid churn.
+  if(k!=='n'&&k!=='obs') renderProjModal();
 }
 function pmAtvDone(tid){
   const t=atv(tid); if(!t)return;
@@ -3272,44 +3466,189 @@ function pmAtvDone(tid){
   t.status=autoAtvStatus(t);
   renderProjModal();
 }
-function projHasSubs(p){ return (p.tasks||[]).some(t=>(t.subs||[]).length>0); }
-function projSubRows(p){
+/* ============================================================
+   SCHEDULING — start/due dates + finish-to-start dependencies
+   ============================================================
+   Activities depend on other activities of the same project; sub-items depend
+   on siblings inside the same activity. Both are plain arrays of ids on the
+   item (`dep`), so the same six helpers below serve either level — pass the
+   list the item belongs to.
+   The relationship is finish-to-start: an item may only begin AFTER every
+   predecessor's due date. Nothing here reschedules silently — a violation is
+   surfaced inline and fixed by an explicit "Reschedule" action, because a
+   date someone typed on purpose should not move under them. */
+const D_MS=864e5;
+function newAtv(n){ return {id:uid(),n:n||'',done:false,inicio:'',fim:'',dep:[],status:'no_prazo',pct:0,obs:'',resp:'',subs:[]}; }
+function newSub(n){ return {id:uid(),n:n||'',done:false,inicio:'',fim:'',dep:[],resp:'',obs:''}; }
+function dISO(d){ return new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10); }
+function dAdd(s,n){ if(!s)return''; const d=new Date(s+'T00:00:00'); d.setDate(d.getDate()+n); return dISO(d); }
+function dDiff(a,b){ if(!a||!b)return 0; return Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/D_MS); }
+/* Latest due date among an item's predecessors — the floor its own start
+   has to clear. Missing/undated predecessors simply don't constrain it. */
+function depEnd(list,item){
+  let m='';
+  (item.dep||[]).forEach(id=>{ const d=(list||[]).find(x=>x.id===id); if(d&&d.fim&&(!m||d.fim>m)) m=d.fim; });
+  return m;
+}
+function depStartFloor(list,item){ const e=depEnd(list,item); return e?dAdd(e,1):''; }
+/* True when the item starts on or before a predecessor's due date. Uses the
+   due date as the effective start for items that only carry one date. */
+function depConflict(list,item){
+  const floor=depStartFloor(list,item); if(!floor)return false;
+  const s=item.inicio||item.fim; if(!s)return false;
+  return s<floor;
+}
+/* Blocks a link that would close a loop: walk what `toId` already depends on
+   and refuse if `fromId` is anywhere upstream. Without this, one careless
+   pick makes the reschedule pass unsolvable. */
+function depWouldCycle(list,fromId,toId){
+  const by={}; (list||[]).forEach(x=>by[x.id]=x);
+  const seen=new Set(); const stack=[toId];
+  while(stack.length){
+    const cur=stack.pop();
+    if(cur===fromId)return true;
+    if(seen.has(cur))continue; seen.add(cur);
+    ((by[cur]||{}).dep||[]).forEach(d=>stack.push(d));
+  }
+  return false;
+}
+function schedIssues(list){ return (list||[]).filter(it=>depConflict(list,it)); }
+/* Pushes every item that starts too early past its predecessors, keeping the
+   duration it already had. Relaxation instead of a topological sort: passes
+   are capped at list length + 1, which is enough for any acyclic chain and
+   terminates even if bad data slipped a cycle in. */
+function schedResolve(list){
+  let moved=0;
+  for(let pass=0; pass<(list||[]).length+1; pass++){
+    let changed=false;
+    (list||[]).forEach(it=>{
+      const floor=depStartFloor(list,it); if(!floor)return;
+      if(!it.inicio&&!it.fim){ it.inicio=floor; it.fim=floor; changed=true; moved++; return; }
+      if(!it.inicio){ if(it.fim<floor){ it.fim=floor; changed=true; moved++; } it.inicio=floor; return; }
+      if(it.inicio<floor){
+        const dur=(it.fim&&it.fim>=it.inicio)?dDiff(it.inicio,it.fim):0;
+        it.inicio=floor; it.fim=dAdd(floor,dur); changed=true; moved++;
+      }
+    });
+    if(!changed)break;
+  }
+  return moved;
+}
+/* Every dated item in the project, activities and sub-items alike, flattened
+   for the timeline. An activity with no start of its own falls back to its
+   due date so a single-date activity still plots as a marker. */
+function projSchedRows(p){
   const rows=[];
-  (p.tasks||[]).forEach(t=>{ (t.subs||[]).forEach(s=>{ if(s.inicio||s.fim){ rows.push({task:t.n,name:s.n||'(untitled)',inicio:s.inicio||s.fim,fim:s.fim||s.inicio,done:!!s.done,resp:s.resp||''}); } }); });
+  (p.tasks||[]).forEach((t,i)=>{
+    const s=t.inicio||t.fim, e=t.fim||t.inicio;
+    if(s&&e) rows.push({kind:'atv',id:t.id,ix:i+1,name:t.n||'(untitled)',inicio:s<e?s:e,fim:e>s?e:s,done:!!t.done,resp:t.resp||'',pct:t.pct||0,dep:(t.dep||[]).slice(),parent:''});
+    (t.subs||[]).forEach((sb,j)=>{
+      const ss=sb.inicio||sb.fim, se=sb.fim||sb.inicio;
+      if(ss&&se) rows.push({kind:'sub',id:sb.id,ix:(i+1)+'.'+(j+1),name:sb.n||'(untitled)',inicio:ss<se?ss:se,fim:se>ss?se:ss,done:!!sb.done,resp:sb.resp||'',pct:sb.done?100:0,dep:(sb.dep||[]).slice(),parent:t.n||''});
+    });
+  });
   return rows;
 }
+function projHasSubs(p){ return (p.tasks||[]).some(t=>(t.subs||[]).length>0); }
+function projHasDates(p){ return (p.tasks||[]).some(t=>t.inicio||t.fim||(t.subs||[]).some(s=>s.inicio||s.fim)); }
 let TLPROJ=null;
 function openProjTimeline(pid){ TLPROJ={id:pid}; renderTLModal(); }
+/* Project timeline — every dated activity and sub-item on one week scale,
+   with the finish-to-start links drawn between them.
+   The connectors are plain positioned divs, not SVG: horizontal offsets are
+   percentages of the chart width (which JS never measures) while vertical
+   offsets are pixels off a fixed row height, and calc() mixes the two.
+   An SVG polyline can't take percentages in its points. */
+const TL_ROW_H=30, TL_BAR_H=16, TL_LBL_W=228;
 function renderTLModal(){
   if(!TLPROJ)return; const p=DATA.projetos.find(x=>x.id===TLPROJ.id); if(!p){closeModal();return;}
-  const rows=projSubRows(p);
+  const rows=projSchedRows(p);
   let body;
   if(!rows.length){
-    body=`<div class="empty" style="padding:30px 16px">No dated sub-items yet. Add start/end dates to sub-items (in the activity editor, "+ subs") to see them here.</div>`;
+    body=`<div class="atv-empty" style="padding:34px 16px">
+      <b style="display:block;font-size:var(--fs-base);margin-bottom:4px">Nothing to plot yet</b>
+      Give the activities a start and a due date in the project detail — anything dated shows up here, sub-items included.</div>`;
   } else {
-    const dates=[]; rows.forEach(r=>{dates.push(new Date(r.inicio+'T00:00:00'));dates.push(new Date(r.fim+'T00:00:00'));});
-    let min=new Date(Math.min(...dates)), max=new Date(Math.max(...dates));
-    min.setDate(min.getDate()-min.getDay());
-    const totalDays=Math.max(7,Math.round((max-min)/864e5)+7);
-    const weeks=Math.ceil(totalDays/7); const dayPct=100/(weeks*7);
+    const ix={}; rows.forEach((r,i)=>ix[r.id]=i);
+    const all=[]; rows.forEach(r=>{ all.push(r.inicio,r.fim); });
+    const minStr=all.reduce((a,b)=>a<b?a:b), maxStr=all.reduce((a,b)=>a>b?a:b);
+    let min=new Date(minStr+'T00:00:00'); min.setDate(min.getDate()-min.getDay());
+    const rawMax=new Date(maxStr+'T00:00:00');
+    const weeks=Math.max(1,Math.ceil((Math.round((rawMax-min)/D_MS)+7)/7));
+    const dayPct=100/(weeks*7);
     const tdy=today0();
     const MM=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    let wkHead=''; for(let w=0;w<weeks;w++){const dd=new Date(min);dd.setDate(dd.getDate()+w*7);const now=tdy>=dd&&tdy<new Date(dd.getFullYear(),dd.getMonth(),dd.getDate()+7);wkHead+=`<div style="flex:1;min-width:0;padding:7px 2px;text-align:center;font-size:9.5px;font-weight:600;color:${now?'#fff':'#8a90a0'};background:${now?'#10131a':'transparent'};border-right:1px solid #edeff4">${dd.getDate()}/${MM[dd.getMonth()]}</div>`;}
-    const rowsHtml=rows.map(r=>{
-      const s=new Date(r.inicio+'T00:00:00'), e=new Date(r.fim+'T00:00:00');
-      const left=Math.max(0,((s-min)/864e5)*dayPct), width=Math.max(dayPct*1.2,(((e-s)/864e5)+1)*dayPct);
-      return `<div style="display:flex;border-bottom:1px solid #edeff4;align-items:center">
-        <div style="width:190px;flex-shrink:0;padding:9px 12px;border-right:1px solid var(--line);min-width:0"><div style="font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.name)}</div><div style="font-size:10.5px;color:var(--txt-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.task)}${r.resp?' · '+esc(r.resp):''}</div></div>
-        <div style="flex:1;position:relative;height:36px"><div style="position:absolute;left:${left}%;width:${width}%;top:8px;height:20px;border-radius:6px;background:${r.done?'#16a06a':'#1273cf'};display:flex;align-items:center;padding:0 7px;overflow:hidden"><span style="font-size:9.5px;font-weight:700;color:#fff;white-space:nowrap">${r.done?'✓ done':''}</span></div></div>
-      </div>`;
+    const xOf=s=>Math.max(0,Math.round(((new Date(s+'T00:00:00')-min)/D_MS)*dayPct*100)/100);
+    let wkHead='';
+    for(let w=0;w<weeks;w++){
+      const dd=new Date(min); dd.setDate(dd.getDate()+w*7);
+      const now=tdy>=dd&&tdy<new Date(dd.getFullYear(),dd.getMonth(),dd.getDate()+7);
+      wkHead+=`<div style="flex:1;min-width:0;padding:7px 2px;text-align:center;font-size:9.5px;font-weight:600;font-family:var(--mono);color:${now?'#fff':'var(--txt-3)'};background:${now?'var(--ink)':'transparent'};border-right:1px solid var(--line)">${dd.getDate()}/${MM[dd.getMonth()]}</div>`;
+    }
+    // labels + bar tracks are two aligned stacks: one absolute chart area
+    // makes cross-row connectors possible at all.
+    const labels=rows.map(r=>`<div style="height:${TL_ROW_H}px;display:flex;align-items:center;gap:6px;padding:0 10px 0 ${r.kind==='sub'?24:10}px;border-bottom:1px solid #f0f2f6;min-width:0">
+      <span class="mono" style="font-size:9.5px;color:var(--txt-3);flex-shrink:0">${esc(String(r.ix))}</span>
+      <span style="font-weight:${r.kind==='sub'?500:600};font-size:${r.kind==='sub'?11:12}px;color:${r.done?'var(--txt-3)':'var(--txt)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${r.done?'text-decoration:line-through':''}" title="${esc(r.name)}${r.parent?' — '+esc(r.parent):''}">${esc(r.name)}</span>
+    </div>`).join('');
+    const grid=Array.from({length:weeks},(_,w)=>`<div style="position:absolute;left:${(w*7*dayPct).toFixed(2)}%;top:0;bottom:0;width:1px;background:var(--line)"></div>`).join('');
+    const todayX=(tdy>=min&&tdy<=new Date(min.getTime()+weeks*7*D_MS))?xOf(dISO(tdy)):null;
+    const bars=rows.map((r,i)=>{
+      const left=xOf(r.inicio);
+      const right=xOf(r.fim)+dayPct;
+      const width=Math.max(dayPct*0.9,right-left);
+      const col=r.done?'var(--green)':(r.kind==='sub'?'var(--blue)':'var(--accent)');
+      const label=r.kind==='sub'?'':(r.pct&&!r.done?r.pct+'%':'');
+      return `<div title="${esc(r.name)} · ${fmtDate(r.inicio)} → ${fmtDate(r.fim)}" style="position:absolute;left:${left}%;width:${width}%;top:${i*TL_ROW_H+(TL_ROW_H-TL_BAR_H)/2}px;height:${TL_BAR_H}px;border-radius:5px;background:${col};opacity:${r.done?.55:1};display:flex;align-items:center;padding:0 6px;overflow:hidden">
+        <span style="font-size:9px;font-weight:700;color:#fff;font-family:var(--mono);white-space:nowrap">${r.done?'✓':esc(label)}</span></div>`;
     }).join('');
-    body=`<div style="border:1px solid var(--line);border-radius:11px;overflow:hidden">
-      <div style="display:flex;border-bottom:1px solid var(--line);background:#fafbfd;position:sticky;top:0;z-index:2"><div style="width:190px;flex-shrink:0;padding:9px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);border-right:1px solid var(--line)">Sub-item</div><div style="flex:1;display:flex">${wkHead}</div></div>
-      ${rowsHtml}
+    // finish-to-start connectors: predecessor's right edge → this row's left edge
+    let links='';
+    rows.forEach((r,i)=>{
+      (r.dep||[]).forEach(id=>{
+        const j=ix[id]; if(j==null)return;
+        const a=rows[j];
+        const xa=xOf(a.fim)+dayPct, xb=xOf(r.inicio);
+        const ya=j*TL_ROW_H+TL_ROW_H/2, yb=i*TL_ROW_H+TL_ROW_H/2;
+        const bad=xb<xa-0.001;
+        const c=bad?'var(--amber)':'#b0b6c4';
+        const fwd=xb>=xa;
+        links+=`<div style="position:absolute;left:${xa}%;top:${ya}px;width:9px;height:1px;background:${c}"></div>`;
+        links+=`<div style="position:absolute;left:calc(${xa}% + 9px);top:${Math.min(ya,yb)}px;height:${Math.abs(yb-ya)}px;width:1px;background:${c}"></div>`;
+        links+=fwd
+          ? `<div style="position:absolute;left:calc(${xa}% + 9px);top:${yb}px;width:max(0px, calc(${(xb-xa).toFixed(2)}% - 9px));height:1px;background:${c}"></div>`
+          : `<div style="position:absolute;left:${xb}%;top:${yb}px;width:calc(${(xa-xb).toFixed(2)}% + 9px);height:1px;background:${c}"></div>`;
+        links+=`<div style="position:absolute;left:${xb}%;top:${yb-3}px;width:0;height:0;border-top:3px solid transparent;border-bottom:3px solid transparent;border-left:5px solid ${c}"></div>`;
+      });
+    });
+    const late=rows.filter(r=>!r.done&&daysTo(r.fim)<0).length;
+    body=`<div style="border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden">
+      <div style="display:flex;border-bottom:1px solid var(--line);background:var(--paper-2)">
+        <div style="width:${TL_LBL_W}px;flex-shrink:0;padding:9px 10px;font-size:var(--fs-eyebrow);font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);border-right:1px solid var(--line)">Activity / sub-item</div>
+        <div style="flex:1;display:flex;min-width:0">${wkHead}</div>
+      </div>
+      <div style="display:flex">
+        <div style="width:${TL_LBL_W}px;flex-shrink:0;border-right:1px solid var(--line)">${labels}</div>
+        <div style="flex:1;position:relative;min-width:0;height:${rows.length*TL_ROW_H}px">
+          ${grid}
+          ${rows.map((r,i)=>`<div style="position:absolute;left:0;right:0;top:${(i+1)*TL_ROW_H-1}px;height:1px;background:#f0f2f6"></div>`).join('')}
+          ${todayX!=null?`<div title="Today" style="position:absolute;left:${todayX}%;top:0;bottom:0;width:1.5px;background:var(--red);opacity:.55"></div>`:''}
+          ${links}
+          ${bars}
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:11px;font-size:var(--fs-xs);color:var(--txt-3)">
+      <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:16px;height:7px;border-radius:3px;background:var(--accent)"></span>Activity</span>
+      <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:16px;height:7px;border-radius:3px;background:var(--blue)"></span>Sub-item</span>
+      <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:16px;height:7px;border-radius:3px;background:var(--green);opacity:.55"></span>Done</span>
+      <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:14px;height:1px;background:#b0b6c4"></span>Starts after</span>
+      <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:14px;height:1px;background:var(--amber)"></span>Link not respected</span>
+      ${late?`<span style="margin-left:auto;color:var(--red);font-weight:700">${late} past its due date</span>`:''}
     </div>`;
   }
-  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:720px">
-    <div class="modal-h"><h3>Timeline — ${esc(p.nome)}</h3><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
+  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:920px">
+    <div class="modal-h"><div style="min-width:0"><h3>Timeline — ${esc(p.nome)}</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">${rows.length} dated item${rows.length===1?'':'s'} · arrows read "starts after"</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">${body}</div>
     <div class="modal-f"><button class="btn-ghost" onclick="exportProjTimeline('${esc(p.id)}')" style="display:inline-flex;align-items:center;gap:6px">${icn('link',13)} Share link</button><button class="btn-ghost" onclick="closeModal()">Close</button></div>
   </div></div>`;
@@ -3435,15 +3774,134 @@ function copyShareLink(url){
   try{ navigator.clipboard.writeText(url); toast('Link copied ✓'); }
   catch(e){ toast('Could not copy — select the link and copy manually.'); }
 }
-function pmAddAtv(){ if(!canEditAtividades(EDIT))return; EDIT.tasks=EDIT.tasks||[]; EDIT.tasks.push({id:uid(),n:'Nova atividade',done:false,fim:'',status:'no_prazo',pct:0,obs:'',resp:'',subs:[]}); renderProjModal(); }
-function pmDelAtv(tid){ if(!canEditAtividades(EDIT))return; EDIT.tasks=(EDIT.tasks||[]).filter(t=>t.id!==tid); renderProjModal(); }
+/* Typing a name and pressing Enter is the primary way to add work here: the
+   field keeps focus after each one, so ten activities take ten lines of
+   typing instead of ten click-rename-click rounds. */
+function pmQuickAtv(ev){
+  if(ev.key!=='Enter')return;
+  ev.preventDefault();
+  const v=(ev.target.value||'').trim(); if(!v)return;
+  if(!canEditAtividades(EDIT)){ toast('You can\'t edit this project\'s activities.'); return; }
+  EDIT.tasks=EDIT.tasks||[]; EDIT.tasks.push(newAtv(v));
+  ev.target.value='';
+  PM_REFOCUS={sel:'#pmQuickAtv'};
+  renderProjModal();
+}
+function pmQuickSub(ev,tid){
+  if(ev.key!=='Enter')return;
+  ev.preventDefault();
+  const v=(ev.target.value||'').trim(); if(!v)return;
+  const t=atv(tid); if(!t||!canEditAtividades(EDIT))return;
+  t.subs=t.subs||[]; t.subs.push(newSub(v));
+  pmRecalcPctFromSubs(t);
+  ev.target.value='';
+  PM_REFOCUS={sel:'#pmQuickSub-'+tid};
+  renderProjModal();
+}
+/* Pasting a list creates one item per line — the fastest path from a brief,
+   a kickoff doc or a spreadsheet column into the plan. Leading bullets and
+   "1." numbering are stripped; a single-line paste behaves normally. */
+function pmPasteLines(ev,tid){
+  const txt=((ev.clipboardData||window.clipboardData||{}).getData?(ev.clipboardData||window.clipboardData).getData('text'):'')||'';
+  if(!/[\n\r]/.test(txt))return;
+  ev.preventDefault();
+  if(!canEditAtividades(EDIT)){ toast('You can\'t edit this project\'s activities.'); return; }
+  const names=txt.split(/\r?\n/).map(s=>s.replace(/^\s*(?:[-*•–]|\d+[.)])\s+/,'').trim()).filter(Boolean);
+  if(!names.length)return;
+  if(tid){ const t=atv(tid); if(!t)return; t.subs=t.subs||[]; names.forEach(n=>t.subs.push(newSub(n))); pmRecalcPctFromSubs(t); PM_REFOCUS={sel:'#pmQuickSub-'+tid}; }
+  else { EDIT.tasks=EDIT.tasks||[]; names.forEach(n=>EDIT.tasks.push(newAtv(n))); PM_REFOCUS={sel:'#pmQuickAtv'}; }
+  ev.target.value='';
+  renderProjModal();
+  toast(names.length+' item'+(names.length===1?'':'s')+' added');
+}
+function pmAddAtv(){
+  if(!canEditAtividades(EDIT))return;
+  EDIT.tasks=EDIT.tasks||[]; EDIT.tasks.push(newAtv(''));
+  PM_REFOCUS={sel:'#pmQuickAtv'};
+  renderProjModal();
+}
+function pmDelAtv(tid){
+  if(!canEditAtividades(EDIT))return;
+  // Drop the link too, or the survivors keep a predecessor that no longer exists.
+  EDIT.tasks=(EDIT.tasks||[]).filter(t=>t.id!==tid);
+  (EDIT.tasks||[]).forEach(t=>{ t.dep=(t.dep||[]).filter(d=>d!==tid); });
+  renderProjModal();
+}
+/* ---- dependency editing ---- */
+let DEP_POP=null; // {tid, sid|null} — which cell's picker is open
+function pmDepList(tid){ const t=tid?atv(tid):null; return t?(t.subs||[]):(EDIT.tasks||[]); }
+function pmDepItem(tid,sid){ const l=pmDepList(sid?tid:null); return l.find(x=>x.id===(sid||tid)); }
+function pmDepToggle(tid,sid,depId){
+  if(!canEditAtividades(EDIT))return;
+  const list=sid?pmDepList(tid):pmDepList(null);
+  const it=list.find(x=>x.id===(sid||tid)); if(!it)return;
+  it.dep=it.dep||[];
+  const i=it.dep.indexOf(depId);
+  if(i>=0) it.dep.splice(i,1);
+  else{
+    if(depWouldCycle(list,sid||tid,depId)){ toast('That would create a circular dependency.'); return; }
+    it.dep.push(depId);
+    // A brand-new link on an undated item schedules it right after its
+    // predecessor — the obvious intent, and only when nothing is overwritten.
+    const floor=depStartFloor(list,it);
+    if(floor&&!it.inicio&&!it.fim){ it.inicio=floor; it.fim=floor; }
+  }
+  if(!sid) it.status=autoAtvStatus(it);
+  renderProjModal();
+  if(DEP_POP) pmDepPop(DEP_POP.tid,DEP_POP.sid,null,true);
+}
+function pmDepClosePop(){ DEP_POP=null; const h=$('#pmPop'); if(h)h.innerHTML=''; }
+/* Anchored to the button with position:fixed so it escapes .modal-b's own
+   scroll container (an absolutely-positioned panel in there gets clipped). */
+function pmDepPop(tid,sid,ev,keepOpen){
+  if(ev&&ev.stopPropagation)ev.stopPropagation();
+  const same=DEP_POP&&DEP_POP.tid===tid&&DEP_POP.sid===(sid||null);
+  if(same&&!keepOpen){ pmDepClosePop(); return; }
+  DEP_POP={tid,sid:sid||null};
+  const host=$('#pmPop'); if(!host)return;
+  const list=sid?pmDepList(tid):pmDepList(null);
+  const selfId=sid||tid;
+  const it=list.find(x=>x.id===selfId); if(!it){ pmDepClosePop(); return; }
+  const opts=list.filter(x=>x.id!==selfId);
+  const rows=opts.length?opts.map((x,i)=>{
+    const on=(it.dep||[]).includes(x.id);
+    const bad=!on&&depWouldCycle(list,selfId,x.id);
+    const ix=sid?(list.indexOf(x)+1):(list.indexOf(x)+1);
+    return `<button class="dep-opt${on?' on':''}" ${bad?'disabled title="Would create a loop"':''} onclick="pmDepToggle('${esc(tid)}',${sid?"'"+esc(sid)+"'":'null'},'${esc(x.id)}')">
+      <span class="ix">${String(ix).padStart(2,'0')}</span><span class="nm">${esc(x.n||'(untitled)')}</span>
+      <span style="flex-shrink:0;color:${on?'var(--accent)':'var(--txt-3)'};font-family:var(--mono);font-size:10px">${x.fim?fmtDate(x.fim):'no date'}</span>
+      ${on?icn('check',12):''}</button>`;
+  }).join(''):`<div class="none">Nothing else to link to yet — add another ${sid?'sub-item':'activity'} first.</div>`;
+  host.innerHTML=`<div class="dep-pop" id="depPop" onclick="event.stopPropagation()"><div class="hd">Starts after</div>${rows}</div>`;
+  const btn=document.getElementById('depBtn-'+(sid||tid));
+  const pop=document.getElementById('depPop');
+  if(btn&&pop){
+    const r=btn.getBoundingClientRect(), pw=290;
+    let left=Math.min(Math.max(8,r.right-pw), window.innerWidth-pw-8);
+    let top=r.bottom+6;
+    if(top+pop.offsetHeight>window.innerHeight-8) top=Math.max(8,r.top-pop.offsetHeight-6);
+    pop.style.left=left+'px'; pop.style.top=top+'px';
+  }
+}
+document.addEventListener('click',()=>{ if(DEP_POP) pmDepClosePop(); });
+/* Explicit, never automatic: dates people typed on purpose only move when
+   they ask for it, and the toast says how many did. */
+function pmReschedule(){
+  if(!canEditAtividades(EDIT))return;
+  let moved=schedResolve(EDIT.tasks||[]);
+  (EDIT.tasks||[]).forEach(t=>{ moved+=schedResolve(t.subs||[]); t.status=autoAtvStatus(t); });
+  renderProjModal();
+  toast(moved?moved+' item'+(moved===1?'':'s')+' moved to respect the links':'Everything already respects its links ✓');
+}
 /* Drag-to-reorder activities — same DRAG-id + dataTransfer pattern as the
    Kanban card drag (dragStartCard/dropOnStage), scoped to EDIT.tasks. */
 let DRAG_ATV=null;
 function atvDragStart(ev,tid){ DRAG_ATV=tid; ev.dataTransfer.effectAllowed='move'; try{ev.dataTransfer.setData('text/plain',tid);}catch(e){} }
-function atvDragOver(ev){ ev.preventDefault(); ev.dataTransfer.dropEffect='move'; }
+function atvDragOver(ev){ ev.preventDefault(); ev.dataTransfer.dropEffect='move'; if(DRAG_ATV&&ev.currentTarget&&ev.currentTarget.classList) ev.currentTarget.classList.add('drop-tgt'); }
+function atvDragLeave(ev){ if(ev.currentTarget&&ev.currentTarget.classList) ev.currentTarget.classList.remove('drop-tgt'); }
 function atvDrop(ev,tid){
   ev.preventDefault();
+  if(ev.currentTarget&&ev.currentTarget.classList) ev.currentTarget.classList.remove('drop-tgt');
   const from=DRAG_ATV||ev.dataTransfer.getData('text/plain'); DRAG_ATV=null;
   if(!from||from===tid||!EDIT||!canEditAtividades(EDIT))return;
   const tasks=EDIT.tasks||[];
@@ -3473,10 +3931,20 @@ function pmRecalcPctFromSubs(t){
   t.done=t.pct>=100;
   t.status=autoAtvStatus(t);
 }
-function pmAddSub(tid){ const t=atv(tid); if(t){ t.subs=t.subs||[]; t.subs.push({id:uid(),n:'',done:false,inicio:'',fim:'',resp:'',obs:''}); pmRecalcPctFromSubs(t); renderProjModal(); } }
-function pmSubSet(tid,sid,k,v){ const t=atv(tid); if(t){ const s=(t.subs||[]).find(x=>x.id===sid); if(s)s[k]=v; } }
+function pmAddSub(tid){ const t=atv(tid); if(t){ t.subs=t.subs||[]; t.subs.push(newSub('')); pmRecalcPctFromSubs(t); PM_REFOCUS={sel:'#pmQuickSub-'+tid}; renderProjModal(); } }
+function pmSubSet(tid,sid,k,v){
+  const t=atv(tid); if(!t)return;
+  const s=(t.subs||[]).find(x=>x.id===sid); if(!s)return;
+  s[k]=v;
+  if(k==='inicio'||k==='fim') renderProjModal(); // refresh conflict flags + the header's issue count
+}
 function pmSubDone(tid,sid){ const t=atv(tid); if(t){ const s=(t.subs||[]).find(x=>x.id===sid); if(s){s.done=!s.done; pmRecalcPctFromSubs(t); renderProjModal();} } }
-function pmDelSub(tid,sid){ const t=atv(tid); if(t){ t.subs=(t.subs||[]).filter(x=>x.id!==sid); pmRecalcPctFromSubs(t); renderProjModal(); } }
+function pmDelSub(tid,sid){
+  const t=atv(tid); if(!t)return;
+  t.subs=(t.subs||[]).filter(x=>x.id!==sid);
+  (t.subs||[]).forEach(s=>{ s.dep=(s.dep||[]).filter(d=>d!==sid); });
+  pmRecalcPctFromSubs(t); renderProjModal();
+}
 /* Scans real people (DATA.pessoas — the actual roster with emails) for
    @mentions in a log update. Was scanning the legacy, largely-empty TEAM
    roster before, which is why "@mention" never actually notified anyone —
@@ -3628,7 +4096,124 @@ function pmPTipo(v){
   renderProjModal();
 }
 let PM_OPEN=false;
-function openProjModal(proj,isNew){ EDIT=proj; EDIT._new=isNew; PM_OPEN=false; renderProjModal(); }
+let PM_REFOCUS=null; // {sel} — element to put the caret back on after a re-render
+function openProjModal(proj,isNew){ EDIT=proj; EDIT._new=isNew; PM_OPEN=false; DEP_POP=null; renderProjModal(); }
+
+/* ============================================================
+   ACTIVITY PLANNER — the project modal's work surface
+   ============================================================
+   One aligned grid for activities and their sub-items: name, owner, start,
+   due, predecessors, progress. Adding is a typing loop (quick-add row, Enter
+   to commit, multi-line paste for a whole list); everything secondary
+   (status override, manual %, note) lives one disclosure deeper so the
+   default view stays a schedule you can read down a column. */
+function pmDateCls(item,list){
+  if(!item.fim) return 'empty';
+  if(item.done) return '';
+  if(depConflict(list,item)) return 'warn';
+  const dd=daysTo(item.fim);
+  if(dd!==null&&dd<0) return 'late';
+  return '';
+}
+function pmDepCellHTML(tid,sid,item,list,EDA){
+  const deps=(item.dep||[]).filter(id=>list.some(x=>x.id===id));
+  const bad=depConflict(list,item);
+  const key=sid||tid;
+  const chips=deps.map(id=>{
+    const ix=list.findIndex(x=>x.id===id);
+    const d=list[ix];
+    const lbl=String(ix+1).padStart(2,'0');
+    const t=`Starts after "${(d&&d.n)||'?'}"${d&&d.fim?' (due '+fmtDate(d.fim)+')':''}${EDA?' — click to unlink':''}`;
+    return `<button class="dep-chip${bad?' warn':''}" title="${esc(t)}" onclick="event.stopPropagation();${EDA?`pmDepToggle('${esc(tid)}',${sid?"'"+esc(sid)+"'":'null'},'${esc(id)}')`:''}">${lbl}${bad?' !':''}</button>`;
+  }).join('');
+  const add=EDA?`<button class="dep-add" id="depBtn-${esc(key)}" title="Link to a predecessor" onclick="pmDepPop('${esc(tid)}',${sid?"'"+esc(sid)+"'":'null'},event)">+</button>`:'';
+  return `<span class="atv-c-dep"><span class="atv-dep">${chips||(EDA?'':'<span class="dep-none">—</span>')}${add}</span></span>`;
+}
+function pmSubRowHTML(t,s,j,EDA){
+  const disA=EDA?'':'disabled';
+  const list=t.subs||[];
+  const dcls=pmDateCls(s,list);
+  const conf=depConflict(list,s);
+  return `<div class="atv-row is-sub">
+    <span class="atv-num"><span class="n">${(EDIT.tasks||[]).indexOf(t)+1}.${j+1}</span></span>
+    <button class="atv-check${s.done?' on':''}" onclick="pmSubDone('${esc(t.id)}','${esc(s.id)}')" title="${s.done?'Mark not done':'Mark done'}" aria-pressed="${!!s.done}">${s.done?'✓':''}</button>
+    <span class="atv-name"><span class="atv-sub-tick">${icn('arrowR',11)}</span><input class="atv-in${s.done?' done':''}" value="${esc(s.n)}" ${disA} onchange="pmSubSet('${esc(t.id)}','${esc(s.id)}','n',this.value)" placeholder="Sub-item name…"></span>
+    <span class="atv-c-owner"><select class="atv-in mini" ${disA} onchange="pmSubSet('${esc(t.id)}','${esc(s.id)}','resp',this.value)" title="Assigned to">${subPersonOpts(s.resp)}</select></span>
+    <span><input type="date" class="atv-in d8${s.inicio?'':' empty'}" value="${esc(s.inicio||'')}" ${disA} onchange="pmSubSet('${esc(t.id)}','${esc(s.id)}','inicio',this.value)" title="Start date"></span>
+    <span><input type="date" class="atv-in d8 ${dcls}" value="${esc(s.fim||'')}" ${disA} onchange="pmSubSet('${esc(t.id)}','${esc(s.id)}','fim',this.value)" title="${conf?'Starts before a linked sub-item finishes':'Due date'}"></span>
+    ${pmDepCellHTML(t.id,s.id,s,list,EDA)}
+    <span></span>
+    <span class="atv-act">${EDA?`<button class="atv-ico del" onclick="pmDelSub('${esc(t.id)}','${esc(s.id)}')" title="Remove sub-item">${icn('trash',13)}</button>`:''}</span>
+  </div>`;
+}
+function pmAtvRowsHTML(EDA){
+  const tasks=EDIT.tasks||[], disA=EDA?'':'disabled';
+  if(!tasks.length) return `<div class="atv-empty"><b style="display:block;font-size:var(--fs-base);margin-bottom:3px">No activities yet</b>Type the first one below and press Enter — or paste a whole list at once, one per line.</div>`;
+  return tasks.map((t,i)=>{
+    const list=tasks, dcls=pmDateCls(t,list), conf=depConflict(list,t);
+    const hp=healthPill(t.status), pct=t.pct||0;
+    const subs=t.subs||[];
+    let h=`<div class="atv-row" ondragover="atvDragOver(event)" ondragleave="atvDragLeave(event)" ondrop="atvDrop(event,'${esc(t.id)}')">
+      <span class="atv-num"><span class="n">${String(i+1).padStart(2,'0')}</span>${(EDA&&tasks.length>1)?`<span class="atv-grip" draggable="true" ondragstart="atvDragStart(event,'${esc(t.id)}')" title="Drag to reorder">${icn('grip',13)}</span>`:''}</span>
+      <button class="atv-check${t.done?' on':''}" onclick="pmAtvDone('${esc(t.id)}')" title="${t.done?'Mark not done':'Mark done'}" aria-pressed="${!!t.done}">${t.done?'✓':''}</button>
+      <span class="atv-name"><input class="atv-in${t.done?' done':''}" value="${esc(t.n)}" ${disA} onchange="pmAtvSet('${esc(t.id)}','n',this.value)" placeholder="Activity name…"></span>
+      <span class="atv-c-owner"><select class="atv-in mini" ${disA} onchange="pmAtvSet('${esc(t.id)}','resp',this.value)" title="Assigned to">${subPersonOpts(t.resp)}</select></span>
+      <span><input type="date" class="atv-in d8${t.inicio?'':' empty'}" value="${esc(t.inicio||'')}" ${disA} onchange="pmAtvSet('${esc(t.id)}','inicio',this.value)" title="Start date"></span>
+      <span><input type="date" class="atv-in d8 ${dcls}" value="${esc(t.fim||'')}" ${disA} onchange="pmAtvSet('${esc(t.id)}','fim',this.value)" title="${conf?'Starts before a linked activity finishes':'Due date'}"></span>
+      ${pmDepCellHTML(t.id,null,t,list,EDA)}
+      <span class="atv-prog" title="${esc(hp.name)} · ${pct}%">${EDIT._new?'':`<span class="pbar" style="flex:1;min-width:22px"><span style="width:${pct}%;background:${hp.dot}"></span></span><span class="pct">${pct}%</span>`}</span>
+      <span class="atv-act">
+        <button class="atv-ico${t._open?' open':''}" onclick="pmToggleOpen('${esc(t.id)}')" title="${t._open?'Hide details':'Details & sub-items'}" aria-expanded="${!!t._open}">${subs.length?`<span class="mono" style="font-size:10px;font-weight:700">${subs.length}</span>`:`<span class="atv-chev" style="display:inline-flex">${icn('chevR',13)}</span>`}</button>
+        ${EDA?`<button class="atv-ico del" onclick="pmDelAtv('${esc(t.id)}')" title="Remove activity">${icn('trash',13)}</button>`:''}
+      </span>
+    </div>`;
+    if(t._open){
+      const dur=(t.inicio&&t.fim)?(dDiff(t.inicio,t.fim)+1):0;
+      h+=`<div class="atv-panel">
+        <div class="atv-panel-row">
+          <label for="atvSt-${esc(t.id)}">Status</label>
+          <select id="atvSt-${esc(t.id)}" ${disA} onchange="pmAtvSet('${esc(t.id)}','status',this.value)">${STATUS.map(s=>`<option value="${s.id}" ${t.status===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select>
+          <label>Progress</label>
+          ${subs.length?`<span class="mono" style="font-size:var(--fs-sm);font-weight:700">${pct}%</span><span style="font-size:var(--fs-xs);color:var(--txt-3)">auto from ${subs.length} sub-item${subs.length===1?'':'s'}</span>`
+            :`<input type="number" min="0" max="100" step="5" ${disA} value="${pct}" onchange="pmAtvSet('${esc(t.id)}','pct',this.value)" style="width:64px">`}
+          ${dur?`<span style="font-size:var(--fs-xs);color:var(--txt-3);margin-left:auto">${fmtDate(t.inicio)} → ${fmtDate(t.fim)} · <b class="mono">${dur}</b> day${dur===1?'':'s'}</span>`:''}
+        </div>
+        <input class="atv-in" style="width:100%;border:1px dashed var(--line-2);background:#fff" value="${esc(t.obs||'')}" ${disA} onchange="pmAtvSet('${esc(t.id)}','obs',this.value)" placeholder="Note for this activity…">
+      </div>`;
+      h+=subs.map((s,j)=>pmSubRowHTML(t,s,j,EDA)).join('');
+      if(EDA) h+=`<div class="atv-add" style="border-bottom:1px solid #f0f2f6">
+        <input id="pmQuickSub-${esc(t.id)}" placeholder="Add a sub-item and press Enter…" onkeydown="pmQuickSub(event,'${esc(t.id)}')" onpaste="pmPasteLines(event,'${esc(t.id)}')" autocomplete="off">
+      </div>`;
+    }
+    return h;
+  }).join('');
+}
+function pmAtvBlockHTML(EDA){
+  const tasks=EDIT.tasks||[];
+  const done=tasks.filter(t=>t.done).length;
+  const tName=typeOf(EDIT.tipo).name;
+  let issues=schedIssues(tasks).length;
+  tasks.forEach(t=>{ issues+=schedIssues(t.subs||[]).length; });
+  return `<div class="atv-wrap">
+    <div class="atv-top">
+      <b>Activities</b>
+      <span class="sub">${tasks.length} item${tasks.length===1?'':'s'}${tasks.length?' · '+done+' done':''} · "${esc(tName)}" pattern</span>
+      <span style="flex:1"></span>
+      ${issues?`<button class="chip-btn" onclick="pmReschedule()" style="display:inline-flex;align-items:center;gap:5px;background:var(--amber-bg);border-color:#ecd9a4;color:var(--amber-ink);font-weight:700"${EDA?'':' disabled'}>${icn('alert',12)} ${issues===1?'1 item starts before its link':issues+' items start before their links'} — reschedule</button>`:''}
+      ${(!EDIT._new&&projHasDates(EDIT))?`<button class="chip-btn" onclick="openProjTimeline('${esc(EDIT.id)}')" style="display:inline-flex;align-items:center;gap:5px">${icn('calendar',12)} Timeline</button>`:''}
+    </div>
+    <div class="atv-scroll">
+      <div class="atv-hd">
+        <span></span><span></span><span>Activity</span><span class="atv-c-owner">Owner</span><span>Start</span><span>Due</span><span class="atv-c-dep">Starts after</span><span>Progress</span><span></span>
+      </div>
+      ${pmAtvRowsHTML(EDA)}
+      ${EDA?`<div class="atv-add">
+        <input id="pmQuickAtv" placeholder="Add an activity and press Enter…" onkeydown="pmQuickAtv(event)" onpaste="pmPasteLines(event,'')" autocomplete="off">
+        <span class="hint">Paste a list to add one per line</span>
+      </div>`:'<div class="atv-add"><span class="hint">You can tick items off and post updates, but not change the activity list.</span></div>'}
+    </div>
+  </div>`;
+}
 function renderProjModal(){
   if(!EDIT)return; const ED=canEdit(EDIT); const dis=ED?'':'disabled'; const canTag=canTagPeople(EDIT);
   // Activities have their own, wider gate than the main project fields —
@@ -3641,50 +4226,14 @@ function renderProjModal(){
   // keystroke-adjacent click, reading as "the screen flashes and jumps back
   // to the top." Carry the old scroll position over to the new node instead.
   const prevScroll=$('.modal-b')?$('.modal-b').scrollTop:0;
-  const prevAtvScroll=$('#pmAtvList')?$('#pmAtvList').scrollTop:0;
   const reopen=PM_OPEN; PM_OPEN=true;
   const tasks=EDIT.tasks||[];
   const done=tasks.filter(t=>t.done).length, prog=tasks.length?Math.round(done/tasks.length*100):0;
-  const tName=typeOf(EDIT.tipo).name;
-  const atvHTML=tasks.map((t,i)=>`
-    <div ondragover="atvDragOver(event)" ondrop="atvDrop(event,'${t.id}')" style="border:1px solid ${t.done?'#bfe4d0':'var(--line-2)'};border-radius:10px;padding:9px 11px;margin-bottom:7px;background:${t.done?'#eef8f1':'#fff'}">
-      <div style="display:flex;align-items:center;gap:8px">
-        ${(EDA&&tasks.length>1)?`<span draggable="true" ondragstart="atvDragStart(event,'${t.id}')" title="Drag to reorder" style="display:flex;align-items:center;color:var(--txt-3);cursor:grab;flex-shrink:0">${icn('grip',14)}</span>`:''}
-        <button onclick="pmAtvDone('${t.id}')" title="Mark done" style="width:18px;height:18px;border-radius:5px;border:2px solid ${t.done?'#16a06a':'var(--line-2)'};background:${t.done?'#16a06a':'#fff'};color:#fff;font-size:11px;font-weight:800;cursor:pointer;flex-shrink:0;padding:0;line-height:1">${t.done?'✓':''}</button>
-        <span class="mono" style="font-size:10px;color:var(--txt-3);width:18px;text-align:right;flex-shrink:0">${String(i+1).padStart(2,'0')}</span>
-        <input class="nm" value="${esc(t.n)}" onchange="pmAtvSet('${t.id}','n',this.value)" ${disA} placeholder="Activity name…" style="flex:1;padding:7px 10px;border:1px solid var(--line-2);border-radius:8px;background:var(--paper-2);font:inherit;font-size:12.5px;font-weight:600;min-width:0">
-        <select onchange="pmAtvSet('${t.id}','resp',this.value)" title="Assigned to" style="width:132px;padding:7px 8px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font:inherit;font-size:11px;color:var(--txt-2);flex-shrink:0">${subPersonOpts(t.resp)}</select>
-        <input type="date" value="${esc(t.fim||'')}" onchange="pmAtvSet('${t.id}','fim',this.value)" title="Due date" style="width:150px;padding:7px 8px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font:inherit;font-size:11.5px;color:var(--txt-2);flex-shrink:0">
-        ${!EDIT._new?`<span class="badge ${statusOf(t.status).cls}" style="flex-shrink:0;font-size:10px;padding:2px 8px"><span class="d"></span>${statusOf(t.status).name}</span><span class="mono" style="font-size:10.5px;font-weight:700;color:var(--txt-2);width:34px;text-align:right;flex-shrink:0">${t.pct||0}%</span>`:''}
-        <button class="chip-btn" onclick="pmToggleOpen('${t.id}')" style="flex-shrink:0">${t._open?'– close':'+ subs'}</button>
-        ${EDA?`<button onclick="pmDelAtv('${t.id}')" style="width:24px;height:24px;border-radius:6px;border:none;background:transparent;color:var(--txt-3);font-size:11px;cursor:pointer;flex-shrink:0">✕</button>`:''}
-      </div>
-      ${t._open?`<div style="margin:8px 0 2px 26px;padding:10px 12px;background:var(--paper-2);border:1px solid var(--line);border-radius:9px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px;flex-wrap:wrap">
-          <span style="font-size:10.5px;color:var(--txt-3);font-weight:700">STATUS</span><select onchange="pmAtvSet('${t.id}','status',this.value)" style="padding:5px 8px;border:1px solid var(--line-2);border-radius:7px;font:inherit;font-size:12px">${STATUS.map(s=>`<option value="${s.id}" ${t.status===s.id?'selected':''}>${s.name}</option>`).join('')}</select>
-          <span style="font-size:10.5px;color:var(--txt-3);font-weight:700">%</span>${(t.subs&&t.subs.length)?`<span class="mono" style="font-weight:700;font-size:12px;color:var(--txt-2)">${t.pct||0}%</span><span style="font-size:10.5px;color:var(--txt-3)">auto from ${t.subs.length} sub-item${t.subs.length===1?'':'s'}</span>`:`<input type="number" min="0" max="100" value="${t.pct||0}" onchange="pmAtvSet('${t.id}','pct',this.value)" style="width:60px;padding:5px 8px;border:1px solid var(--line-2);border-radius:7px;font:inherit;font-size:12px">`}
-        </div>
-        ${(t.subs||[]).map(s=>`<div style="border:1px solid var(--line-2);border-radius:8px;padding:7px 9px;margin-bottom:6px;background:#fff">
-          <div style="display:flex;align-items:center;gap:7px">
-            <button onclick="pmSubDone('${t.id}','${s.id}')" title="Mark done" style="width:16px;height:16px;border-radius:4px;border:2px solid ${s.done?'#16a06a':'var(--line-2)'};background:${s.done?'#16a06a':'#fff'};color:#fff;font-size:9px;font-weight:800;cursor:pointer;flex-shrink:0;padding:0;line-height:1">${s.done?'✓':''}</button>
-            <input value="${esc(s.n)}" onchange="pmSubSet('${t.id}','${s.id}','n',this.value)" placeholder="sub-item…" style="flex:1;min-width:110px;padding:5px 9px;border:1px solid var(--line-2);border-radius:6px;background:var(--paper-2);font:inherit;font-size:12px;font-weight:600;text-decoration:${s.done?'line-through':'none'};color:${s.done?'var(--txt-3)':'inherit'}">
-            <input type="date" value="${esc(s.fim||'')}" onchange="pmSubSet('${t.id}','${s.id}','fim',this.value)" title="Due date" style="width:130px;padding:5px 7px;border:1px solid var(--line-2);border-radius:6px;background:#fff;font:inherit;font-size:11px;color:var(--txt-2);flex-shrink:0">
-            <button onclick="pmDelSub('${t.id}','${s.id}')" style="width:20px;height:20px;border-radius:5px;border:none;background:transparent;color:var(--txt-3);font-size:10px;cursor:pointer;flex-shrink:0">✕</button>
-          </div>
-          <div style="display:flex;align-items:center;gap:7px;margin-top:5px;margin-left:23px">
-            <input value="${esc(s.obs||'')}" onchange="pmSubSet('${t.id}','${s.id}','obs',this.value)" placeholder="Description…" style="flex:1;min-width:110px;padding:5px 9px;border:1px dashed var(--line-2);border-radius:6px;background:transparent;font:inherit;font-size:11.5px">
-            <select onchange="pmSubSet('${t.id}','${s.id}','resp',this.value)" style="width:150px;padding:5px 7px;border:1px solid var(--line-2);border-radius:6px;background:#fff;font:inherit;font-size:11.5px;flex-shrink:0">${subPersonOpts(s.resp)}</select>
-          </div>
-        </div>`).join('')}
-        <button class="chip-btn" onclick="pmAddSub('${t.id}')" style="margin-top:4px">+ Add sub-item</button>
-        <input value="${esc(t.obs||'')}" onchange="pmAtvSet('${t.id}','obs',this.value)" placeholder="Note…" style="width:100%;margin-top:8px;padding:6px 10px;border:1px dashed var(--line-2);border-radius:8px;background:transparent;font:inherit;font-size:12px">
-      </div>`:''}
-    </div>`).join('');
   const logsHTML=(EDIT.logs||[]).slice().reverse().map(l=>`<div style="background:var(--paper-2);border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-bottom:7px"><div style="font-size:11px;color:var(--txt-3);font-weight:600;margin-bottom:4px">${esc(l.autor)} · ${fmtDate(l.t)}</div><div style="font-size:13px">${fmtLogTxt(l.txt)}</div></div>`).join('')||'<div style="font-size:12.5px;color:var(--txt-3)">No updates yet.</div>';
-  $('#modalMount').innerHTML=`<div class="overlay${reopen?' no-anim':''}" onclick="if(event.target===this)pmOverlayClose()"><div role="dialog" aria-modal="true" class="modal${reopen?' no-anim':''}">
-    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--accent);flex-shrink:0;margin-right:2px"></span><div style="flex:1;min-width:0"><h3>${EDIT._new?'New project':esc(EDIT.nome||'Project')}</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Everything below stays open for editing by the creator and admins — activities also by tagged Marketing people</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
+  $('#modalMount').innerHTML=`<div class="overlay${reopen?' no-anim':''}" onclick="if(event.target===this)pmOverlayClose()"><div role="dialog" aria-modal="true" class="modal${reopen?' no-anim':''}" style="max-width:1040px">
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--accent);flex-shrink:0;margin-right:2px"></span><div style="flex:1;min-width:0"><h3>${EDIT._new?'New project':esc(EDIT.nome||'Project')}</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Main fields belong to the creator and admins — the activity plan is also open to tagged Marketing people and to the assigned agencies</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">
-      ${ED?'':`<div class="banner">${EDA?'You\'re tagged on this project and on the Marketing profile: you can edit the activities (add, rename, reorder, remove) and post to the log, but not the main project fields.':'You are not the owner or admin: you can update status, check activities/sub-items and post to the log, but not edit the main fields.'}</div>`}
+      ${ED?'':`<div class="banner">${EDA?'This project is shared with you: the activity plan is yours to work — add, rename, reorder, date and link items — but the main project fields stay with the creator and admins.':'You are not the owner or admin: you can update status, tick activities and sub-items off and post to the log, but not edit the main fields or the activity list.'}</div>`}
       <div class="field"><label>Project name</label><input value="${esc(EDIT.nome||'')}" onchange="pmSet('nome',this.value)" ${dis} placeholder="e.g. Holiday Campaign 2026" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
       <div class="fgrid" style="margin-top:14px">
         <div class="field"><label>Project type <span style="font-weight:600;color:var(--txt-3)">(sets activity template &amp; filters)</span></label><select onchange="pmPTipo(this.value)" ${dis}><option value="">Select…</option>${BUSINESS_TYPES.map(b=>`<option value="${b.id}" ${EDIT.ptipo===b.id?'selected':''}>${b.name}</option>`).join('')}</select></div>
@@ -3692,15 +4241,9 @@ function renderProjModal(){
       </div>
       <div class="field full" style="margin-top:14px"><label>Categories <span style="font-weight:600;color:var(--txt-3)">(product categories — multi-select)</span></label><div style="display:flex;flex-wrap:wrap;gap:6px">${CAT_CHIPS.map(c=>{const on=(EDIT.categorias||[]).includes(c);return `<button ${dis} onclick="pmToggleCat('${esc(c)}')" style="padding:6px 13px;border-radius:18px;border:1px solid ${on?'var(--accent)':'var(--line-2)'};background:${on?'#fff2ee':'#fff'};color:${on?'var(--accent-deep)':'var(--txt-2)'};font-weight:700;font-size:12px;cursor:pointer">${esc(catKeyLabel(c))}</button>`;}).join('')}</div></div>
       <div class="field full"><label>Brand</label><div style="display:flex;flex-wrap:wrap;gap:6px">${BRAND_CHIPS.map(b=>{const on=EDIT.marca===b;return `<button ${dis} onclick="pmSet('marca','${esc(b)}');renderProjModal()" style="padding:6px 13px;border-radius:18px;border:1px solid ${on?'var(--accent)':'var(--line-2)'};background:${on?'#fff2ee':'#fff'};color:${on?'var(--accent-deep)':'var(--txt-2)'};font-weight:700;font-size:12px;cursor:pointer">${esc(b)}</button>`;}).join('')}</div></div>
+      <div class="field full"><label>Agencies <span style="font-weight:600;color:var(--txt-3)">(who sees this project in Work — multi-select)</span></label>${pmAgenciasHTML(ED)}</div>
       ${!EDIT._new?`<div style="display:flex;align-items:center;gap:12px;margin:14px 0 14px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:16px">${prog}%</b><span class="pbar" style="flex:1"><span style="width:${prog}%;background:${healthPill(EDIT.status||autoStatus(EDIT)).dot}"></span></span><span style="font-size:11.5px;color:var(--txt-3);font-weight:600">${done}/${tasks.length} tasks done</span></div>`:''}
-      <div style="border:1px solid var(--line);border-radius:11px;overflow:hidden;margin-bottom:14px">
-        <div style="padding:9px 13px;background:#fdf3e7;border-bottom:1px solid #f0d9c2;display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="font-size:10.5px;font-weight:800;color:#b5550c">${tasks.length} activities from the "${esc(tName)}" pattern — edit names, dates & sub-items now or after</span>${(!EDIT._new&&projHasSubs(EDIT))?`<button class="chip-btn" onclick="openProjTimeline('${esc(EDIT.id)}')" style="flex-shrink:0;display:inline-flex;align-items:center;gap:5px">${icn('calendar',12)} View timeline</button>`:''}</div>
-        <div id="pmAtvList" style="padding:9px 11px;max-height:280px;overflow-y:auto">
-          ${atvHTML||'<div style="font-size:12.5px;color:var(--txt-3);padding:6px">No activities.</div>'}
-          ${EDA?'<button class="btn-ghost" onclick="pmAddAtv()" style="margin-top:2px">+ Add activity</button>':''}
-        </div>
-        <div style="padding:8px 13px;border-top:1px solid #edeff4;background:var(--paper-2);font-size:10.5px;color:var(--txt-3)">Open status — everyone involved can post status updates and add sub-items after creation.</div>
-      </div>
+      ${pmAtvBlockHTML(EDA)}
       <div class="field"><label>Owner <span style="font-weight:600;color:var(--txt-3)">(you — creator)</span></label><div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:var(--paper)"><span class="avatar" style="width:22px;height:22px;background:${avColor(EDIT.owner||EDIT.resp)};font-size:9.5px">${initials(EDIT.owner||EDIT.resp||'?')}</span><b style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(EDIT.owner||EDIT.resp||'—')}</b></div></div>
       <div class="field full" style="margin-top:14px"><label>People tagged on this project <span style="font-weight:600;color:var(--txt-3)">(anyone can tag — PO-only agency logins excluded)</span></label>
         <div id="pmTaggedChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:${canTag?'8px':'0'}">${pmTaggedChipsHTML()}</div>
@@ -3720,12 +4263,15 @@ function renderProjModal(){
       ${logsHTML}
     </div>
     <div class="modal-f">
-      <span style="font-size:11px;color:var(--txt-3);flex:1">${(ED&&!EDIT._new)?`<a onclick="delProj('${EDIT.id}')" style="color:var(--red);cursor:pointer;font-weight:600">Delete project</a>`:'Editable later by: creator · admin — activities also by tagged Marketing people'}</span>
+      <span style="font-size:11px;color:var(--txt-3);flex:1">${(ED&&!EDIT._new)?`<a onclick="delProj('${EDIT.id}')" style="color:var(--red);cursor:pointer;font-weight:600">Delete project</a>`:'Main fields: creator · admin — activity plan also open to tagged Marketing people and the assigned agencies'}</span>
       <div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" onclick="saveProj()">${EDIT._new?'Create project':'Save'}</button></div>
     </div>
-  </div></div>`;
+  </div></div><div id="pmPop"></div>`;
   const mb=$('.modal-b'); if(mb) mb.scrollTop=prevScroll;
-  const al=$('#pmAtvList'); if(al) al.scrollTop=prevAtvScroll;
+  // Quick-add is a typing loop, so the caret goes back where it was rather
+  // than being dropped by the innerHTML swap after every added item.
+  if(PM_REFOCUS){ const el=$(PM_REFOCUS.sel); if(el){ try{ el.focus({preventScroll:true}); }catch(e){ el.focus(); } } PM_REFOCUS=null; }
+  if(DEP_POP) pmDepPop(DEP_POP.tid,DEP_POP.sid,null,true);
 }
 function pmToggleOpen(tid){ const t=atv(tid); if(t){ t._open=!t._open; renderProjModal(); } }
 /* Clicking outside the modal (the dimmed backdrop) while editing an existing
@@ -3740,10 +4286,13 @@ function pmOverlayClose(){
 }
 async function saveProj(){
   if(!EDIT)return;
+  if(VIEW_AS){ toast(roMsg()); return; }
   if(!(EDIT.nome||'').trim()){ toast('Give the project a name.'); return; }
   if(!EDIT.ptipo){ toast('Select the project type.'); return; }
   const clean=JSON.parse(JSON.stringify(EDIT)); delete clean._new;
   const fromTask=clean._fromTask; delete clean._fromTask;
+  // `_open` is which rows the editor had expanded — UI state, not project data.
+  (clean.tasks||[]).forEach(t=>{ delete t._open; });
   clean.etapa=effectiveEtapa(clean); clean.status=autoStatus(clean);
   try{
     const {error}=await SBPO.from('act_projects').upsert({id:clean.id,data:clean});
@@ -3755,6 +4304,7 @@ async function saveProj(){
   }catch(e){ toastErr(e); }
 }
 async function delProj(id){
+  if(VIEW_AS){ toast(roMsg()); return; }
   if(!confirm('Delete this project? This action cannot be undone.'))return;
   try{ await SBPO.from('act_projects').delete().eq('id',id); DATA.projetos=DATA.projetos.filter(p=>p.id!==id); toast('Project deleted'); closeModal(); go(SCREEN); }
   catch(e){ toastErr(e); }
@@ -3766,7 +4316,7 @@ function myMentions(){
   const meTeam=(TEAM||[]).find(m=>(m.email||'').toLowerCase()===me);
   const meName=meTeam?meTeam.nome:'';
   const out=[];
-  DATA.projetos.forEach(p=>{(p.logs||[]).forEach(l=>{(l.mencoes||[]).forEach(mn=>{
+  visProjs().forEach(p=>{(p.logs||[]).forEach(l=>{(l.mencoes||[]).forEach(mn=>{
     const hit=(mn.email&&mn.email.toLowerCase()===me)||(meName&&mn.nome===meName)||isManager;
     if(hit)out.push({proj:p.nome,pid:p.id,txt:l.txt,autor:l.autor,t:l.t});
   });});});
@@ -4735,19 +5285,19 @@ function tlJumpTo(dateStr){
 /* Gantt-style, not a plain list — each activity gets its own bar positioned
    on the SAME week scale (min/dayPct) as the parent project row above it, so
    the bars line up under the shared week header instead of needing one of
-   their own. Tasks only carry a due date (no individual start), so each
-   bar's start is chained from the previous activity's due date (or the
-   project's own start for the first one) — a simple, readable approximation
-   of sequencing rather than true independent start dates. */
+   their own. An activity's own start date is used when it has one; the old
+   chain-from-the-previous-due-date approximation is now only the fallback,
+   for activities that were created before start dates existed. */
 function tlProjActivitiesHTML(p,min,dayPct,weeks){
-  const tasks=(p.tasks||[]).slice().sort((a,b)=>String(a.fim||'9999').localeCompare(String(b.fim||'9999')));
+  const tasks=(p.tasks||[]).slice().sort((a,b)=>String(a.inicio||a.fim||'9999').localeCompare(String(b.inicio||b.fim||'9999')));
   if(!tasks.length) return '<div style="font-size:12px;color:var(--txt-3);padding:8px 16px 8px 45px">No activities.</div>';
   const winEnd=new Date(min); winEnd.setDate(winEnd.getDate()+(weeks||1)*7);
   let prevEnd=projEffStart(p);
   return tasks.map(t=>{
     const st=statusOf(t.status), hp=healthPill(t.status);
-    const endStr=t.fim||prevEnd;
-    const s=new Date(prevEnd+'T00:00:00'), e=new Date(endStr+'T00:00:00');
+    const endStr=t.fim||t.inicio||prevEnd;
+    const startStr=t.inicio||prevEnd;
+    const s=new Date((startStr<=endStr?startStr:endStr)+'T00:00:00'), e=new Date(endStr+'T00:00:00');
     prevEnd=endStr;
     let bar;
     if(e<min){
@@ -4933,7 +5483,7 @@ function copyWeekly(){
 function renderMyTasks(){
   const me=(currentUser&&currentUser.email||'').toLowerCase();
   const meTeam=(TEAM||[]).find(m=>(m.email||'').toLowerCase()===me); const meName=meTeam?meTeam.nome:'';
-  const mine=DATA.projetos.filter(p=>(p.owner||'').toLowerCase()===me||p.resp===meName);
+  const mine=visProjs().filter(p=>(p.owner||'').toLowerCase()===me||p.resp===meName);
   // checklist: atividades não concluídas dos meus projetos
   const checks=[]; mine.forEach(p=>{(p.tasks||[]).forEach(t=>{if(!t.done)checks.push({pid:p.id,tid:t.id,proj:p.nome,title:t.n,fim:t.fim});});});
   checks.sort((a,b)=>String(a.fim||'9999').localeCompare(String(b.fim||'9999')));
