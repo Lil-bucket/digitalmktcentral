@@ -1026,16 +1026,25 @@ function seedDemoData(){
     {id:'demo-orc-social',nome:'Social Always-On',product_category:'Social',valor_total:900000,periodo_inicio:D(2026,1,1),periodo_fim:D(2026,12,31)}
   ];
 
+  /* campanha_id is seeded on purpose across agencies: campaign 1 mixes
+     Wavemaker and Mindshare funds, so switching demo profiles shows an agency
+     the same campaign narrowed to its own funds. p6 stays ungrouped to keep
+     the "funds with no campaign" KPI honest. */
   const fundSeed=[
-    {id:'demo-p1',nome:'Fee - Wavemaker',agencia:'Wavemaker',product_category:'AC',activity:'FEE',orcamento_id:'demo-orc-ac',aprovacao_status:'APROVADO'},
-    {id:'demo-p2',nome:'Fee - Mindshare',agencia:'Mindshare',product_category:'AC',activity:'FEE',orcamento_id:'demo-orc-ac',aprovacao_status:'APROVADO'},
-    {id:'demo-p3',nome:'Freshin',agencia:'Mindshare',product_category:'AC',activity:'KOL',orcamento_id:'demo-orc-ac',aprovacao_status:'APROVADO'},
-    {id:'demo-p4',nome:'Gamescom Sponsorship',agencia:'Mindshare',product_category:'Gaming',activity:'KOL',orcamento_id:'demo-orc-gaming',aprovacao_status:'APROVADO'},
-    {id:'demo-p5',nome:'Squad Influencer Program',agencia:'Mindshare',product_category:'Gaming',activity:'KOL',orcamento_id:'demo-orc-gaming',aprovacao_status:'APROVADO'},
-    {id:'demo-p6',nome:'Always On Social',agencia:'Vizeu',product_category:'Social',activity:'AON',orcamento_id:'demo-orc-social',aprovacao_status:'APROVADO'},
-    {id:'demo-p7',nome:'New Product Launch',agencia:'Wavemaker',product_category:'Social',activity:'Campaign',orcamento_id:'demo-orc-social',aprovacao_status:'PENDENTE'}
+    {id:'demo-p1',nome:'Fee - Wavemaker',agencia:'Wavemaker',product_category:'AC',activity:'FEE',orcamento_id:'demo-orc-ac',aprovacao_status:'APROVADO',campanha_id:'demo-camp-1'},
+    {id:'demo-p2',nome:'Fee - Mindshare',agencia:'Mindshare',product_category:'AC',activity:'FEE',orcamento_id:'demo-orc-ac',aprovacao_status:'APROVADO',campanha_id:'demo-camp-1'},
+    {id:'demo-p3',nome:'Freshin',agencia:'Mindshare',product_category:'AC',activity:'KOL',orcamento_id:'demo-orc-ac',aprovacao_status:'APROVADO',campanha_id:'demo-camp-1'},
+    {id:'demo-p4',nome:'Gamescom Sponsorship',agencia:'Mindshare',product_category:'Gaming',activity:'KOL',orcamento_id:'demo-orc-gaming',aprovacao_status:'APROVADO',campanha_id:'demo-camp-2'},
+    {id:'demo-p5',nome:'Squad Influencer Program',agencia:'Mindshare',product_category:'Gaming',activity:'KOL',orcamento_id:'demo-orc-gaming',aprovacao_status:'APROVADO',campanha_id:'demo-camp-2'},
+    {id:'demo-p6',nome:'Always On Social',agencia:'Vizeu',product_category:'Social',activity:'AON',orcamento_id:'demo-orc-social',aprovacao_status:'APROVADO',campanha_id:null},
+    {id:'demo-p7',nome:'New Product Launch',agencia:'Wavemaker',product_category:'Social',activity:'Campaign',orcamento_id:'demo-orc-social',aprovacao_status:'PENDENTE',campanha_id:'demo-camp-3'}
   ];
-  const poProjetos=fundSeed.map(p=>({id:p.id,nome:p.nome,agencia:p.agencia,product_category:p.product_category,activity:p.activity,orcamento_id:p.orcamento_id,aprovacao_status:p.aprovacao_status,rateio:false,dono:'demo-u-mkt'}));
+  const campanhas=[
+    {id:'demo-camp-1',nome:'[DEMO] Summer AC Launch',responsavel:'Bruno Silva',status:'ativa'},
+    {id:'demo-camp-2',nome:'[DEMO] Gamescom 2026',responsavel:'Eva Martins',status:'ativa'},
+    {id:'demo-camp-3',nome:'[DEMO] New Product Launch',responsavel:'Ana Ramos',status:'planejada'}
+  ];
+  const poProjetos=fundSeed.map(p=>({id:p.id,nome:p.nome,agencia:p.agencia,product_category:p.product_category,activity:p.activity,orcamento_id:p.orcamento_id,aprovacao_status:p.aprovacao_status,campanha_id:p.campanha_id||null,rateio:false,dono:'demo-u-mkt'}));
 
   const tetos=[]; const addTeto=(pid,vals)=>vals.forEach(([m,v])=>tetos.push({fund_id:pid,competencia:D(2026,m,1),teto:v}));
   addTeto('demo-p1',[[6,150000],[7,150000],[8,111155]]);
@@ -1063,7 +1072,7 @@ function seedDemoData(){
     {tipo:'KOL',agencia:'Mindshare',categoria:'Gaming',percentual:1,cc:'CC-200',account:'6100',descricao:'KOL / Influencer spend'}
   ];
 
-  DATA={projetos,orcamentos,poProjetos,pos,tetos,rateio:[],notif:[],mencoes:[],pessoas,fee};
+  DATA={projetos,orcamentos,poProjetos,pos,tetos,rateio:[],notif:[],mencoes:[],pessoas,fee,ccLayout:[],campanhas};
   TEAM=[];
 }
 function demoSetRole(v){
@@ -1336,7 +1345,7 @@ const ROLE_NAV={
   admin:      {work:['dash','board','list','timeline','team','weekly','mytasks'], budget:['bo','budgets','campanhas','funds','pos','people']},
   marketing:  {work:['dash','board','list','timeline','weekly','mytasks'],        budget:['bo','budgets','campanhas','funds','pos']},
   financeiro: {work:[],                                                          budget:['bo','funds','pos']},
-  agencia:    {work:['dash','board','list','timeline','mytasks'],               budget:['bo','funds','pos']}
+  agencia:    {work:['dash','board','list','timeline','mytasks'],               budget:['bo','campanhas','funds','pos']}
 };
 const PANEL_ONLY_WORK=['dash','board','list','timeline','weekly','mytasks'];
 const GLOBAL_NAV=['notif'];
@@ -4880,8 +4889,24 @@ function campCategorias(campId){
   campFunds(campId).forEach(f=>{ const c=String(f.product_category||'').trim(); if(c)s.add(c); });
   return [...s].sort();
 }
+/* Agency scoping lives here, in the one place every campanha figure is
+   derived from: an agency profile sees a campanha only through the funds
+   that are its own, so cap/used, categories, the month split and the fund
+   list underneath all narrow together instead of one of them leaking the
+   campaign's full budget. Same client-side rule the Funds/POs screens use
+   (effPapel/effAgencia, so "View as agency" simulates it too) — not a
+   security boundary, RLS is; see the Work-module note in visProjs(). */
+function campScoped(list){
+  return (effPapel()==='agencia'&&effAgencia())?list.filter(p=>p.agencia===effAgencia()):list;
+}
 function campFunds(campId){
-  return (DATA.poProjetos||[]).filter(p=>p.campanha_id===campId);
+  return campScoped((DATA.poProjetos||[]).filter(p=>p.campanha_id===campId));
+}
+/* Campaigns an agency has anything in: one with no fund of theirs would be an
+   empty card showing someone else's plan, so it drops off the list entirely. */
+function visCampanhas(){
+  const list=(DATA.campanhas||[]).slice();
+  return (effPapel()==='agencia'&&effAgencia())?list.filter(c=>campFunds(c.id).length):list;
 }
 /* Same cap/consumed/committed aggregation renderFunds() does per-fund
    (tetos + rateio_alocacao for the cap, pos by status for spend), just
@@ -5005,25 +5030,72 @@ function campanhaTimelineHTML(list){
     </div>
   </div>`;
 }
-/* The same split for one campanha, for its detail modal: no name column, the
-   figures under each month, and the row reads left to right as the plan. */
-function campanhaMonthStripHTML(campId){
-  const mt=campMonthlyTotals(campId);
-  const months=Object.keys(mt).sort();
-  if(!months.length) return '';
-  const axis=campMonthAxis([mt]);
-  const maxVal=Math.max(1,...Object.values(mt).map(v=>+v||0));
-  const first=months[0], last=months[months.length-1];
+/* The month split for one campanha, for its detail modal — but broken out one
+   row per fund, not just the roll-up. The roll-up alone answers "is the
+   campaign on plan?"; it cannot answer "which fund is carrying the overspend
+   in March?", which is the question anyone opening a campaign actually has.
+   So the funds are the rows (each on its own span, coloured by its category,
+   clicking through to the fund detail) and the campaign total closes the
+   table underneath — the same aggregate strip that used to be here on its own,
+   now as the footer the rows add up to. Cells come from campMonthCellHTML, so
+   this reads exactly like the Campaigns and Funds timelines. */
+function campanhaMonthBreakdownHTML(campId){
+  const funds=campFunds(campId);
+  const rows=funds.map(f=>{
+    const mt=fundMonthlyTotals(f.id);
+    const months=Object.keys(mt).sort();
+    return {f,mt,months};
+  }).filter(r=>r.months.length);
+  const semMes=funds.length-rows.length;
+  const mtTot=campMonthlyTotals(campId);
+  const totMonths=Object.keys(mtTot).sort();
+  if(!totMonths.length) return '';
+  const axis=campMonthAxis([mtTot]);
+  const maxVal=Math.max(1,...rows.flatMap(r=>Object.values(r.mt).map(v=>+v||0)),1);
+  const maxTot=Math.max(1,...Object.values(mtTot).map(v=>+v||0));
   const nowM=new Date().toISOString().slice(0,7);
-  const head=axis.map(mm=>`<div style="flex:1;min-width:0;padding:5px 2px;text-align:center;font-family:var(--mono);font-size:9px;font-weight:700;color:${mm===nowM?'#fff':(mm<nowM?'#a4aab5':'var(--txt-3)')};background:${mm===nowM?'var(--ink)':'transparent'};border-right:1px solid #edeff4;white-space:nowrap;overflow:hidden">${fmtMes(mm+'-01')}</div>`).join('');
-  const cells=axis.map(mm=>campMonthCellHTML(mm,+mt[mm]||0,campMonthUsed(campId,mm),{maxVal,first,last,col:'var(--po)'})).join('');
+  rows.sort((a,b)=>a.months[0].localeCompare(b.months[0])||(a.f.nome||'').localeCompare(b.f.nome||''));
+  const th='font-family:var(--mono);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt-3)';
+  const NAMEW=150, TOTW=94;
+  const head=axis.map(mm=>`<div style="flex:1;min-width:0;padding:6px 2px;text-align:center;font-family:var(--mono);font-size:9px;font-weight:700;color:${mm===nowM?'#fff':(mm<nowM?'#a4aab5':'var(--txt-3)')};background:${mm===nowM?'var(--ink)':'transparent'};border-right:1px solid #edeff4;white-space:nowrap;overflow:hidden">${fmtMes(mm+'-01')}</div>`).join('');
+  const trs=rows.map(r=>{
+    const km=catMeta(String(r.f.product_category||'').trim()||'Uncategorized');
+    const first=r.months[0], last=r.months[r.months.length-1];
+    const cells=axis.map(mm=>campMonthCellHTML(mm,+r.mt[mm]||0,fundMonthUsed(r.f.id,mm),{maxVal,first,last,col:km.c})).join('');
+    const cap=r.months.reduce((s,mm)=>s+(+r.mt[mm]||0),0);
+    const used=r.months.reduce((s,mm)=>s+fundMonthUsed(r.f.id,mm),0);
+    return `<div onclick="closeModal();openFundDetail('${esc(r.f.id)}')" style="display:flex;border-bottom:1px solid #edeff4;cursor:pointer" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''" title="Open the month-by-month detail of ${esc(r.f.nome)}">
+      <div style="width:${NAMEW}px;flex-shrink:0;padding:7px 11px;border-right:1px solid var(--line);min-width:0;display:flex;align-items:center;gap:7px">
+        <span style="width:8px;height:8px;border-radius:2px;background:${km.c};flex-shrink:0"></span>
+        <span style="min-width:0"><span style="font-weight:600;font-size:12px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.f.nome)}</span><span style="font-size:10px;color:var(--txt-3);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fmtMes(first+'-01')} → ${fmtMes(last+'-01')}</span></span>
+      </div>
+      <div style="flex:1;display:flex;min-width:0;align-items:stretch">${cells}</div>
+      <div class="mono" style="width:${TOTW}px;flex-shrink:0;padding:7px 11px;border-left:1px solid var(--line);display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:1px"><span style="font-size:11px;font-weight:700">${cap?BRL(cap):'—'}</span><span style="font-size:9.5px;font-weight:800;color:${used>cap+0.5?'var(--po)':'var(--txt-3)'}">${used?BRL(used):'—'}</span></div>
+    </div>`;
+  }).join('');
+  const totCells=axis.map(mm=>campMonthCellHTML(mm,+mtTot[mm]||0,campMonthUsed(campId,mm),{maxVal:maxTot,first:totMonths[0],last:totMonths[totMonths.length-1],col:'var(--po)'})).join('');
+  const capTot=totMonths.reduce((s,mm)=>s+(+mtTot[mm]||0),0);
+  const usedTot=totMonths.reduce((s,mm)=>s+campMonthUsed(campId,mm),0);
+  const gridW=NAMEW+TOTW+axis.length*46;
   return `<div style="border:1px solid var(--line);border-radius:11px;overflow:hidden;margin-bottom:14px">
-    <div style="padding:9px 12px;background:var(--paper-2);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px">
+    <div style="padding:9px 12px;background:var(--paper-2);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <span style="font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">Budget by month</span>
-      <span style="font-size:11px;color:var(--txt-3)">cap on top, used underneath — summed across this campaign's funds</span>
+      <span style="font-size:11px;color:var(--txt-3)">one row per fund — cap on top, used underneath${rows.length>1?' — the campaign total closes the table':''}</span>
     </div>
-    <div style="display:flex;border-bottom:1px solid #edeff4;background:#fff">${head}</div>
-    <div style="display:flex;align-items:stretch;background:#fff">${cells}</div>
+    <div style="overflow-x:auto"><div style="min-width:${gridW}px">
+      <div style="display:flex;border-bottom:1px solid var(--line);background:#fff">
+        <div style="width:${NAMEW}px;flex-shrink:0;padding:6px 11px;${th};border-right:1px solid var(--line);display:flex;align-items:center">Fund</div>
+        <div style="flex:1;display:flex;min-width:0">${head}</div>
+        <div style="width:${TOTW}px;flex-shrink:0;padding:6px 11px;${th};border-left:1px solid var(--line);display:flex;align-items:center;justify-content:flex-end;text-align:right">Cap / used</div>
+      </div>
+      ${trs||`<div style="padding:12px;font-size:11.5px;color:var(--txt-3)">No fund of this campaign carries monthly values yet.</div>`}
+      ${rows.length===1?'':`<div style="display:flex;border-top:2px solid var(--line);background:var(--paper-2)">
+        <div style="width:${NAMEW}px;flex-shrink:0;padding:7px 11px;${th};border-right:1px solid var(--line);display:flex;align-items:center">Campaign total</div>
+        <div style="flex:1;display:flex;min-width:0">${totCells}</div>
+        <div class="mono" style="width:${TOTW}px;flex-shrink:0;padding:7px 11px;border-left:1px solid var(--line);display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:1px"><span style="font-size:11px;font-weight:800">${BRL(capTot)}</span><span style="font-size:9.5px;font-weight:800;color:${usedTot>capTot+0.5?'var(--po)':'var(--txt-3)'}">${usedTot?BRL(usedTot):'—'}</span></div>
+      </div>`}
+    </div></div>
+    ${semMes?`<div style="padding:7px 12px;border-top:1px solid var(--line);font-size:11px;color:var(--txt-3)">${semMes} fund${semMes===1?'':'s'} of this campaign ${semMes===1?'has':'have'} no monthly cap set — not plotted above, but still counted in the totals at the top.</div>`:''}
   </div>`;
 }
 function campanhaGaugeHTML(campId,width){
@@ -5048,7 +5120,7 @@ function campanhasKpisHTML(list){
       if(saldo>0.5){ closedN++; closedSaldo+=saldo; }
     }
   });
-  const soltos=(DATA.poProjetos||[]).filter(p=>!p.campanha_id&&p.aprovacao_status==='APROVADO');
+  const soltos=campScoped((DATA.poProjetos||[]).filter(p=>!p.campanha_id&&p.aprovacao_status==='APROVADO'));
   const ids=new Set(soltos.map(p=>p.id));
   let soltosTeto=0;
   DATA.tetos.forEach(t=>{ if(ids.has(t.fund_id)) soltosTeto+=(+t.teto||0); });
@@ -5072,7 +5144,7 @@ function campanhasKpisHTML(list){
    Rows open the shared fund detail; the Link button jumps straight into the
    campaign form with that fund pre-ticked, which is where the work is. */
 function openUngroupedFunds(){
-  const soltos=(DATA.poProjetos||[]).filter(p=>!p.campanha_id&&p.aprovacao_status==='APROVADO');
+  const soltos=campScoped((DATA.poProjetos||[]).filter(p=>!p.campanha_id&&p.aprovacao_status==='APROVADO'));
   if(!soltos.length){ toast('Every approved fund already belongs to a campaign.'); return; }
   const capOf=id=>{ let v=0;
     DATA.tetos.forEach(t=>{ if(t.fund_id===id) v+=(+t.teto||0); });
@@ -5105,16 +5177,21 @@ function openCampanhaNewWith(fid){
   renderCampanhaForm();
 }
 function renderCampanhasList(){
-  let list=(DATA.campanhas||[]).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+  let list=visCampanhas().sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+  const scoped=effPapel()==='agencia'&&effAgencia();
+  /* Said once, at the top: every number below counts this agency's funds only,
+     so a campaign whose cap looks smaller here than the client quoted isn't a
+     bug — it is the agency's slice of it. */
+  const note=scoped?`<div class="banner" style="background:var(--violet-bg);border-color:#cfc2f0;color:#5535ad">${icn('lock',12)} You see campaigns that have at least one ${esc(effAgencia())} fund — every figure on this screen covers your funds only.</div>`:'';
   // The KPI row rides above the empty state too: with no campaigns yet, "funds
   // with no campaign" is the whole picture and the only number worth showing.
   const kpis=campanhasKpisHTML(list);
-  if(!list.length) return kpis+`<div class="empty">No campaigns yet. Campaigns group one or more funds under a name, budget and owner — create one and link funds to it from the fund form.</div>`;
+  if(!list.length) return note+kpis+`<div class="empty">${scoped?'No campaign has a fund of yours linked to it yet.':'No campaigns yet. Campaigns group one or more funds under a name, budget and owner — create one and link funds to it from the fund form.'}</div>`;
   const viewBar=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
     <div style="display:flex;gap:6px">${[['list','List'],['tl','Timeline']].map(v=>`<button onclick="campanhaSetView('${v[0]}')" style="padding:8px 13px;border-radius:8px;border:1px solid ${CAMPANHA_VIEW===v[0]?'var(--po)':'var(--line-2)'};background:${CAMPANHA_VIEW===v[0]?'#fbe4e1':'#fff'};color:${CAMPANHA_VIEW===v[0]?'#bf0008':'var(--txt-2)'};font-size:12px;font-weight:700;cursor:pointer">${v[1]}</button>`).join('')}</div>
     <span style="font-size:11.5px;color:var(--txt-3)">${CAMPANHA_VIEW==='tl'?'Row = campaign · each month shows the cap its funds carry and what was used against it. Click a row to open.':'Click a campaign for its funds and its month-by-month split.'}</span>
   </div>`;
-  if(CAMPANHA_VIEW==='tl') return kpis+viewBar+campanhaTimelineHTML(list);
+  if(CAMPANHA_VIEW==='tl') return note+kpis+viewBar+campanhaTimelineHTML(list);
   const rows=list.map(c=>{
     const cats=campCategorias(c.id);
     const funds=campFunds(c.id);
@@ -5131,7 +5208,7 @@ function renderCampanhasList(){
       </div>
     </div>`;
   }).join('');
-  return kpis+viewBar+`<div style="background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">${rows}</div>`;
+  return note+kpis+viewBar+`<div style="background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">${rows}</div>`;
 }
 /* Campaign detail: the roll-up header (same segmented bar the fund detail
    uses, summed across the campaign) over the list of linked funds, each row
@@ -5184,7 +5261,7 @@ function openCampanhaDetail(id){
         <span style="color:var(--txt-2)">balance <b>${BRL(t.teto-used)}</b> of ${BRL(t.teto)}</span>
       </div>
     </div>
-    <div class="modal-b" style="padding:0">${(function(){const strip=campanhaMonthStripHTML(id);return strip?`<div style="padding:16px 18px 2px">${strip}</div>`:'';})()}${rows}</div>
+    <div class="modal-b" style="padding:0">${(function(){const strip=campanhaMonthBreakdownHTML(id);return strip?`<div style="padding:16px 18px 2px">${strip}</div>`:'';})()}${rows}</div>
     <div class="modal-f"><span style="font-size:11px;color:var(--txt-3)">Click a fund for its month-by-month detail.</span><div style="display:flex;gap:10px">${canEdit?`<button class="btn-ghost" onclick="openCampanhaEdit('${esc(id)}')">Edit campaign</button>`:''}<button class="btn-acc" style="background:var(--po)" onclick="closeModal()">Close</button></div></div>
   </div></div>`;
 }
