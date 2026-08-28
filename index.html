@@ -1875,7 +1875,20 @@ const actMeta=a=>ACT_META[a]||{icon:'tag',label:a||'—'};
 let FUND_Q='', FUND_OPEN={};
 let FUND_VIEW=(function(){try{const v=localStorage.getItem('fund_view')||'cat';return v==='list'?'cat':v;}catch(e){return 'cat';}})();
 let FUND_FILTER_ACT='', FUND_FILTER_CAT='';
+/* A finished fund still belongs on the Funds screen — it is the record of a
+   year's spending — but on the Timeline it costs a row to say "nothing left
+   to do here", and a year of them buries the funds still in play. Hiding
+   them is a standing preference, so it persists like the view choice does.
+   It runs inside fundVisible() rather than inside the timeline renderer, so
+   the KPIs, the category cards and the timeline never disagree about which
+   funds are on screen. */
+let FUND_HIDE_DONE=(function(){try{return localStorage.getItem('fund_hide_done')==='1';}catch(e){return false;}})();
 function fundSetView(v){ FUND_VIEW=v; try{localStorage.setItem('fund_view',v);}catch(e){} go('funds'); }
+function fundToggleDone(){
+  FUND_HIDE_DONE=!FUND_HIDE_DONE;
+  try{localStorage.setItem('fund_hide_done',FUND_HIDE_DONE?'1':'0');}catch(e){}
+  go('funds');
+}
 function fundSetFilter(kind,v){
   if(kind==='act')FUND_FILTER_ACT=v; else FUND_FILTER_CAT=v;
   const b=document.getElementById('fundBody'); if(b) b.outerHTML=renderCampBody();
@@ -1907,8 +1920,11 @@ function fundKpisHTML(){
   let orcado=0,consumido=0,comprometido=0;
   aprov.forEach(p=>{orcado+=tetoBy[p.id]||0;consumido+=consBy[p.id]||0;comprometido+=compBy[p.id]||0;});
   const pendCount=vis.filter(p=>p.aprovacao_status==='PENDENTE').length;
-  const doneCount=aprov.filter(p=>fundLifecycle(p)==='done').length;
-  const filtered=!!(FUND_Q||FUND_FILTER_ACT||FUND_FILTER_CAT);
+  /* Counted before the hide-completed filter: the whole point of the number
+     is to say how many finished funds are behind the toggle, so hiding them
+     must not make it read zero. */
+  const doneCount=fundVisible({keepDone:true}).filter(p=>p.aprovacao_status==='APROVADO'&&fundLifecycle(p)==='done').length;
+  const filtered=!!(FUND_Q||FUND_FILTER_ACT||FUND_FILTER_CAT||FUND_HIDE_DONE);
   const stat=(l,v,col)=>`<div class="kpi"><span class="bar" style="background:${col}"></span><div class="lbl">${l}</div><div class="num" style="font-size:19px;margin-top:7px">${v}</div></div>`;
   return `<div id="fundKpis" style="margin-bottom:18px">
     <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px">
@@ -1922,7 +1938,7 @@ function fundKpisHTML(){
     ${filtered?`<div style="font-size:11.5px;color:var(--txt-3);margin-top:7px">Totals follow the active filters — <a onclick="fundClearAll()" style="cursor:pointer;text-decoration:underline;color:var(--po)">show every fund</a>.</div>`:''}
   </div>`;
 }
-function fundClearAll(){ FUND_Q=''; FUND_FILTER_ACT=''; FUND_FILTER_CAT=''; go('funds'); }
+function fundClearAll(){ FUND_Q=''; FUND_FILTER_ACT=''; FUND_FILTER_CAT=''; FUND_HIDE_DONE=false; try{localStorage.setItem('fund_hide_done','0');}catch(e){} go('funds'); }
 function renderFunds(){
   let list=DATA.poProjetos.slice();
   if(effPapel()==='agencia'&&effAgencia()) list=list.filter(p=>p.agencia===effAgencia());
@@ -1950,6 +1966,13 @@ function renderFunds(){
         <option value="">All categories</option>
         ${fundGlobalCats().map(c=>`<option value="${esc(c)}" ${FUND_FILTER_CAT===c?'selected':''}>${esc(catKeyLabel(c))}</option>`).join('')}
       </select>
+      ${(function(){
+        /* Only offered when there is something to hide — a toggle that can
+           never change the screen is just another thing to read. */
+        const doneN=fundVisible({keepDone:true}).filter(p=>p.aprovacao_status==='APROVADO'&&fundLifecycle(p)==='done').length;
+        if(!doneN&&!FUND_HIDE_DONE) return '';
+        return `<button onclick="fundToggleDone()" title="A fund counts as completed once its cap is spent and its last month has closed" style="display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:8px;border:1px solid ${FUND_HIDE_DONE?'var(--po)':'var(--line-2)'};background:${FUND_HIDE_DONE?'#fbe4e1':'#fff'};color:${FUND_HIDE_DONE?'#bf0008':'var(--txt-2)'};font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">${icn('check',12)} ${FUND_HIDE_DONE?'Completed hidden':'Hide completed'} (${doneN})</button>`;
+      })()}
       ${(FUND_FILTER_ACT||FUND_FILTER_CAT)?`<button onclick="fundSetFilter('act','');fundSetFilter('cat','')" style="border:none;background:none;color:var(--po);font-size:12px;font-weight:700;cursor:pointer">Clear filters</button>`:''}
     </div>
     ${renderCampBody()}`;
@@ -1959,12 +1982,14 @@ let FUND_CTX=null;
    is already access-scoped) narrowed by the active filters and search. The
    headline numbers and the list both read this, so a number at the top can
    never describe a set of funds the rows below don't show. */
-function fundVisible(){
+function fundVisible(opt){
   const {list}=FUND_CTX||{list:[]};
   let fl=list;
   if(FUND_FILTER_ACT) fl=fl.filter(p=>actKey(p)===FUND_FILTER_ACT);
   if(FUND_FILTER_CAT) fl=fl.filter(p=>(String(p.product_category||'').trim()||'Uncategorized')===FUND_FILTER_CAT);
   if(FUND_Q) fl=fl.filter(p=>((p.nome||'')+' '+(p.agencia||'')+' '+(p.product_category||'')+' '+(p.activity||'')).toLowerCase().includes(FUND_Q));
+  // keepDone lets the toggle count and label what it is hiding.
+  if(FUND_HIDE_DONE&&!(opt&&opt.keepDone)) fl=fl.filter(p=>fundLifecycle(p)!=='done');
   return fl;
 }
 function renderCampBody(){
@@ -2185,7 +2210,7 @@ function fmtCompactBRL(n){
 function fundTimelineHTML(fl,q){
   const {tetoBy}=FUND_CTX;
   const rows=fl.filter(p=>p.aprovacao_status==='APROVADO').map(p=>{const mt=fundMonthlyTotals(p.id);const months=Object.keys(mt).sort();return {p,mt,months,teto:tetoBy[p.id]||0};}).filter(r=>r.months.length);
-  if(!rows.length) return `<div id="fundBody"><div class="empty">${q?'No funds match "'+esc(q)+'".':'No approved funds with monthly values to plot.'}</div></div>`;
+  if(!rows.length) return `<div id="fundBody"><div class="empty">${q?'No funds match "'+esc(q)+'".':(FUND_HIDE_DONE?'Nothing left to plot — every fund that matches is completed, and completed funds are hidden.':'No approved funds with monthly values to plot.')}</div></div>`;
   const allM=[...new Set(rows.flatMap(r=>r.months))].sort();
   const axis=[]; let cm=allM[0]; const endM=allM[allM.length-1];
   while(cm<=endM&&axis.length<36){ axis.push(cm); const y=+cm.slice(0,4), mo=+cm.slice(5,7); cm=mo===12?(y+1)+'-01':cm.slice(0,4)+'-'+String(mo+1).padStart(2,'0'); }
