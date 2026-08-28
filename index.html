@@ -348,6 +348,7 @@
   .sub input.st{flex:1;padding:5px 9px;border:1px solid var(--line-2);border-radius:6px;background:transparent;font:inherit;font-size:12.5px}
   .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:12px 22px;border-radius:12px;font-weight:600;font-size:13.5px;opacity:0;transition:opacity .28s var(--ease),transform .28s var(--ease);z-index:300;box-shadow:var(--sh-3);border:1px solid rgba(255,255,255,.09);pointer-events:none}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.ok{background:#0f7a4a;border-color:rgba(255,255,255,.16);padding:11px 20px}
   .ment{background:var(--violet-bg);color:var(--violet);font-weight:700;border-radius:4px;padding:0 4px}
 
   /* ===== ICONS + PROGRESS ALIGNMENT ===== */
@@ -647,7 +648,18 @@ const PRODUCT_CATS=['TV','AC','MOB','REF','WG','LABG'];
 const CAT_CHIPS=PRODUCT_CATS; // project categories = same product categories used in Budget
 const BRAND_CHIPS=['TCL','SEMP','TCL + SEMP'];
 const uid=()=>'x'+Math.random().toString(36).slice(2,9);
-function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
+function toast(m){const t=$('#toast');t.classList.remove('ok');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
+/* Saving is the most repeated action in the app and the least interesting
+   news in it. A sentence naming what was saved is read once and skipped
+   forever after, so every save says the same thing the same way: a check.
+   Anything that is NOT just a save — an approval others act on, a payment
+   date the user cannot see anywhere else — keeps its own words. */
+function toastSaved(){
+  const t=$('#toast');
+  t.innerHTML=`<span style="display:inline-flex;align-items:center;gap:8px">${icn('check',15,2.6)}Saved</span>`;
+  t.classList.add('ok','show');
+  setTimeout(()=>t.classList.remove('show'),1400);
+}
 /* Turn a raw Supabase/Postgres error into a sentence a user can act on,
    instead of dumping the constraint name in a toast. */
 function humanErr(e){
@@ -1044,15 +1056,29 @@ function seedDemoData(){
     {id:'demo-camp-2',nome:'[DEMO] Gamescom 2026',responsavel:'Eva Martins',status:'ativa'},
     {id:'demo-camp-3',nome:'[DEMO] New Product Launch',responsavel:'Ana Ramos',status:'planejada'}
   ];
-  const poProjetos=fundSeed.map(p=>({id:p.id,nome:p.nome,agencia:p.agencia,product_category:p.product_category,activity:p.activity,orcamento_id:p.orcamento_id,aprovacao_status:p.aprovacao_status,campanha_id:p.campanha_id||null,rateio:false,dono:'demo-u-mkt'}));
+  /* Cost centre / account / line, the same shape classificar() produces —
+     without them every demo fund is invisible to the Extrato and to the
+     Overview-by-account blocks, which then demo as permanently empty. */
+  const DEMO_CC={AC:'1406122014',Gaming:'1109123014',Social:'1607122049'};
+  const demoLinha=p=>String(p.activity).toLowerCase()==='fee'?'Agency Fee - '+p.agencia+' ('+p.product_category+')'
+    :String(p.activity).toLowerCase()==='kol'?'KOL - Influencers ('+p.product_category+')'
+    :String(p.activity).toLowerCase()==='aon'?'Always on (media and production) ('+p.product_category+')'
+    :'Product Campaign ('+p.nome+')';
+  const poProjetos=fundSeed.map(p=>({id:p.id,nome:p.nome,agencia:p.agencia,product_category:p.product_category,activity:p.activity,orcamento_id:p.orcamento_id,aprovacao_status:p.aprovacao_status,campanha_id:p.campanha_id||null,rateio:false,dono:'demo-u-mkt',
+    cc:DEMO_CC[p.product_category]||'1109123014',
+    account:String(p.activity).toLowerCase()==='fee'?'32202169':'32202171',
+    account_desc:demoLinha(p)}));
 
-  const tetos=[]; const addTeto=(pid,vals)=>vals.forEach(([m,v])=>tetos.push({fund_id:pid,competencia:D(2026,m,1),teto:v}));
-  addTeto('demo-p1',[[6,150000],[7,150000],[8,111155]]);
+  /* A third element on a month is the cut taken back from it, so the demo can
+     show the approved-vs-net split (and the agency view of it) without anyone
+     having to key one in first. */
+  const tetos=[]; const addTeto=(pid,vals)=>vals.forEach(([m,v,corte,motivo])=>tetos.push({fund_id:pid,competencia:D(2026,m,1),teto:v,corte:corte||0,corte_motivo:corte?(motivo||'Demo cut'):null,corte_em:corte?D(2026,8,1):null,bloqueado:false}));
+  addTeto('demo-p1',[[6,150000],[7,150000,60000,'July closed with the balance unused'],[8,111155]]);
   addTeto('demo-p2',[[6,60000],[7,33540]]);
   addTeto('demo-p3',[[7,1100000]]);
   addTeto('demo-p4',[[6,600000],[7,550901]]);
   addTeto('demo-p5',[[6,915895]]);
-  addTeto('demo-p6',[[6,150000],[7,150000],[8,150000]]);
+  addTeto('demo-p6',[[6,150000],[7,150000],[8,150000,25000,'Profit — budget returned']]);
   addTeto('demo-p7',[[8,1100000]]);
 
   const pos=[]; let poN=1;
@@ -1072,7 +1098,7 @@ function seedDemoData(){
     {tipo:'KOL',agencia:'Mindshare',categoria:'Gaming',percentual:1,cc:'CC-200',account:'6100',descricao:'KOL / Influencer spend'}
   ];
 
-  DATA={projetos,orcamentos,poProjetos,pos,tetos,rateio:[],notif:[],mencoes:[],pessoas,fee,ccLayout:[],campanhas};
+  DATA={projetos,orcamentos,poProjetos,pos,tetos:normTetos(tetos),rateio:[],notif:[],mencoes:[],pessoas,fee,ccLayout:[],campanhas};
   TEAM=[];
 }
 function demoSetRole(v){
@@ -1245,7 +1271,7 @@ const Q_BUDGET=()=>[
   SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
   SBPO.from('funds').select('id,nome,agencia,orcamento_id,product_category,activity,fund_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em,campanha_id'),
   SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
-  SBPO.from('tetos').select('fund_id,competencia,teto'),
+  SBPO.from('tetos').select('fund_id,competencia,teto,corte,corte_motivo,corte_em,bloqueado,bloqueado_motivo'),
   SBPO.from('rateio_alocacao').select('fund_id,competencia,valor,categoria'),
   SBPO.from('notificacoes').select('id,mensagem,tipo,po_id,fund_id,lida,criada_em').order('criada_em',{ascending:false}).limit(200),
   SBPO.rpc('listar_pessoas'),
@@ -1282,7 +1308,7 @@ async function loadAll(){
   DATA.orcamentos=tookOr(orc,DATA.orcamentos);
   DATA.poProjetos=(prj&&prj.error)?DATA.poProjetos:((prj.data||[]).filter(p=>p.aprovacao_status!=='REJEITADO'));
   DATA.pos=tookOr(pos,DATA.pos);
-  DATA.tetos=tookOr(tet,DATA.tetos);
+  DATA.tetos=normTetos(tookOr(tet,DATA.tetos));
   DATA.rateio=tookOr(rat,DATA.rateio);
   DATA.notif=tookOr(nt,DATA.notif);
   DATA.pessoas=tookOr(pes,DATA.pessoas);
@@ -1747,7 +1773,7 @@ async function editStageDesc(stageId){
     const s=(cf&&cf.data)?cf.data:{};
     s.stageDescs=Object.assign({},s.stageDescs||{},STAGE_DESCS);
     await SBPO.from('act_config').upsert({id:'app',data:s});
-    toast('Column description updated ✓');
+    toastSaved();
   }catch(e){ toastErr(e); }
   go(SCREEN);
 }
@@ -1927,9 +1953,10 @@ function fundKpisHTML(){
   const filtered=!!(FUND_Q||FUND_FILTER_ACT||FUND_FILTER_CAT||FUND_HIDE_DONE);
   const stat=(l,v,col)=>`<div class="kpi"><span class="bar" style="background:${col}"></span><div class="lbl">${l}</div><div class="num" style="font-size:19px;margin-top:7px">${v}</div></div>`;
   return `<div id="fundKpis" style="margin-bottom:18px">
-    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
       ${stat('Funds',String(vis.length),'#10131a')}
       ${stat('Budgeted (approved)',BRL(orcado),'#10131a')}
+      ${(canSeeCorte()&&cutTotalOf(aprov)>0.005)?stat('Cut',BRL(cutTotalOf(aprov)),'var(--po)'):''}
       ${stat('Consumed',BRL(consumido),'var(--po)')}
       ${stat('Committed',BRL(comprometido),'var(--violet)')}
       ${stat('Pending approval',String(pendCount),'var(--amber)')}
@@ -2244,8 +2271,9 @@ function fundTimelineHTML(fl,q){
       // Over-cap keeps its red in closed months too — an overspend is still
       // worth spotting after the month ends, so it only steps down a notch.
       const fillOp=past?(over?0.75:0.26):1;
-      const tip=`${fmtMes(mm+'-01')} · configured ${cfg?BRL(cfg):'—'} · used ${used?BRL(used):'—'}${cfg?' · balance '+BRL(cfg-used):''}${over?' · over cap':''}${pastDone?' · completed':''}`;
-      return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-right:1px solid #f2f3f7;padding:3px 1px;background:${isNow?'rgba(18,115,207,.09)':'transparent'}" title="${esc(tip)}">
+      const cut=canSeeCorte()?fundMonthCut(r.p.id,mm):0;
+      const tip=`${fmtMes(mm+'-01')} · configured ${cfg?BRL(cfg):'—'} · used ${used?BRL(used):'—'}${cfg?' · balance '+BRL(cfg-used):''}${over?' · over cap':''}${pastDone?' · completed':''}${cut?' · '+BRL(cut)+' cut from this month (approved '+BRL(cfg+cut)+')':''}`;
+      return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-right:1px solid #f2f3f7;padding:3px 1px;background:${isNow?'rgba(18,115,207,.09)':'transparent'}${cut?';box-shadow:inset 0 -2px 0 var(--po)':''}" title="${esc(tip)}">
         <span style="display:block;position:relative;width:100%;height:14px;border-radius:${rl} ${rr} ${rr} ${rl};overflow:hidden">
           <span style="position:absolute;inset:0;background:${trackBg};opacity:${trackOp.toFixed(2)}"></span>
           ${(cfg||used)?`<span style="position:absolute;left:0;top:0;bottom:0;width:${fillPct.toFixed(1)}%;background:${over?'var(--po)':m.c};opacity:${fillOp}"></span>`:''}
@@ -2292,6 +2320,7 @@ function fundTimelineHTML(fl,q){
       <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:12px;height:8px;background:var(--ink);border-radius:2px;display:inline-block"></span>current month</span>
       <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:12px;height:8px;background:#e9ebf1;border-radius:2px;display:inline-block"></span>in period, no allocation</span>
       <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:12px;height:8px;background:var(--po);border-radius:2px;display:inline-block"></span>used over the configured cap</span>
+      ${canSeeCorte()?`<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:12px;height:8px;background:#e9ebf1;border-radius:2px;display:inline-block;box-shadow:inset 0 -2px 0 var(--po)"></span>month with budget cut (hover for the approved figure)</span>`:''}
     </div>
   </div>`;
 }
@@ -2314,7 +2343,13 @@ function openFundDetail(pid){
     const w1=cap?Math.min(100,cM/cap*100):0, w2=cap?Math.min(100-w1,coM/cap*100):0, w3=cap?Math.min(100-w1-w2,peM/cap*100):0;
     const showRealloc=canRealloc&&m<nowM&&saldo>0.5;
     return `<div id="cd-${m}" style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;margin-bottom:10px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:13.5px">${fmtMes(m+'-01')}</b><span class="mono" style="font-size:12px;color:${saldo<0?'var(--po)':'var(--txt-2)'}">balance ${BRL(saldo)} · cap ${BRL(cap)}</span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;flex-wrap:wrap"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:13.5px">${fmtMes(m+'-01')}${fundMonthBlocked(pid,m)?` <span class="badge s-amber" style="font-size:9.5px;padding:1px 7px;vertical-align:middle">${icn('lock',9)} blocked</span>`:''}</b><span class="mono" style="font-size:12px;color:${saldo<0?'var(--po)':'var(--txt-2)'}">balance ${BRL(saldo)} · cap ${BRL(cap)}</span></div>
+      ${(function(){ const cut=canSeeCorte()?fundMonthCut(pid,m):0; if(!cut)return '';
+        const mot=(tetoRow(pid,m)||{}).corte_motivo;
+        return `<div style="display:flex;align-items:center;gap:8px;margin:-2px 0 9px;padding:6px 10px;border-radius:8px;background:#fdf7f6;border:1px solid #f2c4bf;font-size:11.5px;color:#7d1a14">
+          <span style="display:flex;flex-shrink:0">${icn('scale',12)}</span>
+          <span><b class="mono">${BRL(cut)}</b> cut from this month — approved <b class="mono">${BRL(cap+cut)}</b>, cap above is what remains.${mot?` <span style="opacity:.85">${esc(mot)}</span>`:''}</span>
+        </div>`;})()}
       <div style="height:8px;border-radius:5px;background:#edeff4;overflow:hidden;margin-bottom:10px;display:flex" title="Consumed · committed · awaiting approval"><span class="seg-fill" style="width:${w1}%;background:${overM?'var(--po)':'var(--blue)'}"></span><span class="seg-fill" style="width:${w2}%;background:var(--violet)"></span><span class="seg-fill" style="width:${w3}%;background:var(--amber)"></span></div>
       ${list.length?list.map(po=>`<div style="padding:9px 0;border-top:1px dashed var(--line)"><div style="display:flex;align-items:center;gap:10px"><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.descricao||'—')}</div><div style="font-size:11px;color:var(--txt-3)">${esc(po.agencia||'')} · ${esc(po.numero_po||'no number')}</div></div><span class="mono" style="font-weight:700;font-size:12.5px;flex-shrink:0">${BRL(po.valor)}</span></div>${poStepperHTML(po.status)}</div>`).join(''):'<div style="font-size:12px;color:var(--txt-3)">No POs this month.</div>'}
       ${showRealloc?`<button onclick="openReallocModal('${esc(pid)}','${m}',${saldo})" style="margin-top:10px;display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;border:1px solid #bcd9f5;background:var(--blue-bg);color:#0e5ba6;font-weight:700;font-size:12px;cursor:pointer">${icn('calendar',12)} Reallocate ${BRL(saldo)} balance →</button>`:''}
@@ -2360,10 +2395,22 @@ function openFundDetail(pid){
         <span style="color:var(--txt-2)">balance <b>${BRL(saldoTot)}</b> of ${BRL(totCap)}</span>
       </div>
       ${(()=>{const k=fundRestr(p); if(!k)return ''; const r=RESTR_META[k];
-        const cut=(p.restricao_valor!=null&&+p.restricao_valor>0)?`<b class="mono">${BRL(+p.restricao_valor)}</b> of the budget was cut`:(k==='CORTADA'?'The remaining balance was cut':'No new POs can be requested');
         return `<div style="display:flex;align-items:flex-start;gap:10px;background:${r.bg};border:1px solid ${r.bd};border-radius:9px;padding:10px 12px;margin-top:12px;font-size:12px;color:${r.c}">
           <span style="display:flex;flex-shrink:0;margin-top:1px">${icn(r.icon,14)}</span>
-          <span><b>${r.t}</b> — ${cut}. The budget figures below are unchanged, on purpose: they are the record of what this fund was given.${p.restricao_motivo?`<div style="margin-top:3px;font-weight:600">${esc(p.restricao_motivo)}</div>`:''}${p.restricao_em?`<div style="margin-top:2px;opacity:.75">since ${fmtDataBR(p.restricao_em)}</div>`:''}</span>
+          <span><b>${r.t}</b> — no new POs can be requested against this fund. The budget figures are unchanged, on purpose: freezing spending is not the same as taking the money back.${p.restricao_motivo?`<div style="margin-top:3px;font-weight:600">${esc(p.restricao_motivo)}</div>`:''}${p.restricao_em?`<div style="margin-top:2px;opacity:.75">since ${fmtDataBR(p.restricao_em)}</div>`:''}</span>
+        </div>`;})()}
+      ${(()=>{/* The cut, stated once at the top of the fund: how much left this
+          fund and out of which months. Internal profiles only — an agency's
+          caps are already net, so the split is ours to reconcile, not theirs. */
+        if(!canSeeCorte())return '';
+        const cuts=fundMonthlyCuts(p.id), meses=Object.keys(cuts).sort();
+        if(!meses.length)return '';
+        const tot=meses.reduce((s,m)=>s+cuts[m],0);
+        const chips=meses.map(m=>`<span class="badge" style="font-size:10px;padding:2px 8px;background:#fbe4e1;color:#bf0008"${(tetoRow(p.id,m)||{}).corte_motivo?` title="${esc((tetoRow(p.id,m)||{}).corte_motivo)}"`:''}>${fmtMes(m+'-01')} · ${BRL(cuts[m])}</span>`).join('');
+        return `<div style="display:flex;align-items:flex-start;gap:10px;background:#fdf7f6;border:1px solid #f2c4bf;border-radius:9px;padding:10px 12px;margin-top:12px;font-size:12px;color:#7d1a14">
+          <span style="display:flex;flex-shrink:0;margin-top:1px">${icn('scale',14)}</span>
+          <span style="min-width:0"><b>${BRL(tot)} cut</b> from ${meses.length} month${meses.length===1?'':'s'} — the caps shown here are already net of it, and the approved figure per month is in "Edit monthly values".
+            <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px">${chips}</div></span>
         </div>`;})()}
       ${(()=>{const pd=fundCapPedido(p); if(pd==null)return '';
         const cur=fundCapAprovado(p.id)||0;
@@ -2376,7 +2423,7 @@ function openFundDetail(pid){
       ${months.length>1?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">${chips}</div>`:''}
     </div>
     <div class="modal-b">${summary}<div style="font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin:2px 0 10px">Month by month</div>${blocks}</div>
-    <div class="modal-f">${CC_DRILL_BACK?`<button class="btn-ghost" onclick="ccDrillBack()">← Back to breakdown</button>`:'<span></span>'}<div style="display:flex;gap:10px">${canRestrict()?`<button class="btn-ghost" onclick="openCampRestricao('${esc(p.id)}')">${fundRestr(p)?'Restriction…':'Cut / block'}</button>`:''}${(demoWritable(PO_ACCESS)&&!fundRestr(p))?`<button class="btn-acc" style="background:var(--po)" onclick="openReqPO('${esc(p.id)}')">+ Request PO</button>`:''}${((['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly())?`<button class="btn-ghost" onclick="openCampValues('${esc(p.id)}')">Edit monthly values</button><button class="btn-ghost" onclick="openCampEdit('${esc(p.id)}')">Edit category</button>`:''}<button class="btn-ghost" onclick="closeModal()">Close</button></div></div>
+    <div class="modal-f">${CC_DRILL_BACK?`<button class="btn-ghost" onclick="ccDrillBack()">← Back to breakdown</button>`:'<span></span>'}<div style="display:flex;gap:10px">${canRestrict()?`<button class="btn-ghost" onclick="openCampRestricao('${esc(p.id)}')">${fundRestr(p)?'Blocked — review…':'Block spending'}</button>`:''}${(demoWritable(PO_ACCESS)&&!fundRestr(p))?`<button class="btn-acc" style="background:var(--po)" onclick="openReqPO('${esc(p.id)}')">+ Request PO</button>`:''}${((['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly())?`<button class="btn-ghost" onclick="openCampValues('${esc(p.id)}')">Edit monthly values</button><button class="btn-ghost" onclick="openCampEdit('${esc(p.id)}')">Edit category</button>`:''}<button class="btn-ghost" onclick="closeModal()">Close</button></div></div>
   </div></div>`;
 }
 
@@ -2403,12 +2450,12 @@ let REALLOC=null; // {pid,fromMonth,balance,mode,splitCount,rows:[{id,mes,valor}
 async function reallocFetchCurrentBalance(pid,fromMonth){
   const comp=fromMonth+'-01';
   const [{data:tetoRows,error:e1},{data:rateioRows,error:e2},{data:poRows,error:e3}]=await Promise.all([
-    SBPO.from('tetos').select('teto').eq('fund_id',pid).eq('competencia',comp),
+    SBPO.from('tetos').select('teto,corte').eq('fund_id',pid).eq('competencia',comp),
     SBPO.from('rateio_alocacao').select('valor').eq('fund_id',pid).eq('competencia',comp),
     SBPO.from('pos').select('valor,status').eq('fund_id',pid).eq('competencia',comp)
   ]);
   if(e1)throw e1; if(e2)throw e2; if(e3)throw e3;
-  const cap=(tetoRows||[]).reduce((s,r)=>s+(+r.teto||0),0)+(rateioRows||[]).reduce((s,r)=>s+(+r.valor||0),0);
+  const cap=(tetoRows||[]).reduce((s,r)=>s+((+r.teto||0)-(+r.corte||0)),0)+(rateioRows||[]).reduce((s,r)=>s+(+r.valor||0),0);
   const committed=(poRows||[]).filter(po=>!['REJEITADA','CANCELADA'].includes(po.status)).reduce((s,po)=>s+(+po.valor||0),0);
   return r2(cap-committed);
 }
@@ -2569,7 +2616,7 @@ async function submitRealloc(){
       await reallocCreditTetos(p.id,preview);
       await reallocDebitTetos(p.id,REALLOC.fromMonth,moved);
     }
-    toast('Balance reallocated ✓'); REALLOC=null; closeModal(); await reloadPOAll(); goCostCenter();
+    toastSaved(); REALLOC=null; closeModal(); await reloadPOAll(); goCostCenter();
   }catch(e){ toastErr(e); }
 }
 
@@ -2579,11 +2626,40 @@ async function submitRealloc(){
 let FUNDVAL=null;
 function openCampValues(pid){
   const p=DATA.poProjetos.find(x=>x.id===pid); if(!p)return;
-  const totals=fundMonthlyTotals(pid);
-  const rows=Object.keys(totals).sort().map(m=>({id:uid(),mes:m,valor:totals[m]}));
-  if(!rows.length) rows.push({id:uid(),mes:new Date().toISOString().slice(0,7),valor:''});
+  /* The editor is the one place that edits the APPROVED month, so it loads
+     gross and keeps the cut as its own field beside it — typing in the value
+     column must never silently absorb or erase a cut. */
+  const totals=fundMonthlyGross(pid), cuts=fundMonthlyCuts(pid);
+  const rows=Object.keys(totals).sort().map(m=>({id:uid(),mes:m,valor:totals[m],corte:cuts[m]||0,motivo:(tetoRow(pid,m)||{}).corte_motivo||''}));
+  if(!rows.length) rows.push({id:uid(),mes:new Date().toISOString().slice(0,7),valor:'',corte:0,motivo:''});
   FUNDVAL={id:pid,rateio:!!p.rateio,qual:(p.rateio?recoverQual(pid):''),rows};
   renderCampValues();
+}
+/* The cut is capped at the month's approved value (a month cannot lose more
+   than it was given) and at what is still uncommitted — cutting below what
+   POs already took would leave the month over its own cap the moment it was
+   saved, which reads as an overspend nobody caused. */
+function fundValCutCeiling(r){
+  const aprovado=+r.valor||0;
+  const usado=fundMonthUsed(FUNDVAL?FUNDVAL.id:'',r.mes);
+  return Math.max(0,r2(Math.min(aprovado,aprovado-usado)));
+}
+function fundValCutMoney(id,el){
+  const r=FUNDVAL&&FUNDVAL.rows.find(x=>x.id===id); if(!r)return;
+  let v=moneyParse(el.value);
+  const ceil=fundValCutCeiling(r);
+  if(v>ceil){ v=ceil; toast(ceil>0?`Maximum cut for this month is ${BRL(ceil)} — the rest is already committed.`:'This month has nothing left to cut.'); }
+  r.corte=v;
+  el.value=v?moneyFmt(v):'';
+  renderCampValuesRows();
+}
+function fundValMotivo(id,v){ const r=FUNDVAL&&FUNDVAL.rows.find(x=>x.id===id); if(r)r.motivo=v; }
+/* Repaint just the rows block (and the totals) after a cut changes, so the
+   month inputs keep focus and caret position while the net figures move. */
+function renderCampValuesRows(){
+  const box=document.getElementById('cvRows');
+  if(box) box.innerHTML=campValRowsHTML();
+  fundValSync();
 }
 function fundValRowSet(id,k,v){ const r=FUNDVAL&&FUNDVAL.rows.find(x=>x.id===id); if(r)r[k]=v; }
 /* R$ entry mask. Digits go in from the right — typing 1234 gives 12,34 — which
@@ -2608,7 +2684,7 @@ function fundCapAprovado(pid){
   const p=(DATA.poProjetos||[]).find(x=>x.id===pid);
   if(!p) return null;
   if(p.cap_aprovado!=null&&p.cap_aprovado!=='') return +p.cap_aprovado;
-  return Object.values(fundMonthlyTotals(pid)).reduce((s,v)=>s+v,0);
+  return Object.values(fundMonthlyGross(pid)).reduce((s,v)=>s+v,0);
 }
 function fundCapPedido(p){ return (p&&p.cap_pedido!=null&&p.cap_pedido!=='')?+p.cap_pedido:null; }
 /* Raising a cap is an approval, lowering it is not. Giving budget back needs
@@ -2633,7 +2709,7 @@ function renderCapForm(){
   if(!CAPEDIT)return;
   const p=DATA.poProjetos.find(x=>x.id===CAPEDIT.id)||{};
   const cur=fundCapAprovado(CAPEDIT.id)||0;
-  const alloc=Object.values(fundMonthlyTotals(CAPEDIT.id)).reduce((s,v)=>s+v,0);
+  const alloc=Object.values(fundMonthlyGross(CAPEDIT.id)).reduce((s,v)=>s+v,0);
   const ask=CAPEDIT.mode==='ask';
   const delta=(+CAPEDIT.valor||0)-cur;
   /* Lowering below what the months already hold would leave the fund
@@ -2669,12 +2745,12 @@ async function submitCapPedido(){
 }
 async function submitCapEdit(){
   if(!CAPEDIT)return; if(viewOnly()){toast(roMsg());return;}
-  const alloc=Object.values(fundMonthlyTotals(CAPEDIT.id)).reduce((s,v)=>s+v,0);
+  const alloc=Object.values(fundMonthlyGross(CAPEDIT.id)).reduce((s,v)=>s+v,0);
   if(+CAPEDIT.valor<alloc-0.005){ toast('The months already allocate more than that. Reduce them first.'); return; }
   try{
     const {error}=await SBPO.from('funds').update({cap_aprovado:r2(+CAPEDIT.valor),cap_pedido:null,cap_pedido_motivo:null,cap_pedido_em:null}).eq('id',CAPEDIT.id);
     if(error)throw error;
-    CAPEDIT=null; closeModal(); await reloadPOAll(); toast('Cap updated ✓'); goCostCenter();
+    CAPEDIT=null; closeModal(); await reloadPOAll(); toastSaved(); goCostCenter();
   }catch(e){ toastErr(e); }
 }
 async function decidirCapPedido(pid,ok){
@@ -2689,7 +2765,80 @@ async function decidirCapPedido(pid,ok){
     await reloadPOAll(); toast(ok?`Cap raised to ${BRL(pedido)} ✓`:'Cap request rejected'); go(SCREEN);
   }catch(e){ toastErr(e); }
 }
-function fundValAddRow(){ if(!FUNDVAL)return; const last=FUNDVAL.rows[FUNDVAL.rows.length-1]; FUNDVAL.rows.push({id:uid(),mes:last?last.mes:new Date().toISOString().slice(0,7),valor:''}); renderCampValues(); }
+/* One block per month: the approved value on top, and — for whoever may cut
+   — the cut underneath with the resulting net beside it. The net is spelled
+   out rather than left to arithmetic because it is the number the agency
+   will see, and the person cutting should be looking at it while they type.
+   A closed month with an untouched balance gets a one-click "cut the rest",
+   which is the second entry point asked for: at month turn, take back what
+   nobody spent. */
+function campValRowsHTML(){
+  if(!FUNDVAL) return '';
+  const pid=FUNDVAL.id;
+  const nowM=new Date().toISOString().slice(0,7);
+  /* Same roles as canRestrict(), but demo-visible: the cut fields are form
+     state until Save, and every write below already refuses in demo/View-as.
+     Hiding them there would leave the sandbox unable to show the feature. */
+  const podeCortar=demoWritable(['admin','marketing'].includes(PAPEL)||isManager)&&!FUNDVAL.rateio;
+  return FUNDVAL.rows.map(r=>{
+    const aprovado=+r.valor||0, corte=+r.corte||0, liq=aprovado-corte;
+    const usado=fundMonthUsed(pid,r.mes);
+    const saldo=r2(liq-usado);
+    const fechado=r.mes&&r.mes<nowM;
+    const bloq=fundMonthBlocked(pid,r.mes);
+    const money=(val,handler,ph,extra)=>`<span style="flex:1;position:relative;display:flex;align-items:center;min-width:0"><span style="position:absolute;left:10px;font-size:12px;color:var(--txt-3);pointer-events:none">R$</span><input type="text" inputmode="numeric" value="${val?moneyFmt(val):''}" oninput="${handler}" placeholder="${ph}" style="width:100%;padding:8px 10px 8px 32px;border:1px solid ${extra||'var(--line-2)'};border-radius:8px;background:#fff;font:inherit;font-size:12.5px;text-align:right" class="mono"></span>`;
+    return `<div style="border:1px solid ${corte?'#f2c4bf':'var(--line)'};border-radius:10px;padding:9px 10px;background:${corte?'#fdf7f6':'#fff'}">
+      <div style="display:flex;align-items:center;gap:9px">
+        <input type="month" value="${esc(r.mes)}" onchange="fundValRowSet('${r.id}','mes',this.value)" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font:inherit;font-size:12.5px">
+        ${money(aprovado,`fundValMoney('${r.id}',this)`,'0,00')}
+        <button class="chip-btn" onclick="fundValDelRow('${r.id}')" title="Remove this month">✕</button>
+      </div>
+      ${podeCortar?`<div style="display:flex;align-items:center;gap:9px;margin-top:7px">
+        <span style="width:104px;flex-shrink:0;font-size:11px;font-weight:700;color:#bf0008;text-transform:uppercase;letter-spacing:.04em">Cut</span>
+        ${money(corte,`fundValCutMoney('${r.id}',this)`,'0,00',corte?'#e6a9a2':'var(--line-2)')}
+        <span class="mono" style="width:132px;flex-shrink:0;text-align:right;font-size:12px;font-weight:800;color:${corte?'var(--po)':'var(--txt-3)'}" title="What the agency will see as this month's cap">= ${BRL(liq)}</span>
+      </div>
+      ${corte?`<div style="margin-top:7px"><input value="${esc(r.motivo||'')}" oninput="fundValMotivo('${r.id}',this.value)" placeholder="Why was this month cut? (recorded with the cut)" style="width:100%;padding:7px 10px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font:inherit;font-size:12px"></div>`:''}
+      <div style="display:flex;align-items:center;gap:8px;margin-top:7px;flex-wrap:wrap;font-size:11px;color:var(--txt-3)">
+        <span>used <b class="mono">${usado?BRL(usado):'—'}</b></span>
+        <span>· balance <b class="mono" style="color:${saldo<-0.005?'var(--po)':'inherit'}">${BRL(saldo)}</b></span>
+        ${bloq?`<span class="badge s-amber" style="font-size:9.5px;padding:1px 7px">${icn('lock',9)} month blocked</span>`:''}
+        ${(fechado&&saldo>0.5)?`<button class="chip-btn" style="margin-left:auto;color:#bf0008;border-color:#f2c4bf" onclick="fundValCutRest('${r.id}')" title="This month has closed with budget nobody used — take it back">Cut the remaining ${BRL(saldo)}</button>`:''}
+        <button class="chip-btn" style="${(fechado&&saldo>0.5)?'':'margin-left:auto;'}" onclick="fundValToggleBlock('${r.id}')">${bloq?'Unblock month':'Block month'}</button>
+      </div>`:''}
+    </div>`;
+  }).join('');
+}
+/* "Cut the rest" is the same cut, pre-filled — not a second mechanism. It
+   never blocks: a cut month with zero balance already refuses new POs
+   through the cap check. */
+function fundValCutRest(id){
+  const r=FUNDVAL&&FUNDVAL.rows.find(x=>x.id===id); if(!r)return;
+  const usado=fundMonthUsed(FUNDVAL.id,r.mes);
+  const alvo=r2(Math.max(0,(+r.valor||0)-usado));
+  r.corte=alvo;
+  if(!r.motivo) r.motivo='Month closed with the balance unused';
+  renderCampValues();
+}
+/* Blocking is written straight through rather than staged with the rest of
+   the form: it is a freeze, not a value, and making someone press Save to
+   stop spending would leave the month open in the meantime. */
+async function fundValToggleBlock(id){
+  const r=FUNDVAL&&FUNDVAL.rows.find(x=>x.id===id); if(!r)return;
+  if(viewOnly()){toast(roMsg());return;}
+  const on=!fundMonthBlocked(FUNDVAL.id,r.mes);
+  const row=tetoRow(FUNDVAL.id,r.mes);
+  if(!row){ toast('Save the month first, then block it.'); return; }
+  try{
+    const {error}=await SBPO.from('tetos').update({bloqueado:on,bloqueado_motivo:on?'Blocked from the monthly values editor':null,bloqueado_em:on?new Date().toISOString():null})
+      .eq('fund_id',FUNDVAL.id).eq('competencia',r.mes+'-01');
+    if(error)throw error;
+    await reloadPOAll();
+    renderCampValues();
+    toastSaved();
+  }catch(e){ toastErr(e); }
+}
+function fundValAddRow(){ if(!FUNDVAL)return; const last=FUNDVAL.rows[FUNDVAL.rows.length-1]; FUNDVAL.rows.push({id:uid(),mes:last?fundNextCalMonth(last.mes):new Date().toISOString().slice(0,7),valor:'',corte:0,motivo:''}); renderCampValues(); }
 function fundValDelRow(id){ if(!FUNDVAL)return; FUNDVAL.rows=FUNDVAL.rows.filter(x=>x.id!==id); renderCampValues(); }
 /* Live balance without re-rendering: a repaint on every keystroke would take
    the caret out of the field being typed into. Only the three nodes that can
@@ -2697,6 +2846,10 @@ function fundValDelRow(id){ if(!FUNDVAL)return; FUNDVAL.rows=FUNDVAL.rows.filter
 function fundValSync(){
   if(!FUNDVAL)return;
   const total=FUNDVAL.rows.reduce((s,r)=>s+(+r.valor||0),0);
+  const cutTotal=FUNDVAL.rows.reduce((s,r)=>s+(+r.corte||0),0);
+  ['cvCutLine','cvNetLine'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display=cutTotal?'flex':'none';});
+  const ec=document.getElementById('cvCut'); if(ec)ec.textContent='− '+BRL(cutTotal);
+  const en=document.getElementById('cvNet'); if(en)en.textContent=BRL(total-cutTotal);
   const cap=fundCapAprovado(FUNDVAL.id);
   const el=id=>document.getElementById(id);
   if(el('cvTotal')) el('cvTotal').textContent=BRL(total);
@@ -2722,6 +2875,7 @@ function renderCampValues(){
   const cap=fundCapAprovado(FUNDVAL.id);
   const pedido=fundCapPedido(p);
   const total=FUNDVAL.rows.reduce((s,r)=>s+(+r.valor||0),0);
+  const cutTotal=FUNDVAL.rows.reduce((s,r)=>s+(+r.corte||0),0);
   const bal=cap!=null?cap-total:null;
   const over=bal!=null&&bal<-0.005;
   const capBox=cap!=null?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
@@ -2742,7 +2896,7 @@ function renderCampValues(){
       ? `<div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="chip-btn" onclick="openCapEdit('${esc(FUNDVAL.id)}')">Change approved cap…</button></div>`
       : `<div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="chip-btn" onclick="openCapPedido('${esc(FUNDVAL.id)}')">Request a higher cap…</button></div>`}`
    :`<div class="banner" style="margin-bottom:12px">This fund has no approved cap yet, so nothing is enforced here.</div>`;
-  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:520px">
+  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:600px">
     <div class="modal-h"><h3>Monthly values — ${esc(p.nome||'')}</h3><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">
       ${FUNDVAL.rateio?`<div class="banner" style="margin-bottom:12px">Rateio fund — the value you type per month is the <b>total</b>, split across ${esc(FUNDVAL.qual||'the rateio')} categories on save.</div>`:''}
@@ -2750,10 +2904,14 @@ function renderCampValues(){
       <div style="border:1px solid var(--line);border-radius:12px;overflow:hidden">
         <div style="padding:10px 14px;background:#fafbfd;border-bottom:1px solid var(--line);font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">Month-by-month values</div>
         <div style="padding:10px 14px;display:flex;flex-direction:column;gap:8px">
-          ${FUNDVAL.rows.map(r=>`<div style="display:flex;align-items:center;gap:9px"><input type="month" value="${esc(r.mes)}" onchange="fundValRowSet('${r.id}','mes',this.value)" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font:inherit;font-size:12.5px"><span style="flex:1;position:relative;display:flex;align-items:center"><span style="position:absolute;left:10px;font-size:12px;color:var(--txt-3);pointer-events:none">R$</span><input type="text" inputmode="numeric" value="${(+r.valor||0)?moneyFmt(r.valor):''}" oninput="fundValMoney('${r.id}',this)" placeholder="0,00" style="width:100%;padding:8px 10px 8px 32px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font:inherit;font-size:12.5px;text-align:right" class="mono"></span><button class="chip-btn" onclick="fundValDelRow('${r.id}')">✕</button></div>`).join('')}
+          <div id="cvRows" style="display:flex;flex-direction:column;gap:8px">${campValRowsHTML()}</div>
           <button class="btn-ghost" onclick="fundValAddRow()" style="align-self:flex-start;margin-top:2px">+ Add month</button>
         </div>
-        <div style="padding:11px 14px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:13px">Total</b><span id="cvTotal" class="mono" style="font-size:15px;font-weight:800">${BRL(total)}</span></div>
+        <div style="padding:11px 14px;border-top:1px solid var(--line)">
+          <div style="display:flex;align-items:center;justify-content:space-between"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:13px">Approved total</b><span id="cvTotal" class="mono" style="font-size:15px;font-weight:800">${BRL(total)}</span></div>
+          <div id="cvCutLine" style="display:${cutTotal?'flex':'none'};align-items:center;justify-content:space-between;margin-top:5px"><span style="font-size:12px;font-weight:700;color:#bf0008">Cut</span><span id="cvCut" class="mono" style="font-size:13px;font-weight:800;color:var(--po)">− ${BRL(cutTotal)}</span></div>
+          <div id="cvNetLine" style="display:${cutTotal?'flex':'none'};align-items:center;justify-content:space-between;margin-top:5px;padding-top:6px;border-top:1px dashed var(--line-2)"><span style="font-size:12px;font-weight:700">Net — what the agency sees</span><span id="cvNet" class="mono" style="font-size:15px;font-weight:800">${BRL(total-cutTotal)}</span></div>
+        </div>
       </div>
     </div>
     <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button id="cvSave" class="btn-acc" style="background:var(--po);${over?'opacity:.5;cursor:not-allowed':''}" ${over?'disabled':''} onclick="submitCampValues()">Save</button></div></div>
@@ -2792,11 +2950,23 @@ async function submitCampValues(){
       await SBPO.from('rateio_alocacao').delete().eq('fund_id',cv.id);
       const {error}=await SBPO.from('rateio_alocacao').insert(alloc); if(error)throw error;
     }else{
+      /* The cut travels with the row it belongs to. This path rewrites the
+         fund's months wholesale, so anything not carried here is destroyed —
+         which is exactly how a cut would go missing the next time somebody
+         touched an unrelated month. */
+      const now=new Date().toISOString();
       await SBPO.from('tetos').delete().eq('fund_id',cv.id);
-      const tetos=rows.map(r=>({fund_id:cv.id,competencia:r.mes+'-01',teto:r2(+r.valor),definido_por:'portal'}));
+      const tetos=rows.map(r=>{
+        const corte=r2(Math.min(+r.corte||0,+r.valor||0));
+        return {fund_id:cv.id,competencia:r.mes+'-01',teto:r2(+r.valor),definido_por:'portal',
+                corte:corte,
+                corte_motivo:corte?(String(r.motivo||'').trim()||null):null,
+                corte_em:corte?((tetoRow(cv.id,r.mes)||{}).corte_em||now):null,
+                bloqueado:fundMonthBlocked(cv.id,r.mes)};
+      });
       const {error}=await SBPO.from('tetos').insert(tetos); if(error)throw error;
     }
-    FUNDVAL=null; toast('Values updated ✓'); closeModal(); await reloadPOAll(); goCostCenter();
+    FUNDVAL=null; toastSaved(); closeModal(); await reloadPOAll(); goCostCenter();
   }catch(e){ toastErr(e); }
 }
 
@@ -2805,11 +2975,67 @@ async function submitCampValues(){
    Values/months are untouched; only classification + name/agency change. */
 let FUNDEDIT=null;
 function guessCat(str){ const s=String(str||'').toUpperCase(); for(const c of PRODUCT_CATS){ if(new RegExp('(^|[^A-Z])'+c+'([^A-Z]|$)').test(s)) return c; } return ''; }
+/* ============================================================
+   CORTE POR MÊS
+   ------------------------------------------------------------
+   A month's approved ceiling (`tetos.teto`) is never rewritten when budget
+   is taken back. The amount withdrawn is recorded beside it (`tetos.corte`)
+   and the month's EFFECTIVE cap is teto − corte. That keeps two different
+   questions answerable at once — "what was this month approved for" and
+   "what may still be spent" — where lowering the teto would have destroyed
+   the first to express the second, and the year's approval history with it.
+
+   fundMonthlyTotals() returns the EFFECTIVE cap, because "the cap" is what
+   nearly every screen means: gauges, timelines, campaign roll-ups, the
+   Extrato. The approved original is fundMonthlyGross(), used by the two
+   places that genuinely mean it — the values editor and the approved-cap
+   check. An agency only ever sees the effective figure; the split is shown
+   to internal profiles (canSeeCorte).
+   ============================================================ */
+/* Every screen that sums a month's budget reads `t.teto`, in about twenty
+   places. Rather than teach each of them to subtract, the rows are normalised
+   once on the way in: `teto` becomes the EFFECTIVE cap and the approved
+   original is kept beside it as `teto_aprovado`. One choke point, and no
+   aggregation can be forgotten and quietly keep reporting money that was
+   taken back. Writes are unaffected — every path that writes a teto reads its
+   current value straight from the database, never from DATA.tetos. */
+function normTetos(rows){
+  return (rows||[]).map(t=>{
+    // Idempotent: a failed refresh hands back the rows already normalised
+    // (tookOr keeps the previous array), and subtracting the cut a second
+    // time would silently halve the month.
+    const bruto=t.teto_aprovado!=null?+t.teto_aprovado:(+t.teto||0), corte=+t.corte||0;
+    return Object.assign({},t,{teto:bruto-corte,teto_aprovado:bruto,corte:corte});
+  });
+}
+function fundMonthlyGross(pid){
+  const m={};
+  DATA.tetos.filter(t=>t.fund_id===pid).forEach(t=>{const k=String(t.competencia).slice(0,7);m[k]=(m[k]||0)+(t.teto_aprovado!=null?+t.teto_aprovado:+t.teto||0);});
+  DATA.rateio.filter(r=>r.fund_id===pid).forEach(r=>{const k=String(r.competencia).slice(0,7);m[k]=(m[k]||0)+(+r.valor||0);});
+  return m;
+}
+/* Rateio funds allocate per category in rateio_alocacao, which carries no
+   corte column — a rateio month therefore has no cut, and every helper here
+   reports zero for it rather than pretending otherwise. */
+function fundMonthlyCuts(pid){
+  const m={};
+  DATA.tetos.filter(t=>t.fund_id===pid).forEach(t=>{const k=String(t.competencia).slice(0,7);const c=+t.corte||0;if(c)m[k]=(m[k]||0)+c;});
+  return m;
+}
+function fundMonthCut(pid,mm){ return fundMonthlyCuts(pid)[mm]||0; }
+function fundCutTotal(pid){ return Object.values(fundMonthlyCuts(pid)).reduce((s,v)=>s+v,0); }
+function tetoRow(pid,mm){ return (DATA.tetos||[]).find(t=>t.fund_id===pid&&String(t.competencia).slice(0,7)===mm)||null; }
+function fundMonthBlocked(pid,mm){ const t=tetoRow(pid,mm); return !!(t&&t.bloqueado); }
+/* Who is shown the approved-vs-cut split. An agency sees one number — its
+   month's cap, already net — because the cut is a budget decision on our
+   side, not a fact it has to reconcile. */
+function canSeeCorte(){ return effPapel()!=='agencia'; }
+function cutTotalOf(funds){ return (funds||[]).reduce((s,p)=>s+fundCutTotal(p.id),0); }
 function fundMonthlyTotals(pid){
   const m={};
   DATA.tetos.filter(t=>t.fund_id===pid).forEach(t=>{const k=String(t.competencia).slice(0,7);m[k]=(m[k]||0)+(+t.teto||0);});
   DATA.rateio.filter(r=>r.fund_id===pid).forEach(r=>{const k=String(r.competencia).slice(0,7);m[k]=(m[k]||0)+(+r.valor||0);});
-  return m; // {'2026-07': 148000, ...}
+  return m; // {'2026-07': 148000, ...} — já líquido de corte (ver normTetos)
 }
 function recoverQual(pid){
   // Prefer the persisted rateio type (deterministic). Fall back to the old
@@ -2864,7 +3090,7 @@ async function submitFundEdit(){
       const {error}=await SBPO.from('funds').update({nome:ce.nome.trim(),agencia:ce.agencia||null,activity:ce.activity||null,rateio:false,rateio_tipo:null,product_category:ce.cat,cc,account,account_desc,campanha_id:ce.campanha_id||null}).eq('id',ce.id);
       if(error)throw error;
     }
-    FUNDEDIT=null; toast('Fund updated ✓'); closeModal(); await reloadPOAll(); goCostCenter();
+    FUNDEDIT=null; toastSaved(); closeModal(); await reloadPOAll(); goCostCenter();
   }catch(e){ toastErr(e); }
 }
 
@@ -3160,7 +3386,7 @@ function renderPODetailModal(){
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:560px">
     <div class="modal-h" style="align-items:flex-start"><div style="flex:1"><h3>${esc(label)}</h3><span class="badge ${s.c}" style="margin-top:6px;display:inline-flex"><span class="d"></span>${s.t}</span></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">${poStepper(po)}${sections.join('')}</div>
-    <div class="modal-f"><span></span><div style="display:flex;gap:8px;flex-wrap:wrap">${poActionsHTML(po)}</div></div>
+    <div class="modal-f">${CC_DRILL_BACK?`<button class="btn-ghost" onclick="ccDrillBack()">← Back to breakdown</button>`:'<span></span>'}<div style="display:flex;gap:8px;flex-wrap:wrap">${poActionsHTML(po)}</div></div>
   </div></div>`;
 }
 function poActionsHTML(po){
@@ -4375,7 +4601,7 @@ async function saveProj(){
     const i=DATA.projetos.findIndex(p=>p.id===clean.id);
     if(i>=0)DATA.projetos[i]=clean; else DATA.projetos.push(clean);
     if(fromTask){ const l=loadPTasks(); const t=l.find(x=>x.id===fromTask); if(t&&!t.done){ t.done=true; t.updatedAt=Date.now(); savePTasks(l); } }
-    toast('Project saved ✓'); closeModal(); go(SCREEN);
+    toastSaved(); closeModal(); go(SCREEN);
   }catch(e){ toastErr(e); }
 }
 async function delProj(id){
@@ -4528,7 +4754,7 @@ async function mesesDoProjeto(pid){
       const byM={}; (DATA.rateio||[]).filter(r=>r.fund_id===pid).forEach(a=>{const m=String(a.competencia).slice(0,7);byM[m]=(byM[m]||0)+(+a.valor||0);});
       return Object.keys(byM).sort().map(m=>({competencia:m+'-01',teto:byM[m]}));
     }
-    return (DATA.tetos||[]).filter(t=>t.fund_id===pid).map(t=>({competencia:String(t.competencia).slice(0,10),teto:+t.teto})).sort((a,b)=>a.competencia.localeCompare(b.competencia));
+    return (DATA.tetos||[]).filter(t=>t.fund_id===pid).map(t=>({competencia:String(t.competencia).slice(0,10),teto:+t.teto,bloqueado:!!t.bloqueado})).sort((a,b)=>a.competencia.localeCompare(b.competencia));
   }
   try{
     if(p&&p.rateio){
@@ -4536,8 +4762,8 @@ async function mesesDoProjeto(pid){
       const byM={}; (data||[]).forEach(a=>{const m=String(a.competencia).slice(0,7);byM[m]=(byM[m]||0)+(+a.valor||0);});
       return Object.keys(byM).sort().map(m=>({competencia:m+'-01',teto:byM[m]}));
     }else{
-      const {data}=await SBPO.from('tetos').select('competencia,teto').eq('fund_id',pid).order('competencia');
-      return (data||[]).map(t=>({competencia:String(t.competencia).slice(0,10),teto:+t.teto}));
+      const {data}=await SBPO.from('tetos').select('competencia,teto,corte,bloqueado').eq('fund_id',pid).order('competencia');
+      return (data||[]).map(t=>({competencia:String(t.competencia).slice(0,10),teto:(+t.teto||0)-(+t.corte||0),bloqueado:!!t.bloqueado}));
     }
   }catch(e){ return []; }
 }
@@ -4556,21 +4782,20 @@ function reqOptions(){
   return {single,groups};
 }
 /* ============================================================
-   BUDGET CUT / SPENDING FREEZE
+   SPENDING FREEZE (fundo inteiro)
    ------------------------------------------------------------
-   A fund can be marked CORTADA (its money was withdrawn) or BLOQUEADA
-   (spending is frozen) WITHOUT its budget figure changing. Nothing here
-   touches tetos or rateio_alocacao: the fund keeps the cap it was given,
-   and the restriction is a separate fact recorded on the fund. That way
-   "what was this fund given" and "what may still be spent" stay two
-   different questions — reducing the cap would destroy the first answer to
-   express the second, and the year's allocation history with it.
+   Freezing a fund stops new POs against every month of it at once, without
+   claiming the money was withdrawn — the budget stays exactly as approved.
+   It is deliberately NOT a cut: taking budget back is now recorded per
+   month, with an amount and a reason, by the corte fields on tetos (see
+   "CORTE POR MÊS" above). A fund-level cut used to say "some of this is
+   gone" while being unable to say how much or from which month, which is
+   the gap that feature closes.
 
-   It does bite, though: a restricted fund can't have new POs requested
-   against it. A freeze that only changes a colour is decoration.
+   The freeze bites: a blocked fund can't have new POs requested against it.
+   A freeze that only changes a colour is decoration.
    ============================================================ */
 const RESTR_META={
-  CORTADA:{t:'Budget cut',short:'Cut',c:'#bf0008',bg:'#fbe4e1',bd:'#f2c4bf',icon:'alert'},
   BLOQUEADA:{t:'Spending blocked',short:'Blocked',c:'#7a5200',bg:'#fbf0d8',bd:'#ecd9a4',icon:'lock'}
 };
 function fundRestr(p){ return (p&&RESTR_META[p.restricao])?p.restricao:null; }
@@ -4584,28 +4809,28 @@ let FUNDRESTR=null;
 function openCampRestricao(pid){
   const p=DATA.poProjetos.find(x=>x.id===pid); if(!p)return;
   if(!canRestrict()){ toast('Only marketing managers or admin can do this.'); return; }
-  FUNDRESTR={id:pid,tipo:p.restricao||'BLOQUEADA',valor:p.restricao_valor!=null?+p.restricao_valor:'',motivo:p.restricao_motivo||''};
+  FUNDRESTR={id:pid,tipo:'BLOQUEADA',valor:'',motivo:p.restricao_motivo||''};
   renderCampRestricao();
 }
 function fundRestrSet(k,v){ if(FUNDRESTR)FUNDRESTR[k]=v; if(k==='tipo')renderCampRestricao(); }
-function fundRestrMoney(el){ const v=moneyParse(el.value); FUNDRESTR.valor=v; el.value=v?moneyFmt(v):''; }
 function renderCampRestricao(){
   if(!FUNDRESTR)return;
   const p=DATA.poProjetos.find(x=>x.id===FUNDRESTR.id)||{};
   const cap=Object.values(fundMonthlyTotals(FUNDRESTR.id)).reduce((s,v)=>s+v,0);
   const cur=fundRestr(p);
-  const opt=(k)=>{const r=RESTR_META[k];const on=FUNDRESTR.tipo===k;
-    return `<button onclick="fundRestrSet('tipo','${k}')" style="flex:1;text-align:left;padding:11px 13px;border-radius:10px;border:1.5px solid ${on?r.c:'var(--line-2)'};background:${on?r.bg:'#fff'};cursor:pointer">
-      <div style="display:flex;align-items:center;gap:7px;font-weight:800;font-size:12.5px;color:${on?r.c:'var(--txt)'}">${icn(r.icon,13)} ${r.t}</div>
-      <div style="font-size:11px;color:var(--txt-2);margin-top:3px">${k==='CORTADA'?'The money was taken back. The budget figure stays as a record.':'No new POs may be requested. The budget stays available on paper.'}</div>
-    </button>`;};
+  const opt=(k)=>{const r=RESTR_META[k];
+    return `<div style="flex:1;text-align:left;padding:11px 13px;border-radius:10px;border:1.5px solid ${r.c};background:${r.bg}">
+      <div style="display:flex;align-items:center;gap:7px;font-weight:800;font-size:12.5px;color:${r.c}">${icn(r.icon,13)} ${r.t}</div>
+      <div style="font-size:11px;color:var(--txt-2);margin-top:3px">No new POs may be requested against any month of this fund. The budget stays exactly as approved.</div>
+    </div>`;};
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:520px">
-    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:#bf0008;flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Restrict spending</h3><div style="font-size:12px;color:var(--txt-3)">${esc(p.nome||'')} · budget ${BRL(cap)}</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:#cf8a16;flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Block spending</h3><div style="font-size:12px;color:var(--txt-3)">${esc(p.nome||'')} · budget ${BRL(cap)}</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">
       <div class="banner" style="margin-bottom:12px">The fund's budget of <b class="mono">${BRL(cap)}</b> is not reduced by this — the monthly values stay exactly as they are. Only its spending status changes.</div>
-      <div style="display:flex;gap:9px;margin-bottom:14px">${opt('CORTADA')}${opt('BLOQUEADA')}</div>
-      ${FUNDRESTR.tipo==='CORTADA'?`<div class="field"><label>Amount cut <span style="font-weight:600;color:var(--txt-3)">(optional — leave empty for the whole balance)</span></label><span style="position:relative;display:flex;align-items:center"><span style="position:absolute;left:11px;font-size:12px;color:var(--txt-3);pointer-events:none">R$</span><input type="text" inputmode="numeric" value="${FUNDRESTR.valor?moneyFmt(FUNDRESTR.valor):''}" oninput="fundRestrMoney(this)" placeholder="0,00" class="mono" style="width:100%;padding:9px 11px 9px 34px;text-align:right"></span></div>`:''}
-      <div class="field"><label>Reason</label><textarea rows="3" oninput="fundRestrSet('motivo',this.value)" placeholder="Why is this fund being ${FUNDRESTR.tipo==='CORTADA'?'cut':'blocked'}?">${esc(FUNDRESTR.motivo)}</textarea></div>
+      ${(function(){const c=fundCutTotal(FUNDRESTR.id);return c?`<div class="banner" style="margin-bottom:12px;background:#fdf7f6;border-color:#f2c4bf;color:#7d1a14"><b class="mono">${BRL(c)}</b> of this fund has already been cut, month by month. That is separate from blocking and stays as it is.</div>`:'';})()}
+      <div style="display:flex;gap:9px;margin-bottom:14px">${opt('BLOQUEADA')}</div>
+      <div class="banner" style="margin-bottom:12px;background:var(--blue-bg);border-color:#bcd9f5;color:#0e5ba6">To take budget <b>back</b> instead of freezing it, cut the month in "Edit monthly values" — that records how much came out of which month, and the agency sees the reduced cap.</div>
+      <div class="field"><label>Reason</label><textarea rows="3" oninput="fundRestrSet('motivo',this.value)" placeholder="Why is this fund being blocked?">${esc(FUNDRESTR.motivo)}</textarea></div>
     </div>
     <div class="modal-f"><span>${cur?`<button class="btn-ghost" onclick="liftCampRestricao()">Lift restriction</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:#bf0008" onclick="submitCampRestricao()">Apply</button></div></div>
   </div></div>`;
@@ -4616,11 +4841,11 @@ async function submitCampRestricao(){
   const cr=FUNDRESTR;
   if(!String(cr.motivo||'').trim()){ toast('Describe the reason.'); return; }
   try{
-    const patch={restricao:cr.tipo,restricao_valor:(cr.tipo==='CORTADA'&&+cr.valor>0)?r2(+cr.valor):null,
+    const patch={restricao:'BLOQUEADA',restricao_valor:null,
                  restricao_motivo:String(cr.motivo).trim(),restricao_em:new Date().toISOString()};
     const {error}=await SBPO.from('funds').update(patch).eq('id',cr.id); if(error)throw error;
     FUNDRESTR=null; closeModal(); await reloadPOAll();
-    toast(patch.restricao==='CORTADA'?'Budget marked as cut ✓':'Spending blocked ✓');
+    toast('Spending blocked — no new POs on this fund.');
     goCostCenter();
   }catch(e){ toastErr(e); }
 }
@@ -4725,7 +4950,7 @@ function renderReqPO(){
       <div class="field"><label>Description</label><input value="${esc(REQ.descricao)}" onchange="reqSet('descricao',this.value)" placeholder="e.g. Video production, paid media…"></div>
       ${fundField}
       <div class="field"><label>Month to allocate (as opened in the project)</label>
-        <select onchange="reqSet('competencia',this.value)">${REQ.meses.length?REQ.meses.map(m=>`<option value="${m.competencia}" ${REQ.competencia===m.competencia?'selected':''}>${fmtMes(m.competencia)} — cap ${BRL(m.teto)}</option>`).join(''):'<option value="">Project has no months registered</option>'}</select>
+        <select onchange="reqSet('competencia',this.value)">${REQ.meses.length?REQ.meses.map(m=>`<option value="${m.competencia}" ${REQ.competencia===m.competencia?'selected':''} ${m.bloqueado?'disabled':''}>${fmtMes(m.competencia)} — ${m.bloqueado?'blocked':'cap '+BRL(m.teto)}</option>`).join(''):'<option value="">Project has no months registered</option>'}</select>
         ${REQ.competencia?`<div style="font-size:11.5px;color:${estoura?'var(--red)':'var(--txt-3)'};margin-top:5px">Month balance: <b class="mono">${BRL(saldo)}</b> (cap ${BRL(teto)} − consumed ${BRL(cons)})</div>`:''}</div>
       <div class="field"><label>Value (R$)</label><input type="number" min="0" step="100" value="${esc(REQ.valor)}" onchange="reqSet('valor',this.value)" placeholder="0,00"></div>
       <div style="font-size:11.5px;color:var(--txt-3);background:var(--paper-2);border:1px solid var(--line);border-radius:9px;padding:9px 12px;margin-bottom:14px">${icn('calendar',12)} Estimated payment if requested today: <b style="color:var(--txt-2)">~${fmtDateObjBR(calcVencimento(new Date().toISOString().slice(0,10)))}</b> <span style="color:var(--txt-3)">(final date is confirmed once the invoice is posted)</span></div>
@@ -4854,7 +5079,7 @@ async function submitPOEdit(){
   try{
     const {error}=await SBPO.from('pos').update({valor:r2(val),descricao:pe.descricao||null,numero_po:pe.numero_po||null,competencia:comp,status:pe.status}).eq('id',pe.id);
     if(error)throw error;
-    POEDIT=null; toast('PO updated ✓'); closeModal(); await reloadPO(); go('pos');
+    POEDIT=null; toastSaved(); closeModal(); await reloadPO(); go('pos');
   }catch(e){ toastErr(e); }
 }
 
@@ -4986,8 +5211,9 @@ function campMonthCellHTML(mm,cfg,used,o){
   const trackOp=cfg?(past?0.08+0.10*cfg/maxVal:0.60+0.30*cfg/maxVal):(past?0.4:1);
   const fillPct=cfg?Math.min(100,used/cfg*100):(used?100:0);
   const fillOp=past?(over?0.75:0.26):1;
-  const tip=`${fmtMes(mm+'-01')} · configured ${cfg?BRL(cfg):'—'} · used ${used?BRL(used):'—'}${cfg?' · balance '+BRL(cfg-used):''}${over?' · over cap':''}`;
-  return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-right:1px solid #f2f3f7;padding:3px 1px;background:${isNow?'rgba(18,115,207,.09)':'transparent'}" title="${esc(tip)}">
+  const cut=+(o&&o.cut)||0;
+  const tip=`${fmtMes(mm+'-01')} · configured ${cfg?BRL(cfg):'—'} · used ${used?BRL(used):'—'}${cfg?' · balance '+BRL(cfg-used):''}${over?' · over cap':''}${cut?' · '+BRL(cut)+' cut from this month (approved '+BRL(cfg+cut)+')':''}`;
+  return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-right:1px solid #f2f3f7;padding:3px 1px;background:${isNow?'rgba(18,115,207,.09)':'transparent'}${cut?';box-shadow:inset 0 -2px 0 var(--po)':''}" title="${esc(tip)}">
     <span style="display:block;position:relative;width:100%;height:14px;border-radius:${rl} ${rr} ${rr} ${rl};overflow:hidden">
       <span style="position:absolute;inset:0;background:${trackBg};opacity:${trackOp.toFixed(2)}"></span>
       ${(cfg||used)?`<span style="position:absolute;left:0;top:0;bottom:0;width:${fillPct.toFixed(1)}%;background:${over?'var(--po)':col};opacity:${fillOp}"></span>`:''}
@@ -5086,7 +5312,7 @@ function campanhaMonthBreakdownHTML(campId){
   const trs=rows.map(r=>{
     const km=catMeta(String(r.f.product_category||'').trim()||'Uncategorized');
     const first=r.months[0], last=r.months[r.months.length-1];
-    const cells=axis.map(mm=>campMonthCellHTML(mm,+r.mt[mm]||0,fundMonthUsed(r.f.id,mm),{maxVal,first,last,col:km.c})).join('');
+    const cells=axis.map(mm=>campMonthCellHTML(mm,+r.mt[mm]||0,fundMonthUsed(r.f.id,mm),{maxVal,first,last,col:km.c,cut:canSeeCorte()?fundMonthCut(r.f.id,mm):0})).join('');
     const cap=r.months.reduce((s,mm)=>s+(+r.mt[mm]||0),0);
     const used=r.months.reduce((s,mm)=>s+fundMonthUsed(r.f.id,mm),0);
     return `<div onclick="closeModal();openFundDetail('${esc(r.f.id)}')" style="display:flex;border-bottom:1px solid #edeff4;cursor:pointer" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''" title="Open the month-by-month detail of ${esc(r.f.nome)}">
@@ -5156,6 +5382,9 @@ function campanhasKpisHTML(list){
   return `<div style="margin-bottom:18px">
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px">
       ${stat('Campaigns budgeted',BRL(teto),'#10131a',`${list.length} campaign${list.length===1?'':'s'}`)}
+      ${(function(){ if(!canSeeCorte())return '';
+        const c=list.reduce((s,ca)=>s+cutTotalOf(campFunds(ca.id)),0);
+        return c>0.005?stat('Cut',BRL(c),'var(--po)','already out of the figure to the left','Budget taken back from specific months of these campaigns\' funds'):''; })()}
       ${stat('Consumed',BRL(cons),'var(--po)',`${Math.round(pct)}% of the cap committed`,'Consumed POs only — the % also counts committed and awaiting-approval')}
       ${stat('Committed',BRL(comp),'var(--violet)',pend?`+ ${BRL(pend)} awaiting approval`:'')}
       ${stat('Closed with balance',BRL(closedSaldo),'var(--amber)',`${closedN} closed campaign${closedN===1?'':'s'} still holding budget`,'Campaigns marked Closed whose cap was never fully spent')}
@@ -5380,7 +5609,7 @@ async function submitCampanha(){
       const {error:e4}=await SBPO.from('funds').update({campanha_id:null}).in('id',toUnlink);
       if(e4)throw e4;
     }
-    CAMPEDIT=null; toast(ce.id?'Campaign updated ✓':'Campaign created ✓'); closeModal(); await reloadPOAll(); go('campanhas');
+    CAMPEDIT=null; toastSaved(); closeModal(); await reloadPOAll(); go('campanhas');
   }catch(e){ toastErr(e); }
 }
 async function deletarCampanha(id){
@@ -5979,7 +6208,11 @@ function ccDrillCons(a,m){
   const head=`<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:8px 12px;background:var(--paper-2);border-radius:9px 9px 0 0;font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em"><span>PO</span><span>Fund</span><span>Status</span>${split?'<span style="text-align:right">Split</span>':''}<span style="text-align:right">Value</span></div>`;
   const rows=det.map(d=>{
     const po=d.po, s=PO_STATUS[po.status]||{t:po.status,c:'s-slate'};
-    return `<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:9px 12px;border-bottom:1px solid #edeff4;font-size:12px;align-items:center">
+    /* The consumed figure was a dead end: it listed the POs behind it but
+       every one of them was inert. Clicking a line now opens that PO, and
+       CC_DRILL_BACK (already set above) gives the detail a way back to this
+       breakdown. */
+    return `<div class="cc-camp-row" onclick="openPODetail('${esc(po.id)}')" title="Open this PO" style="display:grid;grid-template-columns:${cols};gap:10px;padding:9px 12px;border-bottom:1px solid #edeff4;font-size:12px;align-items:center;cursor:pointer">
       <span style="min-width:0"><b style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.descricao||'—')}</b><span class="mono" style="font-size:10.5px;color:var(--txt-3)">${esc(po.numero_po||'no PO number')}${po.nf_numero?' · NF '+esc(po.nf_numero):''} · ${esc(po.agencia||'—')}</span></span>
       <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txt-2)">${esc(d.proj.nome||'—')}${d.categoria?`<span style="font-size:10.5px;color:var(--txt-3)"> · ${esc(d.categoria)}</span>`:''}</span>
       <span><span class="badge ${s.c}" style="font-size:10px"><span class="d"></span>${esc(s.t)}</span></span>
@@ -6013,8 +6246,9 @@ function ccDrillBudget(a,m){
   const head=`<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:8px 12px;background:var(--paper-2);border-radius:9px 9px 0 0;font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em"><span>Fund</span><span>Cat.</span><span style="text-align:right">Budget</span><span style="text-align:right">Cons.</span><span style="text-align:right">Balance</span></div>`;
   const rows=det.map(d=>{
     const c=consBy[d.proj.id]||0, bal=d.valor-c;
+    const cut=canSeeCorte()?fundMonthCut(d.proj.id,m):0;
     return `<div class="cc-camp-row" onclick="openFundDetail('${esc(d.proj.id)}')" title="Open fund" style="display:grid;grid-template-columns:${cols};gap:10px;padding:9px 12px;border-bottom:1px solid #edeff4;font-size:12px;align-items:center">
-      <span style="min-width:0"><b style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.proj.nome||'—')}</b><span style="font-size:10.5px;color:var(--txt-3)">${esc(d.proj.agencia||'—')}${d.proj.rateio?' · rateio '+esc(d.proj.rateio_tipo||''):''}</span></span>
+      <span style="min-width:0"><b style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.proj.nome||'—')}</b><span style="font-size:10.5px;color:var(--txt-3)">${esc(d.proj.agencia||'—')}${d.proj.rateio?' · rateio '+esc(d.proj.rateio_tipo||''):''}${cut?`<span style="color:#bf0008;font-weight:700"> · ${BRL(cut)} cut (approved ${BRL(d.valor+cut)})</span>`:''}</span></span>
       <span style="font-size:11px;font-weight:700;color:var(--txt-2)">${esc(d.categoria||'—')}</span>
       <span class="mono" style="text-align:right;font-weight:700">${BRL(d.valor)}</span>
       <span class="mono" style="text-align:right;color:var(--txt-2)">${c?BRL(c):'—'}</span>
@@ -6541,7 +6775,16 @@ function renderBudgetOverview(isBalance){
       <div style="display:flex;align-items:flex-end;gap:36px;flex-wrap:wrap">
         <div title="Free budget — the balance on approved funds that belong to no campaign. Balance sitting inside a campaign is counted under Allocated to campaigns instead."><div style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3)">Available</div><div class="mono stat-num" style="font-size:32px;font-weight:700;letter-spacing:-.02em;margin-top:2px;color:${livre<0?'var(--po)':'#16a06a'}">${BRL(livre)}</div></div>
         <div style="display:flex;gap:28px;padding-bottom:5px;flex-wrap:wrap">
-          ${heroStat(isBalance?'Allocated':'Budgeted',BRL(orcado),null,'Sum of the monthly caps of approved funds in the period')}
+          ${heroStat(isBalance?'Allocated':'Budgeted',BRL(orcado),null,'Sum of the monthly caps of approved funds in the period, already net of anything cut')}
+          ${(function(){
+            /* Cut is shown to internal profiles only, and only when there is
+               one. Budgeted above is already net of it — this says how much
+               came out, so a shrinking budget has a visible cause instead of
+               looking like an error. */
+            if(!canSeeCorte())return '';
+            let c=0; funds.forEach(p=>{ const cm=fundMonthlyCuts(p.id); Object.keys(cm).forEach(m=>{ if(boInPeriod(m+'-01')) c+=cm[m]; }); });
+            return c?heroStat('Cut',BRL(c),'var(--po)','Budget taken back from specific months. Already subtracted from Budgeted — the approved figure per month is on each fund.'):'';
+          })()}
           ${heroStat('Consumed',BRL(consumido)+` <span style="font-size:12px;color:var(--txt-3);font-weight:500">· ${Math.round(pctCons)}%</span>`,null,'POs invoiced, validated or completed')}
           ${heroStat('Allocated to campaigns',BRL(alocado),'#0f8f60','Balance still unspent, but on funds already linked to a campaign — not free to hand out')}
           ${heroStat('Committed',BRL(compTot),'var(--violet)','POs approved / issued, not yet invoiced')}
@@ -7013,7 +7256,7 @@ async function savePerson(){
     if(error)throw error;
     try{ await SBPO.from('perfis').update({nome:PERSON.nome,sobrenome:PERSON.sobrenome,email:PERSON.email}).eq('user_id',PERSON.user_id); }catch(e){ console.warn('name update:',e); }
     const {data:pes}=await SBPO.rpc('listar_pessoas'); DATA.pessoas=pes||[];
-    toast('Person updated ✓'); closeModal(); go(SCREEN);
+    toastSaved(); closeModal(); go(SCREEN);
   }catch(e){ toastErr(e); }
 }
 async function deletarPessoa(userId){
@@ -7042,11 +7285,11 @@ async function reloadPOAll(){
       SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
       SBPO.from('funds').select('id,nome,agencia,orcamento_id,product_category,activity,fund_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em,campanha_id'),
       SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
-      SBPO.from('tetos').select('fund_id,competencia,teto'),
+      SBPO.from('tetos').select('fund_id,competencia,teto,corte,corte_motivo,corte_em,bloqueado,bloqueado_motivo'),
       SBPO.from('rateio_alocacao').select('fund_id,competencia,valor,categoria'),
       SBPO.from('campanhas').select('*')
     ]);
-    DATA.orcamentos=orc.data||[]; DATA.poProjetos=(prj.data||[]).filter(p=>p.aprovacao_status!=='REJEITADO'); DATA.pos=pos.data||[]; DATA.tetos=tet.data||[]; DATA.rateio=rat.data||[];
+    DATA.orcamentos=orc.data||[]; DATA.poProjetos=(prj.data||[]).filter(p=>p.aprovacao_status!=='REJEITADO'); DATA.pos=pos.data||[]; DATA.tetos=normTetos(tet.data||[]); DATA.rateio=rat.data||[];
     DATA.campanhas=camp.data||DATA.campanhas;
   }catch(e){ console.error('reloadPOAll:',e); }
 }
@@ -7193,14 +7436,14 @@ async function submitOrc(){
     if(ORC.id){
       const {error}=await SBPO.from('orcamentos').update({valor_total:val,periodo_inicio:ORC.ini?ORC.ini+'-01':null,periodo_fim:ORC.fim?ORC.fim+'-01':null}).eq('id',ORC.id);
       if(error)throw error;
-      toast('Budget updated ✓');
+      toastSaved();
     }else{
       if(!PRODUCT_CATS.includes(cat)){ toast('Pick a product category.'); return; }
       if(usedCats().has(cat)){ toast('A budget for '+cat+' already exists.'); return; }
       if(val<=0){ toast('Enter the total value.'); return; }
       const {error}=await SBPO.rpc('criar_orcamento',{p_nome:cat,p_valor:val,p_inicio:ORC.ini?ORC.ini+'-01':null,p_fim:ORC.fim?ORC.fim+'-01':null});
       if(error)throw error;
-      toast('Budget created ✓');
+      toastSaved();
     }
     closeModal(); await reloadPOAll(); go('budgets');
   }catch(e){ toastErr(e); }
@@ -7253,7 +7496,7 @@ async function saveFee(){
     await SBPO.from('fee_rateio').delete().not('agencia','is',null);
     if(rows.length){ const {error}=await SBPO.from('fee_rateio').insert(rows); if(error)throw error; }
     const {data:fee}=await SBPO.from('fee_rateio').select('agencia,tipo,categoria,percentual,cc,account,descricao'); DATA.fee=fee||[];
-    toast('Fee splits saved ✓'); closeModal(); go('budgets');
+    toastSaved(); closeModal(); go('budgets');
   }catch(e){ toastErr(e); }
 }
 
