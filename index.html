@@ -1915,7 +1915,7 @@ const catMeta=k=>CAT_META[k]||{c:'#59606e',bg:'#edeff4',icon:'folder',label:k};
    land on one account line. */
 const CAT_ALIAS={WG:'WM'};
 const catKeyLabel=k=>String(k||'').split(' + ').map(x=>CAT_ALIAS[x.trim()]||x).join(' + ');
-const ACT_META={KOL:{icon:'mic',label:'KOL / Influencer'},FEE:{icon:'clipboard',label:'Agency fee'},AON:{icon:'radio',label:'Always On'},Campaings:{icon:'megaphone',label:'Paid Media'},Campaign:{icon:'megaphone',label:'Paid Media'}};
+const ACT_META={KOL:{icon:'mic',label:'KOL / Influencer'},FEE:{icon:'clipboard',label:'Agency fee'},AON:{icon:'radio',label:'Always On'},Campaings:{icon:'megaphone',label:'Paid Media'},Campaign:{icon:'megaphone',label:'Paid Media'},LiveCommerce:{icon:'monitor',label:'Live Commerce'}};
 const actMeta=a=>ACT_META[a]||{icon:'tag',label:a||'—'};
 /* Both accordions on this screen — funds by category and funds by campanha —
    start closed and open like a dropdown. Expanded-by-default meant reaching
@@ -2122,14 +2122,14 @@ function fundCampBodyHTML(fl){
   return `<div id="fundBody" style="display:flex;flex-direction:column;gap:13px">${sections}${avulsosSection}</div>`;
 }
 /* ===== Category view: activity columns (fixed, aligned across categories) + compact cards ===== */
-const ACT_COL_ORDER=['Campaign','FEE','KOL','AON','Communication'];
+const ACT_COL_ORDER=['Campaign','FEE','KOL','AON','LiveCommerce','Communication'];
 // Display-only, same deal as CAT_ALIAS: funds.activity still stores 'Campaign'.
-function actColLabel(a){ return ({Campaign:'Paid Media',FEE:'Fee',KOL:'KOL',AON:'AON',Communication:'Comms'})[a]||a||'Other'; }
+function actColLabel(a){ return ({Campaign:'Paid Media',FEE:'Fee',KOL:'KOL',AON:'AON',LiveCommerce:'Live Commerce',Communication:'Comms'})[a]||a||'Other'; }
 // "Campaings" is a legacy misspelling that exists in some older records — fold
 // it into "Campaign" so it doesn't show up as a second, visually-identical
 // column (both render the same label via ACT_META, but were never the same
 // grouping key).
-const ACT_KEY_ALIASES={Campaings:'Campaign'};
+const ACT_KEY_ALIASES={Campaings:'Campaign','Live Commerce':'LiveCommerce','live commerce':'LiveCommerce','LIVE COMMERCE':'LiveCommerce'};
 function actKey(p){ const raw=(p.activity||'').trim()||'Other'; return ACT_KEY_ALIASES[raw]||raw; }
 function orderActs(keys){
   const set=[...new Set(keys)];
@@ -7396,7 +7396,7 @@ function agencyOpts(){
   return [...s].sort();
 }
 let FUND=null;
-const ACT_OPTS=['Campaign','FEE','KOL','AON','Communication'];
+const ACT_OPTS=['Campaign','FEE','KOL','AON','LiveCommerce','Communication'];
 function rateioTipos(){ const s=new Set((DATA.fee||[]).map(f=>f.tipo).filter(Boolean)); return [...s]; }
 function openFundNew(){
   const o0=(DATA.orcamentos||[])[0];
