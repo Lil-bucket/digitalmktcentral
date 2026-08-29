@@ -6541,6 +6541,15 @@ function boMonthIn(m){
   return true;
 }
 function boInPeriod(comp){ if(!comp)return BO_PER.mode==='all'; return boMonthIn(String(comp).slice(0,7)); }
+/* The active period, in words — a breakdown that opens from the hero has to
+   say which slice of the year it is describing, or its total looks wrong
+   against the full-year figure someone remembers. */
+function boPerLabel(){
+  if(BO_PER.mode==='all'||!BO_PER.val) return '';
+  if(BO_PER.mode==='month') return fmtMes(BO_PER.val+'-01');
+  if(BO_PER.mode==='quarter') return BO_PER.val.replace('-Q',' · Q');
+  return BO_PER.val;
+}
 function boSetMode(mode){
   const now=new Date(),y=String(now.getFullYear()),m=now.toISOString().slice(0,7),q=y+'-Q'+Math.ceil((now.getMonth()+1)/3);
   BO_PER={mode,val:mode==='year'?y:mode==='quarter'?q:mode==='month'?m:''};
@@ -6807,7 +6816,13 @@ function accountsOverviewBlock(){
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:14px;align-items:stretch">${ACC_ORDER.map(card).join('')}</div>
   </div>`;
 }
-function renderBudgetOverview(isBalance){
+/* The Overview's working set: approved funds this profile may see, narrowed
+   by the screen's scope and period filters, with the four money buckets each
+   one carries. Pulled out of renderBudgetOverview so the Available
+   breakdown answers from the same arithmetic the hero figure came from —
+   a second implementation would eventually disagree with the number the
+   user clicked on. */
+function boCtx(){
   let funds=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO');
   if(effPapel()==='agencia'&&effAgencia()) funds=funds.filter(p=>p.agencia===effAgencia());
   funds=funds.filter(p=>boScopeKeep(p.product_category));
@@ -6815,6 +6830,84 @@ function renderBudgetOverview(isBalance){
   DATA.tetos.forEach(t=>{if(!boInPeriod(t.competencia))return;tetoBy[t.fund_id]=(tetoBy[t.fund_id]||0)+(+t.teto||0);});
   DATA.rateio.forEach(r=>{if(!boInPeriod(r.competencia))return;tetoBy[r.fund_id]=(tetoBy[r.fund_id]||0)+(+r.valor||0);});
   DATA.pos.forEach(po=>{if(!boInPeriod(po.competencia))return;const v=+po.valor||0;if(CONS.includes(po.status))consBy[po.fund_id]=(consBy[po.fund_id]||0)+v;else if(COMP.includes(po.status))compBy[po.fund_id]=(compBy[po.fund_id]||0)+v;else if(PEND.includes(po.status))pendBy[po.fund_id]=(pendBy[po.fund_id]||0)+v;});
+  return {funds,tetoBy,consBy,compBy,pendBy};
+}
+/* Free budget per fund — cap minus everything committed against it. Negative
+   for an overspent fund on purpose: floored at zero the parts would stop
+   adding back up to the headline figure. */
+function boFundFree(c,p){ return (c.tetoBy[p.id]||0)-(c.consBy[p.id]||0)-(c.compBy[p.id]||0)-(c.pendBy[p.id]||0); }
+/* Which categories the Available figure is sitting in, and the funds behind
+   each one. The headline said how much was free to hand out but not where it
+   was, which is the next question every single time — and the answer decides
+   whether the money is usable for what someone is asking for.
+
+   Grouped by product category, funds with no campaign only, so the total
+   reconciles with the number that was clicked. An overspent fund shows its
+   negative rather than being hidden: it is part of why the category's free
+   balance is what it is. */
+function openAvailableByCat(){
+  const c=boCtx();
+  const soltos=c.funds.filter(p=>!p.campanha_id);
+  const byCat={};
+  soltos.forEach(p=>{
+    const k=(String(p.product_category||'').trim())||'Uncategorized';
+    (byCat[k]=byCat[k]||{cat:k,livre:0,funds:[]});
+    const free=boFundFree(c,p);
+    byCat[k].livre+=free;
+    byCat[k].funds.push({p,free});
+  });
+  const rows=Object.values(byCat).sort((a,b)=>b.livre-a.livre);
+  const total=rows.reduce((s,r)=>s+r.livre,0);
+  const alocado=c.funds.filter(p=>p.campanha_id).reduce((s,p)=>s+boFundFree(c,p),0);
+  if(!rows.length){
+    $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:560px">
+      <div class="modal-h"><div style="flex:1"><h3>Available by category</h3></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
+      <div class="modal-b"><div class="empty">Every approved fund in this period belongs to a campaign, so there is no free balance to place.</div></div>
+    </div></div>`;
+    return;
+  }
+  const maxAbs=Math.max(1,...rows.map(r=>Math.abs(r.livre)));
+  /* Shares are taken against the positive rows only. Against the net total a
+     category could read "161% of what is free" simply because another one is
+     overspent — arithmetically true, useless to read. An overspent category
+     says so in words instead of claiming a negative share. */
+  const positivo=rows.reduce((s,r)=>s+Math.max(0,r.livre),0);
+  const negativos=rows.filter(r=>r.livre<-0.005);
+  const body=rows.map(r=>{
+    const cm=catMeta(r.cat);
+    const pct=Math.abs(r.livre)/maxAbs*100;
+    const neg=r.livre<-0.005;
+    const fl=r.funds.slice().sort((a,b)=>b.free-a.free).map(({p,free})=>`
+      <div onclick="closeModal();openFundDetail('${esc(p.id)}')" style="display:flex;align-items:center;gap:9px;padding:6px 0 6px 37px;cursor:pointer;font-size:12px" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome||'—')}<span style="color:var(--txt-3);font-size:10.5px"> · ${esc(p.agencia||'—')} · ${esc(actColLabel(actKey(p)))}</span></span>
+        <span class="mono" style="flex-shrink:0;font-weight:700;color:${free<-0.005?'var(--po)':'var(--txt)'}">${BRL(free)}</span>
+      </div>`).join('');
+    return `<div style="border-bottom:1px solid var(--line);padding:11px 0">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="ich" style="width:26px;height:26px;background:${cm.bg};color:${cm.c};flex-shrink:0">${icn(cm.icon,13)}</span>
+        <span style="flex:1;min-width:0">
+          <b style="font-size:13px">${esc(catKeyLabel(r.cat))}</b>
+          <span style="font-size:11px;color:var(--txt-3);font-weight:600"> · ${r.funds.length} fund${r.funds.length===1?'':'s'}${neg?' · <span style="color:#bf0008">over its cap</span>':(positivo>0.005?' · '+Math.round(r.livre/positivo*100)+'% of the free budget':'')}</span>
+          <span style="display:block;height:6px;border-radius:4px;background:#edeff4;overflow:hidden;margin-top:5px"><span style="display:block;height:100%;width:${pct.toFixed(1)}%;background:${neg?'var(--po)':cm.c}"></span></span>
+        </span>
+        <span class="mono" style="flex-shrink:0;font-size:14px;font-weight:800;color:${neg?'var(--po)':'#16a06a'}">${BRL(r.livre)}</span>
+      </div>
+      ${fl}
+    </div>`;
+  }).join('');
+  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:620px">
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:#16a06a;flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Available by category</h3><div style="font-size:12px;color:var(--txt-3)"><b class="mono">${BRL(total)}</b> free across ${rows.length} categor${rows.length===1?'y':'ies'}${boPerLabel()?' · '+esc(boPerLabel()):''}</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
+    <div class="modal-b">
+      <div class="banner" style="margin-bottom:12px">Only funds that belong to <b>no campaign</b> count here — that is what "available" means. ${alocado>0.005?`A further <b class="mono">${BRL(alocado)}</b> is unspent but already sits inside campaigns.`:''}</div>
+      ${negativos.length?`<div class="banner" style="margin-bottom:12px;background:var(--red-bg);border-color:#f2c4bf;color:#7d1a14">${negativos.length===1?`<b>${esc(catKeyLabel(negativos[0].cat))}</b> is over its cap`:`${negativos.length} categories are over their caps`} by <b class="mono">${BRL(Math.abs(negativos.reduce((s,r)=>s+r.livre,0)))}</b>, which is already subtracted from the total above — the free budget you can actually place is <b class="mono">${BRL(positivo)}</b>.</div>`:''}
+      ${body}
+    </div>
+    <div class="modal-f"><span style="font-size:11px;color:var(--txt-3)">Click a fund to open it.</span><button class="btn-ghost" onclick="closeModal()">Close</button></div>
+  </div></div>`;
+}
+function renderBudgetOverview(isBalance){
+  const _c=boCtx();
+  const funds=_c.funds, tetoBy=_c.tetoBy, consBy=_c.consBy, compBy=_c.compBy, pendBy=_c.pendBy;
   const fundIds=new Set(funds.map(c=>c.id));
   let orcado=0,consumido=0,compTot=0,pend=0; funds.forEach(p=>{orcado+=tetoBy[p.id]||0;consumido+=consBy[p.id]||0;compTot+=compBy[p.id]||0;pend+=pendBy[p.id]||0;});
   const saldo=orcado-consumido-compTot-pend;
@@ -6870,7 +6963,7 @@ function renderBudgetOverview(isBalance){
   const heroStat=(l,v,c,tt)=>`<div title="${tt||''}"><div style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3)">${l}</div><div class="mono stat-num" style="font-size:17px;font-weight:700;margin-top:2px;color:${c||'var(--txt)'}">${v}</div></div>`;
   const hero=`<div style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px 24px;box-shadow:0 1px 2px rgba(20,22,28,.05)">
       <div style="display:flex;align-items:flex-end;gap:36px;flex-wrap:wrap">
-        <div title="Free budget — the balance on approved funds that belong to no campaign. Balance sitting inside a campaign is counted under Allocated to campaigns instead."><div style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3)">Available</div><div class="mono stat-num" style="font-size:32px;font-weight:700;letter-spacing:-.02em;margin-top:2px;color:${livre<0?'var(--po)':'#16a06a'}">${BRL(livre)}</div></div>
+        <div onclick="openAvailableByCat()" title="Free budget — the balance on approved funds that belong to no campaign. Click to see which categories it is sitting in." style="cursor:pointer"><div style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3);display:flex;align-items:center;gap:6px">Available <span style="font-weight:600;letter-spacing:0;text-transform:none;color:var(--txt-3);opacity:.8">· by category →</span></div><div class="mono stat-num" style="font-size:32px;font-weight:700;letter-spacing:-.02em;margin-top:2px;color:${livre<0?'var(--po)':'#16a06a'}">${BRL(livre)}</div></div>
         <div style="display:flex;gap:28px;padding-bottom:5px;flex-wrap:wrap">
           ${heroStat(isBalance?'Allocated':'Budgeted',BRL(orcado),null,'Sum of the monthly caps of approved funds in the period, already net of anything cut')}
           ${(function(){
