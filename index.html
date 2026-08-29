@@ -6887,6 +6887,29 @@ function boCtx(){
    for an overspent fund on purpose: floored at zero the parts would stop
    adding back up to the headline figure. */
 function boFundFree(c,p){ return (c.tetoBy[p.id]||0)-(c.consBy[p.id]||0)-(c.compBy[p.id]||0)-(c.pendBy[p.id]||0); }
+/* Budget registered on a category and never handed to any fund. It is as
+   available as the balance sitting unused inside a fund — more so, since
+   nothing has been promised against it — so it belongs in the same figure
+   rather than in a footnote nobody connects to it.
+
+   Only computed over the whole period: valor_total is a ceiling for the
+   budget's own window and cannot honestly be sliced into one month, so a
+   period filter leaves it out (and the hero says so). An agency never sees
+   it — unallocated category budget is not its to count. */
+function boUnallocated(){
+  if(BO_PER.mode!=='all') return [];
+  if(effPapel()==='agencia'&&effAgencia()) return [];
+  const aprov=new Set((DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO').map(p=>p.id));
+  const orcOf={}; (DATA.poProjetos||[]).forEach(p=>{ orcOf[p.id]=p.orcamento_id; });
+  const alocBy={};
+  (DATA.tetos||[]).forEach(t=>{ if(!aprov.has(t.fund_id))return; const o=orcOf[t.fund_id]; if(o) alocBy[o]=(alocBy[o]||0)+(+t.teto||0); });
+  (DATA.rateio||[]).forEach(r=>{ if(!aprov.has(r.fund_id))return; const o=orcOf[r.fund_id]; if(o) alocBy[o]=(alocBy[o]||0)+(+r.valor||0); });
+  return (DATA.orcamentos||[]).map(o=>{
+    const cat=(String(o.product_category||o.nome||'').trim())||'Uncategorized';
+    return {orc:o,cat,livre:r2((+o.valor_total||0)-(alocBy[o.id]||0))};
+  }).filter(r=>boScopeKeep(r.cat)&&r.livre>0.005);
+}
+function boUnallocatedTotal(){ return boUnallocated().reduce((s,r)=>s+r.livre,0); }
 /* Which categories the Available figure is sitting in, and the funds behind
    each one. The headline said how much was free to hand out but not where it
    was, which is the next question every single time — and the answer decides
@@ -6907,8 +6930,20 @@ function openAvailableByCat(){
     byCat[k].livre+=free;
     byCat[k].funds.push({p,free});
   });
+  /* The other half of the same figure: budget registered on a category and
+     never given to a fund. It has no fund rows to list, so it shows as its
+     own line inside the category — named by the budget it sits on, since
+     that is what someone would have to open to allocate it. */
+  boUnallocated().forEach(u=>{
+    const k=u.cat;
+    (byCat[k]=byCat[k]||{cat:k,livre:0,funds:[]});
+    byCat[k].livre+=u.livre;
+    byCat[k].naoAloc=(byCat[k].naoAloc||0)+u.livre;
+    (byCat[k].orcs=byCat[k].orcs||[]).push(u);
+  });
   const rows=Object.values(byCat).sort((a,b)=>b.livre-a.livre);
   const total=rows.reduce((s,r)=>s+r.livre,0);
+  const naoAlocTot=rows.reduce((s,r)=>s+(r.naoAloc||0),0);
   const alocado=c.funds.filter(p=>p.campanha_id).reduce((s,p)=>s+boFundFree(c,p),0);
   if(!rows.length){
     $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:560px">
@@ -6928,7 +6963,12 @@ function openAvailableByCat(){
     const cm=catMeta(r.cat);
     const pct=Math.abs(r.livre)/maxAbs*100;
     const neg=r.livre<-0.005;
-    const fl=r.funds.slice().sort((a,b)=>b.free-a.free).map(({p,free})=>`
+    const ul=(r.orcs||[]).map(u=>`
+      <div style="display:flex;align-items:center;gap:9px;padding:6px 0 6px 37px;font-size:12px">
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#0e5ba6">Not allocated to any fund<span style="color:var(--txt-3);font-size:10.5px"> · budget "${esc(u.orc.nome||u.cat)}"</span></span>
+        <span class="mono" style="flex-shrink:0;font-weight:700;color:#0e5ba6">${BRL(u.livre)}</span>
+      </div>`).join('');
+    const fl=ul+r.funds.slice().sort((a,b)=>b.free-a.free).map(({p,free})=>`
       <div onclick="closeModal();openFundDetail('${esc(p.id)}')" style="display:flex;align-items:center;gap:9px;padding:6px 0 6px 37px;cursor:pointer;font-size:12px" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
         <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome||'—')}<span style="color:var(--txt-3);font-size:10.5px"> · ${esc(p.agencia||'—')} · ${esc(actColLabel(actKey(p)))}</span></span>
         <span class="mono" style="flex-shrink:0;font-weight:700;color:${free<-0.005?'var(--po)':'var(--txt)'}">${BRL(free)}</span>
@@ -6938,7 +6978,7 @@ function openAvailableByCat(){
         <span class="ich" style="width:26px;height:26px;background:${cm.bg};color:${cm.c};flex-shrink:0">${icn(cm.icon,13)}</span>
         <span style="flex:1;min-width:0">
           <b style="font-size:13px">${esc(catKeyLabel(r.cat))}</b>
-          <span style="font-size:11px;color:var(--txt-3);font-weight:600"> · ${r.funds.length} fund${r.funds.length===1?'':'s'}${neg?' · <span style="color:#bf0008">over its cap</span>':(positivo>0.005?' · '+Math.round(r.livre/positivo*100)+'% of the free budget':'')}</span>
+          <span style="font-size:11px;color:var(--txt-3);font-weight:600"> · ${r.funds.length?r.funds.length+' fund'+(r.funds.length===1?'':'s')+(r.naoAloc?' + unallocated':''):'unallocated only'}${neg?' · <span style="color:#bf0008">over its cap</span>':(positivo>0.005?' · '+Math.round(r.livre/positivo*100)+'% of the free budget':'')}</span>
           <span style="display:block;height:6px;border-radius:4px;background:#edeff4;overflow:hidden;margin-top:5px"><span style="display:block;height:100%;width:${pct.toFixed(1)}%;background:${neg?'var(--po)':cm.c}"></span></span>
         </span>
         <span class="mono" style="flex-shrink:0;font-size:14px;font-weight:800;color:${neg?'var(--po)':'#16a06a'}">${BRL(r.livre)}</span>
@@ -6949,7 +6989,7 @@ function openAvailableByCat(){
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:620px">
     <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:#16a06a;flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Available by category</h3><div style="font-size:12px;color:var(--txt-3)"><b class="mono">${BRL(total)}</b> free across ${rows.length} categor${rows.length===1?'y':'ies'}${boPerLabel()?' · '+esc(boPerLabel()):''}</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">
-      <div class="banner" style="margin-bottom:12px">Only funds that belong to <b>no campaign</b> count here — that is what "available" means. ${alocado>0.005?`A further <b class="mono">${BRL(alocado)}</b> is unspent but already sits inside campaigns.`:''}</div>
+      <div class="banner" style="margin-bottom:12px">Two things count as available: the balance unused on funds that belong to <b>no campaign</b>${naoAlocTot>0.005?`, and <b class="mono">${BRL(naoAlocTot)}</b> of budget never allocated to any fund`:''}. ${alocado>0.005?`A further <b class="mono">${BRL(alocado)}</b> is unspent but already sits inside campaigns.`:''}${BO_PER.mode!=='all'?' Unallocated budget is left out while a period filter is on — a yearly ceiling cannot be split into one month.':''}</div>
       ${negativos.length?`<div class="banner" style="margin-bottom:12px;background:var(--red-bg);border-color:#f2c4bf;color:#7d1a14">${negativos.length===1?`<b>${esc(catKeyLabel(negativos[0].cat))}</b> is over its cap`:`${negativos.length} categories are over their caps`} by <b class="mono">${BRL(Math.abs(negativos.reduce((s,r)=>s+r.livre,0)))}</b>, which is already subtracted from the total above — the free budget you can actually place is <b class="mono">${BRL(positivo)}</b>.</div>`:''}
       ${body}
     </div>
@@ -6973,6 +7013,7 @@ function renderBudgetOverview(isBalance){
     const free=(tetoBy[p.id]||0)-(consBy[p.id]||0)-(compBy[p.id]||0)-(pendBy[p.id]||0);
     if(p.campanha_id) alocado+=free; else livre+=free;
   });
+  const naoAlocTot=boUnallocatedTotal();
   // barra do mês corrente
   const mNow=(BO_PER.mode==='month'&&BO_PER.val)?BO_PER.val:new Date().toISOString().slice(0,7);
   let capMes=0; DATA.tetos.forEach(t=>{if(fundIds.has(t.fund_id)&&String(t.competencia).slice(0,7)===mNow)capMes+=(+t.teto||0);});
@@ -7014,7 +7055,19 @@ function renderBudgetOverview(isBalance){
   const heroStat=(l,v,c,tt)=>`<div title="${tt||''}"><div style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3)">${l}</div><div class="mono stat-num" style="font-size:17px;font-weight:700;margin-top:2px;color:${c||'var(--txt)'}">${v}</div></div>`;
   const hero=`<div style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px 24px;box-shadow:0 1px 2px rgba(20,22,28,.05)">
       <div style="display:flex;align-items:flex-end;gap:36px;flex-wrap:wrap">
-        <div onclick="openAvailableByCat()" title="Free budget — the balance on approved funds that belong to no campaign. Click to see which categories it is sitting in." style="cursor:pointer"><div style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3);display:flex;align-items:center;gap:6px">Available <span style="font-weight:600;letter-spacing:0;text-transform:none;color:var(--txt-3);opacity:.8">· by category →</span></div><div class="mono stat-num" style="font-size:32px;font-weight:700;letter-spacing:-.02em;margin-top:2px;color:${livre<0?'var(--po)':'#16a06a'}">${BRL(livre)}</div></div>
+        ${(function(){
+          /* Available answers "how much is there to hand out", and that has
+             always had two halves: the balance still unused inside funds
+             nobody has committed to a campaign, and budget registered on a
+             category that was never given to a fund at all. Showing only the
+             first understated what there is by everything that had not been
+             allocated yet — the freest money of the lot. */
+          const naoAloc=naoAlocTot, disp=livre+naoAloc;
+          const sub=naoAloc>0.005
+            ? `<div style="font-size:11px;color:var(--txt-3);font-weight:600;margin-top:3px"><b class="mono">${BRL(livre)}</b> unused on funds · <b class="mono">${BRL(naoAloc)}</b> never allocated</div>`
+            : (BO_PER.mode!=='all'&&!isAg?`<div style="font-size:11px;color:var(--txt-3);font-weight:600;margin-top:3px">Unallocated budget is left out while a period filter is on</div>`:'');
+          return `<div onclick="openAvailableByCat()" title="Free budget — the balance unused on funds that belong to no campaign, plus budget never allocated to any fund. Click to see which categories it is sitting in." style="cursor:pointer"><div style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3);display:flex;align-items:center;gap:6px">Available <span style="font-weight:600;letter-spacing:0;text-transform:none;color:var(--txt-3);opacity:.8">· by category →</span></div><div class="mono stat-num" style="font-size:32px;font-weight:700;letter-spacing:-.02em;margin-top:2px;color:${disp<0?'var(--po)':'#16a06a'}">${BRL(disp)}</div>${sub}</div>`;
+        })()}
         <div style="display:flex;gap:28px;padding-bottom:5px;flex-wrap:wrap">
           ${heroStat(isBalance?'Allocated':'Budgeted',BRL(orcado),null,'Sum of the monthly caps of approved funds in the period, already net of anything cut')}
           ${(function(){
