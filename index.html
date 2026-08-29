@@ -1293,7 +1293,7 @@ const Q_WORK=()=>[
 ];
 const Q_BUDGET=()=>[
   SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
-  SBPO.from('funds').select('id,nome,agencia,orcamento_id,product_category,activity,fund_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em,campanha_id'),
+  SBPO.from('funds').select('id,nome,agencia,orcamento_id,product_category,activity,fund_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em,campanha_id,ativo'),
   SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
   SBPO.from('tetos').select('fund_id,competencia,teto,corte,corte_motivo,corte_em,bloqueado,bloqueado_motivo'),
   SBPO.from('rateio_alocacao').select('fund_id,competencia,valor,categoria'),
@@ -2244,6 +2244,7 @@ function fundBadgeHTML(p){
   const teto=tetoBy[p.id]||0, tot=(consBy[p.id]||0)+(compBy[p.id]||0)+(pendBy[p.id]||0);
   const pctTot=teto?tot/teto*100:0, lc=fundLifecycle(p);
   const base='font-size:10px;font-weight:700;border-radius:20px;padding:3px 9px;white-space:nowrap;flex-shrink:0;display:inline-flex;align-items:center;gap:4px';
+  if(fundArquivado(p)) return `<span style="${base};background:var(--slate-bg);color:#494c54" title="Retired with its spend on record — the unused balance went back to the budget">${icn('folder',10)} Archived</span>`;
   if(lc==='done') return `<span style="${base};background:var(--slate-bg);color:#494c54">${icn('check',10)} Completed</span>`;
   if(lc==='over') return `<span style="${base};background:#fbe4e1;color:#bf0008">${icn('alert',11)} ${Math.round(pctTot)}% over</span>`;
   if(lc==='near') return `<span style="${base};background:#fbf0d8;color:#9c6404">${Math.round(pctTot)}% committed</span>`;
@@ -2421,6 +2422,12 @@ function openFundDetail(pid){
         <span class="stat-num" style="font-weight:700;color:${overT?'#bf0008':nearT?'#9c6404':'var(--txt-1)'}">${Math.round(rawTot)}% committed</span>
         <span style="color:var(--txt-2)">balance <b>${BRL(saldoTot)}</b> of ${BRL(totCap)}</span>
       </div>
+      ${(()=>{ if(!fundArquivado(p))return '';
+        const devolvido=Object.keys(fundMonthlyCuts(p.id)).length?fundCutTotal(p.id):0;
+        return `<div style="display:flex;align-items:flex-start;gap:10px;background:var(--slate-bg);border:1px solid var(--line-2);border-radius:9px;padding:10px 12px;margin-top:12px;font-size:12px;color:#3c4049">
+          <span style="display:flex;flex-shrink:0;margin-top:1px">${icn('folder',14)}</span>
+          <span><b>Archived</b> — this fund takes no new POs. Its POs and everything they consumed stay on record and stay charged to the budget${devolvido?`. In all, <b class="mono">${BRL(devolvido)}</b> of its budget has been released back`:''}.</span>
+        </div>`;})()}
       ${(()=>{const k=fundRestr(p); if(!k)return ''; const r=RESTR_META[k];
         return `<div style="display:flex;align-items:flex-start;gap:10px;background:${r.bg};border:1px solid ${r.bd};border-radius:9px;padding:10px 12px;margin-top:12px;font-size:12px;color:${r.c}">
           <span style="display:flex;flex-shrink:0;margin-top:1px">${icn(r.icon,14)}</span>
@@ -2450,7 +2457,7 @@ function openFundDetail(pid){
       ${months.length>1?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">${chips}</div>`:''}
     </div>
     <div class="modal-b">${summary}<div style="font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin:2px 0 10px">Month by month</div>${blocks}</div>
-    <div class="modal-f">${CC_DRILL_BACK?`<button class="btn-ghost" onclick="ccDrillBack()">← Back to breakdown</button>`:'<span></span>'}<div style="display:flex;gap:10px">${canRestrict()?`<button class="btn-ghost" onclick="openCampRestricao('${esc(p.id)}')">${fundRestr(p)?'Blocked — review…':'Block spending'}</button>`:''}${(demoWritable(PO_ACCESS)&&!fundRestr(p))?`<button class="btn-acc" style="background:var(--po)" onclick="openReqPO('${esc(p.id)}')">+ Request PO</button>`:''}${((['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly())?`<button class="btn-ghost" onclick="openCampValues('${esc(p.id)}')">Edit monthly values</button><button class="btn-ghost" onclick="openCampEdit('${esc(p.id)}')">Edit category</button>`:''}<button class="btn-ghost" onclick="closeModal()">Close</button></div></div>
+    <div class="modal-f">${CC_DRILL_BACK?`<button class="btn-ghost" onclick="ccDrillBack()">← Back to breakdown</button>`:'<span></span>'}<div style="display:flex;gap:10px">${canRestrict()?`<button class="btn-ghost" onclick="openCampRestricao('${esc(p.id)}')">${fundRestr(p)?'Blocked — review…':'Block spending'}</button>`:''}${(demoWritable(PO_ACCESS)&&!fundRestr(p)&&!fundArquivado(p))?`<button class="btn-acc" style="background:var(--po)" onclick="openReqPO('${esc(p.id)}')">+ Request PO</button>`:''}${((['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly())?`<button class="btn-ghost" onclick="openCampValues('${esc(p.id)}')">Edit monthly values</button><button class="btn-ghost" onclick="openCampEdit('${esc(p.id)}')">Edit category</button>`:''}<button class="btn-ghost" onclick="closeModal()">Close</button></div></div>
   </div></div>`;
 }
 
@@ -3167,7 +3174,7 @@ function renderCampEditForm(){
       ${classField}
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">Was: <b>${esc((DATA.poProjetos.find(x=>x.id===ce.id)||{}).product_category||'—')}</b>. Months and total value stay the same.</div>
     </div>
-    <div class="modal-f"><span>${(PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarFund('${esc(ce.id)}')">Delete fund</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitFundEdit()">Save</button></div></div>
+    <div class="modal-f"><span>${(PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarFund('${esc(ce.id)}')">${(DATA.pos||[]).some(x=>x.fund_id===ce.id&&!['REJEITADA','CANCELADA'].includes(x.status))?'Archive fund':'Delete fund'}</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitFundEdit()">Save</button></div></div>
   </div></div>`;
 }
 async function submitFundEdit(){
@@ -4870,7 +4877,7 @@ function consumoMes(pid,comp){
 function projMonths(pid){ return DATA.tetos.filter(t=>t.fund_id===pid).map(t=>({competencia:String(t.competencia).slice(0,10),teto:+t.teto})).sort((a,b)=>a.competencia.localeCompare(b.competencia)); }
 function reqOptions(){
   // cut / frozen funds are not offered as PO targets at all
-  let projs=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO'&&!fundRestr(p));
+  let projs=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO'&&!fundRestr(p)&&!fundArquivado(p));
   if(PAPEL==='agencia'&&MINHA_AGENCIA) projs=projs.filter(p=>p.agencia===MINHA_AGENCIA);
   const groups=feeSplitGroups().filter(g=>!(PAPEL==='agencia'&&MINHA_AGENCIA)||g.agencia===MINHA_AGENCIA);
   const splitIds=new Set(groups.flatMap(g=>g.splits.map(s=>s.fund_id)));
@@ -4896,6 +4903,24 @@ const RESTR_META={
   BLOQUEADA:{t:'Spending blocked',short:'Blocked',c:'#7a5200',bg:'#fbf0d8',bd:'#ecd9a4',icon:'lock'}
 };
 function fundRestr(p){ return (p&&RESTR_META[p.restricao])?p.restricao:null; }
+/* An archived fund is one that was retired with spend already on it. It keeps
+   its POs — that is the point: the money it really spent stays charged to the
+   category — while the balance it never used was released back. It takes no
+   new spending and offers itself for nothing. */
+function fundArquivado(p){ return !!p && p.ativo===false; }
+/* What archiving (or deleting) would hand back: for every month, whatever the
+   effective cap still has above what is already committed against it. Mirrors
+   arquivar_fund() in the database, so the number in the confirmation is the
+   number that actually moves. */
+function fundSaldoLiberavel(pid){
+  let tot=0;
+  Object.keys(fundMonthlyTotals(pid)).forEach(m=>{
+    const cap=fundMonthCap(pid,m);
+    const comprometido=(DATA.pos||[]).filter(po=>po.fund_id===pid&&String(po.competencia).slice(0,7)===m&&!['REJEITADA','CANCELADA'].includes(po.status)).reduce((s,po)=>s+(+po.valor||0),0);
+    if(cap>comprometido) tot+=cap-comprometido;
+  });
+  return r2(tot);
+}
 function canRestrict(){ return (['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly(); }
 function fundRestrBadgeHTML(p){
   const k=fundRestr(p); if(!k)return '';
@@ -4962,6 +4987,7 @@ function openReqPO(pid){
   if(pid){
     const rp=DATA.poProjetos.find(x=>x.id===pid), rk=fundRestr(rp);
     if(rk){ toast(`"${rp.nome}" is ${RESTR_META[rk].short.toLowerCase()} — no new POs can be requested.`); return; }
+    if(fundArquivado(rp)){ toast(`"${rp.nome}" is archived — no new POs can be requested against it.`); return; }
   }
   const {single,groups}=reqOptions();
   if(pid){
@@ -5194,14 +5220,39 @@ async function deletarPO(id){
     POEDIT=null; closeModal(); await reloadPO(); await reloadNotif(); go(SCREEN); toast('PO deleted.');
   }catch(e){ toastErr(e); }
 }
+/* Retiring a fund must not hand the category back money the fund actually
+   spent. Deleting one did exactly that: the POs went with it and the cascade
+   took the monthly caps, so the budget recovered the FULL cap — including the
+   part already consumed — and the year's spend vanished from the record.
+
+   So the two cases are now told apart. A fund that never had a PO has nothing
+   to preserve: it is deleted, and its whole cap goes back. A fund that has
+   spent is archived instead — its POs stay, and stay charged to the category,
+   while every month's cap is pulled down to what is already committed. What
+   comes back is exactly the unused balance, recorded as a cut with a reason,
+   so it shows up in the same places every other released amount does. */
 async function deletarFund(id){
   if(viewOnly()){toast(roMsg());return;}
   if(PAPEL!=='admin'){ toast('Only admin can delete.'); return; }
   const p=DATA.poProjetos.find(x=>x.id===id)||{};
-  const nPos=DATA.pos.filter(x=>x.fund_id===id).length;
-  if(!confirm('Delete fund "'+(p.nome||'')+'"?\n\nThis also deletes its '+nPos+' PO(s) and all monthly caps/rateio.\n\nThis cannot be undone.'))return;
-  try{ const {error}=await SBPO.rpc('excluir_fund',{p_fund:id}); if(error)throw error;
-    FUNDEDIT=null; closeModal(); await reloadPOAll(); goCostCenter(); toast('Fund deleted.');
+  const nPos=DATA.pos.filter(x=>x.fund_id===id&&!['REJEITADA','CANCELADA'].includes(x.status)).length;
+  const orc=(DATA.orcamentos||[]).find(o=>o.id===p.orcamento_id);
+  const destino=orc?`the "${orc.nome||orc.product_category}" budget`:'the budget';
+  try{
+    if(nPos){
+      const saldo=fundSaldoLiberavel(id);
+      if(!confirm(`Archive fund "${p.nome||''}"?\n\nIt has ${nPos} PO(s), so it is archived rather than deleted — the POs and everything they consumed stay on record, and stay charged to ${destino}.\n\n${BRL(saldo)} of unused balance goes back to ${destino} and can be allocated elsewhere.\n\nThe fund takes no new POs after this.`))return;
+      const {data,error}=await SBPO.rpc('arquivar_fund',{p_fund:id,p_motivo:'Saldo devolvido ao orçamento ao arquivar o fund'});
+      if(error)throw error;
+      FUNDEDIT=null; closeModal(); await reloadPOAll(); goCostCenter();
+      toast(`Fund archived — ${BRL(+data||0)} returned to ${destino}.`);
+    }else{
+      const cap=Object.values(fundMonthlyTotals(id)).reduce((s,v)=>s+v,0);
+      if(!confirm(`Delete fund "${p.nome||''}"?\n\nNo PO was ever requested against it, so there is nothing to keep: it is removed along with its monthly caps, and its ${BRL(cap)} goes back to ${destino}.\n\nThis cannot be undone.`))return;
+      const {error}=await SBPO.rpc('excluir_fund',{p_fund:id}); if(error)throw error;
+      FUNDEDIT=null; closeModal(); await reloadPOAll(); goCostCenter();
+      toast(`Fund deleted — ${BRL(cap)} returned to ${destino}.`);
+    }
   }catch(e){ toastErr(e); }
 }
 async function deletarOrcamento(id){
@@ -5646,7 +5697,7 @@ function campEditToggleFund(fid){
    them (mirrors how the Fund form's own Campaign dropdown works, just from
    the other side). */
 function campFundPickerHTML(ce){
-  const list=(DATA.poProjetos||[]).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+  const list=(DATA.poProjetos||[]).filter(f=>!fundArquivado(f)||ce.funds.includes(f.id)).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
   if(!list.length) return '<div style="font-size:12px;color:var(--txt-3)">No funds yet.</div>';
   const rows=list.map(f=>{
     const checked=ce.funds.includes(f.id);
@@ -7473,7 +7524,7 @@ async function reloadPOAll(){
   try{
     const [orc,prj,pos,tet,rat,camp]=await Promise.all([
       SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
-      SBPO.from('funds').select('id,nome,agencia,orcamento_id,product_category,activity,fund_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em,campanha_id'),
+      SBPO.from('funds').select('id,nome,agencia,orcamento_id,product_category,activity,fund_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em,campanha_id,ativo'),
       SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
       SBPO.from('tetos').select('fund_id,competencia,teto,corte,corte_motivo,corte_em,bloqueado,bloqueado_motivo'),
       SBPO.from('rateio_alocacao').select('fund_id,competencia,valor,categoria'),
