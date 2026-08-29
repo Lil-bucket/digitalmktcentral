@@ -1295,7 +1295,7 @@ const Q_BUDGET=()=>[
   SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
   SBPO.from('funds').select('id,nome,agencia,orcamento_id,product_category,activity,fund_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em,campanha_id,ativo'),
   SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
-  SBPO.from('tetos').select('fund_id,competencia,teto,corte,corte_motivo,corte_em,bloqueado,bloqueado_motivo'),
+  SBPO.from('tetos').select('fund_id,competencia,teto,corte,corte_motivo,corte_em,devolucao,devolucao_motivo,devolucao_em,bloqueado,bloqueado_motivo'),
   SBPO.from('rateio_alocacao').select('fund_id,competencia,valor,categoria'),
   SBPO.from('notificacoes').select('id,mensagem,tipo,po_id,fund_id,lida,criada_em').order('criada_em',{ascending:false}).limit(200),
   SBPO.rpc('listar_pessoas'),
@@ -2727,8 +2727,10 @@ function openCampValues(pid){
    saved, which reads as an overspend nobody caused. */
 function fundValCutCeiling(r){
   const aprovado=+r.valor||0;
-  const usado=fundMonthUsed(FUNDVAL?FUNDVAL.id:'',r.mes);
-  return Math.max(0,r2(Math.min(aprovado,aprovado-usado)));
+  const pid=FUNDVAL?FUNDVAL.id:'';
+  const usado=fundMonthUsed(pid,r.mes);
+  const devol=+((tetoRow(pid,r.mes)||{}).devolucao)||0;
+  return Math.max(0,r2(aprovado-usado-devol));
 }
 function fundValCutMoney(id,el){
   const r=FUNDVAL&&FUNDVAL.rows.find(x=>x.id===id); if(!r)return;
@@ -3059,11 +3061,16 @@ async function submitCampValues(){
       const now=new Date().toISOString();
       await SBPO.from('tetos').delete().eq('fund_id',cv.id);
       const tetos=rows.map(r=>{
-        const corte=r2(Math.min(+r.corte||0,+r.valor||0));
+        const prev=tetoRow(cv.id,r.mes)||{};
+        const devol=r2(Math.min(+prev.devolucao||0,+r.valor||0));
+        const corte=r2(Math.min(+r.corte||0,Math.max(0,(+r.valor||0)-devol)));
         return {fund_id:cv.id,competencia:r.mes+'-01',teto:r2(+r.valor),definido_por:'portal',
                 corte:corte,
                 corte_motivo:corte?(String(r.motivo||'').trim()||null):null,
-                corte_em:corte?((tetoRow(cv.id,r.mes)||{}).corte_em||now):null,
+                corte_em:corte?(prev.corte_em||now):null,
+                devolucao:devol,
+                devolucao_motivo:devol?(prev.devolucao_motivo||null):null,
+                devolucao_em:devol?(prev.devolucao_em||now):null,
                 bloqueado:fundMonthBlocked(cv.id,r.mes)};
       });
       const {error}=await SBPO.from('tetos').insert(tetos); if(error)throw error;
@@ -3104,10 +3111,11 @@ function guessCat(str){ const s=String(str||'').toUpperCase(); for(const c of PR
 function normTetos(rows){
   return (rows||[]).map(t=>{
     // Idempotent: a failed refresh hands back the rows already normalised
-    // (tookOr keeps the previous array), and subtracting the cut a second
-    // time would silently halve the month.
-    const bruto=t.teto_aprovado!=null?+t.teto_aprovado:(+t.teto||0), corte=+t.corte||0;
-    return Object.assign({},t,{teto:bruto-corte,teto_aprovado:bruto,corte:corte});
+    // (tookOr keeps the previous array), and subtracting twice would
+    // silently halve the month.
+    const bruto=t.teto_aprovado!=null?+t.teto_aprovado:(+t.teto||0);
+    const corte=+t.corte||0, devol=+t.devolucao||0;
+    return Object.assign({},t,{teto:bruto-corte-devol,teto_aprovado:bruto,corte:corte,devolucao:devol});
   });
 }
 function fundMonthlyGross(pid){
@@ -3126,6 +3134,17 @@ function fundMonthlyCuts(pid){
 }
 function fundMonthCut(pid,mm){ return fundMonthlyCuts(pid)[mm]||0; }
 function fundCutTotal(pid){ return Object.values(fundMonthlyCuts(pid)).reduce((s,v)=>s+v,0); }
+/* A cut and a return both leave the fund, and only one of them leaves the
+   company's budget. Money CUT was taken back and is not available to anyone
+   any more; money RETURNED — the balance an archived fund gave up — goes
+   back to its category to be allocated somewhere else. They are two amounts
+   per month, not two names for one, because a month can have had both. */
+function fundMonthlyDevolucoes(pid){
+  const m={};
+  DATA.tetos.filter(t=>t.fund_id===pid).forEach(t=>{const k=String(t.competencia).slice(0,7);const d=+t.devolucao||0;if(d)m[k]=(m[k]||0)+d;});
+  return m;
+}
+function fundDevolucaoTotal(pid){ return Object.values(fundMonthlyDevolucoes(pid)).reduce((s,v)=>s+v,0); }
 function tetoRow(pid,mm){ return (DATA.tetos||[]).find(t=>t.fund_id===pid&&String(t.competencia).slice(0,7)===mm)||null; }
 function fundMonthBlocked(pid,mm){ const t=tetoRow(pid,mm); return !!(t&&t.bloqueado); }
 /* Who is shown the approved-vs-cut split. An agency sees one number — its
@@ -6901,8 +6920,15 @@ function boUnallocated(){
   if(effPapel()==='agencia'&&effAgencia()) return [];
   const aprov=new Set((DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO').map(p=>p.id));
   const orcOf={}; (DATA.poProjetos||[]).forEach(p=>{ orcOf[p.id]=p.orcamento_id; });
+  /* Allocation is counted GROSS of any cut: budget the company took back is
+     not sitting in the category waiting to be given to another fund, so it
+     must not reappear here as available. A return is the opposite — that is
+     precisely what it is for — so it is subtracted from the allocation and
+     lands back in this pool. */
   const alocBy={};
-  (DATA.tetos||[]).forEach(t=>{ if(!aprov.has(t.fund_id))return; const o=orcOf[t.fund_id]; if(o) alocBy[o]=(alocBy[o]||0)+(+t.teto||0); });
+  (DATA.tetos||[]).forEach(t=>{ if(!aprov.has(t.fund_id))return; const o=orcOf[t.fund_id]; if(!o)return;
+    const bruto=t.teto_aprovado!=null?+t.teto_aprovado:(+t.teto||0);
+    alocBy[o]=(alocBy[o]||0)+bruto-(+t.devolucao||0); });
   (DATA.rateio||[]).forEach(r=>{ if(!aprov.has(r.fund_id))return; const o=orcOf[r.fund_id]; if(o) alocBy[o]=(alocBy[o]||0)+(+r.valor||0); });
   return (DATA.orcamentos||[]).map(o=>{
     const cat=(String(o.product_category||o.nome||'').trim())||'Uncategorized';
@@ -6919,6 +6945,52 @@ function boUnallocatedTotal(){ return boUnallocated().reduce((s,r)=>s+r.livre,0)
    reconciles with the number that was clicked. An overspent fund shows its
    negative rather than being hidden: it is part of why the category's free
    balance is what it is. */
+/* Everything that was cut, and where from. The Overview shows the total
+   because a shrinking budget needs a visible cause; this answers the question
+   that total raises — which fund, which month, how much, and why. Returns are
+   listed too, separately: both left their fund, and only one of them left the
+   budget, so showing them together is the only way the two totals reconcile
+   against what the categories were originally given. */
+function openCutDetail(){
+  const c=boCtx();
+  const linhas=[];
+  c.funds.forEach(p=>{
+    const cortes=fundMonthlyCuts(p.id), devol=fundMonthlyDevolucoes(p.id);
+    [...new Set(Object.keys(cortes).concat(Object.keys(devol)))].sort().forEach(m=>{
+      if(!boInPeriod(m+'-01'))return;
+      const row=tetoRow(p.id,m)||{};
+      if(cortes[m]) linhas.push({p,m,tipo:'corte',valor:cortes[m],motivo:row.corte_motivo,em:row.corte_em});
+      if(devol[m]) linhas.push({p,m,tipo:'devolucao',valor:devol[m],motivo:row.devolucao_motivo,em:row.devolucao_em});
+    });
+  });
+  const totCorte=linhas.filter(l=>l.tipo==='corte').reduce((s,l)=>s+l.valor,0);
+  const totDev=linhas.filter(l=>l.tipo==='devolucao').reduce((s,l)=>s+l.valor,0);
+  linhas.sort((a,b)=>b.valor-a.valor||a.m.localeCompare(b.m));
+  const body=linhas.length?linhas.map(l=>{
+    const corte=l.tipo==='corte';
+    const cm=catMeta(String(l.p.product_category||'').trim()||'Uncategorized');
+    return `<div onclick="closeModal();openFundDetail('${esc(l.p.id)}')" style="display:flex;align-items:flex-start;gap:11px;padding:10px 4px;border-bottom:1px solid #edeff4;cursor:pointer" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
+      <span class="ich" style="width:26px;height:26px;background:${corte?'#fbe4e1':'var(--blue-bg)'};color:${corte?'#bf0008':'#0e5ba6'};flex-shrink:0">${icn(corte?'scale':'calendar',13)}</span>
+      <span style="flex:1;min-width:0">
+        <b style="font-size:12.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.p.nome||'—')}</b>
+        <span style="font-size:11px;color:var(--txt-3);font-weight:600">${esc(fmtMes(l.m+'-01'))} · ${esc(catKeyLabel(String(l.p.product_category||'').trim()||'Uncategorized'))} · ${esc(l.p.agencia||'—')}${l.em?' · '+fmtDataBR(l.em):''}</span>
+        ${l.motivo?`<div style="font-size:11px;color:var(--txt-2);margin-top:2px">${esc(l.motivo)}</div>`:''}
+      </span>
+      <span style="flex-shrink:0;text-align:right">
+        <span class="mono" style="font-size:13px;font-weight:800;color:${corte?'var(--po)':'#0e5ba6'}">${BRL(l.valor)}</span>
+        <span style="display:block;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:${corte?'#bf0008':'#0e5ba6'}">${corte?'cut':'returned'}</span>
+      </span>
+    </div>`;}).join('')
+   :`<div class="empty">Nothing has been cut${BO_PER.mode!=='all'?' in this period':''}.</div>`;
+  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:620px">
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--po);flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Budget cut</h3><div style="font-size:12px;color:var(--txt-3)"><b class="mono">${BRL(totCorte)}</b> taken out of ${linhas.filter(l=>l.tipo==='corte').length} month${linhas.filter(l=>l.tipo==='corte').length===1?'':'s'}${boPerLabel()?' · '+esc(boPerLabel()):''}</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
+    <div class="modal-b">
+      <div class="banner" style="margin-bottom:12px;background:#fdf7f6;border-color:#f2c4bf;color:#7d1a14">Cut budget is <b>not</b> counted as available: it left the fund and it left the category — nobody can spend or reallocate it. The approved figure per month stays on record.${totDev>0.005?` <b class="mono">${BRL(totDev)}</b> shown as <b>returned</b> is the opposite case: it went back to its category and is available to allocate again.`:''}</div>
+      ${body}
+    </div>
+    <div class="modal-f"><span style="font-size:11px;color:var(--txt-3)">Click a line to open its fund.</span><button class="btn-ghost" onclick="closeModal()">Close</button></div>
+  </div></div>`;
+}
 function openAvailableByCat(){
   const c=boCtx();
   const soltos=c.funds.filter(p=>!p.campanha_id);
@@ -7077,7 +7149,7 @@ function renderBudgetOverview(isBalance){
                looking like an error. */
             if(!canSeeCorte())return '';
             let c=0; funds.forEach(p=>{ const cm=fundMonthlyCuts(p.id); Object.keys(cm).forEach(m=>{ if(boInPeriod(m+'-01')) c+=cm[m]; }); });
-            return c?heroStat('Cut',BRL(c),'var(--po)','Budget taken back from specific months. Already subtracted from Budgeted — the approved figure per month is on each fund.'):'';
+            return c?`<div onclick="openCutDetail()" style="cursor:pointer" title="Budget taken back from specific months. Not part of Available — it left the category. Click for what was cut and why.">${heroStat('Cut',BRL(c)+' <span style="font-size:11px;color:var(--txt-3);font-weight:600">→</span>','var(--po)','')}</div>`:'';
           })()}
           ${heroStat('Consumed',BRL(consumido)+` <span style="font-size:12px;color:var(--txt-3);font-weight:500">· ${Math.round(pctCons)}%</span>`,null,'POs invoiced, validated or completed')}
           ${heroStat('Allocated to campaigns',BRL(alocado),'#0f8f60','Balance still unspent, but on funds already linked to a campaign — not free to hand out')}
@@ -7579,7 +7651,7 @@ async function reloadPOAll(){
       SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
       SBPO.from('funds').select('id,nome,agencia,orcamento_id,product_category,activity,fund_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em,campanha_id,ativo'),
       SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
-      SBPO.from('tetos').select('fund_id,competencia,teto,corte,corte_motivo,corte_em,bloqueado,bloqueado_motivo'),
+      SBPO.from('tetos').select('fund_id,competencia,teto,corte,corte_motivo,corte_em,devolucao,devolucao_motivo,devolucao_em,bloqueado,bloqueado_motivo'),
       SBPO.from('rateio_alocacao').select('fund_id,competencia,valor,categoria'),
       SBPO.from('campanhas').select('*')
     ]);
