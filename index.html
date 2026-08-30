@@ -7100,7 +7100,6 @@ function renderBudgetOverview(isBalance){
   const funds=_c.funds, tetoBy=_c.tetoBy, consBy=_c.consBy, compBy=_c.compBy, pendBy=_c.pendBy;
   const fundIds=new Set(funds.map(c=>c.id));
   let orcado=0,consumido=0,compTot=0,pend=0; funds.forEach(p=>{orcado+=tetoBy[p.id]||0;consumido+=consBy[p.id]||0;compTot+=compBy[p.id]||0;pend+=pendBy[p.id]||0;});
-  const saldo=orcado-consumido-compTot-pend;
   /* The balance splits in two by campaign membership. Budget sitting on a fund
      that belongs to a campanha is already spoken for even though no PO has
      touched it yet, so calling all of it "available" overstated what there is
@@ -7184,13 +7183,13 @@ function renderBudgetOverview(isBalance){
                how much was taken back, and then what the budgeted part has
                become. Two identities hold across it, which is what makes it
                checkable at a glance:
-                 ceiling  = budgeted + cut + never allocated
-                 budgeted = consumed + committed + awaiting approval + balance
-               Provisioned is NOT a fourth term of the second one — it is a
-               slice of Balance, naming how much of that untouched money is
-               already spoken for by a campaign. Awaiting approval has no
-               column of its own; it stays in the bar and its legend, and
-               Balance nets it out. */
+                 ceiling = budgeted + cut + never allocated
+               Provisioned is not a term of it: it is a slice of the budgeted
+               money that no PO has touched, naming how much of that a
+               campaign has already spoken for. What is left after consumed,
+               committed and awaiting approval has no column of its own — the
+               bar underneath still draws it, and Available above answers the
+               question it was there to answer. */
             const st=[];
             if(!isAg){
               const teto=(DATA.orcamentos||[]).filter(o=>boScopeKeep((String(o.product_category||o.nome||'').trim())||'Uncategorized'))
@@ -7203,9 +7202,8 @@ function renderBudgetOverview(isBalance){
               if(c) st.push(`<div onclick="openCutDetail()" style="cursor:pointer" title="Budget taken back from specific months. It left the category — it is not in Budgeted and not in Available. Click for what was cut and why.">${heroStat('Cut',BRL(c)+' <span style="font-size:11px;color:var(--txt-3);font-weight:600">&rarr;</span>','var(--po)','')}</div>`);
             }
             st.push(heroStat('Consumed',BRL(consumido)+` <span style="font-size:12px;color:var(--txt-3);font-weight:500">· ${Math.round(pctCons)}%</span>`,'var(--blue)','POs invoiced, validated or completed'));
-            st.push(heroStat('Provisioned',BRL(alocado),'#0f8f60','Budget still unspent, but sitting on funds already linked to a campaign — spoken for by a plan even though no PO has touched it. Part of Balance, not a separate slice of the budget.'));
+            st.push(heroStat('Provisioned',BRL(alocado),'#0f8f60','Budget still unspent, but sitting on funds already linked to a campaign — spoken for by a plan even though no PO has touched it. Part of what is budgeted, not a separate slice of it.'));
             st.push(heroStat('Committed',BRL(compTot),'var(--violet)','POs approved or issued, not yet invoiced'));
-            st.push(heroStat('Balance',BRL(saldo),saldo<-0.005?'var(--po)':'#0f8f60','Budgeted minus consumed, committed and awaiting approval'+(pend>0.005?' ('+BRL(pend)+')':'')+' — money sitting on a month that no PO has touched'+(alocado>0.005?', of which '+BRL(alocado)+' is provisioned to a campaign':'')+'.'));
             return st.join('');
           })()}
         </div>
