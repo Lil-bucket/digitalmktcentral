@@ -7018,6 +7018,88 @@ function openCutDetail(){
     <div class="modal-f"><span style="font-size:11px;color:var(--txt-3)">Click a line to open its fund.</span><button class="btn-ghost" onclick="closeModal()">Close</button></div>
   </div></div>`;
 }
+/* Consumed, Provisioned and Committed get the same treatment Cut has: the
+   figure is the way into what makes it up. A headline number nobody can open
+   is a number people learn to distrust — and the answer is always one of two
+   shapes, so both are built here rather than three times over.
+
+   Consumed and Committed are POs: same scope, period and statuses the hero
+   summed, so the modal's total is the hero's figure by construction rather
+   than by a second calculation that could drift. */
+const BUCKET_META={
+  cons:{t:'Consumed',st:CONS,col:'var(--blue)',bg:'var(--blue-bg)',bd:'#bcd9f5',fg:'#0e5ba6',
+        nota:'POs invoiced, validated or completed — money that has actually left.'},
+  comp:{t:'Committed',st:COMP,col:'var(--violet)',bg:'var(--violet-bg)',bd:'#cfc2f0',fg:'#5535ad',
+        nota:'POs approved or issued and not yet invoiced — promised, not yet paid.'},
+  pend:{t:'Awaiting approval',st:PEND,col:'var(--amber)',bg:'#fbf0d8',bd:'#ecd9a4',fg:'#7a5200',
+        nota:'POs requested and still waiting on a decision.'}
+};
+function openBucketDetail(kind){
+  const meta=BUCKET_META[kind]; if(!meta)return;
+  const c=boCtx();
+  const ids=new Set(c.funds.map(p=>p.id));
+  const nomeDe={}; c.funds.forEach(p=>{ nomeDe[p.id]=p; });
+  const pos=(DATA.pos||[]).filter(po=>ids.has(po.fund_id)&&boInPeriod(po.competencia)&&meta.st.includes(po.status))
+                          .sort((a,b)=>(+b.valor||0)-(+a.valor||0));
+  const total=pos.reduce((s2,po)=>s2+(+po.valor||0),0);
+  const body=pos.length?pos.map(po=>{
+    const f=nomeDe[po.fund_id]||{}, sm=PO_STATUS[po.status]||{t:po.status,c:'s-slate'};
+    return `<div onclick="closeModal();openPODetail('${esc(po.id)}')" style="display:flex;align-items:center;gap:11px;padding:10px 4px;border-bottom:1px solid #edeff4;cursor:pointer" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
+      <span style="flex:1;min-width:0">
+        <b style="font-size:12.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.descricao||po.numero_po||'PO')}</b>
+        <span style="font-size:11px;color:var(--txt-3);font-weight:600">${esc(f.nome||'—')} · ${esc(fmtMes(po.competencia))} · ${esc(po.agencia||'—')}${po.numero_po?' · '+esc(po.numero_po):''}</span>
+      </span>
+      <span class="badge ${sm.c}" style="font-size:10px;flex-shrink:0"><span class="d"></span>${esc(sm.t)}</span>
+      <span class="mono" style="flex-shrink:0;font-size:13px;font-weight:800;width:110px;text-align:right">${BRL(po.valor)}</span>
+    </div>`;}).join('')
+   :`<div class="empty">No ${meta.t.toLowerCase()} POs${boPerLabel()?' in '+esc(boPerLabel()):''}.</div>`;
+  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:660px">
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:${meta.col};flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>${meta.t}</h3><div style="font-size:12px;color:var(--txt-3)"><b class="mono">${BRL(total)}</b> across ${pos.length} PO${pos.length===1?'':'s'}${boPerLabel()?' · '+esc(boPerLabel()):''}</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
+    <div class="modal-b">
+      <div class="banner" style="margin-bottom:12px;background:${meta.bg};border-color:${meta.bd};color:${meta.fg}">${meta.nota}</div>
+      ${body}
+    </div>
+    <div class="modal-f"><span style="font-size:11px;color:var(--txt-3)">Click a PO to open it.</span><button class="btn-ghost" onclick="closeModal()">Close</button></div>
+  </div></div>`;
+}
+/* Provisioned is not POs but funds: budget still untouched, sitting on funds a
+   campaign has already claimed. Grouped by campaign, because "which plan is
+   holding this" is the question the figure raises. An overspent fund shows
+   its negative — it is part of why the total is what it is. */
+function openProvisionedDetail(){
+  const c=boCtx();
+  const linhas=c.funds.filter(p=>p.campanha_id).map(p=>({p,free:boFundFree(c,p)})).filter(r=>Math.abs(r.free)>0.005);
+  const total=linhas.reduce((s2,r)=>s2+r.free,0);
+  const byCamp={};
+  linhas.forEach(r=>{
+    const cid=r.p.campanha_id;
+    (byCamp[cid]=byCamp[cid]||{camp:(DATA.campanhas||[]).find(x=>x.id===cid)||{nome:'—'},total:0,funds:[]});
+    byCamp[cid].total+=r.free; byCamp[cid].funds.push(r);
+  });
+  const grupos=Object.values(byCamp).sort((a,b)=>b.total-a.total);
+  const body=grupos.length?grupos.map(g=>`
+    <div style="border-bottom:1px solid var(--line);padding:11px 0">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="ich" style="width:26px;height:26px;background:#fbe4e1;color:#bf0008;flex-shrink:0">${icn('folder',13)}</span>
+        <span style="flex:1;min-width:0"><b style="font-size:13px">${esc(g.camp.nome||'—')}</b><span style="font-size:11px;color:var(--txt-3);font-weight:600"> · ${g.funds.length} fund${g.funds.length===1?'':'s'}${g.camp.status?' · '+esc(campStatusMeta(g.camp.status).t):''}</span></span>
+        <span class="mono" style="flex-shrink:0;font-size:14px;font-weight:800;color:${g.total<-0.005?'var(--po)':'#0f8f60'}">${BRL(g.total)}</span>
+      </div>
+      ${g.funds.sort((a,b)=>b.free-a.free).map(({p,free})=>`
+        <div onclick="closeModal();openFundDetail('${esc(p.id)}')" style="display:flex;align-items:center;gap:9px;padding:6px 0 6px 37px;cursor:pointer;font-size:12px" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
+          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome||'—')}<span style="color:var(--txt-3);font-size:10.5px"> · ${esc(p.agencia||'—')}${free<-0.005?' · spent over its cap':''}</span></span>
+          <span class="mono" style="flex-shrink:0;font-weight:700;color:${free<-0.005?'var(--po)':'var(--txt)'}">${BRL(free)}</span>
+        </div>`).join('')}
+    </div>`).join('')
+   :`<div class="empty">No campaign is holding unspent budget${boPerLabel()?' in '+esc(boPerLabel()):''}.</div>`;
+  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:620px">
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:#0f8f60;flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Provisioned</h3><div style="font-size:12px;color:var(--txt-3)"><b class="mono">${BRL(total)}</b> across ${grupos.length} campaign${grupos.length===1?'':'s'}${boPerLabel()?' · '+esc(boPerLabel()):''}</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
+    <div class="modal-b">
+      <div class="banner" style="margin-bottom:12px">Budget still unspent, on funds a campaign has already claimed. No PO has touched it, but a plan is counting on it — which is why it is not free to hand out.</div>
+      ${body}
+    </div>
+    <div class="modal-f"><span style="font-size:11px;color:var(--txt-3)">Click a fund to open it.</span><button class="btn-ghost" onclick="closeModal()">Close</button></div>
+  </div></div>`;
+}
 function openAvailableByCat(){
   const c=boCtx();
   const byCat={};
@@ -7191,6 +7273,8 @@ function renderBudgetOverview(isBalance){
                bar underneath still draws it, and Available above answers the
                question it was there to answer. */
             const st=[];
+            // Same affordance Cut already had: a figure you can open.
+            const arrow=' <span style="font-size:11px;color:var(--txt-3);font-weight:600">&rarr;</span>';
             if(!isAg){
               const teto=(DATA.orcamentos||[]).filter(o=>boScopeKeep((String(o.product_category||o.nome||'').trim())||'Uncategorized'))
                                               .reduce((s2,o)=>s2+(+o.valor_total||0),0);
@@ -7201,9 +7285,9 @@ function renderBudgetOverview(isBalance){
               let c=0; funds.forEach(p=>{ const cm=fundMonthlyCuts(p.id); Object.keys(cm).forEach(m=>{ if(boInPeriod(m+'-01')) c+=cm[m]; }); });
               if(c) st.push(`<div onclick="openCutDetail()" style="cursor:pointer" title="Budget taken back from specific months. It left the category — it is not in Budgeted and not in Available. Click for what was cut and why.">${heroStat('Cut',BRL(c)+' <span style="font-size:11px;color:var(--txt-3);font-weight:600">&rarr;</span>','var(--po)','')}</div>`);
             }
-            st.push(heroStat('Consumed',BRL(consumido)+` <span style="font-size:12px;color:var(--txt-3);font-weight:500">· ${Math.round(pctCons)}%</span>`,'var(--blue)','POs invoiced, validated or completed'));
-            st.push(heroStat('Provisioned',BRL(alocado),'#0f8f60','Budget still unspent, but sitting on funds already linked to a campaign — spoken for by a plan even though no PO has touched it. Part of what is budgeted, not a separate slice of it.'));
-            st.push(heroStat('Committed',BRL(compTot),'var(--violet)','POs approved or issued, not yet invoiced'));
+            st.push(`<div onclick="openBucketDetail('cons')" style="cursor:pointer" title="POs invoiced, validated or completed. Click for the POs behind it.">${heroStat('Consumed',BRL(consumido)+` <span style="font-size:12px;color:var(--txt-3);font-weight:500">· ${Math.round(pctCons)}%</span>`+`${arrow}`,'var(--blue)','')}</div>`);
+            st.push(`<div onclick="openProvisionedDetail()" style="cursor:pointer" title="Budget still unspent, but sitting on funds already linked to a campaign — spoken for by a plan even though no PO has touched it. Click for the campaigns holding it.">${heroStat('Provisioned',BRL(alocado)+`${arrow}`,'#0f8f60','')}</div>`);
+            st.push(`<div onclick="openBucketDetail('comp')" style="cursor:pointer" title="POs approved or issued, not yet invoiced. Click for the POs behind it.">${heroStat('Committed',BRL(compTot)+`${arrow}`,'var(--violet)','')}</div>`);
             return st.join('');
           })()}
         </div>
