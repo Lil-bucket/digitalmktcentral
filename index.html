@@ -1932,7 +1932,11 @@ const actMeta=a=>ACT_META[a]||{icon:'tag',label:a||'—'};
    hides its own results. */
 let FUND_Q='', FUND_OPEN={};
 let FUND_VIEW=(function(){try{const v=localStorage.getItem('fund_view')||'cat';return v==='list'?'cat':v;}catch(e){return 'cat';}})();
-let FUND_FILTER_ACT='', FUND_FILTER_CAT='';
+/* Both filters hold a LIST. Picking one activity used to replace the one
+   before it, so "KOL and AON" or "TV and AC" — the way anyone actually reads
+   a budget — meant looking twice and adding the totals by hand. Empty list
+   means no filter, which keeps every check a simple length test. */
+let FUND_FILTER_ACT=[], FUND_FILTER_CAT=[];
 /* A finished fund still belongs on the Funds screen — it is the record of a
    year's spending — but on the Timeline it costs a row to say "nothing left
    to do here", and a year of them buries the funds still in play. Hiding
@@ -1947,15 +1951,29 @@ function fundToggleDone(){
   try{localStorage.setItem('fund_hide_done',FUND_HIDE_DONE?'1':'0');}catch(e){}
   go('funds');
 }
+/* Toggling repaints in place (body + KPIs) rather than re-rendering the
+   screen, so a burst of clicks while picking several values doesn't throw the
+   list back to the top between each one. */
+function fundToggleFilter(kind,v){
+  const arr=kind==='act'?FUND_FILTER_ACT:FUND_FILTER_CAT;
+  const i=arr.indexOf(v);
+  if(i<0) arr.push(v); else arr.splice(i,1);
+  fundSyncFilters();
+}
 function fundSetFilter(kind,v){
-  if(kind==='act')FUND_FILTER_ACT=v; else FUND_FILTER_CAT=v;
+  const arr=v?[v]:[];
+  if(kind==='act')FUND_FILTER_ACT=arr; else FUND_FILTER_CAT=arr;
+  fundSyncFilters();
+}
+function fundSyncFilters(){
+  const bar=document.getElementById('fundFilters'); if(bar) bar.outerHTML=fundFiltersHTML();
   const b=document.getElementById('fundBody'); if(b) b.outerHTML=renderCampBody();
   const k=document.getElementById('fundKpis'); if(k) k.outerHTML=fundKpisHTML();
 }
 /* Overview's activity-totals rows are a summary — clicking one drills into
    the itemized Funds screen, pre-filtered to that category + activity. */
 function jumpToFunds(catKeyStr,actKeyStr){
-  FUND_FILTER_CAT=catKeyStr||''; FUND_FILTER_ACT=actKeyStr||'';
+  FUND_FILTER_CAT=catKeyStr?[catKeyStr]:[]; FUND_FILTER_ACT=actKeyStr?[actKeyStr]:[];
   go('funds');
 }
 function fundSearch(v){
@@ -1966,7 +1984,7 @@ function fundSearch(v){
 function fundToggleCat(ck){ FUND_OPEN[ck]=!FUND_OPEN[ck]; const b=document.getElementById('fundBody'); if(b){ b.outerHTML=renderCampBody(); } }
 /* A search or an active filter forces every section open — otherwise the
    matching funds would sit inside boxes the user still has to hunt for. */
-function fundForcedOpen(){ return !!FUND_Q||!!FUND_FILTER_ACT||!!FUND_FILTER_CAT; }
+function fundForcedOpen(){ return !!FUND_Q||!!FUND_FILTER_ACT.length||!!FUND_FILTER_CAT.length; }
 /* Headline numbers for the funds on screen — fundVisible(), not the whole
    table. An agency login counts its own funds; narrowing to a category or
    typing in the search narrows the totals with it, so the numbers always
@@ -1982,7 +2000,7 @@ function fundKpisHTML(){
      is to say how many finished funds are behind the toggle, so hiding them
      must not make it read zero. */
   const doneCount=fundVisible({keepDone:true}).filter(p=>p.aprovacao_status==='APROVADO'&&fundLifecycle(p)==='done').length;
-  const filtered=!!(FUND_Q||FUND_FILTER_ACT||FUND_FILTER_CAT||FUND_HIDE_DONE);
+  const filtered=!!(FUND_Q||FUND_FILTER_ACT.length||FUND_FILTER_CAT.length||FUND_HIDE_DONE);
   const stat=(l,v,col)=>`<div class="kpi"><span class="bar" style="background:${col}"></span><div class="lbl">${l}</div><div class="num" style="font-size:19px;margin-top:7px">${v}</div></div>`;
   return `<div id="fundKpis" style="margin-bottom:18px">
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
@@ -1997,7 +2015,36 @@ function fundKpisHTML(){
     ${filtered?`<div style="font-size:11.5px;color:var(--txt-3);margin-top:7px">Totals follow the active filters — <a onclick="fundClearAll()" style="cursor:pointer;text-decoration:underline;color:var(--po)">show every fund</a>.</div>`:''}
   </div>`;
 }
-function fundClearAll(){ FUND_Q=''; FUND_FILTER_ACT=''; FUND_FILTER_CAT=''; FUND_HIDE_DONE=false; try{localStorage.setItem('fund_hide_done','0');}catch(e){} go('funds'); }
+/* Chips rather than two dropdowns: a <select multiple> is the one control
+   everybody mis-clicks, and with a handful of activities and categories the
+   whole choice fits on screen where you can see what is on. Nothing selected
+   means everything, so the "All" chip is a state, not an option to pick. */
+function fundChipHTML(kind,v,label,on){
+  return `<button onclick="fundToggleFilter('${kind}','${esc(v)}')" style="padding:5px 11px;border-radius:20px;border:1px solid ${on?'var(--po)':'var(--line-2)'};background:${on?'#fbe4e1':'#fff'};color:${on?'#bf0008':'var(--txt-2)'};font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">${esc(label)}</button>`;
+}
+function fundFiltersHTML(){
+  const acts=fundGlobalActs(), cats=fundGlobalCats();
+  const grupo=(rotulo,kind,itens,sel,rotular)=>{
+    if(!itens.length) return '';
+    return `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--txt-3);margin-right:2px">${rotulo}</span>
+      <button onclick="fundSetFilter('${kind}','')" style="padding:5px 11px;border-radius:20px;border:1px solid ${sel.length?'var(--line-2)':'var(--ink)'};background:${sel.length?'#fff':'var(--ink)'};color:${sel.length?'var(--txt-2)':'#fff'};font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit">All</button>
+      ${itens.map(i=>fundChipHTML(kind,i,rotular(i),sel.includes(i))).join('')}
+    </div>`;
+  };
+  const doneN=fundVisible({keepDone:true}).filter(p=>p.aprovacao_status==='APROVADO'&&fundLifecycle(p)==='done').length;
+  const temFiltro=FUND_FILTER_ACT.length||FUND_FILTER_CAT.length;
+  return `<div id="fundFilters" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;padding:11px 13px;border:1px solid var(--line);border-radius:11px;background:var(--paper-2)">
+    ${grupo('Activity','act',acts,FUND_FILTER_ACT,actColLabel)}
+    ${grupo('Category','cat',cats,FUND_FILTER_CAT,catKeyLabel)}
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      ${(doneN||FUND_HIDE_DONE)?`<button onclick="fundToggleDone()" title="A fund counts as completed once its cap is spent and its last month has closed" style="display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:20px;border:1px solid ${FUND_HIDE_DONE?'var(--po)':'var(--line-2)'};background:${FUND_HIDE_DONE?'#fbe4e1':'#fff'};color:${FUND_HIDE_DONE?'#bf0008':'var(--txt-2)'};font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit">${icn('check',12)} ${FUND_HIDE_DONE?'Completed hidden':'Hide completed'} (${doneN})</button>`:''}
+      ${temFiltro?`<span style="font-size:11px;color:var(--txt-3);font-weight:600">${FUND_FILTER_ACT.length?FUND_FILTER_ACT.length+' activit'+(FUND_FILTER_ACT.length===1?'y':'ies'):''}${FUND_FILTER_ACT.length&&FUND_FILTER_CAT.length?' · ':''}${FUND_FILTER_CAT.length?FUND_FILTER_CAT.length+' categor'+(FUND_FILTER_CAT.length===1?'y':'ies'):''} selected</span>
+      <button onclick="fundSetFilter('act','');fundSetFilter('cat','')" style="border:none;background:none;color:var(--po);font-size:12px;font-weight:700;cursor:pointer">Clear filters</button>`:''}
+    </div>
+  </div>`;
+}
+function fundClearAll(){ FUND_Q=''; FUND_FILTER_ACT=[]; FUND_FILTER_CAT=[]; FUND_HIDE_DONE=false; try{localStorage.setItem('fund_hide_done','0');}catch(e){} go('funds'); }
 function renderFunds(){
   let list=DATA.poProjetos.slice();
   if(effPapel()==='agencia'&&effAgencia()) list=list.filter(p=>p.agencia===effAgencia());
@@ -2015,25 +2062,7 @@ function renderFunds(){
       </div>
       <span style="font-size:11.5px;color:var(--txt-3)">${FUND_VIEW==='tl'?'Row = fund period · each month shows what was configured and what was used, past months included. Click a row to open.':'Click a card for the month-by-month detail (cap × POs).'}</span>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-      <span style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--txt-3)">Filters</span>
-      <select onchange="fundSetFilter('act',this.value)" style="padding:7px 10px;border-radius:8px;border:1px solid ${FUND_FILTER_ACT?'var(--po)':'var(--line-2)'};background:#fff;font-size:12px;font-weight:600;color:var(--txt-2)">
-        <option value="">All activities</option>
-        ${fundGlobalActs().map(a=>`<option value="${esc(a)}" ${FUND_FILTER_ACT===a?'selected':''}>${esc(actColLabel(a))}</option>`).join('')}
-      </select>
-      <select onchange="fundSetFilter('cat',this.value)" style="padding:7px 10px;border-radius:8px;border:1px solid ${FUND_FILTER_CAT?'var(--po)':'var(--line-2)'};background:#fff;font-size:12px;font-weight:600;color:var(--txt-2)">
-        <option value="">All categories</option>
-        ${fundGlobalCats().map(c=>`<option value="${esc(c)}" ${FUND_FILTER_CAT===c?'selected':''}>${esc(catKeyLabel(c))}</option>`).join('')}
-      </select>
-      ${(function(){
-        /* Only offered when there is something to hide — a toggle that can
-           never change the screen is just another thing to read. */
-        const doneN=fundVisible({keepDone:true}).filter(p=>p.aprovacao_status==='APROVADO'&&fundLifecycle(p)==='done').length;
-        if(!doneN&&!FUND_HIDE_DONE) return '';
-        return `<button onclick="fundToggleDone()" title="A fund counts as completed once its cap is spent and its last month has closed" style="display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:8px;border:1px solid ${FUND_HIDE_DONE?'var(--po)':'var(--line-2)'};background:${FUND_HIDE_DONE?'#fbe4e1':'#fff'};color:${FUND_HIDE_DONE?'#bf0008':'var(--txt-2)'};font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">${icn('check',12)} ${FUND_HIDE_DONE?'Completed hidden':'Hide completed'} (${doneN})</button>`;
-      })()}
-      ${(FUND_FILTER_ACT||FUND_FILTER_CAT)?`<button onclick="fundSetFilter('act','');fundSetFilter('cat','')" style="border:none;background:none;color:var(--po);font-size:12px;font-weight:700;cursor:pointer">Clear filters</button>`:''}
-    </div>
+    ${fundFiltersHTML()}
     ${renderCampBody()}`;
 }
 let FUND_CTX=null;
@@ -2044,8 +2073,8 @@ let FUND_CTX=null;
 function fundVisible(opt){
   const {list}=FUND_CTX||{list:[]};
   let fl=list;
-  if(FUND_FILTER_ACT) fl=fl.filter(p=>actKey(p)===FUND_FILTER_ACT);
-  if(FUND_FILTER_CAT) fl=fl.filter(p=>(String(p.product_category||'').trim()||'Uncategorized')===FUND_FILTER_CAT);
+  if(FUND_FILTER_ACT.length) fl=fl.filter(p=>FUND_FILTER_ACT.includes(actKey(p)));
+  if(FUND_FILTER_CAT.length) fl=fl.filter(p=>FUND_FILTER_CAT.includes((String(p.product_category||'').trim()||'Uncategorized')));
   if(FUND_Q) fl=fl.filter(p=>((p.nome||'')+' '+(p.agencia||'')+' '+(p.product_category||'')+' '+(p.activity||'')).toLowerCase().includes(FUND_Q));
   // keepDone lets the toggle count and label what it is hiding.
   if(FUND_HIDE_DONE&&!(opt&&opt.keepDone)) fl=fl.filter(p=>fundLifecycle(p)!=='done');
@@ -2065,7 +2094,7 @@ function renderCampBody(){
   Object.keys(byCat).forEach(k=>{ catTotal[k]=byCat[k].reduce((s,p)=>s+(tetoBy[p.id]||0),0); });
   const grandTotal=Object.values(catTotal).reduce((s,v)=>s+v,0)||0;
   const catKeys=Object.keys(byCat).sort((a,b)=>catTotal[b]-catTotal[a]);
-  if(!catKeys.length) return `<div id="fundBody"><div class="empty">${(q||FUND_FILTER_ACT||FUND_FILTER_CAT)?'No funds match the current search/filters.':'No funds for your access.'}</div></div>`;
+  if(!catKeys.length) return `<div id="fundBody"><div class="empty">${(q||FUND_FILTER_ACT.length||FUND_FILTER_CAT.length)?'No funds match the current search/filters.':'No funds for your access.'}</div></div>`;
   const sections=catKeys.map(ck=>{
     const m=catMeta(ck);
     const funds=byCat[ck].slice().sort((a,b)=>(LC_ORDER[fundLifecycle(a)]-LC_ORDER[fundLifecycle(b)])||((tetoBy[b.id]||0)-(tetoBy[a.id]||0)));
