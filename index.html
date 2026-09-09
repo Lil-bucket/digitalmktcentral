@@ -3451,6 +3451,7 @@ function poScreen(){ const b=currentNav().budget||[]; return ['pos','mypos'].fin
 function canGerarPO(){ return demoWritable(['admin','financeiro'].includes(PAPEL)); }
 function canFaturarPO(po){ return demoWritable(fullAccess() || (PAPEL==='agencia' && MINHA_AGENCIA && MINHA_AGENCIA===po.agencia)); }
 function canValidarPO(){ return demoWritable(['admin','financeiro'].includes(PAPEL)); }
+function canEditPOFile(po){ return demoWritable(['admin','financeiro'].includes(PAPEL) && !['SOLICITADA','EM_APROVACAO','APROVADA'].includes(po.status)); }
 const _poBtn=(bg)=>'padding:6px 12px;border-radius:8px;border:none;color:#fff;font-weight:700;font-size:11.5px;cursor:pointer;background:'+bg;
 
 async function reloadNotif(){
@@ -3558,6 +3559,7 @@ function poActionsHTML(po){
   if(po.status==='APROVADA'&&canGerarPO()) b.push(`<button onclick="openGerarPO('${esc(po.id)}')" style="${_poBtn('#3c7a63')}">Issue PO nº</button>`);
   if(['PO_GERADA','ATUALIZAR_INFO'].includes(po.status)&&canFaturarPO(po)) b.push(`<button onclick="openFaturarPO('${esc(po.id)}')" style="${_poBtn('#b5550c')}">Post NF</button>`);
   if(po.status==='FATURADA'&&canValidarPO()) b.push(`<button onclick="openValidarPO('${esc(po.id)}')" style="${_poBtn('#1f8a4c')}">Validate</button>`);
+  if(canEditPOFile(po)) b.push(`<button class="chip-btn" onclick="openTrocarArqPO('${esc(po.id)}')">${icn('paperclip',11)} Change file</button>`);
   if(fullAccess()&&!viewOnly()) b.push(`<button class="chip-btn" onclick="editarPO('${esc(po.id)}')">Edit</button>`);
   return b.length?b.join(''):'<span style="font-size:11.5px;color:var(--txt-3)">—</span>';
 }
@@ -3603,6 +3605,40 @@ async function submitGerarPO(){
     let path=null; if(GERAR.file){ toast('Uploading…'); path=await uploadEvid(GERAR.id,GERAR.file,'po'); }
     for(const po of sibs){ const {error}=await SBPO.rpc('gerar_po',{p_po:po.id,p_numero:num,p_arquivo:path}); if(error)throw error; }
     GERAR=null; closeModal(); await reloadPO(); await reloadNotif(); go(SCREEN); toast('PO '+num+' issued ✓ — agency can now post the NF.');
+  }catch(e){ toastErr(e); }
+}
+
+/* ---- Change PO file (finance/admin, after issued) ---- */
+let ARQPO=null;
+function openTrocarArqPO(id){ const po=DATA.pos.find(p=>p.id===id); if(!po)return; if(!canEditPOFile(po)){toast('Only finance/admin can replace the PO file.');return;} ARQPO={id,file:null,fileName:''}; renderTrocarArqPO(); }
+function arqpoFile(inp){ const f=inp.files&&inp.files[0]; if(f){ARQPO.file=f;ARQPO.fileName=f.name; renderTrocarArqPO();} }
+function renderTrocarArqPO(){
+  if(!ARQPO)return; const po=DATA.pos.find(p=>p.id===ARQPO.id)||{};
+  const sibs=poGroupSiblings(po); const label=sibs.length>1?poGroupLabel(sibs):poNome(po.fund_id);
+  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:480px">
+    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:#3c7a63;flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Change PO file</h3><div style="font-size:12px;color:var(--txt-3)">${esc(label)} · PO ${esc(po.numero_po||'—')}</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
+    <div class="modal-b">
+      ${po.po_arquivo?`<div style="font-size:12px;color:var(--txt-2);margin-bottom:10px">Current file: <a onclick="abrirAnexo('${esc(po.po_arquivo)}')" style="color:#3c7a63;cursor:pointer;text-decoration:underline">view</a></div>`:''}
+      <div class="field"><label>New PO document (PDF)</label><input type="file" accept="application/pdf,image/*" onchange="arqpoFile(this)"></div>
+      ${ARQPO.fileName?`<div style="font-size:12px;color:var(--txt-2)">${icn('paperclip',12)} ${esc(ARQPO.fileName)}</div>`:''}
+    </div>
+    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" onclick="submitTrocarArqPO()">Save</button></div></div>
+  </div></div>`;
+}
+async function submitTrocarArqPO(){
+  if(!ARQPO)return; if(!ARQPO.file){toast('Choose a file.');return;}
+  const sibs=poGroupSiblings(DATA.pos.find(p=>p.id===ARQPO.id));
+  if(DEMO_MODE){
+    sibs.forEach(po=>{ po.po_arquivo='demo-'+ARQPO.fileName; });
+    ARQPO=null; closeModal(); go(SCREEN); toast('PO file replaced ✓ (demo)');
+    return;
+  }
+  if(viewOnly()){toast(roMsg());return;}
+  try{
+    toast('Uploading…');
+    const path=await uploadEvid(ARQPO.id,ARQPO.file,'po');
+    for(const po of sibs){ const {error}=await SBPO.from('pos').update({po_arquivo:path}).eq('id',po.id); if(error)throw error; po.po_arquivo=path; }
+    ARQPO=null; closeModal(); go(SCREEN); toast('PO file replaced ✓');
   }catch(e){ toastErr(e); }
 }
 
