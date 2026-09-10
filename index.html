@@ -3452,6 +3452,7 @@ function canGerarPO(){ return demoWritable(['admin','financeiro'].includes(PAPEL
 function canFaturarPO(po){ return demoWritable(fullAccess() || (PAPEL==='agencia' && MINHA_AGENCIA && MINHA_AGENCIA===po.agencia)); }
 function canValidarPO(){ return demoWritable(['admin','financeiro'].includes(PAPEL)); }
 function canEditPOFile(po){ return demoWritable(['admin','financeiro'].includes(PAPEL) && !['SOLICITADA','EM_APROVACAO','APROVADA'].includes(po.status)); }
+function canEditPO(){ return demoWritable(fullAccess()||PAPEL==='financeiro'); }
 const _poBtn=(bg)=>'padding:6px 12px;border-radius:8px;border:none;color:#fff;font-weight:700;font-size:11.5px;cursor:pointer;background:'+bg;
 
 async function reloadNotif(){
@@ -3560,7 +3561,7 @@ function poActionsHTML(po){
   if(['PO_GERADA','ATUALIZAR_INFO'].includes(po.status)&&canFaturarPO(po)) b.push(`<button onclick="openFaturarPO('${esc(po.id)}')" style="${_poBtn('#b5550c')}">Post NF</button>`);
   if(po.status==='FATURADA'&&canValidarPO()) b.push(`<button onclick="openValidarPO('${esc(po.id)}')" style="${_poBtn('#1f8a4c')}">Validate</button>`);
   if(canEditPOFile(po)) b.push(`<button class="chip-btn" onclick="openTrocarArqPO('${esc(po.id)}')">${icn('paperclip',11)} Change file</button>`);
-  if(fullAccess()&&!viewOnly()) b.push(`<button class="chip-btn" onclick="editarPO('${esc(po.id)}')">Edit</button>`);
+  if(canEditPO()&&!viewOnly()) b.push(`<button class="chip-btn" onclick="editarPO('${esc(po.id)}')">Edit</button>`);
   return b.length?b.join(''):'<span style="font-size:11.5px;color:var(--txt-3)">—</span>';
 }
 function notifGoPO(poId,tipo){
@@ -5257,14 +5258,14 @@ async function realocarPO(poId){
 /* admin edita uma PO por completo (valor, descrição, nº, mês, status) */
 let POEDIT=null;
 function editarPO(poId){
-  if(!fullAccess()){ toast('Only admin can edit POs.'); return; }
+  if(!canEditPO()){ toast('Only admin/finance can edit POs.'); return; }
   const po=DATA.pos.find(p=>p.id===poId); if(!po)return;
   POEDIT={id:poId,fund_id:po.fund_id,valor:po.valor!=null?po.valor:'',descricao:po.descricao||'',numero_po:po.numero_po||'',mes:String(po.competencia||'').slice(0,7),status:po.status};
   renderPOEdit();
 }
 function poeSet(k,v){ if(POEDIT)POEDIT[k]=v; }
 async function renderPOEdit(){
-  if(!POEDIT)return; const pe=POEDIT;
+  if(!POEDIT)return; const pe=POEDIT; const po=DATA.pos.find(p=>p.id===pe.id)||{};
   let monthOpts=[pe.mes];
   try{ const meses=await mesesDoProjeto(pe.fund_id); monthOpts=[...new Set(meses.map(m=>String(m.competencia).slice(0,7)).concat(pe.mes))].filter(Boolean).sort(); }catch(e){}
   const stOpts=Object.keys(PO_STATUS).map(k=>`<option value="${k}" ${pe.status===k?'selected':''}>${PO_STATUS[k].t}</option>`).join('');
@@ -5282,6 +5283,7 @@ async function renderPOEdit(){
       </div>
       <div class="field full" style="margin-top:14px"><label>Description</label><input value="${esc(pe.descricao)}" onchange="poeSet('descricao',this.value)" placeholder="—" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:10px">Changing status here is a direct override — use Approve/Reject on the row for the normal lifecycle.</div>
+      ${canEditPOFile(po)?`<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line-2)"><button class="chip-btn" onclick="openTrocarArqPO('${esc(pe.id)}')">${icn('paperclip',11)} Change PO file</button>${po.po_arquivo?` <a onclick="abrirAnexo('${esc(po.po_arquivo)}')" style="color:#3c7a63;cursor:pointer;text-decoration:underline;font-size:12px;margin-left:8px">view current</a>`:''}</div>`:''}
     </div>
     <div class="modal-f"><span>${(PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarPO('${esc(pe.id)}')">Delete PO</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitPOEdit()">Save</button></div></div>
   </div></div>`;
@@ -7660,15 +7662,26 @@ function budgetExportRows(){
   DATA.rateio.forEach(r=>{tetoBy[r.fund_id]=(tetoBy[r.fund_id]||0)+(+r.valor||0);});
   DATA.pos.forEach(po=>{const v=+po.valor||0;if(CONS.includes(po.status))consBy[po.fund_id]=(consBy[po.fund_id]||0)+v;else if(COMP.includes(po.status))compBy[po.fund_id]=(compBy[po.fund_id]||0)+v;else if(PEND.includes(po.status))pendBy[po.fund_id]=(pendBy[po.fund_id]||0)+v;});
   const orcs=DATA.orcamentos||[];
-  const byOrc={}; funds.forEach(p=>{ const k=p.orcamento_id||'—'; (byOrc[k]=byOrc[k]||[]).push(p); });
+  const orcByCat={}; orcs.forEach(o=>{ if(o.product_category) orcByCat[o.product_category]=o; });
+  // Same grouping/order the Budgets & Campaigns screens render on-screen:
+  // category in canonical PRODUCT_CATS order, then activity in ACT_COL_ORDER,
+  // then project name — not raw orçamento/DB insertion order.
+  const byCat={}; funds.forEach(p=>{ const k=(String(p.product_category||'').trim())||'Uncategorized'; (byCat[k]=byCat[k]||[]).push(p); });
+  const catKeys=Object.keys(byCat).sort((a,b)=>{let ia=PRODUCT_CATS.indexOf(a),ib=PRODUCT_CATS.indexOf(b);if(ia<0)ia=99;if(ib<0)ib=99;return ia-ib||a.localeCompare(b);});
   const rows=[];
-  orcs.forEach(o=>{
-    (byOrc[o.id]||[]).forEach(p=>{
+  catKeys.forEach(ck=>{
+    const o=orcByCat[ck];
+    const list=byCat[ck].slice().sort((a,b)=>{
+      let ia=ACT_COL_ORDER.indexOf(actKey(a)),ib=ACT_COL_ORDER.indexOf(actKey(b));
+      if(ia<0)ia=99; if(ib<0)ib=99;
+      return ia-ib||(a.nome||'').localeCompare(b.nome||'');
+    });
+    list.forEach(p=>{
       const tot=tetoBy[p.id]||0, cons=consBy[p.id]||0, comp=compBy[p.id]||0, pnd=pendBy[p.id]||0;
       const rawc=tot?(cons+comp+pnd)/tot*100:0;
       const status=rawc>100.5?'Estourado':rawc>=90?'Próximo do limite':'Dentro do orçamento';
       const row={
-        'Categoria': catKeyLabel(o.nome||o.product_category||'—'),
+        'Categoria': catKeyLabel(o?(o.nome||o.product_category):ck),
         'Projeto': p.nome||'',
         'Fornecedor': p.agencia||'',
         'Atividade': actColLabel(actKey(p)),
@@ -7681,7 +7694,7 @@ function budgetExportRows(){
       };
       if(canSensitive){
         row['Tipo Rateio']=p.rateio?(p.rateio_tipo||''):'';
-        const f=p.rateio?fee.find(x=>x.tipo===p.rateio_tipo&&x.categoria===o.product_category):null;
+        const f=p.rateio?fee.find(x=>x.tipo===p.rateio_tipo&&x.categoria===ck):null;
         row['Rateio %']=(f&&f.percentual!=null)?Math.round(f.percentual*10000)/100:'';
       }
       rows.push(row);
