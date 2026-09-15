@@ -6209,8 +6209,14 @@ const CC_TV_CAMP_OVERRIDE={
   'b3c2664c-050c-4184-be64-591f4f8ae5f8':'Product Campaign SQD Mini LED (TV)'
 };
 const CC_TV_MONITOR_FUND_ID='2fbd3e9f-8683-473e-b127-9038a43c8f11';
+/* Same pattern as the TV Monitor fund above: AC's "Instaladores" fund is
+   filed under the shared "KOL - Influencers (AC)" line, so it was merged
+   into that account's total with no way to see it separately. Rerouted
+   (not duplicated) into its own "Installer KOLs (AC)" row. */
+const CC_AC_INSTALLER_FUND_ID='03b85ddf-554d-4af0-bc30-414ed717f9b8';
 function ccEffDesc(p){
   if(p.id===CC_TV_MONITOR_FUND_ID) return 'Product Campaign Monitor (TV)';
+  if(p.id===CC_AC_INSTALLER_FUND_ID) return 'Installer KOLs (AC)';
   if(p.account_desc==='Product Campaign ()'&&CC_TV_CAMP_OVERRIDE[p.campanha_id]) return CC_TV_CAMP_OVERRIDE[p.campanha_id];
   return p.account_desc;
 }
@@ -6236,6 +6242,7 @@ const CC_LAYOUT=[
   ['1109123014','32202171','Product Campaign SQD Mini LED (TV)'],
   ['1109123014','32202171','Product Campaign Monitor (TV)'],
   ['1406122014','32202171','KOL - Influencers (AC)'],
+  ['1406122014','32202171','Installer KOLs (AC)'],
   ['1406122014','32202171','Always on (media and production) (AC)'],
   ['1406122014','32202169','FEE -  (AC)'],
   ['1406122014','32202169','Fee KOL (AC)'],
