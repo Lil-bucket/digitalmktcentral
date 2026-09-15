@@ -6196,6 +6196,24 @@ let CC_VIEW={accRows:[],monthList:[]};
 const CC_LABG='LABG';
 const CC_LABG_CC='1109123033';
 const CC_TAIL=[CC_LABG_CC];
+/* TV's "Product Campaign ()" account line is shared, verbatim, by every TV
+   campaign fund (World Cup, SQD Mini LED) — the Cost center table groups by
+   literal account_desc, so they collapse into one merged row with no way to
+   tell them apart. Lucas wants those three shown as separate rows, but
+   without touching the funds' real classification (the Monitor one is
+   filed under "KOL - Influencers (TV)", not Product Campaign, on purpose)
+   — so this only overrides the DISPLAY/GROUPING description used by
+   ccAggregate for these three specific funds, never the stored fund data. */
+const CC_TV_CAMP_OVERRIDE={
+  'b11cd672-be02-4a38-a87d-5404a72bb215':'Product Campaign World Cup (TV)',
+  'b3c2664c-050c-4184-be64-591f4f8ae5f8':'Product Campaign SQD Mini LED (TV)'
+};
+const CC_TV_MONITOR_FUND_ID='2fbd3e9f-8683-473e-b127-9038a43c8f11';
+function ccEffDesc(p){
+  if(p.id===CC_TV_MONITOR_FUND_ID) return 'Product Campaign Monitor (TV)';
+  if(p.account_desc==='Product Campaign ()'&&CC_TV_CAMP_OVERRIDE[p.campanha_id]) return CC_TV_CAMP_OVERRIDE[p.campanha_id];
+  return p.account_desc;
+}
 /* Row order of the Extrato: cost center, then account, then line, in the
    sequence the finance sheet uses. It is NOT sortable-by-value order — TV
    lists account 32202169 before 32202171 and AC does the reverse — so it can
@@ -6214,6 +6232,9 @@ const CC_LAYOUT=[
   ['1109123014','32202169','Fee KOL (TV)'],
   ['1109123014','32202171','KOL - Influencers (TV)'],
   ['1109123014','32202171','Always on (media and production) (TV)'],
+  ['1109123014','32202171','Product Campaign World Cup (TV)'],
+  ['1109123014','32202171','Product Campaign SQD Mini LED (TV)'],
+  ['1109123014','32202171','Product Campaign Monitor (TV)'],
   ['1406122014','32202171','KOL - Influencers (AC)'],
   ['1406122014','32202171','Always on (media and production) (AC)'],
   ['1406122014','32202169','FEE -  (AC)'],
@@ -6354,15 +6375,16 @@ function ccAggregate(opt){
     } else {
       if(!p.cc&&!p.account&&!p.account_desc)return;
       if(!keepCat(p.product_category))return;
-      const key=accKey(p.cc,p.account,p.account_desc);
+      const desc=ccEffDesc(p);
+      const key=accKey(p.cc,p.account,desc);
       (DATA.tetos||[]).filter(t=>t.fund_id===p.id).forEach(t=>{
         const m=String(t.competencia).slice(0,7);
-        const a=slot(key,p.cc,p.account,p.account_desc,p.product_category);
+        const a=slot(key,p.cc,p.account,desc,p.product_category);
         a.months[m]=(a.months[m]||0)+(+t.teto||0);
         addDetB(a,m,p,p.product_category||'',+t.teto||0);
       });
       Object.keys(consByMonth).forEach(m=>{
-        const a=slot(key,p.cc,p.account,p.account_desc,p.product_category);
+        const a=slot(key,p.cc,p.account,desc,p.product_category);
         a.cons[m]=(a.cons[m]||0)+consByMonth[m];
         (posByMonth[m]||[]).forEach(po=>addDet(a,m,{po,proj:p,categoria:p.product_category||'',ratio:1,share:(+po.valor||0)}));
       });
