@@ -637,11 +637,21 @@ let PTIPO_FILTER='';
 function setPTipoFilter(v){ PTIPO_FILTER=v; go(SCREEN); }
 let STATUS_FILTER='';
 function setStatusFilter(v){ STATUS_FILTER=v; go('list'); }
-function projList(){ let l=visProjs(); if(PTIPO_FILTER) l=l.filter(p=>p.ptipo===PTIPO_FILTER); if(STATUS_FILTER) l=l.filter(p=>p.status===STATUS_FILTER); return l; }
+let CAT_FILTER='';
+function setCatFilter(v){ CAT_FILTER=v; go(SCREEN); }
+function projList(){ let l=visProjs(); if(PTIPO_FILTER) l=l.filter(p=>p.ptipo===PTIPO_FILTER); if(STATUS_FILTER) l=l.filter(p=>p.status===STATUS_FILTER); if(CAT_FILTER) l=l.filter(p=>(p.categorias||[]).includes(CAT_FILTER)); return l; }
 function ptipoFilterHTML(){
   return `<select onchange="setPTipoFilter(this.value)" style="padding:9px 12px;border:1px solid var(--line-2);border-radius:9px;background:#fff;font:inherit;font-size:12.5px;color:var(--txt-2);margin-right:8px">
     <option value="">All types</option>
     ${BUSINESS_TYPES.map(b=>`<option value="${b.id}" ${PTIPO_FILTER===b.id?'selected':''}>${b.name}</option>`).join('')}
+  </select>`;
+}
+function catFilterHTML(){
+  const cats=[...new Set(visProjs().flatMap(p=>p.categorias||[]))].sort();
+  if(!cats.length) return '';
+  return `<select onchange="setCatFilter(this.value)" style="padding:9px 12px;border:1px solid var(--line-2);border-radius:9px;background:#fff;font:inherit;font-size:12.5px;color:var(--txt-2);margin-right:8px">
+    <option value="">All categories</option>
+    ${cats.map(c=>`<option value="${esc(c)}" ${CAT_FILTER===c?'selected':''}>${esc(catKeyLabel(c))}</option>`).join('')}
   </select>`;
 }
 const PRODUCT_CATS=['TV','AC','MOB','REF','WG','LABG'];
@@ -1518,7 +1528,7 @@ function go(screen){
     /* Agencies read and work the projects shared with them; creating a project
        stays with the internal profiles that own the pipeline. */
     const canNewProj=effPapel()!=='agencia'&&!VIEW_AS;
-    $('#ctaBox').innerHTML=`${['dash','board','list'].includes(screen)?ptipoFilterHTML():''}${statusChip}${exportBtn}<button class="btn-ghost" onclick="openStageGuide()">Stage guide</button>${canNewProj?'<button class="btn-acc" onclick="openProjNew()">+ New project</button>':''}`;
+    $('#ctaBox').innerHTML=`${['dash','board','list'].includes(screen)?ptipoFilterHTML():''}${['list','timeline'].includes(screen)?catFilterHTML():''}${statusChip}${exportBtn}<button class="btn-ghost" onclick="openStageGuide()">Stage guide</button>${canNewProj?'<button class="btn-acc" onclick="openProjNew()">+ New project</button>':''}`;
   } else if(screen==='funds'&&demoWritable(['admin','marketing'].includes(PAPEL))){
     $('#ctaBox').innerHTML='<button class="btn-acc" style="background:var(--po)" onclick="openFundNew()">+ New fund</button>';
   } else if(screen==='campanhas'&&demoWritable(['admin','marketing'].includes(PAPEL))){
@@ -5937,7 +5947,7 @@ function tlProjActivitiesHTML(p,min,dayPct,weeks){
   }).join('');
 }
 function renderTimeline(){
-  const list=visProjs().filter(p=>p.prazo).slice();
+  const list=projList().filter(p=>p.prazo).slice();
   if(!list.length)return '<div class="empty">No projects with a due date.</div>';
   // range de semanas — fit-all (escala original) ou janela navegável de TL_SPAN semanas
   const dates=[]; list.forEach(p=>{dates.push(new Date(projEffStart(p)+'T00:00:00'));if(p.prazo)dates.push(new Date(p.prazo+'T00:00:00'));});
