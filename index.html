@@ -740,7 +740,7 @@ function isTagged(p){
    tagged on the project can add, rename, reorder and delete its activities.
    The main project fields (name, type, due date, categories, brand) and
    "Delete project" stay gated behind canEdit(). */
-function canEditAtividades(p){ return canEdit(p)||(effPapel()==='marketing'&&isTagged(p))||(effPapel()==='agencia'&&projHasAgencia(p,effAgencia())); }
+function canEditAtividades(p){ return canEdit(p)||(effPapel()==='marketing'&&isTagged(p))||(effPapel()==='agencia'&&projHasAgencia(p,effAgencia()))||(effPapel()==='tcl_member'&&isTagged(p)); }
 /* The agency roster the Work module offers when assigning a project to one or
    more agencies. Drawn from the same two sources the Budget module already
    trusts — the people roster (perfis) and the funds' own agencia column —
@@ -774,6 +774,14 @@ function visProjs(){
   if(effPapel()==='agencia'&&ag){
     const meEmail=((currentUser&&currentUser.email)||'').toLowerCase();
     return DATA.projetos.filter(p=>projHasAgencia(p,ag)||(p.envolvidos||[]).some(x=>(x.email||'').toLowerCase()===meEmail));
+  }
+  /* TCL Member: no agency, no blanket access either — only the projects
+     marketing (or admin) tagged them on via envolvidos. Unlike the agencia
+     branch above there's no "assigned to my agency" fallback, since this
+     role isn't attached to one. */
+  if(effPapel()==='tcl_member'){
+    const meEmail=((currentUser&&currentUser.email)||'').toLowerCase();
+    return DATA.projetos.filter(p=>(p.envolvidos||[]).some(x=>(x.email||'').toLowerCase()===meEmail));
   }
   return DATA.projetos;
 }
@@ -1020,6 +1028,7 @@ const DEMO_ROLES=[
   {v:'agencia:Wavemaker',label:'Agency — Diego Souza (Wavemaker)'},
   {v:'agencia:Mindshare',label:'Agency — Eva Martins (Mindshare)'},
   {v:'agencia:Wavemaker:po',label:'Agency — PO only (Wavemaker)'},
+  {v:'tcl_member',label:'TCL Member — Hugo Prado'},
   {v:'pendente',label:'Pending — Fábio Rocha'}
 ];
 function seedDemoData(){
@@ -1051,7 +1060,10 @@ function seedDemoData(){
         dep:ti?['demo-task-'+i+'-'+(ti-1)]:[],status:done?'concluido':'no_prazo',pct:done?100:0,obs:'',resp:'',subs:[]};
     });
     return {id:'demo-proj-'+i,nome:p.nome,tipo:p.tipo,ptipo:p.ptipo,partner:p.partner,agencies:[p.partner],marca:p.partner,resp:p.resp,owner:'demo@example.com',prazo:p.prazo,inicio:D(2026,6,1),
-      tasks,logs:[],envolvidos:[],categorias:[],etapa:p.etapa,etapa_override:p.etapa,status:p.status};
+      /* Only the first project tags the TCL Member demo persona (Hugo Prado)
+         — that's what makes visProjs()'s tcl_member scoping visibly true in
+         the demo: switch to that persona and exactly one project shows up. */
+      tasks,logs:[],envolvidos:i===0?[{email:'hugo.prado@demo.tcl',nome:'Hugo Prado'}]:[],categorias:[],etapa:p.etapa,etapa_override:p.etapa,status:p.status};
   });
 
   // agencia_nivel mirrors what listar_pessoas() returns for real — without it
@@ -1063,6 +1075,7 @@ function seedDemoData(){
     {user_id:'demo-u-ag1',nome:'Diego',sobrenome:'Souza',email:'diego.souza@wavemaker.demo',papel:'agencia',agencia:'Wavemaker',agencia_nivel:'completo'},
     {user_id:'demo-u-ag2',nome:'Eva',sobrenome:'Martins',email:'eva.martins@mindshare.demo',papel:'agencia',agencia:'Mindshare',agencia_nivel:'completo'},
     {user_id:'demo-u-agpo',nome:'Gustavo',sobrenome:'Lima',email:'gustavo.lima@wavemaker.demo',papel:'agencia',agencia:'Wavemaker',agencia_nivel:'po'},
+    {user_id:'demo-u-tcl',nome:'Hugo',sobrenome:'Prado',email:'hugo.prado@demo.tcl',papel:'tcl_member',agencia:'',agencia_nivel:'completo'},
     {user_id:'demo-u-pend',nome:'Fábio',sobrenome:'Rocha',email:'fabio.rocha@demo.tcl',papel:'pendente',agencia:'',agencia_nivel:'completo'}
   ];
 
@@ -1413,7 +1426,14 @@ const ROLE_NAV={
   admin:      {work:['dash','board','list','timeline','team','weekly','mytasks'], budget:['bo','budgets','campanhas','funds','pos','people']},
   marketing:  {work:['dash','board','list','timeline','weekly','mytasks'],        budget:['bo','budgets','campanhas','funds','pos']},
   financeiro: {work:[],                                                          budget:['bo','funds','pos']},
-  agencia:    {work:['dash','board','list','timeline','mytasks'],               budget:['bo','campanhas','funds','pos']}
+  agencia:    {work:['dash','board','list','timeline','mytasks'],               budget:['bo','campanhas','funds','pos']},
+  /* TCL Member: internal staff with Work-only access, no Budget nav at all —
+     Budget's own RLS policies are role allow-lists that never mention this
+     role, so it has zero Budget access even if someone typed the screen id
+     directly. Which projects it sees is scoped further in visProjs(): only
+     ones marketing/admin tagged them on (envolvidos), not "everything" like
+     admin/marketing get. */
+  tcl_member: {work:['dash','board','list','timeline','mytasks'],                budget:[]}
 };
 const PANEL_ONLY_WORK=['dash','board','list','timeline','weekly','mytasks'];
 const GLOBAL_NAV=['notif'];
@@ -1498,11 +1518,12 @@ function viewAsBarHTML(screen,meta){
   if(!(isManager||PAPEL==='admin')||screen==='people'||screen==='notif') return '';
   const ags=viewAsAgencias();
   const cur=VIEW_AS?(VIEW_AS.type==='agencia'?'ag:'+VIEW_AS.value:'r:'+VIEW_AS.value):'';
-  const roleLbl={marketing:'Marketing',financeiro:'Finance'};
+  const roleLbl={marketing:'Marketing',financeiro:'Finance',tcl_member:'TCL Member'};
   const opts=`<option value="" ${cur===''?'selected':''}>My view (Admin — full access)</option>
     <optgroup label="Role (read-only)">
       <option value="r:marketing" ${cur==='r:marketing'?'selected':''}>Marketing</option>
       <option value="r:financeiro" ${cur==='r:financeiro'?'selected':''}>Finance</option>
+      <option value="r:tcl_member" ${cur==='r:tcl_member'?'selected':''}>TCL Member</option>
     </optgroup>
     ${ags.length?`<optgroup label="Agency (read-only)">${ags.map(a=>`<option value="ag:${esc(a)}" ${cur==='ag:'+a?'selected':''}>${esc(a)}</option>`).join('')}</optgroup>`:''}`;
   return `<div style="display:flex;align-items:center;gap:10px;padding:9px 24px;background:${VIEW_AS?'#fbf0d8':'var(--paper-2)'};border-bottom:1px solid ${VIEW_AS?'#ecd9a4':'var(--line)'};font-size:12.5px">
@@ -1527,7 +1548,7 @@ function go(screen){
     const exportBtn=screen==='list'?'<button class="btn-ghost" onclick="exportWorkXLSX()">Exportar Excel</button>':'';
     /* Agencies read and work the projects shared with them; creating a project
        stays with the internal profiles that own the pipeline. */
-    const canNewProj=effPapel()!=='agencia'&&!VIEW_AS;
+    const canNewProj=!['agencia','tcl_member'].includes(effPapel())&&!VIEW_AS;
     $('#ctaBox').innerHTML=`${['dash','board','list'].includes(screen)?ptipoFilterHTML():''}${['list','timeline'].includes(screen)?catFilterHTML():''}${statusChip}${exportBtn}<button class="btn-ghost" onclick="openStageGuide()">Stage guide</button>${canNewProj?'<button class="btn-acc" onclick="openProjNew()">+ New project</button>':''}`;
   } else if(screen==='funds'&&demoWritable(['admin','marketing'].includes(PAPEL))){
     $('#ctaBox').innerHTML='<button class="btn-acc" style="background:var(--po)" onclick="openFundNew()">+ New fund</button>';
@@ -1683,7 +1704,7 @@ function renderProjetos(){
     return c*PROJ_SORT.dir;
   });
   if(!list.length)return '<div class="empty">No projects found.</div>';
-  const canDup=effPapel()!=='agencia'&&!VIEW_AS;
+  const canDup=!['agencia','tcl_member'].includes(effPapel())&&!VIEW_AS;
   return `<div style="background:#fff;border:1px solid var(--line);border-radius:13px;box-shadow:0 1px 2px rgba(20,22,28,.05)">
     <div style="display:grid;grid-template-columns:1.7fr 1fr 1.1fr 1fr 1.2fr .7fr .5fr;gap:10px;padding:11px 17px;background:#fafbfd;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;position:sticky;top:var(--sticky-top,73px);z-index:5;border-radius:13px 13px 0 0">
       ${sortTh(PROJ_SORT,'name','Project','projSortHeaderClick')}${sortTh(PROJ_SORT,'owner','Owner','projSortHeaderClick')}${sortTh(PROJ_SORT,'stage','Stage','projSortHeaderClick')}${sortTh(PROJ_SORT,'health','Health','projSortHeaderClick')}${sortTh(PROJ_SORT,'progress','Progress','projSortHeaderClick')}${sortTh(PROJ_SORT,'due','Due','projSortHeaderClick')}<span></span></div>
@@ -1723,7 +1744,7 @@ async function openProj(id){
    Progress-specific state (done/pct/status, sub-item completion, comment log)
    resets fresh; the due date/start carry over as a starting point to edit. */
 function dupProj(id){
-  if(effPapel()==='agencia'||VIEW_AS){ toast(VIEW_AS?roMsg():'Only the internal team can create projects.'); return; }
+  if(['agencia','tcl_member'].includes(effPapel())||VIEW_AS){ toast(VIEW_AS?roMsg():'Only the internal team can create projects.'); return; }
   const src=DATA.projetos.find(x=>x.id===id); if(!src)return;
   const clone=JSON.parse(JSON.stringify(src));
   clone.id=uid();
@@ -1748,7 +1769,7 @@ function dupProj(id){
   openProjModal(clone, true);
 }
 function openProjNew(){
-  if(effPapel()==='agencia'||VIEW_AS){ toast(VIEW_AS?roMsg():'Only the internal team can create projects.'); return; }
+  if(['agencia','tcl_member'].includes(effPapel())||VIEW_AS){ toast(VIEW_AS?roMsg():'Only the internal team can create projects.'); return; }
   const t=TYPES[0];
   const proj={id:uid(),nome:'',tipo:t.id,ptipo:'',partner:'',resp:(currentUser&&currentUser.email)||'',owner:(currentUser&&currentUser.email)||'',prazo:'',inicio:'',
     tasks:t.tasks.map(n=>newAtv(n)),
@@ -7787,7 +7808,7 @@ function exportBudgetXLSX(){
   XLSX.writeFile(wb,`orcamento_TCL_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 function renderPeople(){
-  const ROLE={admin:{t:'Admin',bg:'#fbe4e1',fg:'#bf0008'},marketing:{t:'Marketing',bg:'#ffe9e3',fg:'#c4421f'},financeiro:{t:'Finance',bg:'#f6efe0',fg:'#8a6a1f'},agencia:{t:'Agency',bg:'#ece6fa',fg:'#5535ad'},pendente:{t:'Pending',bg:'#e9ecf2',fg:'#59606e'}};
+  const ROLE={admin:{t:'Admin',bg:'#fbe4e1',fg:'#bf0008'},marketing:{t:'Marketing',bg:'#ffe9e3',fg:'#c4421f'},financeiro:{t:'Finance',bg:'#f6efe0',fg:'#8a6a1f'},agencia:{t:'Agency',bg:'#ece6fa',fg:'#5535ad'},tcl_member:{t:'TCL Member',bg:'#e0eefb',fg:'#0e5ba6'},pendente:{t:'Pending',bg:'#e9ecf2',fg:'#59606e'}};
   const groups={};
   (DATA.pessoas||[]).forEach(pe=>{ const key=(pe.agencia||'').trim()||'Time TCL'; (groups[key]=groups[key]||[]).push(pe); });
   const keys=Object.keys(groups).sort((a,b)=>a==='Time TCL'?-1:b==='Time TCL'?1:a.localeCompare(b));
@@ -7835,7 +7856,7 @@ function editPerson(userId){
 function personSet(k,v){ if(!PERSON)return; PERSON[k]=v; if(k==='papel')renderPersonModal(); }
 function renderPersonModal(){
   if(!PERSON)return;
-  const roles=[['admin','Admin'],['marketing','Marketing'],['financeiro','Finance'],['agencia','Agency'],['pendente','Pending']];
+  const roles=[['admin','Admin'],['marketing','Marketing'],['financeiro','Finance'],['agencia','Agency'],['tcl_member','TCL Member'],['pendente','Pending']];
   const ags=agencyOpts();
   const isNew=!!PERSON._new;
   const isAgencia=PERSON.papel==='agencia';
