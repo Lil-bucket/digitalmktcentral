@@ -4720,19 +4720,33 @@ function pmPeopleFilter(q){
 }
 function pmPeopleBlur(){ const dd=document.getElementById('pmPeopleDD'); if(dd)dd.style.display='none'; }
 /* Fire-and-forget email to whoever just got tagged — never blocks the UI or
-   surfaces an error to the tagger. Edge function: notifica-marcacao. */
+   surfaces an error to the tagger. Edge function: notifica-marcacao.
+   Sends the session's own token so the function can show the real author
+   instead of trusting whatever `autor` the client claims. */
 async function notifyMarcacao(to,projeto,comentario){
   if(!to)return;
   try{
-    await fetch(PO_URL+'/functions/v1/notifica-marcacao',{method:'POST',headers:{'Content-Type':'application/json','apikey':PO_KEY,'Authorization':'Bearer '+PO_KEY},
+    const {data:sPO}=await SBPO.auth.getSession();
+    const token=(sPO&&sPO.session&&sPO.session.access_token)||PO_KEY;
+    await fetch(PO_URL+'/functions/v1/notifica-marcacao',{method:'POST',headers:{'Content-Type':'application/json','apikey':PO_KEY,'Authorization':'Bearer '+token},
       body:JSON.stringify({to,autor:(currentUser&&currentUser.email)||'Alguém',projeto:projeto||'',comentario:comentario||null})});
   }catch(e){ console.warn('notifica-marcacao:',e); }
+}
+/* Queues a marcação e-mail instead of sending it right away — saveProj()
+   flushes the queue after the project is actually persisted, so nobody gets
+   an email about a tag or comment that a closed-without-saving modal threw
+   away. One entry per person: a later comment replaces the plain "marcou
+   você" tag with the actual text, so each person gets a single email. */
+function pmQueueNotif(email,comentario){
+  if(!email||!EDIT)return;
+  EDIT._pendingNotifs=EDIT._pendingNotifs||{};
+  if(comentario||!EDIT._pendingNotifs[email]) EDIT._pendingNotifs[email]=comentario||null;
 }
 function pmPickPerson(email,nome){
   const inp=document.getElementById('pmPeopleQ'); if(inp)inp.value='';
   const dd=document.getElementById('pmPeopleDD'); if(dd){dd.style.display='none';dd.innerHTML='';}
   pmTogglePessoa(email,nome);
-  notifyMarcacao(email,EDIT&&EDIT.nome,null);
+  pmQueueNotif(email,null);
 }
 /* Who a comment's "@" can reach — the project's own tagged people
    (EDIT.envolvidos), not the whole org roster. Adding someone new to the
@@ -4782,8 +4796,8 @@ function pmAddLog(){
   EDIT.logs=EDIT.logs||[];
   EDIT.logs.push({id:uid(),txt,autor:(currentUser&&currentUser.email)||'you',t:new Date().toISOString().slice(0,10),mencoes:men.map(m=>({nome:m.nome,email:m.email||''}))});
   ta.value=''; renderProjModal();
-  // notifica os destinatários mencionados por e-mail
-  men.forEach(m=>{ if(m.email) notifyMarcacao(m.email,EDIT.nome,txt); });
+  // enfileira o e-mail pros mencionados — sai só quando o projeto for salvo (saveProj)
+  men.forEach(m=>{ if(m.email) pmQueueNotif(m.email,txt); });
   if(men.length) toast('Log saved · @mention to '+men.map(m=>m.nome.split(/\s+/)[0]).join(', '));
 }
 function respOpts(sel){ const g={}; (TEAM||[]).forEach(p=>{const k=p.empresa||'Team';(g[k]=g[k]||[]).push(p);}); let h='<option value="">—</option>'; Object.keys(g).sort().forEach(k=>{h+=`<optgroup label="${esc(k)}">`+g[k].map(p=>`<option ${p.nome===sel?'selected':''}>${esc(p.nome)}</option>`).join('')+'</optgroup>';}); return h; }
@@ -4803,7 +4817,7 @@ function pmPTipo(v){
 }
 let PM_OPEN=false;
 let PM_REFOCUS=null; // {sel} — element to put the caret back on after a re-render
-function openProjModal(proj,isNew){ EDIT=proj; EDIT._new=isNew; PM_OPEN=false; DEP_POP=null; renderProjModal(); }
+function openProjModal(proj,isNew){ EDIT=proj; EDIT._new=isNew; EDIT._pendingNotifs={}; PM_OPEN=false; DEP_POP=null; renderProjModal(); }
 
 /* ============================================================
    ACTIVITY PLANNER — the project modal's work surface
@@ -5003,6 +5017,7 @@ async function saveProj(){
   if(!EDIT.ptipo){ toast('Select the project type.'); return; }
   const clean=JSON.parse(JSON.stringify(EDIT)); delete clean._new;
   const fromTask=clean._fromTask; delete clean._fromTask;
+  const pendingNotifs=clean._pendingNotifs||{}; delete clean._pendingNotifs;
   // `_open` is which rows the editor had expanded — UI state, not project data.
   (clean.tasks||[]).forEach(t=>{ delete t._open; });
   clean.etapa=effectiveEtapa(clean); clean.status=autoStatus(clean);
@@ -5012,6 +5027,8 @@ async function saveProj(){
     const i=DATA.projetos.findIndex(p=>p.id===clean.id);
     if(i>=0)DATA.projetos[i]=clean; else DATA.projetos.push(clean);
     if(fromTask){ const l=loadPTasks(); const t=l.find(x=>x.id===fromTask); if(t&&!t.done){ t.done=true; t.updatedAt=Date.now(); savePTasks(l); } }
+    Object.keys(pendingNotifs).forEach(email=>notifyMarcacao(email,clean.nome,pendingNotifs[email]));
+    if(EDIT)EDIT._pendingNotifs={};
     toastSaved();
   }catch(e){ toastErr(e); }
 }
