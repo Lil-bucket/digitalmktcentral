@@ -604,7 +604,7 @@ function roMsg(){ return DEMO_MODE?'Demo mode — sandbox with fake data, nothin
    write action stays hidden in demo (plain !viewOnly()) since it isn't
    locally simulated. */
 function demoWritable(cond){ return cond&&(DEMO_MODE||!viewOnly()); }
-let DATA={projetos:[], orcamentos:[], poProjetos:[], pos:[], tetos:[], rateio:[], notif:[], mencoes:[], pessoas:[], fee:[], ccLayout:[], campanhas:[]};
+let DATA={projetos:[], orcamentos:[], poProjetos:[], fundsRejeitados:[], pos:[], tetos:[], rateio:[], notif:[], mencoes:[], pessoas:[], fee:[], ccLayout:[], campanhas:[]};
 let TEAM=[];
 let SCREEN='dash';
 
@@ -1332,7 +1332,10 @@ async function onSignedIn(user){
   try{ await loadPTasksRemote(); }catch(e){}
   // diagnostic line in sidebar footer
   try{ const d=$('#poDiag'); if(d){ d.textContent = PO_ACCESS ? ('Budget: '+PAPEL) : ('Budget off — '+(window.__poErr||'no PO role')); d.style.color = PO_ACCESS ? '#7d8493' : '#ef7f88'; } }catch(e){}
-  buildNav(); const nav=currentNav(); go((nav.work.concat(nav.budget))[0]||'dash');
+  buildNav(); const nav=currentNav();
+  /* Deep link from e-mail (e.g. the day-26 "Decide redistribution" CTA → #saldos). */
+  const hashScr=(location.hash||'').replace(/^#/,''); const navAll=nav.work.concat(nav.budget);
+  go(hashScr&&navAll.includes(hashScr)?hashScr:(navAll[0]||'dash'));
 }
 
 /* Resolves the signed-in user's role directly against the single Supabase
@@ -1383,7 +1386,7 @@ const Q_WORK=()=>[
 ];
 const Q_BUDGET=()=>[
   SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
-  SBPO.from('funds').select('id,nome,agencia,orcamento_id,product_category,activity,fund_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em,campanha_id,ativo'),
+  SBPO.from('funds').select('id,nome,agencia,orcamento_id,product_category,activity,fund_tag,rateio,rateio_tipo,aprovacao_status,aprovacao_motivo,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em,campanha_id,ativo'),
   SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
   SBPO.from('tetos').select('fund_id,competencia,teto,corte,corte_motivo,corte_em,devolucao,devolucao_motivo,devolucao_em,bloqueado,bloqueado_motivo'),
   SBPO.from('rateio_alocacao').select('fund_id,competencia,valor,categoria'),
@@ -1421,6 +1424,9 @@ async function loadAll(){
   const [orc,prj,pos,tet,rat,nt,pes,fee,camp,lay]=r.slice(2);
   DATA.orcamentos=tookOr(orc,DATA.orcamentos);
   DATA.poProjetos=(prj&&prj.error)?DATA.poProjetos:((prj.data||[]).filter(p=>p.aprovacao_status!=='REJEITADO'));
+  /* Rejected funds stay out of every total (poProjetos), but are kept apart so
+     their owner can fix and resubmit them instead of creating a duplicate. */
+  DATA.fundsRejeitados=(prj&&prj.error)?DATA.fundsRejeitados:((prj.data||[]).filter(p=>p.aprovacao_status==='REJEITADO'));
   DATA.pos=tookOr(pos,DATA.pos);
   DATA.tetos=normTetos(tookOr(tet,DATA.tetos));
   DATA.rateio=tookOr(rat,DATA.rateio);
@@ -1480,10 +1486,10 @@ document.addEventListener('visibilitychange',()=>{ if(!document.hidden) refreshA
    NAV + ROUTING — espelha o protótipo aprovado (menu por papel)
    ============================================================ */
 const W_LABELS={dash:'Dashboard',board:'Board',list:'List',timeline:'Timeline',team:'Team',weekly:'Weekly Status',mytasks:'Tasks',agencywork:'Assigned Work',notif:'Notifications'};
-const B_LABELS={bo:'Overview',budgets:'Budgets',funds:'Funds',campanhas:'Campaigns',pos:'POs & Approvals',approvals:'Approvals',podesk:'PO Desk',people:'People & Roles',reqpo:'Request PO',mypos:'My POs',balance:'Balance'};
+const B_LABELS={saldos:'Balance decisions',bo:'Overview',budgets:'Budgets',funds:'Funds',campanhas:'Campaigns',pos:'POs & Approvals',approvals:'Approvals',podesk:'PO Desk',people:'People & Roles',reqpo:'Request PO',mypos:'My POs',balance:'Balance'};
 const ROLE_NAV={
-  admin:      {work:['dash','board','list','timeline','team','weekly','mytasks'], budget:['bo','budgets','campanhas','funds','pos','people']},
-  marketing:  {work:['dash','board','list','timeline','weekly','mytasks'],        budget:['bo','budgets','campanhas','funds','pos']},
+  admin:      {work:['dash','board','list','timeline','team','weekly','mytasks'], budget:['bo','budgets','campanhas','funds','pos','saldos','people']},
+  marketing:  {work:['dash','board','list','timeline','weekly','mytasks'],        budget:['bo','budgets','campanhas','funds','pos','saldos']},
   financeiro: {work:[],                                                          budget:['bo','funds','pos']},
   agencia:    {work:['dash','board','list','timeline','mytasks'],               budget:['bo','campanhas','funds','pos']},
   /* TCL Member: internal staff with Work-only access, no Budget nav at all —
@@ -1507,7 +1513,10 @@ function currentNav(){
   // just the nav — see repoint_role_functions_to_perfis-era RLS policies).
   if(PAPEL==='agencia'&&AGENCIA_NIVEL==='po') return {global:GLOBAL_NAV, work:[], budget:(PO_ACCESS?['pos']:[])};
   const role=ROLE_NAV[PAPEL];
-  if(!role) return {global:GLOBAL_NAV, work:PANEL_ONLY_WORK, budget:[]};
+  /* No role (or 'pendente'): nothing to navigate. The Work tables now require
+     a valid role at the RLS level too, so showing the Work nav here would only
+     render empty screens — go() shows the "no access yet" screen instead. */
+  if(!role) return {global:[], work:[], budget:[]};
   return {global:GLOBAL_NAV, work:role.work, budget:(PO_ACCESS?role.budget:[])};
 }
 function navBadge(id){
@@ -1520,7 +1529,7 @@ function buildNav(){
   let gh='';
   (nav.global||[]).forEach(id=>gh+=navBtn({id,label:W_LABELS[id]||id,badge:navBadge(id)},'#9aa3b8'));
   $('#navGlobal').innerHTML=gh;
-  let html='<div class="nav-sec work">WORK</div>';
+  let html=nav.work.length?'<div class="nav-sec work">WORK</div>':'';
   nav.work.forEach(id=>html+=navBtn({id,label:W_LABELS[id]||id,badge:navBadge(id)},'#2b4fdd'));
   $('#navWork').innerHTML=html;
   if(PO_ACCESS && nav.budget.length){
@@ -1534,6 +1543,7 @@ function navBtn(it,col){
   return `<button class="nav-btn${SCREEN===it.id?' on':''}" onclick="navGo('${it.id}')"><span class="dot2" style="background:${col}"></span>${esc(it.label)}${badge}</button>`;
 }
 const SCREEN_META={
+  saldos:{t:'Balance decisions',s:'Budget · Redistribute a month\'s unused balance',mod:'budget'},
   dash:{t:'Dashboard',s:'Work · Executive overview',mod:'work'},
   board:{t:'Board',s:'Work · Projects by stage',mod:'work'},
   list:{t:'Project List',s:'Work · All projects',mod:'work'},
@@ -1595,6 +1605,7 @@ function go(screen){
   if(screen==='balance')screen='bo';
   if(screen==='approvals')screen='pos';
   const nav=currentNav(); const valid=nav.work.concat(nav.budget).concat(nav.global||[]);
+  if(!valid.length){ renderSemAcesso(); return; }
   if(!valid.includes(screen)) screen=valid[0]||'dash';
   SCREEN=screen; buildNav();
   const meta=SCREEN_META[screen]||{t:'',s:'',mod:'work'};
@@ -1634,6 +1645,7 @@ function go(screen){
   else if(screen==='budgets'){ v.innerHTML=renderBudgets(); buildBudgetActivityChart(); ccAutoScroll(); }
   else if(screen==='funds'){ v.innerHTML=renderFunds(); buildFundChart(); }
   else if(screen==='campanhas'){ v.innerHTML=renderCampanhasList(); }
+  else if(screen==='saldos'){ v.innerHTML=renderSaldos(); carregarSaldos(); }
   else if(screen==='pos'||screen==='mypos') v.innerHTML=renderPOs();
   else if(screen==='podesk') v.innerHTML=renderAprovacoes();
   else if(screen==='people') v.innerHTML=renderPeople();
@@ -1658,6 +1670,25 @@ function syncStickyOffset(){
 
 /* charts */
 let _charts=[];
+/* Signed in, but no usable role: either the profile is still 'pendente' (an
+   admin hasn't assigned a role) or papel_atual() couldn't be read (network,
+   expired session). The two get different messages, and the second one gets
+   a retry, since reloading is usually all it takes. */
+function renderSemAcesso(){
+  SCREEN='semacesso'; buildNav();
+  const falhou=!!(window.__poErr&&window.__poErr!=='no role for this user');
+  $('#scrTitle').textContent=falhou?'Could not check your access':'Access pending';
+  $('#scrSub').textContent=(currentUser&&currentUser.email)||'';
+  $('#barcol').style.background='var(--txt-3)';
+  $('#viewAsBar').innerHTML=''; $('#ctaBox').innerHTML='';
+  destroyCharts();
+  $('#view').innerHTML=`<div class="panel" style="max-width:560px;margin:40px auto"><div class="panel-b" style="padding:28px 26px">
+    ${emptyState(falhou?'alert':'clock',
+      falhou?'We could not confirm your role right now':'Your account does not have access yet',
+      falhou?'This is usually a connection or session hiccup. Try again; if it persists, sign out and back in.':'An administrator needs to assign your role (Marketing, Finance, Agency…) before the platform opens up. Ask them to enable you in People & Roles.',
+      `<div style="display:flex;gap:8px;justify-content:center;margin-top:10px">${falhou?'<button class="btn-acc" onclick="location.reload()">Try again</button>':''}<button class="btn-ghost" onclick="signOut()">Sign out</button></div>`)}
+  </div></div>`;
+}
 function destroyCharts(){_charts.forEach(c=>{try{c.destroy();}catch(e){}});_charts=[];}
 function buildDashCharts(){
   const el=document.getElementById('chartStatus'); if(!el||!window.Chart)return;
@@ -2079,6 +2110,38 @@ function fundForcedOpen(){ return !!FUND_Q||!!FUND_FILTER_ACT.length||!!FUND_FIL
    table. An agency login counts its own funds; narrowing to a category or
    typing in the search narrows the totals with it, so the numbers always
    describe the rows underneath them. */
+/* Rejected funds, for whoever can fix them: the owner (RLS already limits a
+   marketing login to its own funds) and admin. Editing reuses the normal fund
+   form; "Resubmit" sends it back to PENDENTE via reenviar_fund(), which also
+   re-attaches the category budget and notifies admin. */
+function fundRejeitadosHTML(){
+  const papel=effPapel();
+  if(!['admin','marketing'].includes(papel)) return '';
+  const rej=(DATA.fundsRejeitados||[]); if(!rej.length) return '';
+  const pode=DEMO_MODE||!viewOnly();
+  return `<div class="panel" style="margin-bottom:14px;border-color:rgba(255,92,92,.35)">
+    <div class="panel-h"><h3>Rejected funds — fix and resubmit</h3><span class="tag">${rej.length}</span></div>
+    <div class="panel-b">${rej.map(f=>`<div style="display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid var(--line);flex-wrap:wrap">
+      <div style="flex:1;min-width:220px">
+        <b>${esc(f.nome||'—')}</b> <span style="color:var(--txt-3);font-size:12px">· ${esc(f.product_category||'—')} · ${esc(f.agencia||'—')} · ${esc(f.activity||'—')}</span>
+        <div style="font-size:12px;color:var(--red);margin-top:3px">Reason: ${esc(f.aprovacao_motivo||'—')}</div>
+      </div>
+      ${pode?`<button class="chip-btn" onclick="openCampEdit('${esc(f.id)}')">Edit</button>
+      <button class="btn-acc" style="background:var(--po)" onclick="reenviarFund('${esc(f.id)}')">Resubmit</button>
+      ${PAPEL==='admin'?`<button class="chip-btn" style="color:var(--red)" onclick="deletarFund('${esc(f.id)}')">Delete</button>`:''}`:''}
+    </div>`).join('')}</div>
+  </div>`;
+}
+async function reenviarFund(id){
+  const f=fundAnyById(id); if(!f)return;
+  if(DEMO_MODE){ DATA.fundsRejeitados=DATA.fundsRejeitados.filter(x=>x.id!==id); f.aprovacao_status='PENDENTE'; DATA.poProjetos.push(f); toast('Fund resubmitted (demo)'); go(SCREEN); return; }
+  if(viewOnly()){toast(roMsg());return;}
+  if(!confirm(`Resubmit "${f.nome||''}" for approval?\n\nAdmin is notified and reviews it again.`))return;
+  try{
+    const {error}=await SBPO.rpc('reenviar_fund',{p_fund:id}); if(error)throw error;
+    toast('Fund resubmitted for approval ✓'); await reloadPOAll(); go(SCREEN);
+  }catch(e){ toastErr(e); }
+}
 function fundKpisHTML(){
   const {tetoBy,consBy,compBy}=FUND_CTX||{tetoBy:{},consBy:{},compBy:{}};
   const vis=fundVisible();
@@ -2143,7 +2206,7 @@ function renderFunds(){
   DATA.rateio.forEach(r=>{tetoBy[r.fund_id]=(tetoBy[r.fund_id]||0)+(+r.valor||0);});
   DATA.pos.forEach(po=>{const v=+po.valor||0;if(CONS.includes(po.status))consBy[po.fund_id]=(consBy[po.fund_id]||0)+v;else if(COMP.includes(po.status))compBy[po.fund_id]=(compBy[po.fund_id]||0)+v;else if(PEND.includes(po.status))pendBy[po.fund_id]=(pendBy[po.fund_id]||0)+v;});
   FUND_CTX={list,tetoBy,consBy,compBy,pendBy};
-  return fundKpisHTML()+`
+  return fundRejeitadosHTML()+fundKpisHTML()+`
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
       <div style="display:flex;gap:6px">${[['cat','Categories'],['camp','Campaigns'],['tl','Timeline']].map(v=>`<button onclick="fundSetView('${v[0]}')" style="padding:8px 13px;border-radius:8px;border:1px solid ${FUND_VIEW===v[0]?'var(--po)':'var(--line-2)'};background:${FUND_VIEW===v[0]?'var(--po-soft)':'var(--card)'};color:${FUND_VIEW===v[0]?'var(--red)':'var(--txt-2)'};font-size:12px;font-weight:700;cursor:pointer">${v[1]}</button>`).join('')}</div>
       <div style="position:relative;flex:1;max-width:340px;min-width:200px">
@@ -3296,8 +3359,9 @@ function recoverQual(pid){
   rateioTipos().forEach(tp=>{ const tset=new Set((DATA.fee||[]).filter(f=>f.tipo===tp).map(f=>f.categoria)); if(tset.size===cs.size && [...cs].every(c=>tset.has(c))) found=tp; });
   return found;
 }
+function fundAnyById(id){ return DATA.poProjetos.find(x=>x.id===id)||(DATA.fundsRejeitados||[]).find(x=>x.id===id); }
 function openCampEdit(pid){
-  const p=DATA.poProjetos.find(x=>x.id===pid); if(!p)return;
+  const p=fundAnyById(pid); if(!p)return;
   const feeMode = p.activity==='FEE' ? (p.rateio ? 'split' : 'whole') : 'shared';
   FUNDEDIT={id:pid,nome:p.nome||'',agencia:p.agencia||'',activity:p.activity||'Campaign',cat:guessCat(p.product_category||p.nome),rateio:!!p.rateio,qual:(feeMode==='split'?recoverQual(pid):''),feeMode:feeMode,campanha_id:p.campanha_id||''};
   renderCampEditForm();
@@ -3487,10 +3551,14 @@ async function aprovarPO(id){
 }
 async function rejeitarPO(id){
   const sibs=poGroupSiblings(DATA.pos.find(x=>x.id===id));
-  if(DEMO_MODE){ sibs.forEach(po=>po.status='REJEITADA'); toast('PO rejected (demo)'); go(SCREEN); return; }
-  if(viewOnly()){toast(roMsg());return;}
+  if(!DEMO_MODE&&viewOnly()){toast(roMsg());return;}
+  /* The reason travels to the requester in the rejection e-mail and in-app
+     notification (motivo_rejeicao) — without it they only saw "see platform". */
+  const motivo=prompt('Reason for rejecting this PO (sent to whoever requested it):'); if(motivo===null)return;
+  if(!motivo.trim()){ toast('Describe the reason.'); return; }
+  if(DEMO_MODE){ sibs.forEach(po=>{po.status='REJEITADA';po.motivo_rejeicao=motivo.trim();}); toast('PO rejected (demo)'); go(SCREEN); return; }
   try{
-    for(const po of sibs){ const {error}=await SBPO.rpc('rejeitar_po',{p_po:po.id}); if(error)throw error; }
+    for(const po of sibs){ const {error}=await SBPO.rpc('rejeitar_po_com_motivo',{p_po:po.id,p_motivo:motivo.trim()}); if(error)throw error; }
     toast('PO rejected'); await reloadPO(); go(SCREEN);
   }catch(e){ toastErr(e); }
 }
@@ -5474,7 +5542,7 @@ async function deletarPO(id){
 async function deletarFund(id){
   if(viewOnly()){toast(roMsg());return;}
   if(PAPEL!=='admin'){ toast('Only admin can delete.'); return; }
-  const p=DATA.poProjetos.find(x=>x.id===id)||{};
+  const p=fundAnyById(id)||{};
   const nPos=DATA.pos.filter(x=>x.fund_id===id&&!['REJEITADA','CANCELADA'].includes(x.status)).length;
   const orc=(DATA.orcamentos||[]).find(o=>o.id===p.orcamento_id);
   const destino=orc?`the "${orc.nome||orc.product_category}" budget`:'the budget';
@@ -8051,17 +8119,102 @@ async function deletarPessoa(userId){
 /* ============================================================
    CRIAÇÃO — Fund (atividade, rateio, distribuição mensal) + Orçamento
    ============================================================ */
+/* ============================================================
+   BALANCE DECISIONS (#saldos) — reads saldos_para_decisao() and records
+   via registrar_decisao_saldo(). Ported from the old controle-po "Saldos"
+   tab; the day-26 e-mail links here. Values are net of cuts/returns.
+   ============================================================ */
+let SALDO_MES=null, SALDO_ROWS=null, SALDO_ERR='', SALDO_SEL={};
+function saldoMesPadrao(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function saldoSetMes(v){ if(!v)return; SALDO_MES=v; SALDO_ROWS=null; go('saldos'); }
+function renderSaldos(){
+  if(!SALDO_MES) SALDO_MES=saldoMesPadrao();
+  return `<div class="panel"><div class="panel-h"><h3>Unused balance by fund</h3>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--txt-2)">Source month
+        <input type="month" value="${esc(SALDO_MES)}" onchange="saldoSetMes(this.value)" style="padding:7px 10px;border:1px solid var(--line-2);border-radius:8px;background:var(--card);font:inherit;color:var(--txt)"></label></div>
+    <div class="panel-b"><div style="font-size:12.5px;color:var(--txt-3);margin-bottom:10px">Funds whose cap for the month (net of cuts and returns) was not fully committed or requested. Record how the balance is redistributed across the remaining months of the fiscal year: <b>total</b> (all to next month), <b>split</b> (evenly) or <b>manual</b>.</div>
+    <div id="saldoBody">${saldoBodyHTML()}</div></div></div>`;
+}
+function saldoBodyHTML(){
+  if(SALDO_ROWS===null) return emptyState('clock','Loading…','');
+  if(SALDO_ERR) return emptyState('alert','Could not load balances',SALDO_ERR);
+  if(!SALDO_ROWS.length) return emptyState('check','No eligible balance in this month','Every fund you own used its whole cap, or there is nothing left to redistribute.');
+  return SALDO_ROWS.map(saldoCardHTML).join('');
+}
+async function carregarSaldos(){
+  if(DEMO_MODE){ SALDO_ROWS=[]; SALDO_ERR=''; const b=$('#saldoBody'); if(b)b.innerHTML=saldoBodyHTML(); return; }
+  const mes=SALDO_MES;
+  const {data,error}=await SBPO.rpc('saldos_para_decisao',{p_mes:mes+'-01'});
+  if(mes!==SALDO_MES||SCREEN!=='saldos') return;
+  SALDO_ERR=error?humanErr(error):''; SALDO_ROWS=error?[]:(data||[]);
+  SALDO_ROWS.forEach(r=>{ if(!SALDO_SEL[r.fund_id]) SALDO_SEL[r.fund_id]={modo:r.decisao_modo||'',manual:Object.assign({},r.decisao_modo==='manual'?(r.decisao_alocacoes||{}):{})}; });
+  const b=$('#saldoBody'); if(b) b.innerHTML=saldoBodyHTML();
+  SALDO_ROWS.forEach(r=>saldoSync(r.fund_id));
+}
+function saldoCardHTML(r){
+  const fid=r.fund_id, saldo=+r.saldo_elegivel||0, alvos=r.meses_alvo||[], sel=SALDO_SEL[fid]||{modo:'',manual:{}};
+  const pode=!viewOnly();
+  const dec=r.decisao_modo?`<span class="badge s-green"><span class="d"></span>decided: ${esc(r.decisao_modo)}${r.decidido_em?' · '+new Date(r.decidido_em).toLocaleDateString('pt-BR'):''}</span>`:'';
+  const head=`<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">
+    <div><b>${esc(r.fund||'—')}</b>${r.agencia?` <span style="color:var(--txt-3)">· ${esc(r.agencia)}</span>`:''}
+      <div style="font-size:12px;color:var(--txt-3);margin-top:3px">Committed ${BRL(r.comprometido)} · Pending ${BRL(r.pendente)} · Cap (net) ${BRL(r.estimativa_base)}</div></div>
+    <div style="text-align:right"><div style="font-size:10.5px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.06em">Eligible balance</div>
+      <div style="font-weight:800;font-size:18px;font-family:var(--mono,inherit)">${BRL(saldo)}</div>${dec}</div></div>`;
+  if(!alvos.length) return `<div style="border:1px solid var(--line);border-radius:12px;padding:14px;margin:10px 0">${head}<div style="font-size:12.5px;color:var(--amber);margin-top:8px">No later month in this fiscal year — nothing to redistribute to.</div></div>`;
+  const radio=(m,lbl,dis)=>`<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:${dis?'not-allowed':'pointer'};opacity:${dis?.5:1}"><input type="radio" name="sdModo-${esc(fid)}" value="${m}" ${sel.modo===m?'checked':''} ${dis||!pode?'disabled':''} onchange="saldoModo('${esc(fid)}','${m}')"> ${lbl}</label>`;
+  const manual=alvos.map(a=>`<label style="display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--txt-3)">${fmtMes(a)}
+      <input type="number" min="0" step="0.01" value="${sel.manual[a]!=null?esc(sel.manual[a]):''}" ${pode?'':'disabled'} oninput="saldoManual('${esc(fid)}','${esc(a)}',this.value)" style="width:120px;padding:7px 9px;border:1px solid var(--line-2);border-radius:8px;background:var(--card);font:inherit;color:var(--txt)"></label>`).join('');
+  return `<div style="border:1px solid var(--line);border-radius:12px;padding:14px;margin:10px 0">${head}
+    <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:12px">
+      ${radio('total',`Total <span style="color:var(--txt-3)">(all in ${fmtMes(alvos[0])})</span>`,false)}
+      ${radio('split',`Split <span style="color:var(--txt-3)">(÷ ${alvos.length} months)</span>`,!r.split_disponivel)}
+      ${radio('manual','Manual',false)}
+    </div>
+    <div id="sdPrev-${esc(fid)}" style="font-size:12.5px;color:var(--txt-3);margin-top:8px"></div>
+    <div id="sdManual-${esc(fid)}" style="display:none;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:8px">${manual}
+      <div style="font-size:11px;color:var(--txt-3)">Sum<div id="sdSoma-${esc(fid)}" style="font-weight:700;font-size:13px;padding:6px 0">R$ 0,00</div></div></div>
+    <div style="margin-top:12px;display:flex;gap:10px;align-items:center">
+      ${pode?`<button class="btn-acc" style="background:var(--po)" id="sdBtn-${esc(fid)}" onclick="salvarSaldo('${esc(fid)}','${esc(r.mes_origem)}')" disabled>Confirm decision</button>`:`<span style="font-size:12px;color:var(--txt-3)">${esc(roMsg())}</span>`}
+      <span id="sdMsg-${esc(fid)}" style="font-size:12.5px"></span></div></div>`;
+}
+function saldoModo(fid,m){ (SALDO_SEL[fid]=SALDO_SEL[fid]||{modo:'',manual:{}}).modo=m; saldoSync(fid); }
+function saldoManual(fid,mes,v){ const s=(SALDO_SEL[fid]=SALDO_SEL[fid]||{modo:'manual',manual:{}}); if(v===''||v==null) delete s.manual[mes]; else s.manual[mes]=+v; saldoSync(fid); }
+function saldoSync(fid){
+  const r=(SALDO_ROWS||[]).find(x=>x.fund_id===fid); if(!r)return; const s=SALDO_SEL[fid]||{modo:'',manual:{}};
+  const man=$('#sdManual-'+fid), prev=$('#sdPrev-'+fid), btn=$('#sdBtn-'+fid), soma=$('#sdSoma-'+fid);
+  if(man) man.style.display=s.modo==='manual'?'flex':'none';
+  if(prev) prev.textContent=s.modo==='total'?'The whole balance goes to the next month.':(s.modo==='split'?'The balance is split evenly across the remaining months of the fiscal year.':'');
+  let ok=!!s.modo;
+  if(s.modo==='manual'){
+    const tot=Object.values(s.manual).reduce((a,v)=>a+(+v||0),0), alvo=+r.saldo_elegivel||0;
+    ok=Math.abs(tot-alvo)<0.01;
+    if(soma){ soma.textContent=BRL(tot)+' / '+BRL(alvo); soma.style.color=ok?'var(--green)':'var(--red)'; }
+  }
+  if(btn) btn.disabled=!ok;
+}
+async function salvarSaldo(fid,mesOrigem){
+  if(viewOnly()){toast(roMsg());return;}
+  const s=SALDO_SEL[fid]; if(!s||!s.modo)return;
+  const aloc={}; if(s.modo==='manual') Object.entries(s.manual).forEach(([m,v])=>{ if(+v>0) aloc[m]=Math.round(+v*100)/100; });
+  const btn=$('#sdBtn-'+fid), msg=$('#sdMsg-'+fid);
+  if(btn)btn.disabled=true; if(msg){msg.style.color='var(--txt-3)';msg.textContent='Saving…';}
+  const {error}=await SBPO.rpc('registrar_decisao_saldo',{p_fund:fid,p_mes:mesOrigem,p_modo:s.modo,p_alocacoes:aloc});
+  if(error){ if(msg){msg.style.color='var(--red)';msg.textContent=humanErr(error);} if(btn)btn.disabled=false; return; }
+  if(msg){msg.style.color='var(--green)';msg.textContent='Decision recorded ✓';}
+  delete SALDO_SEL[fid]; setTimeout(carregarSaldos,700);
+}
+
 async function reloadPOAll(){
   try{
     const [orc,prj,pos,tet,rat,camp]=await Promise.all([
       SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
-      SBPO.from('funds').select('id,nome,agencia,orcamento_id,product_category,activity,fund_tag,rateio,rateio_tipo,aprovacao_status,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em,campanha_id,ativo'),
+      SBPO.from('funds').select('id,nome,agencia,orcamento_id,product_category,activity,fund_tag,rateio,rateio_tipo,aprovacao_status,aprovacao_motivo,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em,campanha_id,ativo'),
       SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
       SBPO.from('tetos').select('fund_id,competencia,teto,corte,corte_motivo,corte_em,devolucao,devolucao_motivo,devolucao_em,bloqueado,bloqueado_motivo'),
       SBPO.from('rateio_alocacao').select('fund_id,competencia,valor,categoria'),
       SBPO.from('campanhas').select('*')
     ]);
-    DATA.orcamentos=orc.data||[]; DATA.poProjetos=(prj.data||[]).filter(p=>p.aprovacao_status!=='REJEITADO'); DATA.pos=pos.data||[]; DATA.tetos=normTetos(tet.data||[]); DATA.rateio=rat.data||[];
+    DATA.orcamentos=orc.data||[]; DATA.poProjetos=(prj.data||[]).filter(p=>p.aprovacao_status!=='REJEITADO'); DATA.fundsRejeitados=(prj.data||[]).filter(p=>p.aprovacao_status==='REJEITADO'); DATA.pos=pos.data||[]; DATA.tetos=normTetos(tet.data||[]); DATA.rateio=rat.data||[];
     DATA.campanhas=camp.data||DATA.campanhas;
   }catch(e){ console.error('reloadPOAll:',e); }
 }
