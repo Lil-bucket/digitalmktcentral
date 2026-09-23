@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Estilo Realidade Virtual: preview de tokens (não faz parte do app)</title>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* ===== ESTILO REALIDADE VIRTUAL — proposta de tokens ===== */
+    /* superfícies */
+    --bg:#05070d; --ink:#0a0e18; --ink-2:#131829; --ink-3:#1c2338;
+    --card:#0d1220; --paper:#0a0e18; --paper-2:#0f1424;
+    --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
+    /* texto */
+    --txt:#eef1f8; --txt-2:#a7aec2; --txt-3:#747c92;
+    /* marca — Work (cobalt) / Budget (TCL red) */
+    --accent:#4d7dff; --accent-deep:#2b4fdd; --accent-soft:rgba(77,125,255,.14);
+    --po:#ff3b4e; --po-deep:#c20510; --po-soft:rgba(255,59,78,.14);
+    /* estados */
+    --green:#2fd88a; --green-bg:rgba(47,216,138,.14);
+    --amber:#ffb020; --amber-bg:rgba(255,176,32,.14);
+    --red:#ff5c5c; --red-bg:rgba(255,92,92,.14);
+    --violet:#a685ff; --violet-bg:rgba(166,133,255,.14);
+    --blue:#4fb8ff; --blue-bg:rgba(79,184,255,.14);
+    --slate:#9aa3b8; --slate-bg:rgba(154,163,184,.14);
+    /* tipografia (mantida) */
+    --sans:'Hanken Grotesk',system-ui,-apple-system,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    /* elevação — sombra + glow ambiente, não sombra "papel" */
+    --sh-1:0 1px 2px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.04);
+    --sh-2:0 4px 16px -4px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.06);
+    --sh-3:0 24px 64px -16px rgba(0,0,0,.7),0 0 40px -8px rgba(77,125,255,.18);
+    --ring:0 0 0 3px rgba(77,125,255,.28);
+    --r-sm:10px; --r-md:13px; --r-lg:16px; --r-pill:20px;
+    --ease:cubic-bezier(.22,1,.36,1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:var(--sans);color:var(--txt);background:var(--bg);
+    font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
+    padding:40px 28px 80px;
+    /* padrão de fundo: grid bem discreto (células menores, opacidade baixa) + glow ambiente contido */
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255,255,255,.02) 0 1px, transparent 1px 24px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,.02) 0 1px, transparent 1px 24px),
+      radial-gradient(42rem 28rem at 8% -12%, rgba(77,125,255,.06), transparent 55%),
+      radial-gradient(36rem 24rem at 98% 108%, rgba(255,59,78,.05), transparent 55%);
+    background-attachment:fixed;
+  }
+  h1{font-size:22px;letter-spacing:-.02em;font-weight:800}
+  h2{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--txt-3);margin:44px 0 14px;font-family:var(--mono)}
+  p.lead{color:var(--txt-2);font-size:13.5px;margin-top:8px;max-width:640px}
+  .wrap{max-width:1080px;margin:0 auto}
+  .top{display:flex;align-items:center;gap:14px;padding-bottom:18px;border-bottom:1px solid var(--line)}
+  .logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,var(--accent) 50%,var(--po) 50%);display:grid;place-items:center;font-weight:800;color:#fff;box-shadow:0 0 24px -4px rgba(77,125,255,.5)}
+  .top b{font-size:15px}
+  .top span{display:block;font-family:var(--mono);font-size:10px;color:var(--txt-3);letter-spacing:.1em;text-transform:uppercase}
+
+  .swatch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+  .swatch{border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;background:var(--card)}
+  .swatch .fill{height:56px}
+  .swatch .lbl{padding:8px 10px}
+  .swatch .lbl b{display:block;font-size:11.5px}
+  .swatch .lbl span{display:block;font-family:var(--mono);font-size:10px;color:var(--txt-3);margin-top:2px}
+  .swatch .lbl em{display:block;font-family:var(--mono);font-size:9.5px;color:var(--txt-3);margin-top:4px;font-style:normal}
+
+  .contrast-ok{color:var(--green)}
+
+  .text-demo{display:flex;flex-direction:column;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);padding:18px 20px}
+  .text-demo .l1{font-size:16px;font-weight:700;color:var(--txt)}
+  .text-demo .l2{font-size:13.5px;color:var(--txt-2)}
+  .text-demo .l3{font-size:12px;color:var(--txt-3)}
+
+  .btn-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .btn-acc{padding:10px 18px;border-radius:10px;background:var(--accent-deep);color:#fff;font-weight:700;font-size:13.5px;box-shadow:var(--sh-1);border:none;cursor:pointer}
+  .btn-acc:hover{filter:brightness(1.12)}
+  .btn-po{padding:10px 18px;border-radius:10px;background:var(--po-deep);color:#fff;font-weight:700;font-size:13.5px;box-shadow:var(--sh-1);border:none;cursor:pointer}
+  .btn-po:hover{filter:brightness(1.12)}
+  .btn-ghost{padding:10px 16px;border-radius:10px;font-weight:600;font-size:13.5px;color:var(--txt-2);border:1px solid var(--line-2);background:var(--card);cursor:pointer}
+  .btn-ghost:hover{background:var(--paper-2);color:var(--txt)}
+  .btn-del{padding:10px 16px;border-radius:10px;font-weight:600;font-size:13px;color:var(--red);border:1px solid rgba(255,92,92,.35);background:var(--card);cursor:pointer}
+  .btn-del:hover{background:var(--red);color:#fff;border-color:var(--red)}
+
+  .badge{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:20px}
+  .badge .d{width:6px;height:6px;border-radius:50%}
+  .s-green{background:var(--green-bg);color:var(--green)}.s-green .d{background:var(--green)}
+  .s-amber{background:var(--amber-bg);color:var(--amber)}.s-amber .d{background:var(--amber)}
+  .s-red{background:var(--red-bg);color:var(--red)}.s-red .d{background:var(--red)}
+  .s-violet{background:var(--violet-bg);color:var(--violet)}.s-violet .d{background:var(--violet)}
+  .s-blue{background:var(--blue-bg);color:var(--blue)}.s-blue .d{background:var(--blue)}
+  .s-slate{background:var(--slate-bg);color:var(--slate)}.s-slate .d{background:var(--slate)}
+
+  /* ===== CARD DE EXEMPLO — mimetiza um card real do app (KPI + budget) ===== */
+  .demo-row{display:grid;grid-template-columns:1.3fr 1fr;gap:18px;align-items:start}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--sh-2)}
+  .panel-h{padding:16px 20px 13px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
+  .panel-h h3{font-size:14.5px;letter-spacing:-.01em}
+  .panel-h .tag{font-family:var(--mono);font-size:10.5px;color:var(--txt-3)}
+  .panel-b{padding:18px 20px}
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+  .kpi{background:var(--paper-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:13px 14px;position:relative;overflow:hidden}
+  .kpi .bar{position:absolute;left:0;right:0;top:0;height:3px}
+  .kpi .lbl{font-size:10px;color:var(--txt-3);font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+  .kpi .num{font-family:var(--mono);font-size:22px;font-weight:700;margin-top:7px;letter-spacing:-.03em}
+  .row-item{display:flex;gap:11px;padding:11px 10px;border-radius:10px;align-items:flex-start}
+  .row-item:hover{background:var(--paper-2)}
+  .pin{width:8px;height:8px;border-radius:50%;margin-top:5px;flex-shrink:0}
+  .row-item .t{flex:1;min-width:0}
+  .row-item .t b{font-size:13px;display:block}
+  .row-item .t span{font-size:11.5px;color:var(--txt-3)}
+  .meter{height:20px;border-radius:7px;overflow:hidden;display:flex;border:1px solid var(--line);background:var(--paper-2);margin-top:14px}
+  .meter span{display:block;height:100%}
+  .cat-chip{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;margin:3px 5px 0 0}
+
+  .glass{background:rgba(13,18,32,.6);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--line-2)}
+
+  .fine{font-size:11.5px;color:var(--txt-3);margin-top:6px}
+  footer{margin-top:56px;padding-top:18px;border-top:1px solid var(--line);color:var(--txt-3);font-size:11.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <div class="logo">D</div>
+    <div>
+      <b>Estilo Realidade Virtual: proposta de tokens</b>
+      <span>Etapa 1 · preview isolado · index.html não foi tocado</span>
+    </div>
+  </div>
+
+  <h2>Fundo + padrão (volume sobre o preto)</h2>
+  <p class="lead">Base <code class="mono">#05070d</code> (preto com leve tom azulado, não preto puro). Duas camadas bem discretas, ajustadas para menor: (1) grade de linhas 1px a cada 24px, opacidade .02, quase imperceptível de perto; (2) dois glows radiais menores e mais fracos ecoando a dualidade Work/Budget (mesma técnica já usada em <code>.gate</code> hoje, com raio e opacidade bem reduzidos). Esta própria página já está renderizada com o padrão: role e observe o fundo.</p>
+
+  <h2>Texto sobre o novo fundo (contraste verificado)</h2>
+  <div class="text-demo">
+    <div class="l1">Texto primário (--txt #eef1f8), contraste 17.8:1 <span class="contrast-ok">✓ AA</span></div>
+    <div class="l2">Texto secundário (--txt-2 #a7aec2), contraste 9.1:1 <span class="contrast-ok">✓ AA</span></div>
+    <div class="l3">Texto terciário / legendas (--txt-3 #747c92), contraste 4.8:1 <span class="contrast-ok">✓ AA, usar ≥12.5px</span></div>
+  </div>
+
+  <h2>Superfícies</h2>
+  <div class="swatch-grid">
+    <div class="swatch"><div class="fill" style="background:var(--bg)"></div><div class="lbl"><b>bg</b><span>#05070d</span><em>canvas da página</em></div></div>
+    <div class="swatch"><div class="fill" style="background:var(--ink)"></div><div class="lbl"><b>ink</b><span>#0a0e18</span><em>sidebar / gate / toast</em></div></div>
+    <div class="swatch"><div class="fill" style="background:var(--card)"></div><div class="lbl"><b>card</b><span>#0d1220</span><em>painéis, modais, KPIs</em></div></div>
+    <div class="swatch"><div class="fill" style="background:var(--paper-2)"></div><div class="lbl"><b>paper-2</b><span>#0f1424</span><em>hover de linha/input</em></div></div>
+  </div>
+
+  <h2>Dualidade de marca: Work (cobalt) · Budget (TCL red)</h2>
+  <div class="swatch-grid">
+    <div class="swatch"><div class="fill" style="background:var(--accent)"></div><div class="lbl"><b>accent</b><span>#4d7dff</span><em>texto/ícone/borda no preto · 5.5:1</em></div></div>
+    <div class="swatch"><div class="fill" style="background:var(--accent-deep)"></div><div class="lbl"><b>accent-deep</b><span>#2b4fdd</span><em>preenchido c/ texto branco · 6.4:1</em></div></div>
+    <div class="swatch"><div class="fill" style="background:var(--accent-soft)"></div><div class="lbl"><b>accent-soft</b><span>rgba .14</span><em>fundo de badge/nav ativo</em></div></div>
+    <div class="swatch"><div class="fill" style="background:var(--po)"></div><div class="lbl"><b>po</b><span>#ff3b4e</span><em>texto/ícone/borda no preto · 5.7:1</em></div></div>
+    <div class="swatch"><div class="fill" style="background:var(--po-deep)"></div><div class="lbl"><b>po-deep</b><span>#c20510</span><em>preenchido c/ texto branco · 6.3:1</em></div></div>
+    <div class="swatch"><div class="fill" style="background:var(--po-soft)"></div><div class="lbl"><b>po-soft</b><span>rgba .14</span><em>fundo de badge/nav ativo</em></div></div>
+  </div>
+  <p class="fine">Regra: a cor "bright" (accent/po) é para texto, ícone, borda e glow sobre fundo escuro. A cor "deep" é para preenchimento sólido de botão com texto branco; evita usar a bright em botão sólido, que ficaria abaixo do AA para texto normal.</p>
+
+  <h2>Estados (sucesso / alerta / erro / info)</h2>
+  <div class="swatch-grid">
+    <div class="swatch"><div class="fill" style="background:var(--green)"></div><div class="lbl"><b>green</b><span>#2fd88a</span><em>10.9:1</em></div></div>
+    <div class="swatch"><div class="fill" style="background:var(--amber)"></div><div class="lbl"><b>amber</b><span>#ffb020</span><em>11.0:1</em></div></div>
+    <div class="swatch"><div class="fill" style="background:var(--red)"></div><div class="lbl"><b>red</b><span>#ff5c5c</span><em>6.7:1</em></div></div>
+    <div class="swatch"><div class="fill" style="background:var(--violet)"></div><div class="lbl"><b>violet</b><span>#a685ff</span><em>7.1:1</em></div></div>
+    <div class="swatch"><div class="fill" style="background:var(--blue)"></div><div class="lbl"><b>blue</b><span>#4fb8ff</span><em>9.2:1</em></div></div>
+    <div class="swatch"><div class="fill" style="background:var(--slate)"></div><div class="lbl"><b>slate</b><span>#9aa3b8</span><em>8.0:1</em></div></div>
+  </div>
+  <div class="btn-row" style="margin-top:14px">
+    <span class="badge s-green"><span class="d"></span>Aprovado</span>
+    <span class="badge s-amber"><span class="d"></span>Pendente</span>
+    <span class="badge s-red"><span class="d"></span>Rejeitado</span>
+    <span class="badge s-violet"><span class="d"></span>Comprometido</span>
+    <span class="badge s-blue"><span class="d"></span>Info</span>
+    <span class="badge s-slate"><span class="d"></span>Neutro</span>
+  </div>
+
+  <h2>Categorias de produto (paleta separada dos estados, por regra já existente no app)</h2>
+  <div style="background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);padding:16px 18px">
+    <span class="cat-chip" style="background:rgba(91,110,232,.16);color:#5b6ee8">● TV</span>
+    <span class="cat-chip" style="background:rgba(45,212,196,.16);color:#2dd4c4">● AC</span>
+    <span class="cat-chip" style="background:rgba(227,93,224,.16);color:#e35de0">● Mobile</span>
+    <span class="cat-chip" style="background:rgba(255,138,76,.16);color:#ff8a4c">● Refrigerators</span>
+    <span class="cat-chip" style="background:rgba(34,195,230,.16);color:#22c3e6">● Washer/Dryer</span>
+    <span class="cat-chip" style="background:rgba(136,146,166,.16);color:#8892a6">● Matriz</span>
+    <span class="cat-chip" style="background:rgba(167,139,250,.16);color:#a78bfa">● Monitors</span>
+    <p class="fine">7 matizes, todos ≥4.6:1 sobre o fundo preto, nenhum coincide com as cores de estado acima: um chip de categoria nunca é lido como status ao lado de uma barra de progresso.</p>
+  </div>
+
+  <h2>Botões</h2>
+  <div class="btn-row">
+    <button class="btn-acc">Ação primária (Work)</button>
+    <button class="btn-po">Ação primária (Budget)</button>
+    <button class="btn-ghost">Ação secundária</button>
+    <button class="btn-del">Excluir</button>
+  </div>
+
+  <h2>Card de exemplo (mesma composição de um painel real: KPIs + lista + medidor)</h2>
+  <div class="demo-row">
+    <div class="panel">
+      <div class="panel-h"><h3>Visão geral: Budget</h3><span class="tag">exemplo</span></div>
+      <div class="panel-b">
+        <div class="kpis">
+          <div class="kpi"><span class="bar" style="background:var(--blue)"></span><div class="lbl">Consumido</div><div class="num" style="color:var(--blue)">62%</div></div>
+          <div class="kpi"><span class="bar" style="background:var(--violet)"></span><div class="lbl">Comprometido</div><div class="num" style="color:var(--violet)">24%</div></div>
+          <div class="kpi"><span class="bar" style="background:var(--amber)"></span><div class="lbl">Aguardando</div><div class="num" style="color:var(--amber)">9%</div></div>
+        </div>
+        <div class="meter">
+          <span style="width:62%;background:var(--blue)"></span>
+          <span style="width:24%;background:var(--violet)"></span>
+          <span style="width:9%;background:var(--amber)"></span>
+        </div>
+        <div style="margin-top:16px">
+          <div class="row-item"><span class="pin" style="background:var(--po)"></span><div class="t"><b>Campanha TV — Verão 2026</b><span>PO aprovada · R$ 480k</span></div></div>
+          <div class="row-item"><span class="pin" style="background:var(--green)"></span><div class="t"><b>Fee agência — AC</b><span>Faturada · R$ 92k</span></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel glass">
+      <div class="panel-h"><h3>Card translúcido (glass)</h3><span class="tag">elevação</span></div>
+      <div class="panel-b">
+        <p class="l2" style="color:var(--txt-2);font-size:13px">Variante para elementos flutuantes (top bar, modal, drawer): fundo semitransparente + blur, para deixar o padrão de grade/glow perceptível por trás mesmo em painéis elevados.</p>
+        <div class="btn-row" style="margin-top:14px"><button class="btn-ghost">Fechar</button><button class="btn-acc">Confirmar</button></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>Estilo Realidade Virtual: proposta de tokens para aprovação · gerado a partir do mapeamento de <code>index.html</code> (design system atual "porcelain & graphite") · nenhum arquivo do app foi alterado.</footer>
+</div>
+</body>
+</html>
