@@ -2546,6 +2546,12 @@ function openFundDetail(pid){
   const capByM={};
   DATA.tetos.filter(t=>t.fund_id===pid).forEach(t=>{const m=String(t.competencia).slice(0,7);capByM[m]=(capByM[m]||0)+(+t.teto||0);});
   DATA.rateio.filter(r=>r.fund_id===pid).forEach(r=>{const m=String(r.competencia).slice(0,7);capByM[m]=(capByM[m]||0)+(+r.valor||0);});
+  // Approved (gross, pre-corte) beside the effective cap, same months — an
+  // agency's cap is already net, so this mirrors capByM but with teto_aprovado
+  // for tetos rows (rateio_alocacao has no gross/net split of its own).
+  const capAprovadoByM={};
+  DATA.tetos.filter(t=>t.fund_id===pid).forEach(t=>{const m=String(t.competencia).slice(0,7);capAprovadoByM[m]=(capAprovadoByM[m]||0)+(t.teto_aprovado!=null?+t.teto_aprovado:(+t.teto||0));});
+  DATA.rateio.filter(r=>r.fund_id===pid).forEach(r=>{const m=String(r.competencia).slice(0,7);capAprovadoByM[m]=(capAprovadoByM[m]||0)+(+r.valor||0);});
   const posByM={}; DATA.pos.filter(po=>po.fund_id===pid).forEach(po=>{const m=String(po.competencia).slice(0,7);(posByM[m]=posByM[m]||[]).push(po);});
   const months=[...new Set([...Object.keys(capByM),...Object.keys(posByM)])].sort();
   const nowM=new Date().toISOString().slice(0,7);
@@ -2577,6 +2583,7 @@ function openFundDetail(pid){
   const allPos=DATA.pos.filter(po=>po.fund_id===pid);
   const sumAll=st=>allPos.filter(po=>st.includes(po.status)).reduce((s,po)=>s+(+po.valor||0),0);
   const totCap=Object.values(capByM).reduce((a,b)=>a+(+b||0),0);
+  const totCapAprovado=Object.values(capAprovadoByM).reduce((a,b)=>a+(+b||0),0);
   const totConsu=sumAll(CONS), totComp=sumAll(COMP), totPend=sumAll(PEND);
   const totCons=totConsu+totComp+totPend;
   const saldoTot=totCap-totCons; const rawTot=totCap?totCons/totCap*100:0; const pctTot=Math.min(100,rawTot); const overT=rawTot>100.5, nearT=!overT&&rawTot>=90;
@@ -2586,7 +2593,7 @@ function openFundDetail(pid){
   const kpi=(lbl,val,c)=>`<div style="flex:1;min-width:118px;border:1px solid var(--line);border-radius:11px;padding:11px 13px;background:var(--paper-2)"><div style="font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">${lbl}</div><div class="mono stat-num" style="font-size:16px;font-weight:800;margin-top:3px;color:${c||'var(--txt-1)'}">${val}</div></div>`;
   const summary=`
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
-      ${kpi('Total cap',BRL(totCap))}${kpi('Consumed',BRL(totConsu),'var(--blue)')}${kpi('Committed',BRL(totComp),'var(--violet)')}${kpi('Awaiting approval',BRL(totPend),'var(--amber-ink)')}${kpi('Balance',BRL(saldoTot),saldoTot<0?'var(--po)':'var(--txt-1)')}
+      ${(canSeeCorte()&&totCapAprovado>totCap+0.005)?kpi('Approved',BRL(totCapAprovado)):''}${kpi('Total cap',BRL(totCap))}${kpi('Consumed',BRL(totConsu),'var(--blue)')}${kpi('Committed',BRL(totComp),'var(--violet)')}${kpi('Awaiting approval',BRL(totPend),'var(--amber-ink)')}${kpi('Balance',BRL(saldoTot),saldoTot<0?'var(--po)':'var(--txt-1)')}
     </div>
     ${(p.rateio&&catKeys.length)?`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;margin-bottom:14px">
       <div style="font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:9px">Rateio — allocation by budget</div>
