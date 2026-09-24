@@ -1662,10 +1662,13 @@ function navBadge(id){
 const NAV_HUBS=[
   {id:'dash',label:'Home',screens:['dash']},
   {id:'list',label:'Projects',screens:['list','timeline','weekly']},
-  {id:'bo',label:'Budget',screens:['bo','costcenter','budgets','campanhas','funds','saldos','people']},
+  {id:'bo',label:'Budget',screens:['bo','costcenter','budgets','campanhas','funds','saldos']},
   {id:'pos',label:'POs',screens:['pos','mypos','reqpo']},
   {id:'team',label:'Team',screens:['team']},
-  {id:'mytasks',label:'Notes',screens:['mytasks']}
+  {id:'mytasks',label:'Notes',screens:['mytasks']},
+  /* Admin-only — People & Roles gets its own top-level item instead of
+     living as a Budget tab, same as every other hub here. */
+  {id:'people',label:'People & Roles',screens:['people'],adminOnly:true}
 ];
 function navHubFor(screen){ return NAV_HUBS.find(h=>h.screens.includes(screen)); }
 function buildNav(){
@@ -1673,6 +1676,7 @@ function buildNav(){
   const valid=new Set([...nav.work,...(PO_ACCESS?nav.budget:[]),...(nav.global||[])]);
   let html='';
   NAV_HUBS.forEach(h=>{
+    if(h.adminOnly&&PAPEL!=='admin'&&!isManager) return;
     const avail=h.screens.filter(s=>valid.has(s));
     if(!avail.length) return;
     const on=avail.includes(SCREEN);
@@ -1785,13 +1789,15 @@ function go(screen){
   $('#hubTabsHost').innerHTML=hubTabsHTML();
   $('#viewAsBar').innerHTML=viewAsBarHTML(screen,meta);
   // CTA per screen (mirrors the prototype)
-  if(['dash','list','timeline'].includes(screen)){
-    const statusChip=STATUS_FILTER?`<button onclick="setStatusFilter('')" style="padding:8px 12px;border-radius:9px;border:1px solid var(--line-2);background:var(--card);font-size:12px;font-weight:600;color:var(--txt-2);margin-right:8px">Status: ${esc(statusOf(STATUS_FILTER).name)} ✕</button>`:'';
-    const exportBtn=screen==='list'?'<button class="btn-ghost" onclick="exportWorkXLSX()">Exportar Excel</button>':'';
-    /* Agencies read and work the projects shared with them; creating a project
-       stays with the internal profiles that own the pipeline. */
+  if(screen==='list'){
+    // Projects.dc.html keeps the header to just the title + "New project" —
+    // search/filters/view-switcher move down into the page itself (see
+    // renderProjetos()'s own filter row), not stacked beside the H1.
     const canNewProj=!['agencia','tcl_member'].includes(effPapel())&&!VIEW_AS;
-    $('#ctaBox').innerHTML=`${screen==='list'?projSearchHTML():''}${['dash','list'].includes(screen)?ptipoFilterHTML():''}${['list','timeline'].includes(screen)?catFilterHTML():''}${statusChip}${exportBtn}<button class="btn-ghost" onclick="openStageGuide()">Stage guide</button>${canNewProj?'<button class="btn-acc" onclick="openProjNew()">+ New project</button>':''}`;
+    $('#ctaBox').innerHTML=canNewProj?'<button class="btn-acc" onclick="openProjNew()">New project</button>':'';
+  } else if(['dash','timeline'].includes(screen)){
+    const statusChip=STATUS_FILTER?`<button onclick="setStatusFilter('')" style="padding:8px 12px;border-radius:9px;border:1px solid var(--line-2);background:var(--card);font-size:12px;font-weight:600;color:var(--txt-2);margin-right:8px">Status: ${esc(statusOf(STATUS_FILTER).name)} ✕</button>`:'';
+    $('#ctaBox').innerHTML=`${screen==='dash'?ptipoFilterHTML():''}${screen==='timeline'?catFilterHTML():''}${statusChip}`;
   } else if(screen==='funds'&&demoWritable(['admin','marketing'].includes(PAPEL))){
     $('#ctaBox').innerHTML='<button class="btn-acc" style="background:var(--po)" onclick="openFundNew()">+ New fund</button>';
   } else if(screen==='campanhas'&&demoWritable(['admin','marketing'].includes(PAPEL))){
@@ -2136,8 +2142,19 @@ function renderProjetos(){
     }).join('');
     if(!body) body='<div class="empty">No projects found.</div>';
   }
+  // Filter row — search, type, category, plus the export/stage-guide tools
+  // this app has beyond the prototype — with the List/Board/By category
+  // switcher on the right, same row layout as Projects.dc.html.
+  const filterRow=`<div style="display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:16px">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      ${projSearchHTML()}${ptipoFilterHTML()}${catFilterHTML()}
+      <button class="btn-ghost" onclick="exportWorkXLSX()">Export Excel</button>
+      <button class="btn-ghost" onclick="openStageGuide()">Stage guide</button>
+    </div>
+    ${groupToggle}
+  </div>`;
   return `<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px">${summary}</div>
-    <div style="display:flex;justify-content:flex-end;margin-bottom:12px">${groupToggle}</div>
+    ${filterRow}
     ${body}`;
 }
 /* Compact budget cell for the Projects list (F1, P2) — a thin v2-segbar plus
