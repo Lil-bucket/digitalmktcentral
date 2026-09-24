@@ -1615,7 +1615,7 @@ document.addEventListener('visibilitychange',()=>{ if(!document.hidden) refreshA
    NAV + ROUTING — espelha o protótipo aprovado (menu por papel)
    ============================================================ */
 const W_LABELS={dash:'Dashboard',board:'Board',list:'List',timeline:'Timeline',team:'Team',weekly:'Weekly Status',mytasks:'Tasks',agencywork:'Assigned Work',notif:'Notifications'};
-const B_LABELS={saldos:'Balance decisions',bo:'Overview',budgets:'Categories',costcenter:'Cost center',funds:'Funds',campanhas:'Campaigns',pos:'POs & Approvals',approvals:'Approvals',podesk:'PO Desk',people:'People & Roles',reqpo:'Request PO',mypos:'My POs',balance:'Balance'};
+const B_LABELS={saldos:'Balance decisions',bo:'Overview',budgets:'Categories',costcenter:'Cost center',funds:'Funds',campanhas:'Timeline',pos:'POs & Approvals',approvals:'Approvals',podesk:'PO Desk',people:'People & Roles',reqpo:'Request PO',mypos:'My POs',balance:'Balance'};
 const ROLE_NAV={
   admin:      {work:['dash','list','timeline','team','weekly','mytasks'], budget:['bo','costcenter','budgets','campanhas','funds','pos','saldos','people']},
   marketing:  {work:['dash','list','timeline','weekly','mytasks'],        budget:['bo','costcenter','budgets','campanhas','funds','pos','saldos']},
@@ -1662,7 +1662,7 @@ function navBadge(id){
 const NAV_HUBS=[
   {id:'dash',label:'Home',screens:['dash']},
   {id:'list',label:'Projects',screens:['list','timeline','weekly']},
-  {id:'bo',label:'Budget',screens:['bo','costcenter','budgets','campanhas','funds','saldos']},
+  {id:'bo',label:'Budget',screens:['bo','budgets','costcenter','campanhas','funds','saldos']},
   {id:'pos',label:'POs',screens:['pos','mypos','reqpo']},
   {id:'team',label:'Team',screens:['team']},
   {id:'mytasks',label:'Notes',screens:['mytasks']},
@@ -1724,7 +1724,7 @@ const SCREEN_META={
   costcenter:{t:'Budget',s:'Budget · Cost center / account, rateios',mod:'budget'},
   budgets:{t:'Budget',s:'Budget · Categories',mod:'budget'},
   funds:{t:'Budget',s:'Budget · Consumption per fund',mod:'budget'},
-  campanhas:{t:'Budget',s:'Budget · Grouping layer above Fund',mod:'budget'},
+  campanhas:{t:'Budget',s:'Budget · Campaigns and funds by month',mod:'budget'},
   pos:{t:'POs',s:'Budget · Single queue by lifecycle phase',mod:'budget'},
   mypos:{t:'POs',s:'Budget · Your agency\'s POs',mod:'budget'},
   approvals:{t:'Approvals',s:'Budget · Pending funds and POs',mod:'budget'},
@@ -6193,7 +6193,9 @@ async function deletarOrcamento(id){
    optional parent and a screen that rolls several funds up into one card.
    ============================================================ */
 // Remembered like FUND_VIEW, so switching screens and coming back keeps the view.
-let CAMPANHA_VIEW=(function(){try{return localStorage.getItem('campanha_view')||'list';}catch(e){return 'list';}})();
+// Defaults to the timeline view — Budget-Timeline.dc.html's own tab shows
+// the gantt first, with List/By-category as the secondary switch inside it.
+let CAMPANHA_VIEW=(function(){try{return localStorage.getItem('campanha_view')||'tl';}catch(e){return 'tl';}})();
 function campanhaSetView(v){ CAMPANHA_VIEW=v; try{localStorage.setItem('campanha_view',v);}catch(e){} go('campanhas'); }
 function campStatusMeta(s){
   return ({planejada:{t:'Planned',c:'s-blue'},ativa:{t:'Active',c:'s-green'},encerrada:{t:'Closed',c:'s-slate'}})[s]||{t:s||'—',c:'s-slate'};
