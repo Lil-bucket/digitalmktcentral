@@ -8041,65 +8041,98 @@ function accBreakdownData(){
   });
   return map;
 }
-/* Exactly two blocks — one per account — each with a 100% share bar split by
-   product category (labelled with its cost center) plus a line per category. */
-function accountsOverviewBlock(){
-  const map=accBreakdownData();
-  const catOrder=(a,b)=>{ let ia=PRODUCT_CATS.indexOf(a), ib=PRODUCT_CATS.indexOf(b); if(ia<0)ia=99; if(ib<0)ib=99; return ia-ib||a.localeCompare(b); };
-  const card=acc=>{
-    const a=map[acc]||{acc,cats:{}};
-    const rows=Object.values(a.cats).filter(r=>r.b||r.cons||r.comp||r.pend).sort((x,y)=>catOrder(x.cat,y.cat));
-    const tot=rows.reduce((t,r)=>({b:t.b+r.b,cons:t.cons+r.cons,comp:t.comp+r.comp,pend:t.pend+r.pend}),{b:0,cons:0,comp:0,pend:0});
-    const totSaldo=tot.b-tot.cons-tot.comp-tot.pend;
-    const share=r=>tot.b?r.b/tot.b*100:0;
-    const open=!!ACC_OV_OPEN[acc];
-    const shareBar=rows.length?`<div style="display:flex;height:22px;border-radius:8px;overflow:hidden;background:var(--line-2);margin-top:14px">
-      ${rows.map(r=>{const m=catMeta(r.cat),pc=share(r);return pc>0?`<span title="${esc(m.label)} · CC ${esc(CAT_CC[r.cat]||'—')} · ${pc.toFixed(1)}% · ${BRL(r.b)}" style="width:${pc}%;background:${m.c}"></span>`:'';}).join('')}
-    </div>`:'';
-    const legend=rows.length?`<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px">
-      ${rows.map(r=>{const m=catMeta(r.cat);return `<span style="display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:var(--txt-2)"><span style="width:9px;height:9px;border-radius:3px;background:${m.c}"></span>${esc(m.label)} <span class="mono" style="font-weight:800;color:var(--txt)">${share(r).toFixed(1)}%</span></span>`;}).join('')}
-    </div>`:'';
-    const am=accMetaOf(acc);
-    return `<div style="background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;box-shadow:var(--sh-1);height:100%;display:flex;flex-direction:column">
-      <div style="padding:16px 18px;border-bottom:${open?'1px solid var(--line)':'none'}">
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-          <span class="ich" style="width:34px;height:34px;background:${am.bg};color:${am.c};flex-shrink:0">${icn(am.icon,17)}</span>
-          <span style="flex:1;min-width:140px">
-            <b style="font-family:var(--sans);font-size:var(--fs-lg);display:block;line-height:1.15">${esc(ACC_LABEL[acc]||('Account '+acc))}</b>
-            <span class="mono" style="font-size:var(--fs-eyebrow);font-weight:700;color:var(--txt-3);letter-spacing:.02em">Account ${esc(acc)}</span>
-          </span>
-          <span style="text-align:right;flex-shrink:0">
-            <span class="mono" style="font-size:var(--fs-xl);font-weight:800;display:block;line-height:1.1;color:var(--txt)" title="Total budget in the period">${BRL(tot.b)}</span>
-            <span class="mono" style="font-size:var(--fs-eyebrow);color:var(--txt-3)">total budget</span>
-          </span>
-          <span style="width:1px;height:34px;background:var(--line);flex-shrink:0"></span>
-          <span style="text-align:right;flex-shrink:0;min-width:120px">
-            <span class="mono" style="font-size:var(--fs-base);font-weight:800;display:block;line-height:1.1;color:${totSaldo<0?'var(--po)':'var(--green)'}" title="Balance = budget − consumed − committed − pending">${BRL(totSaldo)}</span>
-            <span class="mono" style="font-size:var(--fs-eyebrow);color:var(--txt-3)">balance · ${BRL(tot.cons+tot.comp)} used</span>
-          </span>
-          <button class="chip-btn" onclick="toggleAccOv('${esc(acc)}')">${open?'Hide values':'Values by CC'}</button>
+/* "Categories / Accounts" table — Budget.dc.html's own toggle table: one row
+   per category or per account, scaled to Approved with Consumed/Committed/
+   Available solid and Cut hatched. Reuses boCtx (category rows) and
+   accBreakdownData (account rows, summed across categories) rather than a
+   third aggregation pass — same figures the hero and the by-account cards
+   already show, just laid out as the mockup's table+toggle instead of an
+   accordion of cards. Cut/Approved columns only render for canSeeCorte() —
+   an agency profile never sees the gross/cut split, same gate the hero uses. */
+let BO_TABLE_VIEW='category';
+function boSetTableView(v){ BO_TABLE_VIEW=v; go(SCREEN); }
+function boCatAccRows(){
+  const _c=boCtx();
+  const seeCut=canSeeCorte();
+  const cutByCat=(catKey)=>{
+    if(!seeCut) return 0;
+    let c=0;
+    _c.funds.filter(p=>(String(p.product_category||'').trim()||'Uncategorized')===catKey).forEach(p=>{
+      const cm=fundMonthlyCuts(p.id); Object.keys(cm).forEach(m=>{ if(boInPeriod(m+'-01')) c+=cm[m]; });
+    });
+    return c;
+  };
+  if(BO_TABLE_VIEW==='account'){
+    const map=accBreakdownData();
+    return ACC_ORDER.filter(a=>map[a]).map(acc=>{
+      const a=map[acc];
+      const rows=Object.values(a.cats);
+      const bu=rows.reduce((s,r)=>s+r.b,0), cons=rows.reduce((s,r)=>s+r.cons,0), comp=rows.reduce((s,r)=>s+r.comp,0);
+      const cut=seeCut?rows.reduce((s,r)=>s+cutByCat(r.cat),0):0;
+      const am=accMetaOf(acc);
+      return {name:ACC_LABEL[acc]||('Account '+acc),meta:'Account '+acc,c:am.c,bu,cons,comp,cut,ap:bu+cut};
+    });
+  }
+  const byCat={}; _c.funds.forEach(p=>{ const k=(String(p.product_category||'').trim()||'Uncategorized'); (byCat[k]=byCat[k]||[]).push(p); });
+  return Object.keys(byCat).sort((a,b)=>{let ia=PRODUCT_CATS.indexOf(a),ib=PRODUCT_CATS.indexOf(b);if(ia<0)ia=99;if(ib<0)ib=99;return ia-ib||a.localeCompare(b);}).map(k=>{
+    const list=byCat[k]; const m=catMeta(k);
+    const bu=list.reduce((s,p)=>s+(_c.tetoBy[p.id]||0),0), cons=list.reduce((s,p)=>s+(_c.consBy[p.id]||0),0), comp=list.reduce((s,p)=>s+(_c.compBy[p.id]||0),0);
+    const cut=cutByCat(k);
+    return {name:m.label,meta:`${list.length} fund${list.length===1?'':'s'}`,c:m.c,bu,cons,comp,cut,ap:bu+cut};
+  });
+}
+function boCatAccTable(){
+  const seeCut=canSeeCorte();
+  const rows=boCatAccRows();
+  if(!rows.length) return '';
+  const tot=rows.reduce((t,r)=>({bu:t.bu+r.bu,cons:t.cons+r.cons,comp:t.comp+r.comp,cut:t.cut+r.cut,ap:t.ap+r.ap}),{bu:0,cons:0,comp:0,cut:0,ap:0});
+  const allRows=[...rows,{name:'Total',meta:BO_TABLE_VIEW==='category'?`${rows.length} categories`:`${rows.length} accounts`,c:'var(--txt)',bold:true,...tot}];
+  const tr=r=>{
+    const av=r.bu-r.cons-r.comp;
+    const base=seeCut?(r.ap||1):(r.bu||1);
+    const w1=base?Math.min(100,r.cons/base*100):0;
+    const w2=base?Math.min(100-w1,r.comp/base*100):0;
+    const w3=base?Math.max(0,Math.min(100-w1-w2,av/base*100)):0;
+    const w4=seeCut&&base?Math.min(100-w1-w2-w3,r.cut/base*100):0;
+    const pct=r.bu?Math.round((r.cons+r.comp)/r.bu*100):0;
+    return `<div style="display:grid;grid-template-columns:minmax(0,1.9fr) ${seeCut?'repeat(6,minmax(0,.8fr))':'repeat(4,minmax(0,.8fr))'} minmax(0,1.5fr);gap:12px;padding:12px 0;border-bottom:1px solid var(--line);align-items:center;font-weight:${r.bold?800:400}">
+      <div style="min-width:0;display:flex;align-items:center;gap:9px"><span style="width:8px;height:8px;border-radius:50%;flex-shrink:0;background:${r.c}"></span><div style="min-width:0"><div style="font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.name)}</div><div class="mono" style="font-size:11px;color:var(--txt-3);font-weight:400">${esc(r.meta)}</div></div></div>
+      ${seeCut?`<div class="mono" style="text-align:right;font-size:12.5px">${BRL(r.ap)}</div><div class="mono" style="text-align:right;font-size:12.5px;color:var(--po)">${BRL(r.cut)}</div>`:''}
+      <div class="mono" style="text-align:right;font-size:12.5px">${BRL(r.bu)}</div>
+      <div class="mono" style="text-align:right;font-size:12.5px;color:var(--txt-2)">${BRL(r.cons)}</div>
+      <div class="mono" style="text-align:right;font-size:12.5px;color:var(--txt-2)">${BRL(r.comp)}</div>
+      <div class="mono" style="text-align:right;font-size:12.5px;font-weight:700">${BRL(av)}</div>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 46px;gap:8px;align-items:center">
+        <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--line-2)">
+          <span style="width:${w1}%;background:var(--blue)"></span>
+          <span style="width:${w2}%;background:var(--violet)"></span>
+          <span style="width:${w3}%;background:var(--line-2);border:1px solid var(--line)"></span>
+          ${seeCut?`<span style="width:${w4}%;background:repeating-linear-gradient(135deg,var(--po) 0 2px,rgba(255,59,78,.22) 2px 5px)"></span>`:''}
         </div>
-        ${rows.length?shareBar+legend:'<div style="margin-top:12px;font-size:var(--fs-sm);color:var(--txt-3)">No amounts in this account for the selected period.</div>'}
+        <span class="mono" style="font-size:12px;text-align:right">${pct}%</span>
       </div>
-      ${(open&&rows.length)?`<div style="padding:6px 18px 12px">
-        ${rows.map(r=>{const m=catMeta(r.cat),s=r.b-r.cons-r.comp-r.pend,pc=share(r);
-          const c=r.b?Math.min(100,r.cons/r.b*100):0, cm=r.b?Math.min(100-c,r.comp/r.b*100):0, cp=r.b?Math.min(100-c-cm,r.pend/r.b*100):0;
-          return `<div style="padding:9px 0;border-bottom:1px solid #f4f5f8">
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <span class="ich" style="width:24px;height:24px;background:${m.bg};color:${m.c};flex-shrink:0">${icn(m.icon,13)}</span>
-            <span style="flex:1;min-width:120px"><b style="font-size:12.5px">${esc(m.label)}</b><span class="mono" style="font-size:10.5px;color:var(--txt-3);display:block">CC ${esc(CAT_CC[r.cat]||'—')}</span></span>
-            <span class="mono" style="font-size:11px;font-weight:800;padding:3px 8px;border-radius:20px;background:${m.bg};color:${m.c};flex-shrink:0">${pc.toFixed(1)}%</span>
-            <span class="mono" style="font-size:11.5px;color:var(--txt-2);width:190px;text-align:right;flex-shrink:0" title="Consumed + committed / budget">${BRL(r.cons+r.comp)} <span style="color:var(--txt-3)">/ ${BRL(r.b)}</span></span>
-            <span class="mono" style="font-size:11.5px;font-weight:700;width:104px;text-align:right;flex-shrink:0;color:${s<0?'var(--po)':'var(--green)'}">${BRL(s)}</span>
-          </div>
-          <span class="pbar" style="margin-top:6px"><span style="width:${c}%;background:var(--blue)"></span><span style="width:${cm}%;background:var(--violet)"></span><span style="width:${cp}%;background:var(--amber)"></span></span>
-        </div>`;}).join('')}
-      </div>`:''}
     </div>`;
   };
-  return `<div>
-    <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 12px"><h3 style="font-family:var(--sans);font-size:var(--fs-base)">By account</h3><span style="font-size:var(--fs-xs);color:var(--txt-3)">share of each account's budget by cost center / category${BO_PER.mode!=='all'?' — filtered by the selected period':''}${BO_SCOPE==='nolabg'?' · LABG excluded':''}</span></div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:14px;align-items:stretch">${ACC_ORDER.map(card).join('')}</div>
+  return `<div class="panel" style="margin-top:16px">
+    <div class="panel-h" style="flex-wrap:wrap;gap:12px">
+      <div><h3>${BO_TABLE_VIEW==='category'?'Categories':'Accounts'}</h3><span class="tag">bars scaled to ${seeCut?'approved':'budgeted'} · cut shown hatched</span></div>
+      <div style="display:flex;padding:4px;border-radius:11px;background:var(--paper-2);border:1px solid var(--line)">
+        <button onclick="boSetTableView('category')" style="padding:6px 14px;border-radius:8px;border:none;cursor:pointer;font-weight:600;font-size:13px;background:${BO_TABLE_VIEW==='category'?'var(--ink)':'transparent'};color:${BO_TABLE_VIEW==='category'?'var(--paper)':'var(--txt-2)'}">By category</button>
+        <button onclick="boSetTableView('account')" style="padding:6px 14px;border-radius:8px;border:none;cursor:pointer;font-weight:600;font-size:13px;background:${BO_TABLE_VIEW==='account'?'var(--ink)':'transparent'};color:${BO_TABLE_VIEW==='account'?'var(--paper)':'var(--txt-2)'}">By account</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto;margin-top:12px"><div style="min-width:${seeCut?'1000px':'760px'}">
+      <div style="display:grid;grid-template-columns:minmax(0,1.9fr) ${seeCut?'repeat(6,minmax(0,.8fr))':'repeat(4,minmax(0,.8fr))'} minmax(0,1.5fr);gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:12px;color:var(--txt-3);font-weight:600">
+        <div>${BO_TABLE_VIEW==='category'?'Category':'Account'}</div>${seeCut?'<div style="text-align:right">Approved</div><div style="text-align:right">Cut</div>':''}<div style="text-align:right">Budgeted</div><div style="text-align:right">Consumed</div><div style="text-align:right">Committed</div><div style="text-align:right">Available</div><div style="text-align:right">Use of ${seeCut?'approved':'budgeted'}</div>
+      </div>
+      ${allRows.map(tr).join('')}
+    </div></div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:16px;font-size:12.5px;color:var(--txt-2)">
+      <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:3px;background:var(--blue)"></span>Consumed</span>
+      <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:3px;background:var(--violet)"></span>Committed</span>
+      <span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:3px;background:var(--line-2);border:1px solid var(--line)"></span>Available</span>
+      ${seeCut?`<span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:3px;background:repeating-linear-gradient(135deg,var(--po) 0 2px,rgba(255,59,78,.22) 2px 4px)"></span>Cut</span>`:''}
+    </div>
   </div>`;
 }
 /* The Overview's working set: approved funds this profile may see, narrowed
@@ -8526,7 +8559,7 @@ function renderBudgetOverview(isBalance){
       </div>
     </div>`;
   const showAccounts=effIsManager()||['admin','financeiro'].includes(effPapel());
-  const accountsGroup=showAccounts?accountsOverviewBlock():'';
+  const accountsGroup=showAccounts?boCatAccTable():'';
   /* Same sequence Budget.dc.html runs: KPI hero + bar, then By category/By
      activity, then Month by month — with the extra real sections this app
      has (this-month balance, by-account cards) appended after rather than
