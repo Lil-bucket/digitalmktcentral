@@ -244,6 +244,9 @@
   .search-in:focus{border-color:var(--accent-deep)}
   .proj-row:hover{background:rgba(255,255,255,.025)}
   .rt-btn:hover{background:rgba(255,255,255,.08)!important}
+  .pd-subnav button{padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;color:var(--txt-2)}
+  .pd-subnav button:hover{color:var(--txt)}
+  .pd-subnav button.on{color:var(--txt);background:rgba(255,255,255,.09)}
   #ptBody h3{font-size:16px;font-weight:700;margin:14px 0 6px} #ptBody p{margin:0 0 10px;color:var(--txt-soft)} #ptBody ul,#ptBody ol{margin:0 0 10px 22px;color:var(--txt-soft)} #ptBody li{margin:3px 0}
 
   /* ===== MODAL ===== */
@@ -2430,47 +2433,119 @@ async function pdUnlinkCampanha(pid){
 }
 function pdHeroHTML(p){
   const bt=businessTypeOf(p.ptipo);
-  const di=deadlineInfo(p);
   const canEditProj=canEdit(p);
-  return `<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">
-    <div style="font-size:13px;color:var(--txt-3);display:flex;gap:8px"><a onclick="go('list')" style="cursor:pointer">Projects</a><span>/</span><span style="color:var(--txt)">${esc(p.nome)}</span></div>
+  const canDup=!['agencia','tcl_member'].includes(effPapel())&&!VIEW_AS;
+  const st=projEffStart(p);
+  const range=st&&p.prazo?`${fmtDate(st)} – ${fmtDate(p.prazo)}`:p.prazo?'Due '+fmtDate(p.prazo):'No dates';
+  const chip=(t,c)=>`<span style="font-size:12.5px;padding:4px 12px;border-radius:20px;border:1px solid ${c?c+'73':'rgba(255,255,255,.18)'};color:${c||'var(--txt-2)'}">${t}</span>`;
+  return `<div style="display:flex;flex-direction:column;gap:10px">
+    <div style="font-size:13px;color:var(--txt-2);display:flex;gap:8px"><a onclick="go('list')" style="cursor:pointer">Projects</a><span>/</span><span style="color:var(--txt)">${esc(p.nome)}</span></div>
     <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap">
       <div style="display:flex;flex-direction:column;gap:10px;max-width:780px">
-        <h1 style="font-size:34px;line-height:1.08;font-weight:800;letter-spacing:-.02em">${esc(p.nome)}</h1>
+        <h1 style="font-size:38px;line-height:1.08;font-weight:800;letter-spacing:-.03em">${esc(p.nome)}</h1>
         <div style="display:flex;flex-wrap:wrap;gap:8px">
-          ${bt?`<span style="font-size:12.5px;padding:4px 12px;border-radius:20px;border:1px solid ${bt.color}55;color:${bt.color}">${esc(bt.name)}</span>`:''}
-          ${(p.categorias||[]).map(c=>`<span style="font-size:12.5px;padding:4px 12px;border-radius:20px;border:1px solid var(--line-2);color:var(--txt-2)">${esc(catKeyLabel(c))}</span>`).join('')}
-          <span style="font-size:12.5px;padding:4px 12px;border-radius:20px;border:1px solid var(--line-2);color:var(--txt-2)">${p.prazo?'Due '+fmtDate(p.prazo):'No due date'}</span>
-          <span style="font-size:12.5px;padding:4px 12px;border-radius:20px;border:1px solid var(--line-2);color:var(--txt-2)">Owner: ${esc(respName(p.owner||p.resp)||'—')}</span>
+          ${bt?chip(esc(bt.name)):''}
+          ${(p.categorias||[]).map(c=>chip(esc(catKeyLabel(c)),catMeta(c).c)).join('')}
+          ${chip(esc(range))}
+          ${chip('Owner: '+esc(respName(p.owner||p.resp)||'—'))}
+          ${projAgencias(p).map(a=>chip(esc(a))).join('')}
         </div>
       </div>
-      <div style="display:flex;gap:10px">
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        ${canDup?`<button class="btn-ghost" onclick="dupProj('${esc(p.id)}')">Duplicate</button>`:''}
         ${canEditProj?`<button class="btn-ghost" onclick="editProj('${esc(p.id)}')">Edit project</button>`:''}
-        <button class="btn-po" onclick="openReqPO()">Request PO</button>
+        ${demoWritable(PO_ACCESS)&&((ROLE_NAV[effPapel()]||{}).budget||[]).length?`<button class="btn-po" onclick="openReqPO()">Request PO</button>`:''}
       </div>
     </div>
   </div>`;
 }
 function pdStatsHTML(p){
-  const st=statusOf(p.status||autoStatus(p)); const hp=healthPill(p.status||autoStatus(p));
+  const sid=p.status||autoStatus(p); const st=statusOf(sid); const hp=healthPill(sid);
+  const HC={no_prazo:'47,216,138',atencao:'255,176,32',atrasado:'255,92,92',bloqueado:'166,133,255',concluido:'154,163,184'}[sid]||'154,163,184';
   const prog=computeProg(p);
-  const risky=(p.tasks||[]).filter(t=>!t.done&&t.status&&['atrasado','bloqueado'].includes(t.status));
-  const peopleN=(p.envolvidos||[]).length+(p.owner?1:0);
+  const risky=(p.tasks||[]).filter(t=>!t.done&&t.status&&['atrasado','bloqueado','atencao'].includes(t.status));
+  const people=[p.owner||p.resp,...(p.envolvidos||[]).map(e=>e.nome||e.email)].filter(Boolean);
+  const ags=projAgencias(p);
   const camp=(DATA.campanhas||[]).find(c=>c.id===p.campanha_id);
   const bud=camp?campTotals(camp.id):null;
-  const cell=(eyebrow,body,accentCol)=>`<div class="v2-card" style="padding:16px 18px${accentCol?';border-color:'+accentCol+'55':''}"><div class="v2-card-eyebrow">${eyebrow}</div>${body}</div>`;
-  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:22px">
-    ${cell('CURRENT STATUS',`<div style="display:flex;align-items:center;gap:8px;margin-top:6px"><span style="width:10px;height:10px;border-radius:50%;background:${hp.dot}"></span><span style="font-size:19px;font-weight:800">${st.name}</span></div><div style="font-size:12.5px;color:var(--txt-2);margin-top:2px">Stage: ${esc(stageOf(p.etapa).name)} · ${prog}% done</div><div class="pbar" style="margin-top:9px"><span style="width:${prog}%;background:${hp.dot}"></span></div>`,hp.dot)}
-    ${cell('ACTIVITIES AT RISK',`<div class="mono" style="font-size:24px;font-weight:700;color:var(--amber);margin-top:4px">${risky.length}</div><div style="font-size:12px;color:var(--txt-3)">${risky.length?risky.slice(0,2).map(t=>esc(t.n)).join(' · '):'none'}</div>`)}
-    ${cell('PEOPLE INVOLVED',`<div style="display:flex;align-items:center;gap:10px;margin-top:4px"><span class="mono" style="font-size:24px;font-weight:700">${peopleN}</span><div style="display:flex">${(p.envolvidos||[]).slice(0,5).map(e=>`<span class="avatar" style="width:26px;height:26px;font-size:9.5px;margin-left:-6px;border:2px solid var(--card);background:${avColor(e.nome||e.email)}">${initials(e.nome||e.email)}</span>`).join('')}</div></div><div style="font-size:12px;color:var(--txt-3)">owner + tagged people</div>`)}
-    ${bud?cell('BUDGET',`<div style="display:flex;align-items:baseline;gap:8px;margin-top:4px"><span class="mono" style="font-size:20px;font-weight:700">${BRL(bud.teto)}</span><span class="mono" style="font-size:14px;color:var(--accent-deep)">${bud.teto?Math.round((bud.cons+bud.comp)/bud.teto*100):0}%</span></div><div class="pbar" style="margin-top:9px"><span style="width:${bud.teto?Math.min(100,(bud.cons+bud.comp)/bud.teto*100):0}%;background:var(--accent-deep)"></span></div>`):cell('BUDGET','<div style="font-size:19px;font-weight:700;margin-top:6px;color:var(--txt-3)">—</div><div style="font-size:12px;color:var(--txt-3)">no campaign linked</div>')}
+  const card=(inner,bd,glow,click)=>`<div ${click?`onclick="${click}" `:''}style="background:var(--surf);border:1px solid ${bd||'var(--line-card)'};border-radius:14px;padding:16px 18px;${glow?`box-shadow:0 0 30px -16px ${glow};`:''}${click?'cursor:pointer':''}">${inner}</div>`;
+  const eb=t=>`<div class="mono" style="font-size:11.5px;color:var(--txt-3)">${t}</div>`;
+  let budCard;
+  if(bud){
+    let cut=0; if(canSeeCorte()) campFunds(camp.id).forEach(f=>{const cm=fundMonthlyCuts(f.id);Object.keys(cm).forEach(k=>cut+=cm[k]);});
+    const pct=bud.teto?Math.round(bud.cons/bud.teto*100):0;
+    budCard=card(`${eb('budget total · consumed')}
+      <div style="display:flex;align-items:baseline;gap:10px;margin-top:4px"><span class="mono" style="font-size:22px;font-weight:700">${BRLc(bud.teto)}</span><span class="mono" style="font-size:18px;font-weight:700;color:#7d9dff">${pct}%</span></div>
+      <div style="display:flex;height:5px;border-radius:3px;overflow:hidden;background:rgba(255,255,255,.1);margin-top:10px"><div style="width:${bud.teto?Math.min(100,bud.cons/bud.teto*100):0}%;background:#4d7dff"></div><div style="width:${bud.teto?Math.min(100,bud.comp/bud.teto*100):0}%;background:#a685ff"></div></div>
+      <div style="font-size:12px;color:var(--txt-3);margin-top:6px;display:flex;flex-wrap:wrap;gap:0 6px">${canSeeCorte()?`<span style="white-space:nowrap">approved ${BRLc(bud.teto+cut)}</span><span style="white-space:nowrap">· cut ${BRLc(cut)}</span>`:`<span>committed ${BRLc(bud.comp)}</span>`}</div>`,null,null,"pdScrollTo('pd-sec-budget')");
+  } else budCard=card(`${eb('budget')}<div style="font-size:20px;font-weight:800;margin-top:6px;color:var(--txt-3)">No budget</div><div style="font-size:12.5px;color:var(--txt-2)">no campaign linked</div>`,null,null,"pdScrollTo('pd-sec-budget')");
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
+    ${card(`${eb('current status')}<div style="display:flex;align-items:center;gap:8px;margin-top:6px"><span style="width:10px;height:10px;border-radius:50%;background:${hp.dot};box-shadow:0 0 10px ${hp.dot}"></span><span style="font-size:20px;font-weight:800">${st.name}</span></div><div style="font-size:12.5px;color:var(--txt-2);margin-top:2px">Stage: ${esc(stageOf(p.etapa).name)} · ${prog}% done</div><div style="height:5px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:10px"><div style="height:100%;width:${prog}%;background:${hp.dot}"></div></div>`,`rgba(${HC},.4)`,`rgba(${HC},.6)`)}
+    ${card(`${eb('activities at risk')}<div class="mono" style="font-size:26px;font-weight:700;color:${risky.length?'#ffb020':'var(--txt)'};margin-top:4px">${risky.length}</div><div style="font-size:12.5px;color:var(--txt-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${risky.length?risky.slice(0,3).map(t=>esc(t.n)).join(' · '):'none'}</div>`,risky.length?'rgba(255,176,32,.4)':null,null,"pdScrollTo('pd-sec-activities')")}
+    ${card(`${eb('people involved')}<div style="display:flex;align-items:center;gap:12px;margin-top:6px"><span class="mono" style="font-size:26px;font-weight:700">${people.length+ags.length}</span><div style="display:flex;padding-left:6px">${[...people,...ags].slice(0,5).map(n=>`<span class="avatar" style="width:28px;height:28px;font-size:9.5px;margin-left:-6px;border:2px solid #121a32;background:${avColor(respName(n)||n)}">${initials(respName(n)||n)}</span>`).join('')}</div></div><div style="font-size:12.5px;color:var(--txt-2)">${people.length} internal · ${ags.length} agenc${ags.length===1?'y':'ies'}</div>`,null,null,"pdScrollTo('pd-sec-people')")}
+    ${budCard}
   </div>`;
 }
+let PD_SEC='pd-sec-schedule';
+function pdGoSec(id){ PD_SEC=id; document.querySelectorAll('.pd-subnav button').forEach(b=>b.classList.toggle('on',b.dataset.sec===id)); pdScrollTo(id); }
 function pdSubnavHTML(p){
-  const items=[['pd-sec-schedule','Schedule',projHasDates(p)],['pd-sec-activities','Activities',true],['pd-sec-messages','Messages',true],['pd-sec-budget','Budget',true],['pd-sec-pos','POs',true],['pd-sec-people','People',true]].filter(x=>x[2]);
-  return `<nav style="position:sticky;top:0;z-index:15;display:flex;gap:4px;flex-wrap:wrap;padding:6px;border-radius:12px;background:rgba(10,14,24,.92);backdrop-filter:blur(12px);border:1px solid var(--line);margin-bottom:20px">
-    ${items.map(([id,l])=>`<button onclick="pdScrollTo('${id}')" style="padding:8px 15px;border-radius:9px;border:none;background:transparent;color:var(--txt-2);font-weight:600;font-size:13px;cursor:pointer">${l}</button>`).join('')}
+  const items=[['pd-sec-schedule','Schedule'],['pd-sec-activities','Activities & messages'],['pd-sec-budget','Budget & funds'],['pd-sec-pos','POs'],['pd-sec-people','People']];
+  return `<nav class="pd-subnav" style="position:sticky;top:var(--nav-h,62px);z-index:25;display:flex;gap:4px;flex-wrap:wrap;padding:6px;border-radius:0 0 12px 12px;background:rgba(10,14,24,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.1);border-top:none;box-shadow:0 12px 24px -12px rgba(0,0,0,.8)">
+    ${items.map(([id,l])=>`<button data-sec="${id}" class="${PD_SEC===id?'on':''}" onclick="pdGoSec('${id}')">${l}</button>`).join('')}
   </nav>`;
+}
+/* Schedule — Project.dc.html's Timeline (milestones on one line: each
+   activity's end date, filled when done) and Gantt (one bar per activity),
+   over the project's own month span with a today marker. */
+let PD_SCHED='timeline';
+function pdScheduleHTML(p){
+  const tasks=(p.tasks||[]).filter(t=>t.inicio||t.fim);
+  const ds=[projEffStart(p),p.prazo,...tasks.flatMap(t=>[t.inicio,t.fim])].filter(Boolean).sort();
+  if(!ds.length) return '';
+  const d0=new Date(ds[0].slice(0,7)+'-01T00:00:00'); const dl=new Date(ds[ds.length-1]+'T00:00:00');
+  const d1=new Date(dl.getFullYear(),dl.getMonth()+1,1);
+  const span=(d1-d0)/864e5;
+  const pos=s=>Math.max(0,Math.min(100,(new Date(s+'T00:00:00')-d0)/864e5/span*100));
+  const MM=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const months=[]; for(let d=new Date(d0);d<d1;d=new Date(d.getFullYear(),d.getMonth()+1,1)) months.push(d);
+  const now=today0(); const nowM=now.getFullYear()*12+now.getMonth();
+  const todayIn=now>=d0&&now<d1; const today=todayIn?(now-d0)/864e5/span*100:null;
+  const monthRow=`<div style="display:grid;grid-template-columns:repeat(${months.length},1fr)">${months.map(m=>{const cur=m.getFullYear()*12+m.getMonth()===nowM;return `<div style="font-weight:${cur?700:400};color:${cur?'var(--txt)':'var(--txt-2)'}">${MM[m.getMonth()]}${months.length>12||m.getMonth()===0?' '+String(m.getFullYear()).slice(2):''}</div>`;}).join('')}</div>`;
+  const isG=PD_SCHED==='gantt';
+  const tstat=t=>{ if(t.done) return ['#4fb8ff','#4fb8ff']; if(['atrasado'].includes(t.status)) return ['#ff5c5c','#ff5c5c']; if(['atencao','bloqueado'].includes(t.status)) return ['#ffb020','#ffb020']; const on=t.inicio&&t.fim&&daysTo(t.inicio)<=0&&daysTo(t.fim)>=0; return on?['#4d7dff','#4d7dff']:['transparent','#9aa3b8']; };
+  let body;
+  if(isG){
+    body=`<div style="position:relative">
+      ${today!=null?`<div style="position:absolute;left:230px;right:0;top:0;bottom:0;pointer-events:none"><div style="position:absolute;top:0;bottom:0;width:2px;background:#7d9dff;box-shadow:0 0 12px #4d7dff;left:${today}%"></div></div>`:''}
+      ${tasks.map(t=>{const a=t.inicio||t.fim,b=t.fim||t.inicio;const l=pos(a),r=pos(dAdd(b,1));const [bg,bd]=tstat(t);
+        return `<div style="display:grid;grid-template-columns:230px minmax(0,1fr);align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04)"><div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:10px">${esc(t.n||'(untitled)')}</div><div style="position:relative;height:16px"><div title="${fmtDate(a)} – ${fmtDate(b)}" style="position:absolute;top:0;bottom:0;border-radius:5px;left:${l}%;width:${Math.max(1.2,r-l)}%;background:${bg};border:1.5px solid ${bd}"></div></div></div>`;}).join('')}
+    </div>`;
+  } else {
+    const ms=tasks.filter(t=>t.fim).slice().sort((a,b)=>a.fim.localeCompare(b.fim));
+    /* Labels go into four lanes (two above the line, two below); a label
+       that would collide with the previous one in every lane is left off —
+       its dot keeps the name as a tooltip. The mockup's six milestones never
+       collide; a real plan with ten close activities would. */
+    const LANES=[44,132,4,172], GAP=15, last=[-99,-99,-99,-99];
+    const lab=ms.map(t=>{const x=pos(t.fim);const li=LANES.findIndex((_,k)=>x-last[k]>=GAP);if(li>=0)last[li]=x;return {t,x,li};});
+    body=`<div style="position:relative;height:216px;margin-top:6px">
+      <div style="position:absolute;left:0;right:0;top:106px;height:2px;background:rgba(255,255,255,.18)"></div>
+      ${today!=null?`<div style="position:absolute;top:0;bottom:18px;width:2px;background:#7d9dff;box-shadow:0 0 12px #4d7dff;left:${today}%"></div><div class="mono" style="position:absolute;bottom:-4px;transform:translateX(-50%);font-size:11.5px;color:#9fb5ff;white-space:nowrap;left:${today}%">today · ${now.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>`:''}
+      ${lab.map(({t,x,li})=>{const right=x>80;const done=t.done;
+        return `<div title="${esc(t.n)} · ${fmtDate(t.fim)}" style="position:absolute;top:99px;width:16px;height:16px;margin-left:-8px;border-radius:50%;left:${x}%;background:${done?'#4fb8ff':'#10172a'};border:2px solid ${done?'#4fb8ff':'#ff3b4e'};z-index:1"></div>
+          ${li>=0?`<div style="position:absolute;white-space:nowrap;left:${x}%;top:${LANES[li]}px;margin-left:${right?8:-8}px;transform:translateX(${right?'-100%':'0'});max-width:200px"><div class="mono" style="font-size:11.5px;color:var(--txt-2)">${fmtDate(t.fim)} · ${done?'done':'planned'}</div><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis">${esc(t.n||'(untitled)')}</div></div>`:''}`;}).join('')}
+    </div>`;
+  }
+  return `<div id="pd-sec-schedule" style="scroll-margin-top:130px;border-radius:18px;border:1px solid rgba(255,255,255,.16);padding:22px 26px;background:radial-gradient(40rem 18rem at 100% 0%,rgba(255,59,78,.14),transparent 60%),radial-gradient(34rem 16rem at 45% 120%,rgba(77,125,255,.18),transparent 60%),#10172a;overflow-x:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:18px;position:sticky;left:0">
+      <div style="font-size:21px;font-weight:800;letter-spacing:-.02em">Schedule</div>
+      ${v2Seg([['timeline','Timeline'],['gantt','Gantt']],PD_SCHED,v=>`PD_SCHED='${v}';go('projectdetail')`).replace('background:#0c1222','background:rgba(5,7,13,.5)')}
+    </div>
+    <div style="min-width:800px">
+      <div style="display:grid;grid-template-columns:${isG?'230px minmax(0,1fr)':'minmax(0,1fr)'};font-size:13px;color:var(--txt-2);padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.1)">${isG?'<div>Activity</div>':''}${monthRow}</div>
+      ${body}
+    </div>
+  </div>`;
 }
 function pdActivitiesHTML(p){
   const tasks=p.tasks||[]; const EDA=canEditAtividades(p);
@@ -2479,8 +2554,8 @@ function pdActivitiesHTML(p){
     const stMeta=healthPill(t.status||'no_prazo');
     const di=t.fim?deadlineInfo({prazo:t.fim,status:t.done?'concluido':(t.status||'no_prazo'),tasks:[]}):null;
     const subsDone=(t.subs||[]).filter(s=>s.done).length;
-    return `<div style="border-bottom:1px solid var(--line)">
-      <div style="display:grid;grid-template-columns:18px 20px minmax(0,1.8fr) minmax(0,1fr) 70px 70px minmax(0,1.2fr) 100px 96px;gap:10px;align-items:center;padding:11px 0;cursor:pointer" onclick="pdToggleOpen('${t.id}')">
+    return `<div style="border-bottom:1px solid rgba(255,255,255,.06)">
+      <div class="proj-row" style="display:grid;grid-template-columns:18px 20px minmax(0,1.8fr) minmax(0,1fr) 70px 70px minmax(0,1.2fr) 100px 96px;gap:10px;align-items:center;padding:11px 0;cursor:pointer" onclick="pdToggleOpen('${t.id}')">
         <span style="font-size:10px;color:var(--txt-3)">${(t.subs||[]).length?(open?'▼':'▶'):''}</span>
         <button onclick="event.stopPropagation();pdToggleTask('${esc(p.id)}','${t.id}')" ${EDA?'':'disabled'} style="width:18px;height:18px;border-radius:5px;display:grid;place-items:center;font-size:11px;font-weight:800;background:${t.done?'#2fd88a':'transparent'};border:1.5px solid ${t.done?'#2fd88a':'var(--line-2)'};color:#05070d;cursor:${EDA?'pointer':'default'}">${t.done?'✓':''}</button>
         <div style="font-weight:600;font-size:13.5px;color:${t.done?'var(--txt-3)':'var(--txt)'};text-decoration:${t.done?'line-through':'none'}">${esc(t.n||'(untitled)')}</div>
@@ -2501,10 +2576,11 @@ function pdActivitiesHTML(p){
         </div>`).join('')}</div>`:''}
     </div>`;
   }).join('');
-  return `<div id="pd-sec-activities" class="v2-card" style="margin-bottom:20px">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><div><div class="v2-card-eyebrow">${tasks.length} ACTIVITIES</div><div class="v2-card-title" style="font-size:19px">Activities</div></div></div>
-    <div style="overflow-x:auto;margin-top:10px"><div style="min-width:900px">
-      <div style="display:grid;grid-template-columns:18px 20px minmax(0,1.8fr) minmax(0,1fr) 70px 70px minmax(0,1.2fr) 100px 96px;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:11.5px;color:var(--txt-3);font-weight:700;text-transform:uppercase;letter-spacing:.04em">
+  const subsN=tasks.reduce((n,t)=>n+(t.subs||[]).length,0);
+  return `<div id="pd-sec-activities" class="v2-card" style="scroll-margin-top:130px;flex:2 1 620px;min-width:0">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><div><div class="v2-card-eyebrow">${tasks.length} activities · ${subsN} sub-activities · click a row to open</div><div class="v2-card-title">Activities</div></div>${canEdit(p)?`<a onclick="editProj('${esc(p.id)}')" style="font-size:13px;font-weight:600;cursor:pointer">+ Activity</a>`:''}</div>
+    <div style="overflow-x:auto;margin-top:10px"><div style="min-width:920px">
+      <div style="display:grid;grid-template-columns:18px 20px minmax(0,1.8fr) minmax(0,1fr) 70px 70px minmax(0,1.2fr) 100px 96px;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.1);font-size:12px;color:var(--txt-3);font-weight:600">
         <span></span><span></span><span>Activity</span><span>Owner</span><span>Start</span><span>End</span><span>Depends on</span><span>Progress</span><span>Status</span></div>
       ${rows||'<div class="empty">No activities yet.</div>'}
     </div></div>
@@ -2512,97 +2588,131 @@ function pdActivitiesHTML(p){
 }
 function pdMessagesHTML(p){
   const logs=(p.logs||[]).slice().reverse();
-  return `<div id="pd-sec-messages" class="v2-card" style="margin-bottom:20px">
-    <div class="v2-card-eyebrow">MESSAGES + SYSTEM EVENTS</div>
-    <div class="v2-card-title" style="font-size:19px;margin-bottom:12px">Message history</div>
+  return `<div id="pd-sec-messages" class="v2-card" style="flex:1 1 340px;min-width:0;align-self:stretch;display:flex;flex-direction:column">
+    <div class="v2-card-eyebrow">messages + system events</div>
+    <div class="v2-card-title" style="margin-bottom:12px">Message history</div>
     <div style="display:flex;flex-direction:column;gap:14px;max-height:420px;overflow-y:auto">
       ${logs.length?logs.map(l=>`<div style="display:grid;grid-template-columns:28px minmax(0,1fr);gap:10px">
-        <span class="avatar" style="width:28px;height:28px;font-size:10px;background:${avColor(l.autor)}">${initials(l.autor||'?')}</span>
-        <div style="min-width:0"><div style="font-size:12.5px"><b>${esc(l.autor)}</b> <span style="color:var(--txt-3)">· ${fmtDate(l.t)}</span></div><div style="font-size:13.5px;color:var(--txt-2);margin-top:1px">${fmtLogTxt(l.txt)}</div></div>
+        <span class="avatar" style="width:28px;height:28px;font-size:10px;background:${avColor(respName(l.autor)||l.autor)}">${initials(respName(l.autor)||l.autor||'?')}</span>
+        <div style="min-width:0"><div style="font-size:12.5px"><b>${esc(respName(l.autor)||l.autor)}</b> <span style="color:var(--txt-3)">· ${fmtDate(l.t)}</span></div><div style="font-size:13.5px;color:var(--txt-soft);margin-top:1px">${fmtLogTxt(l.txt)}</div></div>
       </div>`).join(''):'<div class="empty">No updates yet.</div>'}
     </div>
-    <div style="display:flex;gap:8px;margin-top:14px;padding:8px;border-radius:12px;background:var(--paper-2);border:1px solid var(--line)">
+    <div style="display:flex;gap:8px;margin-top:auto;padding:8px;border-radius:12px;background:#0c1222;border:1px solid rgba(255,255,255,.12)">
       <textarea id="pdMsg" rows="1" placeholder="Write a message, @ to mention" style="flex:1;background:transparent;border:none;outline:none;color:var(--txt);font:inherit;font-size:13.5px;resize:none;padding:6px 8px"></textarea>
-      <button class="btn-acc" onclick="pdPostMessage('${esc(p.id)}')">Send</button>
+      <button class="btn-acc" style="padding:7px 14px;font-size:13px;box-shadow:none;align-self:center" onclick="pdPostMessage('${esc(p.id)}')">Send</button>
     </div>
   </div>`;
 }
+let PD_FV='totals';
 function pdBudgetHTML(p){
   const camp=(DATA.campanhas||[]).find(c=>c.id===p.campanha_id);
   const canEditProj=canEdit(p);
   if(!camp){
-    return `<div id="pd-sec-budget" class="v2-card" style="margin-bottom:20px">
-      <div class="v2-card-eyebrow">BUDGET</div>
-      <div class="v2-card-title" style="font-size:19px">No budget linked</div>
+    return v2Card('budget · shown when the project has one','No budget linked',`
       <p style="font-size:13px;color:var(--txt-2);margin-top:6px">This project has no campaign attached — no budget, funds or POs to show here yet.</p>
       ${canEditProj?`<div style="margin-top:14px;display:flex;gap:8px;align-items:center;max-width:460px">
-        <select id="pdCampPick" style="flex:1;min-width:0;padding:9px 11px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);color:var(--txt);font:inherit;font-size:13px">
+        <select id="pdCampPick" class="chip-sel" style="flex:1;min-width:0">
           <option value="">Select a campaign…</option>
           ${(DATA.campanhas||[]).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||'')).map(c=>`<option value="${esc(c.id)}">${esc(c.nome)}</option>`).join('')}
         </select>
         <button class="btn-ghost" onclick="pdLinkCampanha('${esc(p.id)}',document.getElementById('pdCampPick').value)">Link</button>
-      </div>`:''}
+      </div>`:''}`,{id:'pd-sec-budget',style:'scroll-margin-top:130px'});
+  }
+  const seeCut=canSeeCorte();
+  const funds=campFunds(camp.id).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+  const rows=funds.map(f=>{
+    const mt=fundMonthlyTotals(f.id); const b=Object.values(mt).reduce((s2,v)=>s2+v,0);
+    let c=0,m=0; (DATA.pos||[]).forEach(po=>{if(po.fund_id!==f.id)return;const v=+po.valor||0;if(CONS.includes(po.status))c+=v;else if(COMP.includes(po.status))m+=v;});
+    let cut=0; if(seeCut){const cm=fundMonthlyCuts(f.id);Object.keys(cm).forEach(k=>cut+=cm[k]);}
+    return {f,name:f.nome,ag:[f.agencia,actColLabel(actKey(f))].filter(Boolean).join(' · '),b,c,m,cut,mt};
+  });
+  const T=rows.reduce((t,r)=>({b:t.b+r.b,c:t.c+r.c,m:t.m+r.m,cut:t.cut+r.cut}),{b:0,c:0,m:0,cut:0});
+  const av=T.b-T.c-T.m, ap=T.b+T.cut, base=(seeCut?ap:T.b)||1;
+  const kpis=[...(seeCut?[{label:'Approved',value:BRLc(ap),sub:'gross',sw:'transparent',bd:'2px solid #eef1f8',size:17}]:[]),
+    {label:'Consumed',value:BRLc(T.c),sub:`${T.b?(T.c/T.b*100).toFixed(1):0}% of budgeted`,sw:'#4d7dff',size:17},
+    {label:'Committed',value:BRLc(T.m),sub:`${T.b?(T.m/T.b*100).toFixed(1):0}% · POs approved`,sw:'#a685ff',size:17},
+    {label:'Available',value:BRLc(av),sub:`${T.b?(av/T.b*100).toFixed(1):0}% · free`,sw:'rgba(255,255,255,.2)',size:17,c:av<0?'#ff5c6c':''},
+    ...(seeCut?[{label:'Cut',value:BRLc(T.cut),sub:`${ap?(T.cut/ap*100).toFixed(1):0}% of approved`,sw:'#ff3b4e',size:17}]:[])];
+  const k=v=>BRLc(v);
+  let table;
+  if(PD_FV==='monthly'){
+    const ms=[...new Set(rows.flatMap(r=>Object.keys(r.mt)))].sort();
+    const cols=`minmax(0,1.8fr) repeat(${ms.length},minmax(0,1fr)) 90px`;
+    const usedM=(fid,mo)=>{let c=0,m=0;(DATA.pos||[]).forEach(po=>{if(po.fund_id!==fid||String(po.competencia).slice(0,7)!==mo)return;const v=+po.valor||0;if(CONS.includes(po.status))c+=v;else if(COMP.includes(po.status))m+=v;});return {c,m};};
+    const cell=(v,fid,mo)=>{const u=fid?usedM(fid,mo):{c:0,m:0};return `<div style="text-align:right"><div class="mono" style="font-size:12.5px">${v?k(v).replace('R$ ',''):'—'}</div><div style="display:flex;height:3px;border-radius:2px;overflow:hidden;background:rgba(255,255,255,.06);margin-top:4px"><div style="width:${v?Math.min(100,u.c/v*100):0}%;background:#4d7dff"></div><div style="width:${v?Math.min(100,u.m/v*100):0}%;background:#a685ff"></div></div></div>`;};
+    table=`<div style="min-width:${Math.max(700,240+ms.length*90)}px">
+      <div style="display:grid;grid-template-columns:${cols};gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.1);font-size:12px;color:var(--txt-3);font-weight:600"><div>Fund · agency</div>${ms.map(mo=>`<div style="text-align:right">${fmtMes(mo+'-01')}</div>`).join('')}<div style="text-align:right">Total</div></div>
+      ${rows.map(r=>`<div onclick="openFundDetail('${esc(r.f.id)}')" class="proj-row" style="display:grid;grid-template-columns:${cols};gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06);align-items:center;cursor:pointer"><div style="min-width:0"><div style="font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.name)}</div><div style="font-size:11.5px;color:var(--txt-3)">${esc(r.ag)}</div></div>${ms.map(mo=>cell(r.mt[mo]||0,r.f.id,mo)).join('')}<div class="mono" style="text-align:right;font-size:13px;font-weight:700">${k(r.b)}</div></div>`).join('')}
+    </div>`;
+  } else {
+    const cols=`minmax(0,1.8fr) repeat(${seeCut?5:4},minmax(0,.8fr)) 170px`;
+    const tr=(r,bold)=>{const a=r.b-r.c-r.m;return `<div ${r.f?`onclick="openFundDetail('${esc(r.f.id)}')" class="proj-row" `:''}style="display:grid;grid-template-columns:${cols};gap:10px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.06);align-items:center;font-weight:${bold?700:400};${r.f?'cursor:pointer':''}">
+      <div style="min-width:0"><div style="font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.name)}</div><div style="font-size:11.5px;color:var(--txt-3);font-weight:400">${esc(r.ag||'')}</div></div>
+      <div class="mono" style="text-align:right;font-size:12.5px">${k(r.b)}</div><div class="mono" style="text-align:right;font-size:12.5px;color:var(--txt-2)">${k(r.c)}</div><div class="mono" style="text-align:right;font-size:12.5px;color:var(--txt-2)">${k(r.m)}</div><div class="mono" style="text-align:right;font-size:12.5px;font-weight:700;${a<0?'color:#ff5c6c':''}">${k(a)}</div>${seeCut?`<div class="mono" style="text-align:right;font-size:12.5px;color:#ff8a96">${k(r.cut)}</div>`:''}
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:8px;align-items:center"><div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:rgba(255,255,255,.1)"><div style="width:${r.b?Math.min(100,r.c/r.b*100):0}%;background:#4d7dff;box-shadow:inset -2px 0 0 #121a32"></div><div style="width:${r.b?Math.min(100,r.m/r.b*100):0}%;background:#a685ff"></div></div><span class="mono" style="font-size:12px;text-align:right">${r.b?Math.round((r.c+r.m)/r.b*100):0}%</span></div></div>`;};
+    table=`<div style="min-width:900px">
+      <div style="display:grid;grid-template-columns:${cols};gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.1);font-size:12px;color:var(--txt-3);font-weight:600"><div>Fund · agency</div><div style="text-align:right">Budgeted</div><div style="text-align:right">Consumed</div><div style="text-align:right">Committed</div><div style="text-align:right">Available</div>${seeCut?'<div style="text-align:right">Cut</div>':''}<div style="text-align:right">Use</div></div>
+      ${rows.map(r=>tr(r)).join('')}${rows.length>1?tr({name:'Total',...T},true):''}
     </div>`;
   }
-  const t=campTotals(camp.id); const avail=Math.max(0,t.teto-t.cons-t.comp); const tot=t.teto||1;
-  const funds=campFunds(camp.id);
-  return `<div id="pd-sec-budget" class="v2-card" style="margin-bottom:20px">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-      <div style="cursor:pointer" onclick="openCampanhaDetail('${esc(camp.id)}')"><div class="v2-card-eyebrow">BUDGET · ${esc(camp.nome)}</div><div class="v2-card-title" style="font-size:19px">${BRL(t.teto)} budgeted</div></div>
-      ${canEditProj?`<a onclick="pdUnlinkCampanha('${esc(p.id)}')" style="font-size:11.5px;color:var(--txt-3);cursor:pointer">Unlink</a>`:''}
-    </div>
-    <div class="v2-segbar" style="margin-top:14px"><i class="v2-seg-cons" style="width:${(t.cons/tot*100).toFixed(2)}%"></i><i class="v2-seg-comp" style="width:${(t.comp/tot*100).toFixed(2)}%"></i><i class="v2-seg-avail" style="width:${(avail/tot*100).toFixed(2)}%"></i></div>
-    <div class="v2-segbar-legend">
-      <span><i style="background:var(--accent-deep)"></i>Consumed <span class="mono">${BRL(t.cons)}</span></span>
-      <span><i style="background:var(--violet)"></i>Committed <span class="mono">${BRL(t.comp)}</span></span>
-      <span><i style="background:rgba(255,255,255,.16)"></i>Available <span class="mono">${BRL(avail)}</span></span>
-    </div>
-    ${funds.length?`<div style="overflow-x:auto;margin-top:16px"><div style="min-width:520px">
-      <div style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,.8fr) minmax(0,.8fr) minmax(0,.8fr);gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase">
-        <span>Fund · agency</span><span style="text-align:right">Budgeted</span><span style="text-align:right">Consumed + committed</span><span style="text-align:right">Available</span></div>
-      ${funds.map(f=>{const cap=Object.values(fundMonthlyTotals(f.id)).reduce((s,v)=>s+v,0);const used=(DATA.pos||[]).filter(po=>po.fund_id===f.id&&(CONS.includes(po.status)||COMP.includes(po.status))).reduce((s,po)=>s+(+po.valor||0),0);const av=Math.max(0,cap-used);
-        return `<div onclick="openFundDetail('${esc(f.id)}')" style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,.8fr) minmax(0,.8fr) minmax(0,.8fr);gap:10px;padding:9px 0;border-bottom:1px solid var(--line);cursor:pointer;font-size:12.5px;align-items:center">
-          <span style="min-width:0"><span style="font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(f.nome)}</span><span style="font-size:11px;color:var(--txt-3)">${esc(f.agencia||'—')}</span></span>
-          <span class="mono" style="text-align:right">${BRL(cap)}</span><span class="mono" style="text-align:right;color:var(--txt-2)">${BRL(used)}</span><span class="mono" style="text-align:right;font-weight:700">${BRL(av)}</span>
-        </div>`;}).join('')}
-    </div></div>`:''}
-  </div>`;
+  return v2Card(`accrual · ${esc(camp.nome)}`,'Budget and funds',`
+    <div style="margin-top:16px">${v2Bar([{w:T.c/base*100,bg:'#4d7dff',t:'Consumed'},{w:T.m/base*100,bg:'#a685ff',t:'Committed'},{w:Math.max(0,av)/base*100,bg:'rgba(255,255,255,.16)',t:'Available'},...(seeCut?[{w:T.cut/base*100,bg:V2_HATCH_S,t:'Cut'}]:[])],14)}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:14px;margin-top:14px">${kpis.map(v2Kpi).join('')}</div>
+    ${funds.length?`<div style="overflow-x:auto;margin-top:18px">${table}</div>`:'<div class="empty">No funds linked to this campaign yet.</div>'}
+    <div style="display:flex;justify-content:space-between;gap:10px;margin-top:12px;font-size:12px"><a onclick="openCampanhaDetail('${esc(camp.id)}')" style="cursor:pointer;font-weight:600">Open campaign →</a>${canEditProj?`<a onclick="pdUnlinkCampanha('${esc(p.id)}')" style="color:var(--txt-3);cursor:pointer">Unlink campaign</a>`:''}</div>`,
+    {id:'pd-sec-budget',style:'scroll-margin-top:130px',right:v2Seg([['totals','Totals'],['monthly','By month']],PD_FV,v=>`PD_FV='${v}';go('projectdetail')`)});
 }
 function pdPOsHTML(p){
   const camp=(DATA.campanhas||[]).find(c=>c.id===p.campanha_id);
   const fundIds=camp?new Set(campFunds(camp.id).map(f=>f.id)):new Set();
-  const pos=(DATA.pos||[]).filter(po=>fundIds.has(po.fund_id)).sort((a,b)=>String(b.solicitado_em||'').localeCompare(String(a.solicitado_em||'')));
-  return `<div id="pd-sec-pos" class="v2-card" style="margin-bottom:20px">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap"><div><div class="v2-card-eyebrow">${pos.length} PO(S)</div><div class="v2-card-title" style="font-size:19px">POs</div></div><span style="font-weight:600;font-size:13px;color:var(--accent);cursor:pointer" onclick="go('pos')">Open in POs →</span></div>
-    <div style="margin-top:10px">${pos.length?pos.slice(0,10).map(po=>{const st=PO_STATUS[po.status]||{t:po.status,c:'s-slate'};
-      return `<div onclick="openPODetail('${esc(po.id)}')" style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);cursor:pointer;font-size:12.5px">
-        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(poNome(po.fund_id))}${po.descricao?' · '+esc(po.descricao):''}</span>
-        <span class="badge ${st.c}" style="flex-shrink:0"><span class="d"></span>${st.t}</span>
-        <span class="mono" style="flex-shrink:0;width:90px;text-align:right">${BRL(po.valor)}</span>
-      </div>`;}).join(''):'<div class="empty">No POs against this project\'s campaign yet.</div>'}
-    ${pos.length>10?`<div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">+${pos.length-10} more — open in POs for the full list.</div>`:''}</div>
-  </div>`;
+  const nomeBy={}; DATA.poProjetos.forEach(f=>nomeBy[f.id]=f.nome);
+  const pos=poDisplayList((DATA.pos||[]).filter(po=>fundIds.has(po.fund_id))).sort((a,b)=>String(b.solicitado_em||'').localeCompare(String(a.solicitado_em||'')));
+  const tot=pos.reduce((s2,po)=>s2+(+po.valor||0),0);
+  const counts=PO_FLOW_PHASES.map(f=>({f,n:pos.filter(po=>f.st.includes(po.status)).length})).filter(x=>x.n);
+  const cols='108px minmax(0,1.4fr) minmax(0,.9fr) 60px 120px 170px 56px';
+  return v2Card(`${pos.length} PO${pos.length===1?'':'s'} · ${BRLc(tot)}`,'POs',pos.length?`
+    <div style="overflow-x:auto;margin-top:12px"><div style="min-width:780px">
+      <div style="display:grid;grid-template-columns:${cols};gap:12px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.1);font-size:12px;color:var(--txt-3);font-weight:600"><div>PO</div><div>Description · fund</div><div>Vendor</div><div>Month</div><div style="text-align:right">Amount</div><div>Stage</div><div style="text-align:right">Date</div></div>
+      ${pos.slice(0,12).map(po=>`<div onclick="openPODetail('${esc(po.id)}')" class="proj-row" style="display:grid;grid-template-columns:${cols};gap:12px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.06);align-items:center;cursor:pointer">
+        <div class="mono" style="font-size:12.5px;color:var(--txt-2)">${esc(po.numero_po||('#'+po.id.slice(-6)))}</div>
+        <div style="min-width:0"><div style="font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(po.descricao||'—')}</div><div style="font-size:12px;color:var(--txt-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(po._sib&&po._sib.length>1?poGroupLabel(po._sib):(nomeBy[po.fund_id]||'—'))}</div></div>
+        <div style="font-size:13px;color:var(--txt-2)">${esc(po.agencia||'—')}</div>
+        <div style="font-size:12.5px;color:var(--txt-2)">${fmtMes(po.competencia)}</div>
+        <div class="mono" style="text-align:right;font-size:12.5px;white-space:nowrap">${BRL(po.valor)}</div>
+        ${poRowStageHTML(po)}
+        <div class="mono" style="text-align:right;font-size:12px;color:var(--txt-3)">${po.solicitado_em?fmtDate(String(po.solicitado_em).slice(0,10)):''}</div>
+      </div>`).join('')}
+    </div></div>
+    ${pos.length>12?`<div style="font-size:12px;color:var(--txt-3);margin-top:8px">+${pos.length-12} more</div>`:''}
+    <a onclick="go(poScreen())" style="display:inline-block;margin-top:14px;font-size:13px;font-weight:600;cursor:pointer">Open in POs →</a>`:`<div class="empty">${camp?'No POs against this project\'s campaign yet.':'Link a campaign to see its POs here.'}</div>`,
+    {id:'pd-sec-pos',style:'scroll-margin-top:130px',right:`<div style="display:flex;gap:6px;flex-wrap:wrap">${counts.map(x=>`<span style="font-size:12px;padding:3px 10px;border-radius:20px;background:rgba(255,255,255,.05);color:var(--txt-2);display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:50%;background:${x.f.c}"></span>${esc(x.f.t)} <b class="mono" style="color:var(--txt)">${x.n}</b></span>`).join('')}</div>`});
 }
 function pdPeopleHTML(p){
-  const people=[{ini:initials(p.owner),av:avColor(p.owner),name:respName(p.owner)||p.owner||'—',role:'Owner'},
-    ...(p.envolvidos||[]).map(e=>({ini:initials(e.nome||e.email),av:avColor(e.nome||e.email),name:e.nome||e.email,role:'Tagged'}))];
-  const agencias=projAgencias(p);
-  return `<div id="pd-sec-people" class="v2-card" style="margin-bottom:20px">
-    <div style="display:flex;justify-content:space-between;align-items:baseline"><div class="v2-card-title" style="font-size:19px">People</div>${canEdit(p)?`<span style="font-size:13px;font-weight:600;color:var(--accent);cursor:pointer" onclick="editProj('${esc(p.id)}')">+ Add / edit →</span>`:''}</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px 24px;margin-top:14px">
-      ${people.map(pe=>`<div style="display:grid;grid-template-columns:32px minmax(0,1fr);gap:12px;align-items:center">
-        <span class="avatar" style="width:32px;height:32px;font-size:10.5px;background:${pe.av}">${pe.ini}</span>
-        <div style="min-width:0"><div style="font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(pe.name)}</div><div style="font-size:12px;color:var(--txt-3)">${pe.role}</div></div>
-      </div>`).join('')}
-    </div>
-    ${agencias.length?`<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)"><div style="font-size:11.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Agencies</div><div style="display:flex;flex-wrap:wrap;gap:6px">${agencias.map(a=>`<span style="font-size:12px;padding:4px 11px;border-radius:20px;border:1px solid var(--line-2);color:var(--txt-2)">${esc(a)}</span>`).join('')}</div></div>`:''}
-  </div>`;
+  const tag=(t,bg,c)=>`<span class="mono" style="font-size:10.5px;padding:2px 7px;border-radius:5px;background:${bg};color:${c}">${t}</span>`;
+  const own=p.owner||p.resp;
+  const people=[{n:respName(own)||own||'—',role:'Project owner',t:tag('OWNER','rgba(77,125,255,.18)','#9fb5ff')},
+    ...(p.envolvidos||[]).map(e=>{const pe=(DATA.pessoas||[]).find(x=>x.email&&e.email&&x.email.toLowerCase()===e.email.toLowerCase());const r=pe?pe.papel:'';
+      return {n:e.nome||e.email,role:r==='tcl_member'?'TCL member · tagged':r==='financeiro'?'Finance · tagged':r==='agencia'?'Agency · tagged':'Marketing · tagged',t:r==='financeiro'?tag('FIN','rgba(255,176,32,.14)','#ffb020'):r==='agencia'?tag('AGENCY','rgba(45,212,196,.14)','#2dd4c4'):tag('MKT','rgba(255,255,255,.08)','#a7aec2')};}),
+    ...projAgencias(p).map(a=>({n:a,role:'Agency',t:tag('AGENCY','rgba(45,212,196,.14)','#2dd4c4')}))];
+  return v2Card('','People',`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px 24px;margin-top:14px">
+      ${people.map(pe=>`<div style="display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:12px;align-items:center">
+        <span class="avatar" style="width:32px;height:32px;font-size:10.5px;background:${avColor(pe.n)}">${initials(pe.n)}</span>
+        <div style="min-width:0"><div style="font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(pe.n)}</div><div style="font-size:12px;color:var(--txt-3)">${pe.role}</div></div>
+        ${pe.t}</div>`).join('')}
+    </div>`,{id:'pd-sec-people',style:'scroll-margin-top:130px',right:canEdit(p)?`<a onclick="editProj('${esc(p.id)}')" style="font-size:13px;font-weight:600;cursor:pointer">+ Add</a>`:''});
 }
 function renderProjectDetail(){
   const p=DATA.projetos.find(x=>x.id===PROJ_VIEW_ID);
   if(!p) return '<div class="empty">Project not found. <a onclick="go(\'list\')" style="cursor:pointer">Back to Projects</a></div>';
-  const scheduleHTML=projHasDates(p)?(()=>{const {body}=ganttBodyHTML(p);return `<div id="pd-sec-schedule" class="v2-card" style="margin-bottom:20px"><div class="v2-card-eyebrow">SCHEDULE</div><div class="v2-card-title" style="font-size:19px;margin-bottom:10px">Timeline</div>${body}</div>`;})():'';
-  return `${pdHeroHTML(p)}${pdStatsHTML(p)}${pdSubnavHTML(p)}${scheduleHTML}${pdActivitiesHTML(p)}${pdMessagesHTML(p)}${pdBudgetHTML(p)}${pdPOsHTML(p)}${pdPeopleHTML(p)}`;
+  /* Project.dc.html order: breadcrumb/hero → 4 stat cards → sticky sub-nav →
+     Schedule → Activities beside Message history → Budget and funds → POs →
+     People. */
+  return `<div style="display:flex;flex-direction:column;gap:20px;padding-top:6px">
+    ${pdHeroHTML(p)}${pdStatsHTML(p)}${pdSubnavHTML(p)}
+    ${pdScheduleHTML(p)}
+    <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start">${pdActivitiesHTML(p)}${pdMessagesHTML(p)}</div>
+    ${pdBudgetHTML(p)}${pdPOsHTML(p)}${pdPeopleHTML(p)}
+  </div>`;
 }
 /* Duplicate: opens a prefilled "new project" form (same type/categories/brand/
    activity names) rather than silently creating a copy — nothing is saved
