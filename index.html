@@ -1592,19 +1592,19 @@ document.addEventListener('visibilitychange',()=>{ if(!document.hidden) refreshA
 const W_LABELS={dash:'Dashboard',board:'Board',list:'List',timeline:'Timeline',team:'Team',weekly:'Weekly Status',mytasks:'Tasks',agencywork:'Assigned Work',notif:'Notifications'};
 const B_LABELS={saldos:'Balance decisions',bo:'Overview',budgets:'Categories',costcenter:'Cost center',funds:'Funds',campanhas:'Campaigns',pos:'POs & Approvals',approvals:'Approvals',podesk:'PO Desk',people:'People & Roles',reqpo:'Request PO',mypos:'My POs',balance:'Balance'};
 const ROLE_NAV={
-  admin:      {work:['dash','board','list','timeline','team','weekly','mytasks'], budget:['bo','costcenter','budgets','campanhas','funds','pos','saldos','people']},
-  marketing:  {work:['dash','board','list','timeline','weekly','mytasks'],        budget:['bo','costcenter','budgets','campanhas','funds','pos','saldos']},
+  admin:      {work:['dash','list','timeline','team','weekly','mytasks'], budget:['bo','costcenter','budgets','campanhas','funds','pos','saldos','people']},
+  marketing:  {work:['dash','list','timeline','weekly','mytasks'],        budget:['bo','costcenter','budgets','campanhas','funds','pos','saldos']},
   financeiro: {work:[],                                                          budget:['bo','funds','pos']},
-  agencia:    {work:['dash','board','list','timeline','mytasks'],               budget:['bo','campanhas','funds','pos']},
+  agencia:    {work:['dash','list','timeline','mytasks'],               budget:['bo','campanhas','funds','pos']},
   /* TCL Member: internal staff with Work-only access, no Budget nav at all —
      Budget's own RLS policies are role allow-lists that never mention this
      role, so it has zero Budget access even if someone typed the screen id
      directly. Which projects it sees is scoped further in visProjs(): only
      ones marketing/admin tagged them on (envolvidos), not "everything" like
      admin/marketing get. */
-  tcl_member: {work:['dash','board','list','timeline','mytasks'],                budget:[]}
+  tcl_member: {work:['dash','list','timeline','mytasks'],                budget:[]}
 };
-const PANEL_ONLY_WORK=['dash','board','list','timeline','weekly','mytasks'];
+const PANEL_ONLY_WORK=['dash','list','timeline','weekly','mytasks'];
 const GLOBAL_NAV=['notif'];
 function currentNav(){
   // Work-module screens follow PAPEL; Budget screens additionally require
@@ -1636,7 +1636,7 @@ function navBadge(id){
    screen set this app actually has instead of the prototype's 4. */
 const NAV_HUBS=[
   {id:'dash',label:'Home',screens:['dash']},
-  {id:'list',label:'Projects',screens:['list','board','timeline','weekly']},
+  {id:'list',label:'Projects',screens:['list','timeline','weekly']},
   {id:'bo',label:'Budget',screens:['bo','costcenter','budgets','campanhas','funds','saldos','people']},
   {id:'pos',label:'POs',screens:['pos','mypos','reqpo']},
   {id:'team',label:'Team',screens:['team']},
@@ -1743,6 +1743,9 @@ function viewAsBarHTML(screen,meta){
 function go(screen){
   if(screen==='balance')screen='bo';
   if(screen==='approvals')screen='pos';
+  /* Board is now a view inside Projects/List (List · Board · By category —
+     the same 3-way toggle Projects.dc.html has), not its own nav screen. */
+  if(screen==='board'){ screen='list'; PROJ_GROUP='board'; }
   const nav=currentNav(); const valid=nav.work.concat(nav.budget).concat(nav.global||[]);
   if(!valid.length){ renderSemAcesso(); return; }
   if(!valid.includes(screen)) screen=valid[0]||'dash';
@@ -1757,13 +1760,13 @@ function go(screen){
   $('#hubTabsHost').innerHTML=hubTabsHTML();
   $('#viewAsBar').innerHTML=viewAsBarHTML(screen,meta);
   // CTA per screen (mirrors the prototype)
-  if(['dash','board','list','timeline'].includes(screen)){
+  if(['dash','list','timeline'].includes(screen)){
     const statusChip=STATUS_FILTER?`<button onclick="setStatusFilter('')" style="padding:8px 12px;border-radius:9px;border:1px solid var(--line-2);background:var(--card);font-size:12px;font-weight:600;color:var(--txt-2);margin-right:8px">Status: ${esc(statusOf(STATUS_FILTER).name)} ✕</button>`:'';
     const exportBtn=screen==='list'?'<button class="btn-ghost" onclick="exportWorkXLSX()">Exportar Excel</button>':'';
     /* Agencies read and work the projects shared with them; creating a project
        stays with the internal profiles that own the pipeline. */
     const canNewProj=!['agencia','tcl_member'].includes(effPapel())&&!VIEW_AS;
-    $('#ctaBox').innerHTML=`${screen==='list'?projSearchHTML():''}${['dash','board','list'].includes(screen)?ptipoFilterHTML():''}${['list','timeline'].includes(screen)?catFilterHTML():''}${statusChip}${exportBtn}<button class="btn-ghost" onclick="openStageGuide()">Stage guide</button>${canNewProj?'<button class="btn-acc" onclick="openProjNew()">+ New project</button>':''}`;
+    $('#ctaBox').innerHTML=`${screen==='list'?projSearchHTML():''}${['dash','list'].includes(screen)?ptipoFilterHTML():''}${['list','timeline'].includes(screen)?catFilterHTML():''}${statusChip}${exportBtn}<button class="btn-ghost" onclick="openStageGuide()">Stage guide</button>${canNewProj?'<button class="btn-acc" onclick="openProjNew()">+ New project</button>':''}`;
   } else if(screen==='funds'&&demoWritable(['admin','marketing'].includes(PAPEL))){
     $('#ctaBox').innerHTML='<button class="btn-acc" style="background:var(--po)" onclick="openFundNew()">+ New fund</button>';
   } else if(screen==='campanhas'&&demoWritable(['admin','marketing'].includes(PAPEL))){
@@ -1777,7 +1780,6 @@ function go(screen){
   const v=$('#view');
   destroyCharts();
   if(screen==='dash'){ v.innerHTML=renderDash(); buildDashCharts(); }
-  else if(screen==='board') v.innerHTML=renderKanban();
   else if(screen==='list') v.innerHTML=renderProjetos();
   else if(screen==='timeline') v.innerHTML=renderTimeline();
   else if(screen==='team') v.innerHTML=renderTeam();
@@ -2051,7 +2053,7 @@ function projBase(){
   if(PROJ_Q) l=l.filter(p=>((p.nome||'')+' '+(respName(p.resp)||'')+' '+projAgencias(p).join(' ')+' '+(p.categorias||[]).join(' ')+' '+(p.marca||'')).toLowerCase().includes(PROJ_Q));
   return l;
 }
-let PROJ_GROUP=false;
+let PROJ_GROUP='list'; // 'list' | 'board' | 'category' — same 3-way switcher Projects.dc.html has
 function toggleProjGroup(v){ PROJ_GROUP=v; go('list'); }
 function projRowHTML(p,cols,canDup){
   const stg=stageOf(p.etapa);const hp=healthPill(p.status);const di=deadlineInfo(p);const pr=computeProg(p);const bt=businessTypeOf(p.ptipo);
@@ -2084,14 +2086,17 @@ function renderProjetos(){
       </button>`;
     }).join('');
   const groupToggle=`<div style="display:flex;padding:4px;border-radius:11px;background:var(--paper-2);border:1px solid var(--line)">
-    <button onclick="toggleProjGroup(false)" style="padding:6px 14px;border-radius:8px;border:none;cursor:pointer;font-weight:600;font-size:12.5px;background:${!PROJ_GROUP?'var(--accent)':'transparent'};color:${!PROJ_GROUP?'#fff':'var(--txt-2)'}">List</button>
-    <button onclick="toggleProjGroup(true)" style="padding:6px 14px;border-radius:8px;border:none;cursor:pointer;font-weight:600;font-size:12.5px;background:${PROJ_GROUP?'var(--accent)':'transparent'};color:${PROJ_GROUP?'#fff':'var(--txt-2)'}">By category</button>
+    ${[['list','List'],['board','Board'],['category','By category']].map(([v,l])=>{const on=PROJ_GROUP===v;
+      return `<button onclick="toggleProjGroup('${v}')" style="padding:6px 14px;border-radius:8px;border:none;cursor:pointer;font-weight:600;font-size:12.5px;background:${on?'var(--accent)':'transparent'};color:${on?'#fff':'var(--txt-2)'}">${l}</button>`;
+    }).join('')}
   </div>`;
   const head=`<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:11px 17px;background:var(--paper-2);border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;position:sticky;top:var(--sticky-top,73px);z-index:5">
     ${sortTh(PROJ_SORT,'name','Project','projSortHeaderClick')}${sortTh(PROJ_SORT,'owner','Owner','projSortHeaderClick')}${sortTh(PROJ_SORT,'stage','Stage','projSortHeaderClick')}${sortTh(PROJ_SORT,'health','Health','projSortHeaderClick')}${sortTh(PROJ_SORT,'progress','Progress','projSortHeaderClick')}<span>Budget</span>${sortTh(PROJ_SORT,'due','Due','projSortHeaderClick')}<span></span></div>`;
   let body;
-  if(!list.length){ body='<div class="empty">No projects found.</div>'; }
-  else if(!PROJ_GROUP){
+  if(PROJ_GROUP==='board'){
+    body=renderKanban();
+  } else if(!list.length){ body='<div class="empty">No projects found.</div>'; }
+  else if(PROJ_GROUP==='list'){
     body=`<div style="background:var(--card);border:1px solid var(--line);border-radius:13px;box-shadow:var(--sh-2);border-radius:13px;overflow:hidden">${head}${list.map(p=>projRowHTML(p,cols,canDup)).join('')}</div>`;
   } else {
     const cats=[...new Set(list.flatMap(p=>(p.categorias&&p.categorias.length)?p.categorias:['—']))].sort();
