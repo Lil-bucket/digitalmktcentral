@@ -4119,6 +4119,51 @@ function renderNotes(){
   </div>`;
 }
 function pmSet(k,v){ if(EDIT)EDIT[k]=v; }
+/* Budget block on the Project modal (F1) — the "no budget" empty state and
+   the linked-campaign summary described in the esteira, seção 04/F1. Reads
+   campTotals() (already isAg-scoped via campScoped) so a linked project
+   shows the same Consumed/Committed/Available a campaign card would; corte
+   is deliberately left out of this compact view (canSeeCorte() gate stays
+   ready for it if a later pass adds it). Linking only touches EDIT locally,
+   same as every other pmSet field — it only reaches the DB on Save. */
+function pmBudgetBlockHTML(canEditProj){
+  const camp=(DATA.campanhas||[]).find(c=>c.id===EDIT.campanha_id);
+  if(!camp){
+    return `<div class="v2-card" style="margin-top:14px;padding:18px 20px">
+      <div class="v2-card-eyebrow">BUDGET</div>
+      <div class="v2-card-title" style="font-size:15px;margin-top:3px">No budget linked</div>
+      <p style="font-size:12.5px;color:var(--txt-2);margin-top:4px">This project has no campaign attached — no budget, funds or POs to show here yet.</p>
+      ${canEditProj?`<div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+        <select id="pmCampPick" style="flex:1;min-width:0;padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:var(--paper-2);color:var(--txt);font:inherit;font-size:12.5px">
+          <option value="">Select a campaign…</option>
+          ${(DATA.campanhas||[]).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||'')).map(c=>`<option value="${esc(c.id)}">${esc(c.nome)}</option>`).join('')}
+        </select>
+        <button class="btn-ghost" onclick="pmLinkCampanha()">Link</button>
+      </div>`:''}
+    </div>`;
+  }
+  const t=campTotals(camp.id);
+  const avail=Math.max(0,t.teto-t.cons-t.comp);
+  const tot=t.teto||1;
+  const seg=[['v2-seg-cons',t.cons],['v2-seg-comp',t.comp],['v2-seg-avail',avail]];
+  return `<div class="v2-card" style="margin-top:14px;padding:18px 20px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+      <div style="cursor:pointer" onclick="closeModal();openCampanhaDetail('${esc(camp.id)}')"><div class="v2-card-eyebrow">BUDGET · ${esc(camp.nome)}</div><div class="v2-card-title" style="font-size:15px;margin-top:3px">${BRL(t.teto)} budgeted</div></div>
+      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+        ${t.pend>0?`<span style="font-size:11px;font-weight:700;color:var(--amber-ink);white-space:nowrap">${BRL(t.pend)} pending</span>`:''}
+        ${canEditProj?`<a onclick="pmUnlinkCampanha()" style="font-size:11px;color:var(--txt-3);cursor:pointer">Unlink</a>`:''}
+      </div>
+    </div>
+    <div class="v2-segbar" style="margin-top:12px">${seg.map(s=>`<i class="${s[0]}" style="width:${(s[1]/tot*100).toFixed(2)}%"></i>`).join('')}</div>
+    <div class="v2-segbar-legend">
+      <span><i style="background:var(--accent-deep)"></i>Consumed ${BRL(t.cons)}</span>
+      <span><i style="background:var(--violet)"></i>Committed ${BRL(t.comp)}</span>
+      <span><i style="background:rgba(255,255,255,.16)"></i>Available ${BRL(avail)}</span>
+    </div>
+  </div>`;
+}
+function pmLinkCampanha(){ const sel=$('#pmCampPick'); if(!sel||!sel.value)return; pmSet('campanha_id',sel.value); renderProjModal(); }
+function pmUnlinkCampanha(){ pmSet('campanha_id',''); renderProjModal(); }
 function pmType(v){ if(!EDIT)return; EDIT.tipo=v; if(EDIT._new){ const t=typeOf(v); EDIT.tasks=t.tasks.map(n=>({id:uid(),n,done:false,fim:'',status:'no_prazo',pct:0,obs:'',resp:'',subs:[]})); } renderProjModal(); }
 function pmToggleCat(c){ if(!EDIT)return; EDIT.categorias=EDIT.categorias||[]; const i=EDIT.categorias.indexOf(c); if(i<0)EDIT.categorias.push(c); else EDIT.categorias.splice(i,1); renderProjModal(); }
 /* Assigning a project to an agency is what makes it appear in that agency's
@@ -5031,6 +5076,7 @@ function renderProjModal(){
           <div id="pmPeopleDD" style="position:absolute;left:0;right:0;top:100%;margin-top:4px;background:var(--card);border:1px solid var(--line);border-radius:9px;box-shadow:0 6px 18px rgba(20,22,28,.14);max-height:190px;overflow-y:auto;z-index:20;display:none"></div>
         </div>`:''}
       </div>
+      ${!EDIT._new?pmBudgetBlockHTML(ED):''}
       </div>
       <aside class="pm-side" aria-label="Status and updates">
         <div class="pm-side-h"><b>Status / updates</b>${logs.length?`<span class="n mono">${logs.length}</span>`:''}</div>
