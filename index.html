@@ -110,33 +110,40 @@
      #navBudget just now lay out horizontally — so buildNav()/navBtn() in the
      JS below needed no changes, only this CSS did.) ===== */
   .app{display:flex;flex-direction:column;min-height:100vh}
-  .side{width:100%;flex-shrink:0;background:var(--ink);color:#ced4e0;padding:0 24px;display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;gap:0;position:sticky;top:0;z-index:30;border-bottom:1px solid rgba(255,255,255,.08)}
-  .brand{display:flex;align-items:center;gap:11px;padding:13px 20px 13px 0;margin-right:4px;flex-shrink:0}
-  .brand .dot{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--accent) 50%,var(--po) 50%);display:grid;place-items:center;font-weight:800;color:#fff;font-size:14px;flex-shrink:0;box-shadow:0 4px 12px -3px rgba(0,0,0,.5)}
-  .brand b{color:#fff;font-size:14px;font-weight:700;display:block;line-height:1.15;letter-spacing:-.01em}
-  .brand span{font-family:var(--mono);font-size:9px;color:#7d8493;letter-spacing:.12em;text-transform:uppercase}
-  #navGlobal,#navWork,#navBudget{display:flex;flex-wrap:wrap;align-items:center;gap:1px}
-  .nav-sec{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.14em;padding:0 10px;color:#5b6377;flex-shrink:0;display:flex;align-items:center;height:56px;border-left:1px solid rgba(255,255,255,.08);margin-left:6px}
-  .nav-sec.work{color:#8fa3ff} .nav-sec.budget{color:#ff8d95}
-  .nav-btn{display:flex;align-items:center;gap:8px;padding:0 12px;height:56px;color:#a2a9b8;font-weight:600;font-size:12.5px;text-align:left;position:relative;border-bottom:2px solid transparent;border-radius:0;white-space:nowrap}
+  /* Nav — a single flat row, no per-item dots or colored section labels: the
+     v1 tells (WORK/BUDGET chips, colored dots per button) that made the bar
+     read as repositioned sidebar rather than the mockup's plain top nav
+     (Nav.dc.html). Work/Budget/global still render into three containers for
+     the JS that fills them, but nothing here marks where one ends and the
+     next begins — they read as one continuous row, same as the mockup. */
+  .side{width:100%;flex-shrink:0;background:rgba(5,7,13,.9);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);color:#ced4e0;padding:0 28px;display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;gap:0;position:sticky;top:0;z-index:30;border-bottom:1px solid rgba(255,255,255,.08)}
+  .brand{display:flex;align-items:center;gap:11px;padding:14px 20px 14px 0;margin-right:6px;flex-shrink:0}
+  .brand .dot{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--accent) 50%,var(--po) 50%);display:grid;place-items:center;font-weight:800;color:#fff;font-size:13px;flex-shrink:0}
+  .brand b{color:#fff;font-size:14.5px;font-weight:700;display:block;line-height:1.15;letter-spacing:-.01em}
+  .brand span{font-family:var(--mono);font-size:9px;color:#7d8493;letter-spacing:.1em;text-transform:uppercase}
+  #navGlobal,#navWork,#navBudget{display:flex;flex-wrap:wrap;align-items:center;gap:2px}
+  .nav-sec{display:none}
+  .nav-btn{display:flex;align-items:center;gap:7px;padding:0 13px;height:56px;color:#a7aec2;font-weight:600;font-size:13.5px;text-align:left;position:relative;border-bottom:2px solid transparent;border-radius:0;white-space:nowrap}
   .nav-btn:hover{color:#fff}
-  .nav-btn.on{color:#fff;border-bottom-color:var(--accent-deep)}
-  .nav-btn .dot2{width:6px;height:6px;border-radius:50%;flex-shrink:0;transition:box-shadow var(--fast)}
-  .nav-btn.on .dot2{box-shadow:0 0 0 3px rgba(255,255,255,.09)}
-  .nav-btn .badge{background:var(--po);color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:800;font-family:var(--mono)}
-  .side-foot{margin-left:auto;padding:10px 0;display:flex;flex-direction:row;align-items:center;gap:8px;flex-shrink:0}
-  .side-foot .acct{display:flex;align-items:center;gap:8px;padding:6px 4px;color:var(--txt-3);font-size:11px;font-weight:600}
-  .side-foot .acct .av{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:10px;font-weight:800;flex-shrink:0}
+  .nav-btn.on{color:#fff;font-weight:700;border-bottom-color:var(--accent-deep)}
+  .nav-btn .dot2{display:none}
+  .nav-btn .badge{background:transparent;color:var(--po);border-radius:0;padding:0;font-size:9.5px;font-weight:800;font-family:var(--mono)}
+  .side-foot{margin-left:auto;padding:10px 0;display:flex;flex-direction:row;align-items:center;gap:10px;flex-shrink:0}
+  .side-foot .acct{display:flex;align-items:center;gap:9px;padding:2px 4px;color:var(--txt-3);font-size:11px;font-weight:600}
+  .side-foot .acct .av{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:12px;font-weight:800;flex-shrink:0}
   .side-foot .acct span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px}
-  .side-foot button{padding:8px 12px;border-radius:8px;background:var(--ink-2);color:#c8cedb;font-size:11.5px;font-weight:600;text-align:left}
-  .side-foot button:hover{background:var(--ink-3);color:#fff}
+  .side-foot button{padding:7px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:transparent;color:#a7aec2;font-size:11.5px;font-weight:600;text-align:left}
+  .side-foot button:hover{background:rgba(255,255,255,.06);color:#fff}
 
   .main{flex:1;min-width:0;display:flex;flex-direction:column}
-  .top{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:15px 28px;border-bottom:1px solid var(--line);background:rgba(13,18,32,.72);color:var(--txt);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);position:sticky;top:var(--nav-h,56px);z-index:20}
-  .top .tl{display:flex;align-items:center;gap:13px;min-width:0}
-  .top .barcol{width:7px;height:32px;border-radius:4px;flex-shrink:0}
-  .top h1{font-size:18px;letter-spacing:-.025em;margin:0}
-  .top .sub{font-size:12px;color:var(--txt-3);margin-top:1px}
+  /* Page header — plain inline eyebrow + title, like every mockup's <main>
+     opener (Home.dc.html, Budget.dc.html, ...), not a sticky glass toolbar. */
+  .top{display:flex;align-items:flex-end;justify-content:space-between;gap:14px 20px;flex-wrap:wrap;padding:32px 28px 0;color:var(--txt)}
+  .top .tl{display:flex;flex-direction:column;gap:4px;min-width:0}
+  .top .barcol{display:none}
+  .top h1{font-size:32px;font-weight:800;letter-spacing:-.02em;line-height:1.15;margin:0}
+  .top .sub{font-family:var(--mono);font-size:12px;color:var(--txt-3);order:-1}
+  .top>div:last-child{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-bottom:2px}
   /* No overflow-y:auto here — #view never actually gets its own scrollbar
      (nothing constrains its height, .main just grows taller than 100vh and
      the PAGE scrolls), so this was dead weight that additionally broke
@@ -146,7 +153,7 @@
      block — any sticky descendant then sticks to #view's own (never-
      scrolling) box instead of the page, freezing it at the wrong offset
      instead of actually tracking scroll. */
-  .view{flex:1;padding:26px 28px 56px}
+  .view{flex:1;padding:22px 28px 56px}
 
   .kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:22px}
   .kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:15px 15px 13px;position:relative;overflow:hidden;box-shadow:var(--sh-1);transition:box-shadow var(--med) var(--ease),transform var(--med) var(--ease)}
@@ -1702,6 +1709,10 @@ function go(screen){
   const meta=SCREEN_META[screen]||{t:'',s:'',mod:'work'};
   const col=meta.mod==='budget'?'#e20613':'#2b4fdd';
   $('#scrTitle').textContent=meta.t; $('#scrSub').textContent=meta.s; $('#barcol').style.background=col;
+  /* Home builds its own full-width hero (eyebrow + greeting), same shape the
+     generic bar below would draw — showing both stacked the same title
+     twice. Every other screen still uses the generic bar. */
+  const topEl=document.querySelector('.top'); if(topEl) topEl.style.display=(screen==='dash')?'none':'';
   $('#viewAsBar').innerHTML=viewAsBarHTML(screen,meta);
   // CTA per screen (mirrors the prototype)
   if(['dash','board','list','timeline'].includes(screen)){
@@ -1916,11 +1927,19 @@ function renderDash(){
   const pc={atrasado:'var(--red)',bloqueado:'var(--violet)',atencao:'var(--amber)',no_prazo:'var(--green)',concluido:'var(--slate)'};
   const health=[['On track','no_prazo','var(--green)'],['At risk','atencao','var(--amber)'],['Late','atrasado','var(--red)'],['Blocked','bloqueado','var(--violet)']].map(([name,id,col])=>({name,id,col,n:c[id==='no_prazo'?'no_prazo':id==='atencao'?'atencao':id==='atrasado'?'atrasado':'bloqueado']}));
   const approvals=homeApprovalsHTML();
+  const canNewProj=!['agencia','tcl_member'].includes(effPapel())&&!VIEW_AS;
+  const canReqPO=demoWritable(PO_ACCESS)&&((ROLE_NAV[effPapel()]||{}).budget||[]).length;
   return `
-  <div style="margin-bottom:22px">
-    <div style="font-family:var(--mono);font-size:12px;color:var(--txt-3)">${new Date().toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})} · ${(PAPEL||'').replace(/^\w/,x=>x.toUpperCase())} view</div>
-    <h1 style="font-size:32px;line-height:1.15;font-weight:800;letter-spacing:-.02em;margin-top:4px">${homeGreeting()}, ${esc(homeFirstName())}.</h1>
-    <p style="font-size:15px;color:var(--txt-2);margin-top:6px;max-width:760px">${esc(homeSummaryLine(list,approvals.n))}</p>
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap;margin-bottom:22px">
+    <div style="max-width:760px">
+      <div style="font-family:var(--mono);font-size:12px;color:var(--txt-3)">${new Date().toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})} · ${(PAPEL||'').replace(/^\w/,x=>x.toUpperCase())} view</div>
+      <h1 style="font-size:32px;line-height:1.15;font-weight:800;letter-spacing:-.02em;margin-top:4px">${homeGreeting()}, ${esc(homeFirstName())}.</h1>
+      <p style="font-size:15px;color:var(--txt-2);margin-top:6px">${esc(homeSummaryLine(list,approvals.n))}</p>
+    </div>
+    <div style="display:flex;gap:10px">
+      ${canNewProj?`<button class="btn-ghost" onclick="openProjNew()">New project</button>`:''}
+      ${canReqPO?`<button class="btn-acc" style="background:var(--po)" onclick="openReqPO()">Request PO</button>`:''}
+    </div>
   </div>
   <div style="display:flex;flex-wrap:wrap;gap:18px;align-items:stretch">
     <div class="v2-card" style="flex:2 1 560px;min-width:0">
