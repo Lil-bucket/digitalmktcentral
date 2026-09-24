@@ -7954,7 +7954,7 @@ function renderBudgetOverview(isBalance){
      a locale, and it is wrong the day any of those change. This way a cell is
      never narrower than what is in it, and they share whatever is left over. */
   const heroStat=(l,v,c,tt,onclick,sub)=>`<div ${onclick?`onclick="${onclick}" `:''}title="${tt||''}" style="flex:1 1 auto;min-width:max-content;white-space:nowrap${onclick?';cursor:pointer':''}"><div style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3);overflow:hidden;text-overflow:ellipsis">${l}</div><div class="mono stat-num" style="font-size:15.5px;font-weight:700;margin-top:2px;color:${c||'var(--txt)'}">${v}</div><div style="font-size:10.5px;color:var(--txt-3);font-weight:600;margin-top:2px;min-height:13px;overflow:hidden;text-overflow:ellipsis">${sub||''}</div></div>`;
-  const hero=`<div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 24px;box-shadow:0 1px 2px rgba(20,22,28,.05)">
+  const hero=`<div class="v2-card">
       <div>
         ${(function(){
           /* Available answers "how much is there to hand out", and that has
@@ -8030,7 +8030,7 @@ function renderBudgetOverview(isBalance){
   const chartPanel=`<div class="panel"><div class="panel-h"><h3>Monthly evolution</h3><span class="tag">cap · consumed · committed · awaiting approval</span></div>
       <div style="padding:18px;height:280px"><canvas id="chartMonthly"></canvas></div>
     </div>`;
-  const monthBalance=`<div style="background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);padding:17px 18px;box-shadow:var(--sh-1)">
+  const monthBalance=`<div class="v2-card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><b style="font-family:var(--sans);font-size:var(--fs-base)">${fmtMes(mNow+'-01')} — month balance</b><span class="mono" style="font-size:var(--fs-sm);color:var(--txt-2)">cap ${BRL(capMes)} · balance ${BRL(balMes)}</span></div>
       <div style="display:flex;height:24px;border-radius:7px;overflow:hidden;border:1px solid var(--line);background:var(--line-2)"><span style="width:${consPctM}%;background:var(--blue)"></span><span style="width:${compPctM}%;background:var(--violet)"></span><span style="width:${penPctM}%;background:var(--amber)"></span></div>
       <div style="display:flex;gap:18px;font-size:var(--fs-sm);color:var(--txt-2);margin-top:9px;font-weight:600;flex-wrap:wrap">
@@ -8042,21 +8042,16 @@ function renderBudgetOverview(isBalance){
     </div>`;
   const showAccounts=effIsManager()||['admin','financeiro'].includes(effPapel());
   /* GROUP 1 — Budget overview: hero total, monthly chart and the current-month
-     balance live together in one tinted band. */
-  const budgetGroup=`<section style="background:var(--paper-2);border:1px solid var(--line);border-radius:var(--r-lg);padding:18px;margin-bottom:22px">
-      <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 14px">
-        <h3 style="font-family:var(--sans);font-size:var(--fs-lg)">Budget overview</h3>
-        <span style="font-size:var(--fs-xs);color:var(--txt-3)">totals, monthly evolution and this month's balance</span>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:14px">${hero}${chartPanel}${monthBalance}</div>
-    </section>`;
-  /* GROUP 2 — By account: its own band, the two account blocks equal-sized side by side. */
-  const accountsGroup=showAccounts?`<section style="background:var(--paper-2);border:1px solid var(--line);border-radius:var(--r-lg);padding:18px;margin-bottom:22px">${accountsOverviewBlock()}</section>`:'';
+     balance, as plain stacked cards (mockup's Budget.dc.html has no tinted
+     wrapper band — each figure block is its own card). */
+  const budgetGroup=`<div style="display:flex;flex-direction:column;gap:18px">${hero}${chartPanel}${monthBalance}</div>`;
+  /* GROUP 2 — By account, same flat treatment. */
+  const accountsGroup=showAccounts?accountsOverviewBlock():'';
   /* GROUP 3 — where the money sits: category and activity, side by side. */
   return boPeriodBar()+`${alertsHTML}
     ${budgetGroup}
-    ${accountsGroup}
-    ${boPiePanel(HIDE_MONEY)}`;
+    <div style="margin-top:18px">${accountsGroup}</div>
+    <div style="margin-top:18px">${boPiePanel(HIDE_MONEY)}</div>`;
 }
 /* Two part-to-whole charts closing the Overview: allocation by product
    category and by activity.
