@@ -1944,7 +1944,7 @@ function go(screen){
     $('#ctaBox').innerHTML=boHeaderControls();
   } else if(screen==='budgets'){
     const canBudget=PAPEL==='admin'&&!viewOnly();
-    $('#ctaBox').innerHTML=`<button class="btn-ghost" onclick="exportBudgetXLSX()">Exportar Excel</button>${canBudget?'<button class="btn-po" onclick="openOrcNew()">+ New budget</button>':''}`;
+    $('#ctaBox').innerHTML=`<button class="btn-ghost" onclick="exportBudgetXLSX()">Export</button>${canBudget?'<button class="btn-po" onclick="openOrcNew()">New budget</button>':''}`;
   } else if(['pos','mypos','reqpo'].includes(screen)&&demoWritable(PO_ACCESS)){
     $('#ctaBox').innerHTML='<button class="btn-po" onclick="openReqPO()">Request PO</button>';
   } else if(screen==='mytasks'){
@@ -9033,16 +9033,17 @@ function budgetCategoryCampaignsHTML(list){
     const pct=b?Math.round((co+cm)/b*100):0;
     return {b,co,cm,av,period,pct,w1:b?Math.min(100,co/b*100):0,w2:b?Math.min(100-(b?co/b*100:0),cm/b*100):0};
   };
+  const cols='minmax(0,2fr) 110px repeat(4,minmax(0,.8fr)) 170px';
   const row=(name,funds,onclick)=>{
     const s=rowStats(funds);
-    return `<a onclick="${onclick}" style="display:grid;grid-template-columns:minmax(0,2fr) 90px repeat(4,minmax(0,.8fr)) 170px;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);align-items:center;color:var(--txt);cursor:pointer">
-      <div style="min-width:0"><div style="font-weight:700;color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(name)}</div><div style="font-size:12px;color:var(--txt-3)">${funds.length} fund${funds.length===1?'':'s'}</div></div>
+    return `<a onclick="${onclick}" class="proj-row" style="display:grid;grid-template-columns:${cols};gap:10px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06);align-items:center;color:var(--txt);cursor:pointer">
+      <div style="min-width:0"><div style="font-weight:700;color:#9fb5ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(name)}</div><div style="font-size:12px;color:var(--txt-3)">${funds.length} fund${funds.length===1?'':'s'}</div></div>
       <div style="font-size:12.5px;color:var(--txt-2)">${s.period}</div>
-      <div class="mono" style="text-align:right;font-size:12.5px">${BRL(s.b)}</div>
-      <div class="mono" style="text-align:right;font-size:12.5px;color:var(--txt-2)">${BRL(s.co)}</div>
-      <div class="mono" style="text-align:right;font-size:12.5px;color:var(--txt-2)">${BRL(s.cm)}</div>
-      <div class="mono" style="text-align:right;font-size:12.5px;font-weight:700">${BRL(s.av)}</div>
-      <div style="display:grid;grid-template-columns:minmax(0,1fr) 42px;gap:8px;align-items:center"><div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:var(--line-2)"><span style="width:${s.w1}%;background:#4fb8ff"></span><span style="width:${s.w2}%;background:#a685ff"></span></div><span class="mono" style="font-size:12px;text-align:right">${s.pct}%</span></div>
+      <div class="mono" title="${BRL(s.b)}" style="text-align:right;font-size:12.5px">${BRLc(s.b)}</div>
+      <div class="mono" title="${BRL(s.co)}" style="text-align:right;font-size:12.5px;color:var(--txt-2)">${BRLc(s.co)}</div>
+      <div class="mono" title="${BRL(s.cm)}" style="text-align:right;font-size:12.5px;color:var(--txt-2)">${BRLc(s.cm)}</div>
+      <div class="mono" title="${BRL(s.av)}" style="text-align:right;font-size:12.5px;font-weight:700;${s.av<0?'color:#ff5c6c':''}">${BRLc(s.av)}</div>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 42px;gap:8px;align-items:center"><div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:rgba(255,255,255,.1)"><div style="width:${s.w1}%;background:#4d7dff;box-shadow:inset -2px 0 0 #121a32"></div><div style="width:${s.w2}%;background:#a685ff"></div></div><span class="mono" style="font-size:12px;text-align:right">${s.pct}%</span></div>
     </a>`;
   };
   const campRows=Object.keys(byCamp).sort((a,b)=>{
@@ -9053,13 +9054,10 @@ function budgetCategoryCampaignsHTML(list){
     return row(c.nome,byCamp[cid],`openCampanhaDetail('${esc(cid)}')`);
   }).join('');
   const standaloneRows=standalone.map(p=>row(p.nome,[p],`jumpToFunds('${esc(BUDGET_CAT)}','${esc(actKey(p))}')`)).join('');
-  return `<div class="panel" style="margin-top:16px">
-      <div class="panel-h"><h3>Campaigns</h3><span class="tag">campaigns and funds in this category</span></div>
-      <div style="padding:16px 18px;overflow-x:auto"><div style="min-width:820px">
-      <div style="display:grid;grid-template-columns:minmax(0,2fr) 90px repeat(4,minmax(0,.8fr)) 170px;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:12px;color:var(--txt-3);font-weight:600"><div>Campaign · funds</div><div>Period</div><div style="text-align:right">Budgeted</div><div style="text-align:right">Consumed</div><div style="text-align:right">Committed</div><div style="text-align:right">Available</div><div style="text-align:right">Use</div></div>
+  return v2Card('campaigns and funds in this category','Campaigns',`<div style="overflow-x:auto;margin-top:10px"><div style="min-width:820px">
+      <div style="display:grid;grid-template-columns:${cols};gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.1);font-size:12px;color:var(--txt-3);font-weight:600"><div>Campaign · funds</div><div>Period</div><div style="text-align:right">Budgeted</div><div style="text-align:right">Consumed</div><div style="text-align:right">Committed</div><div style="text-align:right">Available</div><div style="text-align:right">Use</div></div>
       ${campRows}${standaloneRows}
-      </div></div>
-    </div>`;
+      </div></div>`);
 }
 function renderBudgets(){
   const orcs=DATA.orcamentos||[];
@@ -9076,70 +9074,61 @@ function renderBudgets(){
   const orcByCat={}; orcs.forEach(o=>{ if(o.product_category) orcByCat[o.product_category]=o; });
   const catSet=new Set([...Object.keys(byCat),...orcs.map(o=>o.product_category).filter(Boolean)]);
   const catKeys=Array.from(catSet).sort((a,b)=>{let ia=PRODUCT_CATS.indexOf(a),ib=PRODUCT_CATS.indexOf(b);if(ia<0)ia=99;if(ib<0)ib=99;return ia-ib||a.localeCompare(b);});
-  const header=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><b style="font-family:var(--sans);font-size:var(--fs-base)">Budget categories</b>${canBudget?'<button class="chip-btn" onclick="openOrcNew()">+ New budget</button>':''}</div>`;
-  /* Marketing reaches this screen too now, and gets the categories in full —
-     caps, consumption, the activity chart and the activity cards. What it does
-     not get is the Rateios block and the cost center / account table: those are
-     the accounting layer, Admin and Finance work. Rendered as nothing rather
-     than as a "restricted" banner — a banner explaining an absence is just a
-     second thing to read on a screen that is complete without it. */
-  const fee=canSensitive?feeSplitBlock():'';
-  if(!catKeys.length) return header+'<div class="banner">No budgets registered.</div>'+fee;
+  /* Budget-Category.dc.html: category chips (share of the year's budget) →
+     glowing category hero (KPI row + bar scaled to approved) → Month by
+     month beside By activity → Campaigns. Same sums as before; the
+     Rateios/cost-center block that used to trail here lives on its own
+     Cost center tab now. */
+  if(!catKeys.length) return '<div class="banner">No budgets registered.</div>';
   if(!catKeys.includes(BUDGET_CAT)) BUDGET_CAT=catKeys[0];
   const sums=l=>({tot:l.reduce((s,p)=>s+(tetoBy[p.id]||0),0),cons:l.reduce((s,p)=>s+(consBy[p.id]||0),0),comp:l.reduce((s,p)=>s+(compBy[p.id]||0),0),pnd:l.reduce((s,p)=>s+(pendBy[p.id]||0),0)});
-  // Horizontal category tabs (same pattern as the POs screen).
-  const tabsHTML=`<div class="po-tabs" style="margin-bottom:16px">${catKeys.map(k=>{const mm=catMeta(k);const on=k===BUDGET_CAT;const s=sums(byCat[k]||[]);const rw=s.tot?(s.cons+s.comp+s.pnd)/s.tot*100:0;return `<button class="po-tab${on?' on':''}" onclick="budgetSetCat('${esc(k)}')" style="${on?`border-color:${mm.c};background:${mm.bg}`:''}">
-      <span class="ich" style="width:24px;height:24px;background:${on?'#fff':mm.bg};color:${mm.c};flex-shrink:0">${icn(mm.icon,12)}</span>
-      <span style="font-weight:700;font-size:12px;color:${on?mm.c:'var(--txt-2)'};white-space:nowrap">${esc(mm.label)}</span>
-      <span class="mono" style="font-size:10px;font-weight:800;background:${on?'#fff':'var(--paper)'};border:1px solid ${mm.c}40;border-radius:20px;padding:1px 7px;color:${mm.c};flex-shrink:0">${Math.round(rw)}%</span>
-    </button>`;}).join('')}</div>`;
-  // Active category: bar chart of its activities + one separated card per activity group.
+  const grand=catKeys.reduce((g,k)=>g+sums(byCat[k]||[]).tot,0)||1;
+  const chips=`<div style="display:flex;gap:8px;flex-wrap:wrap">${catKeys.map(k=>{const mm=catMeta(k);const on=k===BUDGET_CAT;const st=sums(byCat[k]||[]);
+    return `<button onclick="budgetSetCat('${esc(k)}')" style="padding:9px 16px;border-radius:12px;font-weight:700;font-size:14px;border:1px solid ${on?mm.c:'rgba(255,255,255,.14)'};background:${on?'rgba(255,255,255,.07)':'transparent'};color:var(--txt);display:flex;align-items:center;gap:9px"><span style="width:9px;height:9px;border-radius:50%;background:${mm.c}"></span>${esc(catKeyLabel(k))}<span class="mono" style="font-size:12px;color:var(--txt-2);font-weight:500">${Math.round(st.tot/grand*100)}%</span></button>`;}).join('')}</div>`;
   const m=catMeta(BUDGET_CAT);
   const list=byCat[BUDGET_CAT]||[];
   const orc=orcByCat[BUDGET_CAT];
-  const t=sums(list); const raw=t.tot?(t.cons+t.comp+t.pnd)/t.tot*100:0; const over=raw>100.5,near=!over&&raw>=90;
-  /* "Budget" on screen means the sum of the funds' caps — that is what the
-     word means here. It used to show orcamentos.valor_total when a budget was
-     registered, so this line read one number while every figure under it added
-     up to another. valor_total keeps its real job: the ceiling checked when a
-     fund is created or approved, not a headline. */
-  const budgetTot=t.tot;
+  const t=sums(list);
   const orcTot=orc?(+orc.valor_total||0):0;
-  const byAct={}; list.forEach(p=>{const k=actKey(p);(byAct[k]=byAct[k]||[]).push(p);});
-  const actOrder=Object.keys(byAct).sort((a,b)=>{let ia=ACT_COL_ORDER.indexOf(a),ib=ACT_COL_ORDER.indexOf(b);if(ia<0)ia=99;if(ib<0)ib=99;return ia-ib||a.localeCompare(b);});
-  const ACT_LBL={Campaign:'Campaign',FEE:'Fee',KOL:'KOLs',AON:'AON',Communication:'Communication'};
-  const actCard=k=>{const items=byAct[k];const a=sums(items);const rc=a.tot?(a.cons+a.comp+a.pnd)/a.tot*100:0;const ov=rc>100.5,nr=!ov&&rc>=90;const cC=a.tot?Math.min(100,a.cons/a.tot*100):0,cM=a.tot?Math.min(100-cC,a.comp/a.tot*100):0,cP=a.tot?Math.min(100-cC-cM,a.pnd/a.tot*100):0;
-    return `<div onclick="jumpToFunds('${esc(BUDGET_CAT)}','${esc(k)}')" title="Open ${esc(ACT_LBL[k]||actColLabel(k))} funds in this category" style="background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);padding:14px 16px;cursor:pointer;box-shadow:var(--sh-1);transition:box-shadow var(--fast) var(--ease),transform var(--fast) var(--ease)" onmouseover="this.style.boxShadow='var(--sh-2)';this.style.transform='translateY(-1px)'" onmouseout="this.style.boxShadow='var(--sh-1)';this.style.transform=''">
-      <div style="display:flex;align-items:center;gap:10px">
-        <span class="ich" style="width:26px;height:26px;background:${m.bg};color:${m.c};flex-shrink:0">${icn(actMeta(k).icon,13)}</span>
-        <span style="flex:1;min-width:0"><b style="font-size:13.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ACT_LBL[k]||actColLabel(k))}</b><span style="font-size:10.5px;color:var(--txt-3);font-weight:600">${items.length} fund${items.length===1?'':'s'}</span></span>
-        <span class="pct" style="font-weight:800;color:${ov?'var(--red)':nr?'var(--amber)':'var(--txt-2)'}">${Math.round(rc)}%</span>
-        <span style="color:var(--txt-3);display:flex">${icn('chev',14)}</span>
-      </div>
-      <span class="pbar" style="margin-top:10px"><span style="width:${cC}%;background:${ov?'var(--po)':'var(--blue)'}"></span><span style="width:${cM}%;background:var(--violet)"></span><span style="width:${cP}%;background:var(--amber)"></span></span>
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--txt-2);margin-top:8px" class="mono"><span>${BRL(a.cons+a.comp)} used</span><span style="color:var(--txt-3)">cap ${BRL(a.tot)}</span></div>
-    </div>`;};
-  const activeHTML=`<div style="background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);padding:16px 18px;box-shadow:var(--sh-1);margin-bottom:16px">
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
-        <span class="ich" style="width:34px;height:34px;background:${m.bg};color:${m.c};flex-shrink:0">${icn(m.icon,17)}</span>
-        <span style="flex:1;min-width:150px"><b style="font-family:var(--sans);font-size:var(--fs-lg);display:block">${esc(orc?catKeyLabel(orc.nome||m.label):m.label)}</b><span style="font-size:var(--fs-eyebrow);color:var(--txt-3);font-weight:600">${list.length} fund${list.length===1?'':'s'} · budget ${BRL(budgetTot)}${orcTot?` <span title="Ceiling registered for this category — checked when a fund is created or approved">· ceiling ${BRL(orcTot)}</span>`:''}</span></span>
-        <span class="mono" style="font-size:var(--fs-sm);color:var(--txt-2);text-align:right;white-space:nowrap" title="Consumed + committed / cap">${BRL(t.cons+t.comp)} <span style="color:var(--txt-3)">/ ${BRL(t.tot)}</span></span>
-        <span class="pct" style="font-weight:800;font-size:var(--fs-base);color:${over?'var(--red)':near?'var(--amber)':'var(--txt)'}">${Math.round(raw)}%</span>
-        ${canBudget&&orc?`<button class="chip-btn" onclick="event.stopPropagation();openOrcEdit('${esc(orc.id)}')">Edit budget</button>`:''}
-        <button onclick="jumpToFunds('${esc(BUDGET_CAT)}','')" style="background:${m.c};padding:8px 14px;border-radius:9px;color:#fff;font-weight:700;font-size:12px;cursor:pointer;border:none">View funds →</button>
-      </div>
-      <div style="font-size:var(--fs-eyebrow);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--txt-3);margin-bottom:6px">Main activities — consumed vs committed vs cap</div>
-      <div style="height:280px">${actOrder.length?'<canvas id="chartBudgetAct"></canvas>':'<div class="banner">No funds in this category yet.</div>'}</div>
+  const seeCut=canSeeCorte();
+  let cut=0; if(seeCut) list.forEach(p=>{ const cm=fundMonthlyCuts(p.id); Object.keys(cm).forEach(k=>cut+=cm[k]); });
+  const aprov=t.tot+cut, av=t.tot-t.cons-t.comp;
+  const pctOf=(v,bs)=>bs?(v/bs*100).toFixed(1)+'%':'—';
+  const campN=new Set(list.map(p=>p.campanha_id).filter(Boolean)).size;
+  const kpis=[];
+  if(seeCut){ kpis.push({label:'Approved',value:BRLc(aprov),sub:'gross',sw:'transparent',bd:'2px solid #eef1f8',size:21}); kpis.push({label:'Cut',value:BRLc(cut),sub:`${pctOf(cut,aprov)} of approved`,sw:'#ff3b4e',size:21}); }
+  kpis.push({label:'Budgeted',value:BRLc(t.tot),sub:orcTot?`net · ceiling ${BRLc(orcTot)}`:'net',sw:'#eef1f8',size:21});
+  kpis.push({label:'Consumed',value:BRLc(t.cons),sub:pctOf(t.cons,t.tot),sw:'#4d7dff',size:21});
+  kpis.push({label:'Committed',value:BRLc(t.comp),sub:pctOf(t.comp,t.tot)+(t.pnd>0.005?` · ${BRLc(t.pnd)} pending`:''),sw:'#a685ff',size:21});
+  kpis.push({label:'Available',value:BRLc(av),sub:`${pctOf(av,t.tot)} · free`,sw:'rgba(255,255,255,.2)',c:av<0?'#ff5c6c':'',size:21});
+  const base=(seeCut?aprov:t.tot)||1;
+  const hero=`<div style="border-radius:18px;padding:22px 26px;border:1px solid ${m.c}66;background:radial-gradient(36rem 14rem at 100% 0%,${m.c}2e,transparent 60%),#10172a">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="width:12px;height:12px;border-radius:50%;background:${m.c};box-shadow:0 0 12px ${m.c}"></span>
+      <span style="font-size:24px;font-weight:800;letter-spacing:-.02em">${esc(orc?catKeyLabel(orc.nome||m.label):catKeyLabel(m.label))}</span>
+      <span style="font-size:13px;color:var(--txt-2)">${campN?`${campN} campaign${campN===1?'':'s'} · `:''}${list.length} fund${list.length===1?'':'s'} · ${(t.tot/grand*100).toFixed(1)}% of the budget</span>
+      <span style="flex:1"></span>
+      ${canBudget&&orc?`<button class="chip-sel" onclick="openOrcEdit('${esc(orc.id)}')">Edit budget</button>`:''}
+      <button class="chip-sel" style="color:var(--txt)" onclick="jumpToFunds('${esc(BUDGET_CAT)}','')">View funds →</button>
     </div>
-    ${actOrder.length?`<div style="font-size:var(--fs-eyebrow);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--txt-3);margin:0 2px 10px">Activity groups · tap to open in Funds</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px">${actOrder.map(actCard).join('')}</div>`:''}`;
-  // "Month by month" — same cap/consumed/committed idiom as the activity
-  // chart above, but across the calendar instead of across activities.
-  // Matches the second panel of Budget-Category.dc.html's split row.
-  const monthlyHTML=`<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>Month by month</h3><span class="tag">consumed + committed vs monthly cap</span></div>
-      <div style="padding:18px;height:260px">${list.length?'<canvas id="chartBudgetMonthly"></canvas>':'<div class="banner">No funds in this category yet.</div>'}</div>
-    </div>`;
-  const campaignsHTML=budgetCategoryCampaignsHTML(list);
-  return header+tabsHTML+activeHTML+monthlyHTML+campaignsHTML+(fee?`<div style="margin-top:24px">${fee}</div>`:'');
+    <div style="margin-top:18px">${v2KpiGrid(kpis)}</div>
+    <div style="margin-top:18px">${v2Bar([{w:t.cons/base*100,bg:'#4d7dff',t:'Consumed'},{w:t.comp/base*100,bg:'#a685ff',t:'Committed'},{w:Math.max(0,av)/base*100,bg:'rgba(255,255,255,.16)',t:'Available'},...(seeCut?[{w:cut/base*100,bg:V2_HATCH,t:'Cut'}]:[])],14)}</div>
+  </div>`;
+  const byAct={}; list.forEach(p=>{const k=actKey(p);(byAct[k]=byAct[k]||[]).push(p);});
+  const actOrder=Object.keys(byAct).sort((a,b)=>sums(byAct[b]).tot-sums(byAct[a]).tot);
+  const actMax=Math.max(1,...actOrder.map(k=>sums(byAct[k]).tot));
+  const actCard=v2Card('budgeted by activity · click to open its funds','By activity',actOrder.length?`<div style="display:flex;flex-direction:column;gap:12px;margin-top:14px">${actOrder.map(k=>{const a=sums(byAct[k]);const used=a.tot?Math.round((a.cons+a.comp)/a.tot*100):0;
+      return `<div onclick="jumpToFunds('${esc(BUDGET_CAT)}','${esc(k)}')" title="${byAct[k].length} fund(s) · ${used}% used" style="display:grid;grid-template-columns:96px minmax(0,1fr) 70px;gap:10px;align-items:center;cursor:pointer">
+        <span style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(actColLabel(k))}</span>
+        <div style="height:8px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden;position:relative"><div style="position:absolute;inset:0 auto 0 0;border-radius:4px;opacity:.35;width:${a.tot/actMax*100}%;background:${m.c}"></div><div style="position:absolute;inset:0 auto 0 0;border-radius:4px;width:${Math.min(a.tot,a.cons+a.comp)/actMax*100}%;background:${m.c}"></div></div>
+        <span class="mono" style="text-align:right;font-size:12px">${BRLc(a.tot)}</span></div>`;}).join('')}</div>`:'<div class="empty">No funds in this category yet.</div>',{style:'flex:1 1 320px;min-width:0'});
+  const monthCard=v2Card('consumed + committed vs monthly cap','Month by month',list.length?`<div style="margin-top:16px">${v2MonthChart(v2MonthRows(new Set(list.map(p=>p.id)),false),{withPct:true,height:200})}</div>`:'<div class="empty">No funds in this category yet.</div>',{style:'flex:2 1 560px;min-width:0'});
+  return `<div style="display:flex;flex-direction:column;gap:22px">
+    ${chips}
+    ${hero}
+    <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:stretch">${monthCard}${actCard}</div>
+    ${budgetCategoryCampaignsHTML(list)}
+  </div>`;
 }
 /* Export (read-only) — mirrors renderBudgets' own aggregation exactly, transcribes
    what that screen already displays per fund, never recomputes new business values. */
