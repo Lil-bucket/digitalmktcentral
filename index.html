@@ -1815,6 +1815,94 @@ function buildFundChart(){
 /* ============================================================
    RENDER — WORK
    ============================================================ */
+function homeGreeting(){
+  const h=new Date().getHours();
+  return h<12?'Good morning':h<18?'Good afternoon':'Good evening';
+}
+function homeFirstName(){
+  const n=respName((currentUser&&currentUser.email)||'')||(currentUser&&currentUser.email)||'';
+  return (String(n).trim().split(/\s+/)[0])||'there';
+}
+/* Real "needs your attention today" line — no fabricated data, just the
+   counts that already drive the panels below. */
+function homeSummaryLine(list,pendPOCount){
+  const late=list.filter(p=>p.status==='atrasado').length;
+  const blocked=list.filter(p=>p.status==='bloqueado').length;
+  const bits=[];
+  if(pendPOCount) bits.push(`${pendPOCount} PO${pendPOCount===1?'':'s'} wait${pendPOCount===1?'s':''} for your approval`);
+  if(late) bits.push(`${late} project${late===1?' is':'s are'} late`);
+  if(blocked) bits.push(`${blocked} project${blocked===1?' is':'s are'} blocked`);
+  if(!bits.length) return 'Everything is on track today.';
+  return bits.join(', ')+'.';
+}
+function homeApprovalsHTML(){
+  const canAprova=demoWritable(['admin','marketing'].includes(PAPEL)||isManager);
+  if(!canAprova) return {n:0,html:''};
+  let pend=DATA.pos.filter(po=>['SOLICITADA','EM_APROVACAO'].includes(po.status));
+  if(effPapel()==='agencia'&&effAgencia()) pend=pend.filter(p=>p.agencia===effAgencia());
+  if(!pend.length) return {n:0,html:''};
+  const nomeBy={}; DATA.poProjetos.forEach(p=>nomeBy[p.id]=p.nome);
+  pend=pend.slice().sort((a,b)=>String(a.solicitado_em||'').localeCompare(String(b.solicitado_em||'')));
+  const rows=pend.slice(0,5).map(po=>{
+    const ageD=-daysTo((po.solicitado_em||'').slice(0,10));
+    const ageTxt=ageD===null?'—':ageD<=0?'today':ageD+'d';
+    return `<div style="display:grid;grid-template-columns:110px minmax(0,1.4fr) minmax(0,1fr) minmax(0,.8fr) 110px 60px 188px;gap:12px;padding:11px 0;border-bottom:1px solid var(--line);align-items:center;font-size:13px" onclick="openPODetail('${esc(po.id)}')" class="row-item">
+      <span class="mono" style="font-size:12px;color:var(--txt-3)">${esc(po.numero_po||po.id.slice(0,8))}</span>
+      <span style="font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.descricao||'—')}</span>
+      <span style="font-size:12.5px;color:var(--txt-2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(nomeBy[po.fund_id]||'—')}</span>
+      <span style="font-size:12.5px;color:var(--txt-2)">${esc(po.agencia||'—')}</span>
+      <span class="mono" style="font-size:13px">${BRL(po.valor)}</span>
+      <span style="font-size:12px;font-weight:600;color:${ageD>3?'var(--red)':'var(--txt-2)'}">${ageTxt}</span>
+      <span style="display:flex;gap:8px;justify-content:flex-end" onclick="event.stopPropagation()">
+        <button class="btn-ghost" style="padding:7px 12px;font-size:12px" onclick="openPODetail('${esc(po.id)}')">Review</button>
+        <button class="btn-acc" style="padding:7px 12px;font-size:12px" onclick="aprovarPO('${esc(po.id)}')">Approve</button>
+      </span>
+    </div>`;
+  }).join('');
+  return {n:pend.length,html:`<div class="v2-card" style="margin-top:18px">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">
+      <div><div class="v2-card-eyebrow">MARKETING APPROVAL · WITH YOU</div><div class="v2-card-title">Approvals to do <span class="mono" style="font-size:14px;color:var(--red);margin-left:6px">${pend.length}</span></div></div>
+      <span style="font-weight:600;font-size:13.5px;color:var(--accent);cursor:pointer" onclick="go('${poScreen()}')">PO summary →</span>
+    </div>
+    <div style="overflow-x:auto;margin-top:10px"><div style="min-width:900px">
+      <div style="display:grid;grid-template-columns:110px minmax(0,1.4fr) minmax(0,1fr) minmax(0,.8fr) 110px 60px 188px;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);font-size:11.5px;color:var(--txt-3);font-weight:700;text-transform:uppercase;letter-spacing:.04em">
+        <span>PO</span><span>Description</span><span>Fund</span><span>Agency</span><span style="text-align:right">Amount</span><span>Waiting</span><span></span></div>
+      ${rows}
+    </div></div>
+  </div>`};
+}
+/* Annual budget hero — self-contained (never depends on Budget Overview's own
+   period filter, same reasoning as homeMonthHealthHTML), scoped to the
+   current year. */
+function homeAnnualBudgetHTML(){
+  if(!((ROLE_NAV[effPapel()]||{}).budget||[]).includes('bo')) return '';
+  let funds=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO');
+  if(effPapel()==='agencia'&&effAgencia()) funds=funds.filter(p=>p.agencia===effAgencia());
+  const fundIds=new Set(funds.map(p=>p.id));
+  const yr=String(new Date().getFullYear());
+  let teto=0,aprov=0;
+  DATA.tetos.forEach(t=>{if(!fundIds.has(t.fund_id)||String(t.competencia).slice(0,4)!==yr)return;teto+=(+t.teto||0);aprov+=(t.teto_aprovado!=null?+t.teto_aprovado:(+t.teto||0));});
+  DATA.rateio.forEach(r=>{if(!fundIds.has(r.fund_id)||String(r.competencia).slice(0,4)!==yr)return;teto+=(+r.valor||0);aprov+=(+r.valor||0);});
+  let cons=0,comp=0,pend=0;
+  DATA.pos.forEach(po=>{if(!fundIds.has(po.fund_id)||String(po.competencia).slice(0,4)!==yr)return;const v=+po.valor||0;if(CONS.includes(po.status))cons+=v;else if(COMP.includes(po.status))comp+=v;else if(PEND.includes(po.status))pend+=v;});
+  if(!teto) return '';
+  const avail=Math.max(0,teto-cons-comp), cut=Math.max(0,aprov-teto);
+  const showCut=canSeeCorte();
+  const tot=(showCut?aprov:teto)||1;
+  return `<div class="v2-card">
+    <div class="v2-card-eyebrow">ACCRUAL · ALL CATEGORIES</div>
+    <div class="v2-card-title">Budget ${yr}</div>
+    <div style="display:flex;align-items:baseline;gap:12px;margin:14px 0 12px;flex-wrap:wrap"><span class="mono" style="font-size:28px;font-weight:700;letter-spacing:-.03em">${BRL(teto)}</span><span style="font-size:13px;color:var(--txt-3)">budgeted${showCut?` of ${BRL(aprov)} approved`:''}</span></div>
+    <div class="v2-segbar"><i class="v2-seg-cons" style="width:${(cons/tot*100).toFixed(2)}%"></i><i class="v2-seg-comp" style="width:${(comp/tot*100).toFixed(2)}%"></i><i class="v2-seg-avail" style="width:${(avail/tot*100).toFixed(2)}%"></i>${showCut?`<i class="v2-seg-cut" style="width:${(cut/tot*100).toFixed(2)}%"></i>`:''}</div>
+    <div class="v2-segbar-legend">
+      <span><i style="background:var(--accent-deep)"></i>Consumed <span class="mono">${BRL(cons)}</span></span>
+      <span><i style="background:var(--violet)"></i>Committed <span class="mono">${BRL(comp)}</span></span>
+      <span><i style="background:rgba(255,255,255,.16)"></i>Available <span class="mono">${BRL(avail)}</span></span>
+      ${showCut?`<span><i style="background:var(--po)"></i>Cut <span class="mono">${BRL(cut)}</span></span>`:''}
+      ${pend>0.005?`<span style="color:var(--txt-3)">Pending <span class="mono">${BRL(pend)}</span></span>`:''}
+    </div>
+  </div>`;
+}
 function renderDash(){
   const list=projList(), active=list.filter(p=>p.status!=='concluido');
   const c={total:active.length,
@@ -1823,45 +1911,48 @@ function renderDash(){
     atrasado:list.filter(p=>p.status==='atrasado').length,
     bloqueado:list.filter(p=>p.status==='bloqueado').length,
     concl:list.filter(p=>p.status==='concluido').length};
-  const kpi=(l,n,col,m)=>`<div class="kpi"><span class="bar" style="background:${col}"></span><div class="lbl">${l}</div><div class="num" style="color:${col}">${n}</div><div class="meta">${m}</div></div>`;
   const need=list.filter(p=>['atrasado','bloqueado','atencao'].includes(p.status)).sort((a,b)=>(daysTo(a.prazo)??99)-(daysTo(b.prazo)??99));
   const up=list.filter(p=>p.status!=='concluido'&&p.prazo).sort((a,b)=>(daysTo(a.prazo)??999)-(daysTo(b.prazo)??999)).slice(0,6);
   const pc={atrasado:'var(--red)',bloqueado:'var(--violet)',atencao:'var(--amber)',no_prazo:'var(--green)',concluido:'var(--slate)'};
+  const health=[['On track','no_prazo','var(--green)'],['At risk','atencao','var(--amber)'],['Late','atrasado','var(--red)'],['Blocked','bloqueado','var(--violet)']].map(([name,id,col])=>({name,id,col,n:c[id==='no_prazo'?'no_prazo':id==='atencao'?'atencao':id==='atrasado'?'atrasado':'bloqueado']}));
+  const approvals=homeApprovalsHTML();
   return `
-  <div class="kpis">
-    ${kpi('Active',c.total,'var(--txt)','in progress')}
-    ${kpi('On track',c.no_prazo,'var(--green)','on track')}
-    ${kpi('At risk',c.atencao,'var(--amber-ink)','monitor')}
-    ${kpi('Late',c.atrasado,'var(--red)','act now')}
-    ${kpi('Blocked',c.bloqueado,'var(--violet)','unblock')}
-    ${kpi('Completed',c.concl,'var(--slate)','this period')}
+  <div style="margin-bottom:22px">
+    <div style="font-family:var(--mono);font-size:12px;color:var(--txt-3)">${new Date().toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})} · ${(PAPEL||'').replace(/^\w/,x=>x.toUpperCase())} view</div>
+    <h1 style="font-size:32px;line-height:1.15;font-weight:800;letter-spacing:-.02em;margin-top:4px">${homeGreeting()}, ${esc(homeFirstName())}.</h1>
+    <p style="font-size:15px;color:var(--txt-2);margin-top:6px;max-width:760px">${esc(homeSummaryLine(list,approvals.n))}</p>
   </div>
-  <div style="display:grid;grid-template-columns:1.3fr 1fr;gap:18px;margin-bottom:18px">
-    <div class="panel"><div class="panel-h"><h3>Next actions</h3><span class="tag">${need.length} item(s)</span></div>
-      <div class="panel-b">${need.length?need.map(p=>{const st=statusOf(p.status);const di=deadlineInfo(p);const lu=latestLog(p);
-        return `<div class="row-item" onclick="openProj('${esc(p.id)}')"><span class="pin" style="background:${pc[p.status]}"></span>
-          <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13.5px">${esc(p.nome)}</div>
-          <div style="font-size:12.5px;color:var(--txt-2);margin-top:1px">${lu?esc(lu.txt):'No status yet'}</div>
-          ${lu&&lu.autor?`<span class="who">${esc(lu.autor)} · ${fmtDate(lu.t)}</span>`:''}</div>
-          <div class="rt"><span class="badge ${st.cls}"><span class="d"></span>${st.name}</span><div style="font-weight:600;font-size:12px;color:${di.color};margin-top:6px">${di.txt}</div><div style="font-size:11px;color:var(--txt-3)">${di.sub}</div></div></div>`;
-      }).join(''):'<div class="empty">Nothing pending.</div>'}</div>
+  <div style="display:flex;flex-wrap:wrap;gap:18px;align-items:stretch">
+    <div class="v2-card" style="flex:2 1 560px;min-width:0">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">
+        <div><div class="v2-card-eyebrow">YOUR PROJECTS · ${active.length} ACTIVE</div><div class="v2-card-title">Projects overview</div></div>
+        <span style="font-weight:600;font-size:13.5px;color:var(--accent);cursor:pointer" onclick="go('list')">All projects →</span>
+      </div>
+      <div style="display:flex;height:12px;border-radius:6px;overflow:hidden;margin:18px 0 12px;gap:2px">${health.map(h=>`<div style="flex:${h.n||0.0001};background:${h.col}"></div>`).join('')}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px 22px;margin-bottom:18px">${health.map(h=>`<button onclick="setStatusFilter('${h.id}')" style="display:flex;align-items:baseline;gap:8px;border:none;background:none;cursor:pointer;padding:0"><span style="width:9px;height:9px;border-radius:3px;background:${h.col}"></span><span class="mono" style="font-size:18px;font-weight:700">${h.n}</span><span style="font-size:13px;color:var(--txt-2)">${h.name}</span></button>`).join('')}</div>
+      <div style="font-size:12px;color:var(--txt-3);font-weight:600;padding-bottom:6px;border-bottom:1px solid var(--line)">Needs attention</div>
+      ${need.length?need.map(p=>{const st=statusOf(p.status);const di=deadlineInfo(p);const lu=latestLog(p);
+        return `<div class="row-item" onclick="openProj('${esc(p.id)}')" style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line)"><span style="width:8px;height:8px;border-radius:50%;flex-shrink:0;background:${pc[p.status]}"></span>
+          <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</div>
+          <div style="font-size:12px;color:var(--txt-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${lu?esc(lu.txt):'No status yet'}</div></div>
+          <div style="text-align:right;flex-shrink:0"><span class="badge ${st.cls}"><span class="d"></span>${st.name}</span><div style="font-weight:600;font-size:12px;color:${di.color};margin-top:6px">${di.txt}</div></div></div>`;
+      }).join(''):'<div class="empty">Nothing needs attention.</div>'}
     </div>
-    <div class="panel"><div class="panel-h"><h3>Upcoming deadlines</h3><span class="tag">by urgency</span></div>
-      <div class="panel-b">${up.length?up.map(p=>{const di=deadlineInfo(p);
-        return `<div class="row-item" onclick="openProj('${esc(p.id)}')"><div class="avatar" style="background:${avColor(respName(p.resp))};margin-top:1px">${initials(respName(p.resp))}</div>
-          <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">${esc(p.nome)}</div><div style="font-size:11px;color:var(--txt-3);margin-top:1px">${esc(stageOf(p.etapa).name)}</div></div>
-          <div class="rt"><div style="font-weight:600;font-size:12px;color:${di.color}">${di.txt}</div><div style="font-size:11px;color:var(--txt-3)">${di.sub}</div></div></div>`;
+    <div class="v2-card" style="flex:1 1 320px;min-width:0">
+      <div class="v2-card-eyebrow">${up.length} UPCOMING</div>
+      <div class="v2-card-title">Upcoming deadlines</div>
+      <div style="margin-top:12px">${up.length?up.map(p=>{const di=deadlineInfo(p);
+        return `<div class="row-item" onclick="openProj('${esc(p.id)}')" style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)"><div class="avatar" style="background:${avColor(respName(p.resp))};width:28px;height:28px;font-size:10.5px">${initials(respName(p.resp))}</div>
+          <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</div><div style="font-size:11px;color:var(--txt-3);margin-top:1px">${esc(stageOf(p.etapa).name)}</div></div>
+          <div style="text-align:right;flex-shrink:0"><div style="font-weight:600;font-size:12.5px;color:${di.color}">${di.txt}</div><div style="font-size:11px;color:var(--txt-3)">${di.sub}</div></div></div>`;
       }).join(''):'<div class="empty">No upcoming deadlines.</div>'}</div>
     </div>
   </div>
-  <div class="panel"><div class="panel-h"><h3>Status distribution</h3><span class="tag">${list.length} project(s)</span></div>
-    <div style="display:grid;grid-template-columns:1.1fr 1fr;gap:6px;padding:18px;align-items:center">
-      <div style="height:220px"><canvas id="chartStatus"></canvas></div>
-      <div style="display:flex;flex-direction:column;gap:6px">${[['no_prazo','On track','var(--green)'],['atencao','At risk','var(--amber)'],['atrasado','Late','var(--red)'],['bloqueado','Blocked','var(--violet)'],['concluido','Completed','var(--slate)']].map(([id,name,col])=>{const n=list.filter(p=>p.status===id).length;const pct=list.length?Math.round(n/list.length*100):0;return `<button onclick="setStatusFilter('${id}')" style="display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:9px;border:1px solid var(--line);background:var(--card);text-align:left;cursor:pointer">
-        <span style="width:10px;height:10px;border-radius:50%;background:${col};flex-shrink:0"></span><span style="flex:1;font-size:13px;font-weight:600">${name}</span><span class="mono" style="font-size:12.5px;color:var(--txt-2)">${n} · ${pct}%</span></button>`;}).join('')}</div>
-    </div>
+  ${approvals.html}
+  <div style="display:flex;flex-wrap:wrap;gap:18px;align-items:stretch;margin-top:18px">
+    <div style="flex:2 1 520px;min-width:0">${homeAnnualBudgetHTML()}</div>
+    <div style="flex:1 1 340px;min-width:0">${homeMonthHealthHTML()}</div>
   </div>
-  ${homeMonthHealthHTML()}
   ${renderRecommendations()}`;
 }
 
