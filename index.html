@@ -4223,7 +4223,19 @@ function sanitizeRich(html){
   Array.from(tmp.childNodes).forEach(process);
   return tmp.innerHTML;
 }
-let PT_EXPANDED={}; let PT_DRAFT={title:'',desc:'',due:''};
+let PT_EXPANDED={}; let PT_DRAFT={title:'',desc:'',due:''}; let PT_FILTER='open';
+function ptSetFilter(v){ PT_FILTER=v; renderTasksInto(); }
+/* Same Today/This week/Later/No date buckets the mockup groups by — computed
+   from daysTo() so "today" and "this week" track the real calendar, not a
+   stored label. */
+function ptBucket(due){
+  if(!due) return 'none';
+  const dd=daysTo(due);
+  if(dd<0) return 'today'; // overdue surfaces with today's urgency, not buried in "later"
+  if(dd===0) return 'today';
+  if(dd<=7) return 'week';
+  return 'later';
+}
 function ptRtFmt(id,cmd){ const el=document.getElementById(id); if(!el)return; el.focus(); document.execCommand(cmd); }
 function ptAdd(){
   const ti=$('#ptNewTitle'); const de=$('#ptNewDesc'); const du=$('#ptNewDue');
@@ -4285,8 +4297,16 @@ function tasksInner(){
       </div>`:''}
     </div>`;
   };
+  const filters=[['open','Open',open.length],['done','Done',done.length],['all','All',l.length]]
+    .map(f=>`<button onclick="ptSetFilter('${f[0]}')" style="flex:1;padding:7px 8px;border-radius:8px;border:1px solid ${PT_FILTER===f[0]?'var(--accent)':'var(--line-2)'};background:${PT_FILTER===f[0]?'var(--accent-deep)':'transparent'};color:${PT_FILTER===f[0]?'#fff':'var(--txt-2)'};font-weight:600;font-size:12.5px;cursor:pointer">${f[1]} <span style="opacity:.75">${f[2]}</span></button>`).join('');
+  const vis=PT_FILTER==='all'?l:PT_FILTER==='done'?done:open;
+  const buckets=[['today','TODAY'],['week','THIS WEEK'],['later','LATER'],['none','NO DATE']];
+  const grouped=PT_FILTER==='done'?[['done','DONE',vis]]:buckets.map(b=>[b[0],b[1],vis.filter(t=>!t.done&&ptBucket(t.due)===b[0])]).filter(g=>g[2].length);
+  const listHTML=PT_FILTER==='all'
+    ? (vis.length?vis.map(row).join(''):'<div style="padding:14px 4px;font-size:12.5px;color:var(--txt-3)">No tasks yet.</div>')
+    : (grouped.length?grouped.map(([id,label,items])=>`<div style="padding:10px 4px 2px;font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">${label}</div>${items.map(row).join('')}`).join(''):`<div style="padding:14px 4px;font-size:12.5px;color:var(--txt-3)">No ${PT_FILTER==='done'?'completed':'open'} tasks.</div>`);
   return `<div style="max-width:640px">
-    <div style="font-family:'Hanken Grotesk',sans-serif;font-weight:700;font-size:13px;margin-bottom:9px">To-do · <span style="color:var(--txt-3);font-weight:600">${open.length} open</span></div>
+    <div style="display:flex;gap:6px;margin-bottom:12px">${filters}</div>
     <div style="border:1px solid var(--line-2);border-radius:12px;padding:12px;background:var(--card);margin-bottom:12px;display:flex;flex-direction:column;gap:8px">
       <input id="ptNewTitle" onkeydown="ptKey(event)" placeholder="Task title…" style="padding:9px 11px;border:1px solid var(--line-2);border-radius:8px;background:var(--paper-2);font:inherit;font-size:13px">
       <div style="display:flex;gap:5px"><button class="chip-btn" onclick="ptRtFmt('ptNewDesc','bold')" style="font-weight:800;width:26px;padding:5px 0">B</button><button class="chip-btn" onclick="ptRtFmt('ptNewDesc','insertUnorderedList')" style="width:26px;padding:5px 0">•</button></div>
@@ -4296,7 +4316,7 @@ function tasksInner(){
         <button class="btn-acc" style="background:var(--po)" onclick="ptAdd()">Add</button>
       </div>
     </div>
-    <div style="border:1px solid var(--line);border-radius:12px;padding:4px 12px;background:var(--card)">${open.length?open.map(row).join(''):'<div style="padding:14px 4px;font-size:12.5px;color:var(--txt-3)">No open tasks.</div>'}${done.length?`<div style="padding:10px 4px 4px;font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">Done (${done.length})</div>`+done.map(row).join(''):''}</div>
+    <div style="border:1px solid var(--line);border-radius:12px;padding:4px 12px;background:var(--card)">${listHTML}</div>
   </div>`;
 }
 function ptToProject(id){
