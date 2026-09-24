@@ -4579,8 +4579,10 @@ function openProjTimeline(pid){ TLPROJ={id:pid}; renderTLModal(); }
    offsets are pixels off a fixed row height, and calc() mixes the two.
    An SVG polyline can't take percentages in its points. */
 const TL_ROW_H=30, TL_BAR_H=16, TL_LBL_W=228;
-function renderTLModal(){
-  if(!TLPROJ)return; const p=DATA.projetos.find(x=>x.id===TLPROJ.id); if(!p){closeModal();return;}
+/* Gantt body, factored out of renderTLModal so the same chart can also sit
+   inline as the Project page's Schedule section (P3) — same rows, same
+   drawing, just without the modal chrome around it. */
+function ganttBodyHTML(p){
   const rows=projSchedRows(p);
   let body;
   if(!rows.length){
@@ -4688,6 +4690,11 @@ function renderTLModal(){
       ${late?`<span style="margin-left:auto;color:var(--red);font-weight:700">${late} past its due date</span>`:''}
     </div>`;
   }
+  return {body,rows};
+}
+function renderTLModal(){
+  if(!TLPROJ)return; const p=DATA.projetos.find(x=>x.id===TLPROJ.id); if(!p){closeModal();return;}
+  const {body,rows}=ganttBodyHTML(p);
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:920px">
     <div class="modal-h"><div style="min-width:0"><h3>Timeline — ${esc(p.nome)}</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">${rows.length} dated item${rows.length===1?'':'s'} · arrows read "starts after"</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">${body}</div>
@@ -5277,6 +5284,51 @@ function pmAtvRowsHTML(EDA){
     return h;
   }).join('');
 }
+/* Project-page hero + section nav (P3, esteira §3): the modal already carries
+   every field the mockup's page does, just stacked as one long form. This
+   adds the hero stats and an in-modal anchor nav on top of it — reads like a
+   page inside the dialog — without touching the form fields, saving logic or
+   any external call site (openProj/closeModal/etc. are untouched). Only for
+   an existing project: a brand-new one has no status/activities/budget yet
+   to summarize. */
+function pmScrollTo(id){
+  const el=document.getElementById(id), c=document.querySelector('.modal-b');
+  if(el&&c) c.scrollTop=el.offsetTop-c.offsetTop-4;
+}
+function pmHeroHTML(){
+  if(EDIT._new) return '';
+  const tasks=EDIT.tasks||[];
+  const done=tasks.filter(t=>t.done).length, prog=tasks.length?Math.round(done/tasks.length*100):0;
+  const st=statusOf(EDIT.status||autoStatus(EDIT));
+  const risky=(tasks||[]).filter(t=>!t.done&&t.status&&['atrasado','bloqueado'].includes(t.status));
+  const camp=(DATA.campanhas||[]).find(c=>c.id===EDIT.campanha_id);
+  const bud=camp?campTotals(camp.id):null;
+  const budPct=bud&&bud.teto?Math.round((bud.cons+bud.comp)/bud.teto*100):null;
+  const peopleN=(EDIT.envolvidos||[]).length+(EDIT.owner?1:0);
+  const cell=(eyebrow,val,sub,col)=>`<div class="v2-card" style="padding:14px 16px"><div class="v2-card-eyebrow">${eyebrow}</div><div style="font-size:17px;font-weight:800;margin-top:4px${col?';color:'+col:''}">${val}</div><div style="font-size:11.5px;color:var(--txt-3);margin-top:2px">${sub}</div></div>`;
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px">
+    ${cell('Status',`<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:${st.cls==='ok'?'var(--green)':st.cls==='late'?'var(--red)':st.cls==='soon'?'var(--amber)':'var(--slate)'}"></span>${st.name}</span>`,`${prog}% done · ${done}/${tasks.length} tasks`)}
+    ${cell('Activities at risk',risky.length,risky.length?risky.slice(0,2).map(t=>t.n).join(', '):'none',risky.length?'var(--red)':null)}
+    ${cell('People involved',peopleN,'owner + tagged people')}
+    ${bud?cell('Budget',budPct+'%',BRL(bud.cons+bud.comp)+' of '+BRL(bud.teto)):cell('Budget','—','no campaign linked')}
+  </div>`;
+}
+function pmSubnavHTML(){
+  if(EDIT._new) return '';
+  const items=[['pm-sec-schedule','Schedule'],['pm-sec-activities','Activities'],['pm-sec-messages','Messages'],['pm-sec-budget','Budget'],['pm-sec-people','People']];
+  return `<nav style="display:flex;gap:4px;flex-wrap:wrap;padding:4px;border-radius:10px;background:var(--paper-2);border:1px solid var(--line);margin-bottom:16px;position:sticky;top:0;z-index:6">
+    ${items.map(([id,l])=>`<button onclick="pmScrollTo('${id}')" style="padding:6px 12px;border-radius:7px;border:none;background:transparent;color:var(--txt-2);font-weight:600;font-size:12.5px;cursor:pointer">${l}</button>`).join('')}
+  </nav>`;
+}
+function pmScheduleBlockHTML(){
+  if(EDIT._new||!projHasDates(EDIT)) return '';
+  const {body}=ganttBodyHTML(EDIT);
+  return `<div id="pm-sec-schedule" class="v2-card" style="margin-bottom:16px">
+    <div class="v2-card-eyebrow">SCHEDULE</div>
+    <div class="v2-card-title" style="font-size:15px;margin-bottom:10px">Timeline</div>
+    ${body}
+  </div>`;
+}
 function pmAtvBlockHTML(EDA){
   const tasks=EDIT.tasks||[];
   const done=tasks.filter(t=>t.done).length;
@@ -5325,6 +5377,9 @@ function renderProjModal(){
     <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--accent);flex-shrink:0;margin-right:2px"></span><div style="flex:1;min-width:0"><h3>${EDIT._new?'New project':esc(EDIT.nome||'Project')}</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Main fields belong to the creator and admins — the activity plan is also open to tagged Marketing people and to the assigned agencies</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b pm-body">
       <div class="pm-main">
+      ${pmHeroHTML()}
+      ${pmSubnavHTML()}
+      ${pmScheduleBlockHTML()}
       ${ED?'':`<div class="banner">${EDA?'This project is shared with you: the activity plan is yours to work — add, rename, reorder, date and link items — but the main project fields stay with the creator and admins.':'You are not the owner or admin: you can update status, tick activities and sub-items off and post to the log, but not edit the main fields or the activity list.'}</div>`}
       <div class="field"><label>Project name</label><input value="${esc(EDIT.nome||'')}" onchange="pmSet('nome',this.value)" ${dis} placeholder="e.g. Holiday Campaign 2026" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
       <div class="fgrid" style="margin-top:14px">
@@ -5335,7 +5390,8 @@ function renderProjModal(){
       <div class="field full"><label>Brand</label><div style="display:flex;flex-wrap:wrap;gap:6px">${BRAND_CHIPS.map(b=>{const on=EDIT.marca===b;return `<button ${dis} onclick="pmSet('marca','${esc(b)}');renderProjModal()" style="padding:6px 13px;border-radius:18px;border:1px solid ${on?'var(--accent)':'var(--line-2)'};background:${on?'var(--accent-soft)':'var(--card)'};color:${on?'var(--accent-deep)':'var(--txt-2)'};font-weight:700;font-size:12px;cursor:pointer">${esc(b)}</button>`;}).join('')}</div></div>
       <div class="field full"><label>Agencies <span style="font-weight:600;color:var(--txt-3)">(who sees this project in Work — multi-select)</span></label>${pmAgenciasHTML(ED)}</div>
       ${!EDIT._new?`<div style="display:flex;align-items:center;gap:12px;margin:14px 0 14px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:16px">${prog}%</b><span class="pbar" style="flex:1"><span style="width:${prog}%;background:${healthPill(EDIT.status||autoStatus(EDIT)).dot}"></span></span><span style="font-size:11.5px;color:var(--txt-3);font-weight:600">${done}/${tasks.length} tasks done</span></div>`:''}
-      ${pmAtvBlockHTML(EDA)}
+      <div id="pm-sec-activities">${pmAtvBlockHTML(EDA)}</div>
+      <div id="pm-sec-people">
       <div class="field"><label>Owner <span style="font-weight:600;color:var(--txt-3)">(you — creator)</span></label><div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:var(--paper)"><span class="avatar" style="width:22px;height:22px;background:${avColor(EDIT.owner||EDIT.resp)};font-size:9.5px">${initials(EDIT.owner||EDIT.resp||'?')}</span><b style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(EDIT.owner||EDIT.resp||'—')}</b></div></div>
       <div class="field full" style="margin-top:14px"><label>People tagged on this project <span style="font-weight:600;color:var(--txt-3)">(anyone can tag — PO-only agency logins excluded)</span></label>
         <div id="pmTaggedChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:${canTag?'8px':'0'}">${pmTaggedChipsHTML()}</div>
@@ -5344,9 +5400,10 @@ function renderProjModal(){
           <div id="pmPeopleDD" style="position:absolute;left:0;right:0;top:100%;margin-top:4px;background:var(--card);border:1px solid var(--line);border-radius:9px;box-shadow:0 6px 18px rgba(20,22,28,.14);max-height:190px;overflow-y:auto;z-index:20;display:none"></div>
         </div>`:''}
       </div>
-      ${!EDIT._new?pmBudgetBlockHTML(ED):''}
       </div>
-      <aside class="pm-side" aria-label="Status and updates">
+      <div id="pm-sec-budget">${!EDIT._new?pmBudgetBlockHTML(ED):''}</div>
+      </div>
+      <aside class="pm-side" id="pm-sec-messages" aria-label="Status and updates">
         <div class="pm-side-h"><b>Status / updates</b>${logs.length?`<span class="n mono">${logs.length}</span>`:''}</div>
         <div class="pm-side-c">
           <div style="position:relative">
