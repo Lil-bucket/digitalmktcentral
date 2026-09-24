@@ -1160,9 +1160,11 @@ function homeMonthHealthHTML(){
   const R=80, arc=Math.PI*R, tickA=Math.PI*(1-.9);
   const gaugeDash=`${arc*Math.min(100,pctRaw)/100} ${arc}`;
   const tickX1=95+(R-12)*Math.cos(tickA), tickY1=100-(R-12)*Math.sin(tickA), tickX2=95+(R+12)*Math.cos(tickA), tickY2=100-(R+12)*Math.sin(tickA);
-  return `<div class="v2-card" style="margin-top:18px;cursor:pointer" onclick="go('bo')">
-    <div class="v2-card-eyebrow">CONSUMED + COMMITTED VS MONTHLY CAP</div>
-    <div class="v2-card-title" style="font-size:19px">${fmtMes(mNow+'-01')}</div>
+  const glowRGB=pct>100?'255,92,92':pct>=90?'255,176,32':'47,216,138';
+  const dNow=new Date(), daysLeft=new Date(dNow.getFullYear(),dNow.getMonth()+1,0).getDate()-dNow.getDate();
+  return `<div onclick="go('bo')" style="flex:1;min-width:0;cursor:pointer;border-radius:16px;padding:22px 24px;border:1px solid rgba(${glowRGB},.4);background:radial-gradient(26rem 16rem at 100% 0%,rgba(${glowRGB},.14),transparent 60%),linear-gradient(180deg,#161f36,#111931);box-shadow:0 0 40px -18px rgba(${glowRGB},.6)">
+    <div class="v2-card-eyebrow">consumed + committed vs monthly cap</div>
+    <div class="v2-card-title" style="font-size:21px">${dNow.toLocaleDateString('en-US',{month:'long'})}</div>
     <div style="display:grid;grid-template-columns:190px minmax(0,1fr);gap:18px;align-items:center;margin-top:10px">
       <div class="v2-gauge" style="width:190px;height:112px">
         <svg viewBox="0 0 190 112" width="190" height="112">
@@ -1174,14 +1176,15 @@ function homeMonthHealthHTML(){
       </div>
       <div style="display:flex;flex-direction:column;gap:6px">
         <span style="display:inline-flex;align-self:flex-start;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;background:${level.bg};color:${level.c}"><span style="width:6px;height:6px;border-radius:50%;background:${level.c}"></span>${level.t}</span>
-        <div style="font-size:13px;color:var(--txt-2)">${BRL(cons+comp)} of ${BRL(cap)}${pend>0.005?` · ${BRL(pend)} pending`:''}</div>
+        <div style="font-size:13px;color:var(--txt-2)">${BRLc(cons+comp)} of ${BRLc(cap)} · ${daysLeft} day${daysLeft===1?'':'s'} left</div>
+        ${pend>0.005?`<div style="font-size:12px;color:var(--txt-3)">${BRLc(pend)} awaiting approval, not counted</div>`:''}
         <div style="font-size:12px;color:var(--txt-3)">tick = 90% threshold</div>
       </div>
     </div>
-    ${catRows.length?`<div style="display:flex;flex-direction:column;gap:9px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
+    ${catRows.length?`<div style="display:flex;flex-direction:column;gap:9px;margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,.08)">
       ${catRows.map(c=>`<div style="display:grid;grid-template-columns:92px minmax(0,1fr) 48px;gap:10px;align-items:center;font-size:13px">
-        <span style="color:var(--txt-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</span>
-        <span style="height:6px;border-radius:3px;background:var(--line-2);overflow:hidden;display:block"><span style="display:block;height:100%;border-radius:3px;width:${c.w}%;background:${c.c}"></span></span>
+        <span style="color:var(--txt-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</span>
+        <span style="height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden;display:block"><span style="display:block;height:100%;border-radius:3px;width:${c.w}%;background:${c.c}"></span></span>
         <span class="mono" style="text-align:right;font-size:12px;font-weight:700;color:${c.c}">${c.pct}%</span>
       </div>`).join('')}
     </div>`:''}
@@ -1253,12 +1256,22 @@ function seedDemoData(){
   const D=(y,m,d)=>y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');
   const stages=['briefing','producao','revisao','ajustes','entrega','concluido'];
   const projSeed=[
-    {nome:'[DEMO] Summer Launch Campaign',tipo:'campanha',ptipo:'campanha',partner:'Wavemaker',resp:'Bruno Silva',etapa:'producao',status:'no_prazo',prazo:D(2026,8,10)},
-    {nome:'[DEMO] Influencer Series — Gaming',tipo:'campanha',ptipo:'kol',partner:'Mindshare',resp:'Bruno Silva',etapa:'revisao',status:'atencao',prazo:D(2026,7,22)},
-    {nome:'[DEMO] Always-On Social Content',tipo:'conteudo',ptipo:'social',partner:'Vizeu',resp:'Ana Ramos',etapa:'entrega',status:'no_prazo',prazo:D(2026,7,30)},
-    {nome:'[DEMO] Product Launch Event',tipo:'evento',ptipo:'evento',partner:'Wavemaker',resp:'Diego Souza',etapa:'ajustes',status:'atrasado',prazo:D(2026,7,10)},
-    {nome:'[DEMO] Retail POS Materials',tipo:'trade',ptipo:'midia',partner:'Mindshare',resp:'Eva Martins',etapa:'briefing',status:'bloqueado',prazo:D(2026,9,5)},
-    {nome:'[DEMO] PR Media Outreach',tipo:'livre',ptipo:'pr',partner:'Vizeu',resp:'Ana Ramos',etapa:'concluido',status:'concluido',prazo:D(2026,6,15)}
+    {nome:'[DEMO] Summer Launch Campaign',tipo:'campanha',ptipo:'campanha',partner:'Wavemaker',resp:'Bruno Silva',etapa:'producao',status:'no_prazo',prazo:D(2026,11,10),cats:['AC'],camp:'demo-camp-1'},
+    {nome:'[DEMO] Influencer Series — Gaming',tipo:'campanha',ptipo:'kol',partner:'Mindshare',resp:'Bruno Silva',etapa:'revisao',status:'atencao',prazo:D(2026,9,28),cats:['TV'],camp:'demo-camp-2'},
+    {nome:'[DEMO] Always-On Social Content',tipo:'conteudo',ptipo:'social',partner:'Vizeu',resp:'Ana Ramos',etapa:'entrega',status:'no_prazo',prazo:D(2026,12,15),cats:['MOB']},
+    {nome:'[DEMO] Product Launch Event',tipo:'evento',ptipo:'evento',partner:'Wavemaker',resp:'Diego Souza',etapa:'ajustes',status:'atrasado',prazo:D(2026,9,18),cats:['TV'],camp:'demo-camp-3'},
+    {nome:'[DEMO] Retail POS Materials',tipo:'trade',ptipo:'midia',partner:'Mindshare',resp:'Eva Martins',etapa:'briefing',status:'bloqueado',prazo:D(2026,10,5),cats:['WG']},
+    {nome:'[DEMO] PR Media Outreach',tipo:'livre',ptipo:'pr',partner:'Vizeu',resp:'Ana Ramos',etapa:'concluido',status:'concluido',prazo:D(2026,6,15),cats:['MOB']}
+  ];
+  /* A short message history per project, so the detail page's Messages
+     section and Home's "For you" have something to show in the demo. */
+  const DEMO_LOGS=[
+    [['bruno.silva@demo.tcl','Media plan v3 uploaded — needs sign-off to unlock the PO.',D(2026,9,21)],['diego.souza@wavemaker.demo','Key visual approved by the category team.',D(2026,9,17)]],
+    [['eva.martins@mindshare.demo','2 of 6 creators confirmed, contracts pending for the rest.',D(2026,9,22)],['bruno.silva@demo.tcl','@Ana can we move wave 2 to Oct 14?',D(2026,9,19)]],
+    [['ana.ramos@demo.tcl','October calendar is in review.',D(2026,9,20)]],
+    [['diego.souza@wavemaker.demo','Studio has a conflict on the 27th — proposing the 28th.',D(2026,9,23)]],
+    [['eva.martins@mindshare.demo','Waiting on the print vendor quote.',D(2026,9,16)]],
+    [['ana.ramos@demo.tcl','Coverage report delivered. Closing this one.',D(2026,6,15)]]
   ];
   /* Activities are laid out as a real chain — each one starts the day after
      the previous one is due — so the planner, the conflict flag and the
@@ -1285,7 +1298,7 @@ function seedDemoData(){
       /* Only the first project tags the TCL Member demo persona (Hugo Prado)
          — that's what makes visProjs()'s tcl_member scoping visibly true in
          the demo: switch to that persona and exactly one project shows up. */
-      tasks,logs:[],envolvidos:i===0?[{email:'hugo.prado@demo.tcl',nome:'Hugo Prado'}]:[],categorias:[],etapa:p.etapa,etapa_override:p.etapa,status:p.status};
+      tasks,logs:(DEMO_LOGS[i]||[]).slice().reverse().map(([autor,txt,t],li)=>({id:'demo-log-'+i+'-'+li,autor,txt,t,mencoes:[]})),envolvidos:i===0?[{email:'hugo.prado@demo.tcl',nome:'Hugo Prado'}]:[],categorias:p.cats||[],campanha_id:p.camp||null,etapa:p.etapa,etapa_override:p.etapa,status:p.status};
   });
 
   // agencia_nivel mirrors what listar_pessoas() returns for real — without it
@@ -1384,7 +1397,12 @@ function seedDemoData(){
     const bruto=tetos.filter(t=>t.fund_id===p.id).reduce((s,t)=>s+(+t.teto||0),0);
     p.cap_aprovado=(p.id==='demo-p1')?500000:bruto;
   });
-  DATA={projetos,orcamentos,poProjetos,pos,tetos:normTetos(tetos),rateio:[],notif:[],mencoes:[],pessoas,fee,ccLayout:[],campanhas};
+  const mencoes=[
+    {projeto_nome:'[DEMO] Product Launch Event',mensagem:'@Ana can we move the live to Sep 28? Studio has a conflict on the 27th.',autor:'Diego Souza',criado_em:D(2026,9,23)},
+    {projeto_nome:'[DEMO] Summer Launch Campaign',mensagem:'Media plan v3 uploaded, needs your sign-off to unlock the PO.',autor:'Bruno Silva',criado_em:D(2026,9,22)},
+    {projeto_nome:'[DEMO] Influencer Series — Gaming',mensagem:'Creator shortlist attached. Two contracts pending.',autor:'Eva Martins',criado_em:D(2026,9,21)}
+  ];
+  DATA={projetos,orcamentos,poProjetos,pos,tetos:normTetos(tetos),rateio:[],notif:[],mencoes,pessoas,fee,ccLayout:[],campanhas};
   TEAM=[];
 }
 function demoSetRole(v){
@@ -2053,35 +2071,33 @@ function homeApprovalsHTML(){
   let pend=DATA.pos.filter(po=>['SOLICITADA','EM_APROVACAO'].includes(po.status));
   if(effPapel()==='agencia'&&effAgencia()) pend=pend.filter(p=>p.agencia===effAgencia());
   if(!pend.length) return {n:0,html:''};
-  const nomeBy={}; DATA.poProjetos.forEach(p=>nomeBy[p.id]=p.nome);
+  const fundBy={}; DATA.poProjetos.forEach(p=>fundBy[p.id]=p);
+  const campBy={}; (DATA.campanhas||[]).forEach(c=>campBy[c.id]=c);
   pend=pend.slice().sort((a,b)=>String(a.solicitado_em||'').localeCompare(String(b.solicitado_em||'')));
+  const cols='118px minmax(0,1.5fr) minmax(0,1.2fr) minmax(0,1fr) 110px 70px 188px';
   const rows=pend.slice(0,5).map(po=>{
     const ageD=-daysTo((po.solicitado_em||'').slice(0,10));
-    const ageTxt=ageD===null?'—':ageD<=0?'today':ageD+'d';
-    return `<div style="display:grid;grid-template-columns:110px minmax(0,1.4fr) minmax(0,1fr) minmax(0,.8fr) 110px 60px 188px;gap:12px;padding:11px 0;border-bottom:1px solid var(--line);align-items:center;font-size:13px" onclick="openPODetail('${esc(po.id)}')" class="row-item">
-      <span class="mono" style="font-size:12px;color:var(--txt-3)">${esc(po.numero_po||po.id.slice(0,8))}</span>
+    const ageTxt=ageD===null?'—':ageD<=0?'today':ageD===1?'1 day':ageD+' days';
+    const f=fundBy[po.fund_id]||{}; const camp=campBy[f.campanha_id];
+    return `<div onclick="openPODetail('${esc(po.id)}')" class="proj-row" style="display:grid;grid-template-columns:${cols};gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06);align-items:center;cursor:pointer">
+      <span class="mono" style="font-size:12.5px;color:var(--txt-2)">${esc(po.numero_po||('#'+po.id.slice(-6)))}</span>
       <span style="font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.descricao||'—')}</span>
-      <span style="font-size:12.5px;color:var(--txt-2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(nomeBy[po.fund_id]||'—')}</span>
-      <span style="font-size:12.5px;color:var(--txt-2)">${esc(po.agencia||'—')}</span>
-      <span class="mono" style="font-size:13px">${BRL(po.valor)}</span>
-      <span style="font-size:12px;font-weight:600;color:${ageD>3?'var(--red)':'var(--txt-2)'}">${ageTxt}</span>
+      <span style="min-width:0"><span style="display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(camp?camp.nome:(f.nome||'—'))}</span><span style="display:block;font-size:12px;color:var(--txt-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(camp?(f.nome||''):catKeyLabel(f.product_category||''))}</span></span>
+      <span style="font-size:13px;color:var(--txt-2)">${esc(po.agencia||'—')}</span>
+      <span class="mono" style="text-align:right;font-size:13px">${BRL(po.valor)}</span>
+      <span style="font-size:12.5px;font-weight:600;color:${ageD>3?'#ff6b6b':'var(--txt-2)'}">${ageTxt}</span>
       <span style="display:flex;gap:8px;justify-content:flex-end" onclick="event.stopPropagation()">
-        <button class="btn-ghost" style="padding:7px 12px;font-size:12px" onclick="openPODetail('${esc(po.id)}')">Review</button>
-        <button class="btn-acc" style="padding:7px 12px;font-size:12px" onclick="aprovarPO('${esc(po.id)}')">Approve</button>
+        <button class="btn-ghost" style="padding:7px 12px;font-size:12.5px;background:transparent;border-color:rgba(255,255,255,.16)" onclick="openPODetail('${esc(po.id)}')">Review</button>
+        <button class="btn-acc" style="padding:7px 12px;font-size:12.5px;box-shadow:none" onclick="aprovarPO('${esc(po.id)}')">Approve</button>
       </span>
     </div>`;
   }).join('');
-  return {n:pend.length,html:`<div class="v2-card" style="margin-top:18px">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">
-      <div><div class="v2-card-eyebrow">MARKETING APPROVAL · WITH YOU</div><div class="v2-card-title">Approvals to do <span class="mono" style="font-size:14px;color:var(--red);margin-left:6px">${pend.length}</span></div></div>
-      <span style="font-weight:600;font-size:13.5px;color:var(--accent);cursor:pointer" onclick="go('${poScreen()}')">PO summary →</span>
-    </div>
-    <div style="overflow-x:auto;margin-top:10px"><div style="min-width:900px">
-      <div style="display:grid;grid-template-columns:110px minmax(0,1.4fr) minmax(0,1fr) minmax(0,.8fr) 110px 60px 188px;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);font-size:11.5px;color:var(--txt-3);font-weight:700;text-transform:uppercase;letter-spacing:.04em">
-        <span>PO</span><span>Description</span><span>Fund</span><span>Agency</span><span style="text-align:right">Amount</span><span>Waiting</span><span></span></div>
+  return {n:pend.length,html:v2Card('marketing approval · with you',`Approvals to do <span class="mono" style="font-size:14px;color:#ff8a96;margin-left:6px">${pend.length}</span>`,`
+    <div style="overflow-x:auto;margin-top:10px"><div style="min-width:860px">
+      <div style="display:grid;grid-template-columns:${cols};gap:12px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.1);font-size:12px;color:var(--txt-3);font-weight:600">
+        <span>PO</span><span>Description</span><span>Project · fund</span><span>Agency</span><span style="text-align:right">Amount</span><span>Waiting</span><span></span></div>
       ${rows}
-    </div></div>
-  </div>`};
+    </div></div>`,{right:`<a onclick="go('${poScreen()}')" style="font-weight:600;font-size:13.5px;cursor:pointer">PO summary →</a>`})};
 }
 /* Annual budget hero — self-contained (never depends on Budget Overview's own
    period filter, same reasoning as homeMonthHealthHTML), scoped to the
@@ -2101,79 +2117,97 @@ function homeAnnualBudgetHTML(){
   const avail=Math.max(0,teto-cons-comp), cut=Math.max(0,aprov-teto);
   const showCut=canSeeCorte();
   const tot=(showCut?aprov:teto)||1;
-  return `<div class="v2-card">
-    <div class="v2-card-eyebrow">ACCRUAL · ALL CATEGORIES</div>
-    <div class="v2-card-title">Budget ${yr}</div>
-    <div style="display:flex;align-items:baseline;gap:12px;margin:14px 0 12px;flex-wrap:wrap"><span class="mono" style="font-size:28px;font-weight:700;letter-spacing:-.03em">${BRL(teto)}</span><span style="font-size:13px;color:var(--txt-3)">budgeted${showCut?` of ${BRL(aprov)} approved`:''}</span></div>
-    <div class="v2-segbar"><i class="v2-seg-cons" style="width:${(cons/tot*100).toFixed(2)}%"></i><i class="v2-seg-comp" style="width:${(comp/tot*100).toFixed(2)}%"></i><i class="v2-seg-avail" style="width:${(avail/tot*100).toFixed(2)}%"></i>${showCut?`<i class="v2-seg-cut" style="width:${(cut/tot*100).toFixed(2)}%"></i>`:''}</div>
-    <div class="v2-segbar-legend">
-      <span><i style="background:var(--accent-deep)"></i>Consumed <span class="mono">${BRL(cons)}</span></span>
-      <span><i style="background:var(--violet)"></i>Committed <span class="mono">${BRL(comp)}</span></span>
-      <span><i style="background:rgba(255,255,255,.16)"></i>Available <span class="mono">${BRL(avail)}</span></span>
-      ${showCut?`<span><i style="background:var(--po)"></i>Cut <span class="mono">${BRL(cut)}</span></span>`:''}
-      ${pend>0.005?`<span style="color:var(--txt-3)">Pending <span class="mono">${BRL(pend)}</span></span>`:''}
-    </div>
+  const stats=[['Consumed',cons,`${(cons/teto*100).toFixed(1)}% of budgeted`,'#4d7dff'],['Committed',comp,`${(comp/teto*100).toFixed(1)}% · POs approved or issued`,'#a685ff'],['Available',avail,`${(avail/teto*100).toFixed(1)}% · free`,'rgba(255,255,255,.16)'],...(showCut?[['Cut',cut,`${aprov?(cut/aprov*100).toFixed(1):0}% of approved`,V2_HATCH_S]]:[])];
+  return v2Card('accrual · all categories',`Budget ${yr}`,`
+    <div style="display:flex;align-items:baseline;gap:12px;margin:14px 0 12px;flex-wrap:wrap"><span class="mono" style="font-size:28px;font-weight:700;letter-spacing:-.03em">${BRLc(teto)}</span><span style="font-size:13px;color:var(--txt-2)">budgeted${showCut?` of ${BRLc(aprov)} approved`:''}</span></div>
+    ${v2Bar([{w:cons/tot*100,bg:'#4d7dff',t:'Consumed'},{w:comp/tot*100,bg:'#a685ff',t:'Committed'},{w:avail/tot*100,bg:'rgba(255,255,255,.16)',t:'Available'},...(showCut?[{w:cut/tot*100,bg:V2_HATCH_S,t:'Cut'}]:[])],14)}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:14px;margin-top:16px">${stats.map(([l,v,sub,bg])=>`<div><div style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--txt-2)"><span style="width:10px;height:10px;border-radius:3px;background:${bg}"></span>${l}</div><div class="mono" style="font-size:17px;font-weight:700;margin-top:3px">${BRLc(v)}</div><div style="font-size:12px;color:var(--txt-3)">${sub}</div></div>`).join('')}</div>
+    ${pend>0.005?`<div style="font-size:12px;color:var(--txt-3);margin-top:12px">Awaiting approval (not in the bar): <span class="mono" style="color:#ffb020">${BRLc(pend)}</span></div>`:''}`,{right:`<a onclick="go('bo')" style="font-weight:600;font-size:13.5px;cursor:pointer">Budget →</a>`,style:'flex:1;min-width:0'});
+}
+function homeMonthLine(){
+  if(!((ROLE_NAV[effPapel()]||{}).budget||[]).includes('bo')) return '';
+  let funds=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO');
+  if(effPapel()==='agencia'&&effAgencia()) funds=funds.filter(p=>p.agencia===effAgencia());
+  const ids=new Set(funds.map(p=>p.id)); const mNow=new Date().toISOString().slice(0,7);
+  let cap=0,used=0;
+  DATA.tetos.forEach(t=>{if(ids.has(t.fund_id)&&String(t.competencia).slice(0,7)===mNow)cap+=(+t.teto||0);});
+  DATA.rateio.forEach(r=>{if(ids.has(r.fund_id)&&String(r.competencia).slice(0,7)===mNow)cap+=(+r.valor||0);});
+  DATA.pos.forEach(po=>{if(ids.has(po.fund_id)&&String(po.competencia).slice(0,7)===mNow&&(CONS.includes(po.status)||COMP.includes(po.status)))used+=(+po.valor||0);});
+  if(!cap) return '';
+  const pct=Math.round(used/cap*100), c=pct>100?'#ff5c5c':pct>=90?'#ffb020':'#2fd88a';
+  const d=new Date(), left=new Date(d.getFullYear(),d.getMonth()+1,0).getDate()-d.getDate();
+  return ` ${d.toLocaleDateString('en-US',{month:'long'})} is at <b style="color:${c}">${pct}%</b> of the monthly cap with ${left} day${left===1?'':'s'} to go.`;
+}
+function homeForYouHTML(up){
+  const items=buildNotifList().slice(0,5);
+  if(!items.length){
+    return v2Card(`${up.length} upcoming`,'Upcoming deadlines',`<div style="margin-top:10px">${up.length?up.map(p=>{const own=respName(p.resp);
+      return `<div class="row-item" onclick="openProj('${esc(p.id)}')" style="display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06);border-radius:0">
+        <span class="avatar" style="width:30px;height:30px;font-size:11px;background:${avColor(own)}">${initials(own)}</span>
+        <div style="min-width:0"><div style="font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.nome)}</div><div style="font-size:12px;color:var(--txt-3)">${esc(stageOf(p.etapa).name)}</div></div>
+        <div style="text-align:right">${projDueHTML(p)}</div></div>`;}).join(''):'<div class="empty">No upcoming deadlines.</div>'}</div>`,{style:'flex:1 1 320px;min-width:0'});
+  }
+  const unread=items.filter(x=>!x.lida).length;
+  const ago=t=>{const dd=-daysTo(t);return dd===null?'':dd<=0?'today':dd===1?'yesterday':dd+' days ago';};
+  return `<div class="v2-card" style="flex:1 1 320px;min-width:0;display:flex;flex-direction:column">
+    <div class="v2-card-eyebrow">mentions &amp; notifications · ${unread} unread</div><div class="v2-card-title" style="font-size:21px">For you</div>
+    <div style="display:flex;flex-direction:column;margin-top:10px;flex:1">${items.map(m=>{const who=m.origin==='budget'?'System':(m.autor||'—');const nav=m.origin==='budget'&&m.poId?`notifGoPO('${esc(m.poId)}','${esc(m.tipo)}')`:m.pid?`openProj('${esc(m.pid)}')`:`go('notif')`;
+      return `<div onclick="${nav}" style="display:grid;grid-template-columns:30px minmax(0,1fr) 8px;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer">
+        <span class="avatar" style="width:30px;height:30px;font-size:11px;background:${m.origin==='budget'?'#1c2338':avColor(who)}">${m.origin==='budget'?'◆':initials(respName(who)||who)}</span>
+        <div style="min-width:0"><div style="font-size:13px"><b>${esc(respName(who)||who)}</b> <span style="color:var(--txt-3)">· ${ago(m.t)}</span></div><div style="font-size:13.5px;color:var(--txt-soft)">${esc(m.txt||'')}</div><div style="font-size:12px;color:#7d9dff;margin-top:2px">${esc(m.proj||'')}</div></div>
+        <span style="width:8px;height:8px;border-radius:50%;margin-top:6px;background:${m.lida?'transparent':'#ff3b4e'}"></span></div>`;}).join('')}</div>
+    <a onclick="go('notif')" style="font-weight:600;font-size:13.5px;margin-top:14px;cursor:pointer">All messages →</a>
   </div>`;
 }
 function renderDash(){
   const list=projList(), active=list.filter(p=>p.status!=='concluido');
-  const c={total:active.length,
-    no_prazo:list.filter(p=>p.status==='no_prazo').length,
-    atencao:list.filter(p=>p.status==='atencao').length,
-    atrasado:list.filter(p=>p.status==='atrasado').length,
-    bloqueado:list.filter(p=>p.status==='bloqueado').length,
-    concl:list.filter(p=>p.status==='concluido').length};
+  const cnt=id=>list.filter(p=>p.status===id).length;
   const need=list.filter(p=>['atrasado','bloqueado','atencao'].includes(p.status)).sort((a,b)=>(daysTo(a.prazo)??99)-(daysTo(b.prazo)??99));
   const up=list.filter(p=>p.status!=='concluido'&&p.prazo).sort((a,b)=>(daysTo(a.prazo)??999)-(daysTo(b.prazo)??999)).slice(0,6);
-  const pc={atrasado:'var(--red)',bloqueado:'var(--violet)',atencao:'var(--amber)',no_prazo:'var(--green)',concluido:'var(--slate)'};
-  const health=[['On track','no_prazo','var(--green)'],['At risk','atencao','var(--amber)'],['Late','atrasado','var(--red)'],['Blocked','bloqueado','var(--violet)']].map(([name,id,col])=>({name,id,col,n:c[id==='no_prazo'?'no_prazo':id==='atencao'?'atencao':id==='atrasado'?'atrasado':'bloqueado']}));
+  const health=[['On track','no_prazo','#2fd88a'],['At risk','atencao','#ffb020'],['Late','atrasado','#ff5c5c'],['Blocked','bloqueado','#a685ff']].map(([name,id,col])=>({name,id,col,n:cnt(id)}));
   const approvals=homeApprovalsHTML();
   const canNewProj=!['agencia','tcl_member'].includes(effPapel())&&!VIEW_AS;
   const canReqPO=demoWritable(PO_ACCESS)&&((ROLE_NAV[effPapel()]||{}).budget||[]).length;
-  return `
-  <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap;margin-bottom:22px">
-    <div style="max-width:760px">
-      <div style="font-family:var(--mono);font-size:12px;color:var(--txt-3)">${new Date().toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})} · ${(PAPEL||'').replace(/^\w/,x=>x.toUpperCase())} view</div>
-      <h1 style="font-size:32px;line-height:1.15;font-weight:800;letter-spacing:-.02em;margin-top:4px">${homeGreeting()}, ${esc(homeFirstName())}.</h1>
-      <p style="font-size:15px;color:var(--txt-2);margin-top:6px">${esc(homeSummaryLine(list,approvals.n))}</p>
+  const attRow=p=>{const hp=healthPill(p.status);const pr=computeProg(p);const own=respName(p.resp);const lu=latestLog(p);
+    return `<div class="proj-row" onclick="openProj('${esc(p.id)}')" style="display:grid;grid-template-columns:minmax(0,1.8fr) 34px 96px minmax(0,1fr) 92px;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer">
+      <div style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.nome)}</div><div style="font-size:12px;color:var(--txt-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${lu?esc(lu.txt):esc(stageOf(p.etapa).name)}</div></div>
+      <span title="${esc(own||'')}" class="avatar" style="width:28px;height:28px;font-size:11px;background:${avColor(own)}">${initials(own)}</span>
+      <span style="display:inline-flex;align-items:center;gap:6px;justify-self:start;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:20px;background:${hp.bg};color:${hp.fg}"><span style="width:6px;height:6px;border-radius:50%;background:${hp.dot}"></span>${hp.name}</span>
+      <div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden"><div style="height:100%;border-radius:3px;background:#4d7dff;width:${pr}%"></div></div><span class="mono" style="font-size:12px;color:var(--txt-2)">${pr}%</span></div>
+      <div style="text-align:right">${projDueHTML(p)}</div>
+    </div>`;};
+  const role=(ROLE_TAG[effPapel()]||'').toLowerCase();
+  return `<div style="display:flex;flex-direction:column;gap:22px;padding-top:14px">
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap">
+    <div style="display:flex;flex-direction:column;gap:8px;max-width:760px">
+      <div class="mono" style="font-size:12px;color:var(--txt-2)">${new Date().toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})}${role?' · '+esc(role)+' view':''}</div>
+      <h1 style="font-size:38px;line-height:1.1;font-weight:800;letter-spacing:-.03em">${homeGreeting()}, ${esc(homeFirstName())}.</h1>
+      <p style="font-size:16px;color:var(--txt-2);text-wrap:pretty">${esc(homeSummaryLine(list,approvals.n))}${homeMonthLine()}</p>
     </div>
     <div style="display:flex;gap:10px">
       ${canNewProj?`<button class="btn-ghost" onclick="openProjNew()">New project</button>`:''}
       ${canReqPO?`<button class="btn-po" onclick="openReqPO()">Request PO</button>`:''}
     </div>
   </div>
-  <div style="display:flex;flex-wrap:wrap;gap:18px;align-items:stretch">
+  <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:stretch">
     <div class="v2-card" style="flex:2 1 560px;min-width:0">
       <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">
-        <div><div class="v2-card-eyebrow">YOUR PROJECTS · ${active.length} ACTIVE</div><div class="v2-card-title">Projects overview</div></div>
-        <span style="font-weight:600;font-size:13.5px;color:var(--accent);cursor:pointer" onclick="go('list')">All projects →</span>
+        <div><div class="v2-card-eyebrow">your projects · ${active.length} active</div><div class="v2-card-title" style="font-size:21px">Projects overview</div></div>
+        <a onclick="go('list')" style="font-weight:600;font-size:13.5px;cursor:pointer">All projects →</a>
       </div>
-      <div style="display:flex;height:12px;border-radius:6px;overflow:hidden;margin:18px 0 12px;gap:2px">${health.map(h=>`<div style="flex:${h.n||0.0001};background:${h.col}"></div>`).join('')}</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px 22px;margin-bottom:18px">${health.map(h=>`<button onclick="setStatusFilter('${h.id}')" style="display:flex;align-items:baseline;gap:8px;border:none;background:none;cursor:pointer;padding:0"><span style="width:9px;height:9px;border-radius:3px;background:${h.col}"></span><span class="mono" style="font-size:18px;font-weight:700">${h.n}</span><span style="font-size:13px;color:var(--txt-2)">${h.name}</span></button>`).join('')}</div>
-      <div style="font-size:12px;color:var(--txt-3);font-weight:600;padding-bottom:6px;border-bottom:1px solid var(--line)">Needs attention</div>
-      ${need.length?need.map(p=>{const st=statusOf(p.status);const di=deadlineInfo(p);const lu=latestLog(p);
-        return `<div class="row-item" onclick="openProj('${esc(p.id)}')" style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line)"><span style="width:8px;height:8px;border-radius:50%;flex-shrink:0;background:${pc[p.status]}"></span>
-          <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</div>
-          <div style="font-size:12px;color:var(--txt-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${lu?esc(lu.txt):'No status yet'}</div></div>
-          <div style="text-align:right;flex-shrink:0"><span class="badge ${st.cls}"><span class="d"></span>${st.name}</span><div style="font-weight:600;font-size:12px;color:${di.color};margin-top:6px">${di.txt}</div></div></div>`;
-      }).join(''):'<div class="empty">Nothing needs attention.</div>'}
+      <div style="display:flex;height:12px;border-radius:6px;overflow:hidden;margin:18px 0 12px;gap:2px">${health.map(h=>h.n?`<div style="flex:${h.n};background:${h.col}"></div>`:'').join('')||'<div style="flex:1;background:rgba(255,255,255,.08)"></div>'}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px 22px;margin-bottom:18px">${health.map(h=>`<button onclick="setStatusFilter('${h.id}')" style="display:flex;align-items:baseline;gap:8px;padding:0"><span style="width:9px;height:9px;border-radius:3px;background:${h.col}"></span><span class="mono" style="font-size:18px;font-weight:700">${h.n}</span><span style="font-size:13px;color:var(--txt-2)">${h.name}</span></button>`).join('')}</div>
+      <div style="font-size:12px;color:var(--txt-3);font-weight:600;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.1)">Needs attention</div>
+      ${need.length?need.slice(0,6).map(attRow).join(''):'<div class="empty">Nothing needs attention.</div>'}
     </div>
-    <div class="v2-card" style="flex:1 1 320px;min-width:0">
-      <div class="v2-card-eyebrow">${up.length} UPCOMING</div>
-      <div class="v2-card-title">Upcoming deadlines</div>
-      <div style="margin-top:12px">${up.length?up.map(p=>{const di=deadlineInfo(p);
-        return `<div class="row-item" onclick="openProj('${esc(p.id)}')" style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)"><div class="avatar" style="background:${avColor(respName(p.resp))};width:28px;height:28px;font-size:10.5px">${initials(respName(p.resp))}</div>
-          <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</div><div style="font-size:11px;color:var(--txt-3);margin-top:1px">${esc(stageOf(p.etapa).name)}</div></div>
-          <div style="text-align:right;flex-shrink:0"><div style="font-weight:600;font-size:12.5px;color:${di.color}">${di.txt}</div><div style="font-size:11px;color:var(--txt-3)">${di.sub}</div></div></div>`;
-      }).join(''):'<div class="empty">No upcoming deadlines.</div>'}</div>
-    </div>
+    ${homeForYouHTML(up)}
   </div>
   ${approvals.html}
-  <div style="display:flex;flex-wrap:wrap;gap:18px;align-items:stretch;margin-top:18px">
-    <div style="flex:2 1 520px;min-width:0">${homeAnnualBudgetHTML()}</div>
-    <div style="flex:1 1 340px;min-width:0">${homeMonthHealthHTML()}</div>
+  <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:stretch">
+    ${(()=>{const a=homeAnnualBudgetHTML(),m=homeMonthHealthHTML();return (a?`<div style="flex:2 1 560px;min-width:0;display:flex">${a}</div>`:'')+(m?`<div style="flex:1 1 360px;min-width:0;display:flex">${m}</div>`:'');})()}
   </div>
-  ${renderRecommendations()}`;
+  ${renderRecommendations()}
+  </div>`;
 }
 
 /* List sort — defaults to health severity (Blocked/Late first, Completed
