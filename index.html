@@ -15,10 +15,14 @@
   :root{
     /* neutrals — cool graphite scale */
     --ink:#10131a; --ink-2:#1a1e27; --ink-3:#252b3a;
-    --paper:#0a0e18; --paper-2:#0f1424; --card:#0d1220;
+    --paper:#0f1628; --paper-2:#0c1222; --card:#131b31;
+    /* v2 surface — every card/panel in the mockups is this gradient + hairline */
+    --surf:linear-gradient(180deg,#161f36,#111931); --line-card:rgba(255,255,255,.13);
+    --sh-card:inset 0 1px 0 rgba(255,255,255,.06),0 12px 32px -12px rgba(0,0,0,.8);
+    --field:#0a0f1d;
     --bg:#05070d; /* Estilo Realidade Virtual — canvas preto da página */
     --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
-    --txt:#eef1f8; --txt-2:#a7aec2; --txt-3:#747c92;
+    --txt:#eef1f8; --txt-soft:#dfe3ee; --txt-2:#a7aec2; --txt-3:#747c92;
     /* brand duality — Work (cobalt) + Budget (TCL red)
        accent/po ficam com o tom "deep" original (preenchimento sólido com
        texto branco, já testado ≥6:1); accent-deep passou a ser o tom "bright"
@@ -39,9 +43,9 @@
     /* radius scale — field / card / pill */
     --r-xs:8px; --r-sm:10px; --r-md:13px; --r-lg:16px; --r-pill:20px;
     /* elevation */
-    --sh-1:0 1px 2px rgba(16,19,26,.05),0 1px 3px rgba(16,19,26,.04);
-    --sh-2:0 2px 6px -1px rgba(16,19,26,.07),0 6px 16px -6px rgba(16,19,26,.08);
-    --sh-3:0 24px 64px -16px rgba(16,19,26,.38),0 8px 24px -12px rgba(16,19,26,.22);
+    --sh-1:none;
+    --sh-2:var(--sh-card);
+    --sh-3:0 40px 100px -20px rgba(0,0,0,.9);
     /* motion */
     --ease:cubic-bezier(.22,1,.36,1); --fast:.15s; --med:.22s;
     /* focus */
@@ -52,22 +56,19 @@
   body{font-family:var(--sans);background:var(--bg);color:var(--txt);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
     /* Estilo Realidade Virtual (Etapa 2) — grade + glow discretos sobre o canvas; cards/paineis internos não mudam nesta etapa */
     background-image:
-      repeating-linear-gradient(0deg, rgba(255,255,255,.02) 0 1px, transparent 1px 24px),
-      repeating-linear-gradient(90deg, rgba(255,255,255,.02) 0 1px, transparent 1px 24px),
-      radial-gradient(42rem 28rem at 8% -12%, rgba(77,125,255,.06), transparent 55%),
-      radial-gradient(36rem 24rem at 98% 108%, rgba(255,59,78,.05), transparent 55%);
+      radial-gradient(46rem 30rem at 10% -10%, rgba(77,125,255,.14), transparent 60%),
+      radial-gradient(40rem 28rem at 100% 10%, rgba(255,59,78,.08), transparent 60%),
+      repeating-linear-gradient(0deg, rgba(255,255,255,.022) 0 1px, transparent 1px 24px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,.022) 0 1px, transparent 1px 24px);
     background-attachment:fixed}
   h1,h2,h3,h4{font-family:var(--sans);letter-spacing:-.02em;font-weight:700;text-wrap:balance}
   .mono{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
   button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;transition:background var(--fast) var(--ease),color var(--fast) var(--ease),border-color var(--fast) var(--ease),box-shadow var(--fast) var(--ease),filter var(--fast) var(--ease),transform var(--fast) var(--ease)}
-  a{color:var(--accent-deep);text-decoration:none} a:hover{text-decoration:underline}
+  a{color:#7d9dff;text-decoration:none} a:hover{color:#a9bdff}
   ::selection{background:rgba(77,125,255,.25)}
   :focus-visible{outline:2px solid var(--accent-deep);outline-offset:2px;border-radius:4px}
   input,select,textarea{accent-color:var(--accent-deep)}
-  ::-webkit-scrollbar{width:8px;height:8px}
-  ::-webkit-scrollbar-track{background:transparent}
-  ::-webkit-scrollbar-thumb{background:#c7ccd8;border-radius:8px;border:2px solid var(--paper)}
-  ::-webkit-scrollbar-thumb:hover{background:#a9b0c0}
+  *{scrollbar-color:#1c2338 transparent;scrollbar-width:thin}
 
   /* ===== ESTILO REALIDADE VIRTUAL (Etapa 2 — layout raiz + navegação) =====
      Escopo local, só nestes seletores: login (.gate), sidebar (.side) e barra
@@ -110,66 +111,76 @@
      #navBudget just now lay out horizontally — so buildNav()/navBtn() in the
      JS below needed no changes, only this CSS did.) ===== */
   .app{display:flex;flex-direction:column;min-height:100vh}
-  /* Nav — a single flat row, no per-item dots or colored section labels: the
-     v1 tells (WORK/BUDGET chips, colored dots per button) that made the bar
-     read as repositioned sidebar rather than the mockup's plain top nav
-     (Nav.dc.html). Work/Budget/global still render into three containers for
-     the JS that fills them, but nothing here marks where one ends and the
-     next begins — they read as one continuous row, same as the mockup. */
-  .side{width:100%;flex-shrink:0;background:rgba(5,7,13,.9);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);color:#ced4e0;padding:0 28px;display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;gap:0;position:sticky;top:0;z-index:30;border-bottom:1px solid rgba(255,255,255,.08)}
-  .brand{display:flex;align-items:center;gap:11px;padding:14px 20px 14px 0;margin-right:6px;flex-shrink:0}
-  .brand .dot{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--accent) 50%,var(--po) 50%);display:grid;place-items:center;font-weight:800;color:#fff;font-size:13px;flex-shrink:0}
-  .brand b{color:#fff;font-size:14.5px;font-weight:700;display:block;line-height:1.15;letter-spacing:-.01em}
-  .brand span{font-family:var(--mono);font-size:9px;color:#7d8493;letter-spacing:.1em;text-transform:uppercase}
-  #navGlobal,#navWork,#navBudget{display:flex;flex-wrap:wrap;align-items:center;gap:2px}
+  /* Nav — Nav.dc.html: 62px glass bar, content boxed to the same 1280px as
+     every page, brand left · hubs centred · bell + account right. Sign out,
+     reload, "view as" and People & Roles live in the account menu so the bar
+     carries exactly the mockup's six items. */
+  .side{position:sticky;top:0;z-index:30;background:rgba(5,7,13,.78);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid rgba(255,255,255,.08)}
+  .side-in{max-width:1280px;margin:0 auto;padding:0 28px;min-height:62px;display:flex;align-items:center;justify-content:space-between;gap:20px}
+  .brand{display:flex;align-items:center;gap:11px;color:var(--txt);flex-shrink:0}
+  .brand:hover{color:var(--txt)}
+  .brand .dot{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#4d7dff 50%,#ff3b4e 50%);box-shadow:0 0 22px -4px rgba(77,125,255,.6);flex-shrink:0}
+  .brand b{font-weight:800;font-size:15.5px;letter-spacing:-.01em}
+  .nav-mid{display:flex;align-items:center;overflow-x:auto;scrollbar-width:none}
+  #navGlobal,#navWork,#navBudget{display:flex;align-items:center;gap:2px}
   .nav-sec{display:none}
-  .nav-btn{display:flex;align-items:center;gap:7px;padding:0 13px;height:56px;color:#a7aec2;font-weight:600;font-size:13.5px;text-align:left;position:relative;border-bottom:2px solid transparent;border-radius:0;white-space:nowrap}
-  .nav-btn:hover{color:#fff}
-  .nav-btn.on{color:#fff;font-weight:700;border-bottom-color:var(--accent-deep)}
+  .nav-btn{display:flex;align-items:center;gap:6px;padding:0 13px;height:62px;color:#a7aec2;font-weight:600;font-size:14px;border-bottom:2px solid transparent;border-radius:0;white-space:nowrap}
+  .nav-btn:hover{color:var(--txt)}
+  .nav-btn.on{color:var(--txt);border-bottom-color:#4d7dff}
   .nav-btn .dot2{display:none}
-  .nav-btn .badge{background:transparent;color:var(--po);border-radius:0;padding:0;font-size:9.5px;font-weight:800;font-family:var(--mono)}
+  .nav-btn .badge,.nav-btn .tag{font-family:var(--mono);font-size:9.5px;font-weight:700;color:#ff8a96;background:none;padding:0;border-radius:0}
   .nav-bell{position:relative;width:34px;height:34px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:transparent;color:#a7aec2;display:grid;place-items:center;flex-shrink:0}
   .nav-bell:hover,.nav-bell.on{color:#fff;border-color:rgba(255,255,255,.28)}
-  .nav-bell .dot{position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;border-radius:9px;background:var(--po);color:#fff;font-size:9.5px;font-weight:800;display:grid;place-items:center;padding:0 3px}
-  .side-foot{margin-left:auto;padding:10px 0;display:flex;flex-direction:row;align-items:center;gap:10px;flex-shrink:0}
-  .side-foot .acct{display:flex;align-items:center;gap:9px;padding:2px 4px;color:var(--txt-3);font-size:11px;font-weight:600}
-  .side-foot .acct .av{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:12px;font-weight:800;flex-shrink:0}
-  .side-foot .acct span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px}
-  .side-foot button{padding:7px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:transparent;color:#a7aec2;font-size:11.5px;font-weight:600;text-align:left}
-  .side-foot button:hover{background:rgba(255,255,255,.06);color:#fff}
+  .nav-bell .dot{position:absolute;top:-4px;right:-4px;min-width:17px;height:17px;border-radius:9px;background:#ff3b4e;color:#fff;font-size:10px;font-weight:800;display:grid;place-items:center;padding:0 4px}
+  .side-foot{position:relative;display:flex;align-items:center;gap:14px;flex-shrink:0}
+  .acct{display:flex;align-items:center;gap:9px;padding:4px 6px 4px 4px;border-radius:12px;text-align:left}
+  .acct:hover,.acct[aria-expanded="true"]{background:rgba(255,255,255,.05)}
+  .acct .av{width:32px;height:32px;border-radius:50%;background:#1c2338;border:1px solid rgba(255,255,255,.14);display:grid;place-items:center;font-size:12px;font-weight:700;color:var(--txt);flex-shrink:0}
+  .acct-txt{display:flex;flex-direction:column;line-height:1.2}
+  .acct-name{font-size:12.5px;font-weight:600;color:var(--txt);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .acct-role{font-family:var(--mono);font-size:10px;color:#ff8a96;text-transform:uppercase}
+  .acct-menu{position:absolute;top:calc(100% + 8px);right:0;z-index:60;min-width:260px;background:#0f1628;border:1px solid rgba(255,255,255,.14);border-radius:12px;box-shadow:0 30px 80px -20px rgba(0,0,0,.9);padding:6px}
+  .acct-menu[hidden]{display:none}
+  .acct-menu-h{padding:9px 10px 10px;border-bottom:1px solid var(--line);margin-bottom:4px;display:flex;flex-direction:column;gap:2px}
+  .acct-menu-h span:first-child{font-size:12.5px;color:var(--txt);font-weight:600;overflow:hidden;text-overflow:ellipsis}
+  .acct-menu-h span:last-child{font-family:var(--mono);font-size:10.5px;color:var(--txt-3)}
+  .acct-menu button,.acct-menu .mi{display:flex;align-items:center;gap:8px;width:100%;padding:9px 10px;border-radius:8px;font-size:13px;font-weight:600;color:var(--txt-2);text-align:left}
+  .acct-menu button:hover{background:rgba(255,255,255,.06);color:var(--txt)}
+  .acct-menu .mi{flex-direction:column;align-items:stretch;gap:6px;cursor:default}
+  .acct-menu .mi label{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--txt-3)}
+  .acct-menu select{padding:7px 9px;border:1px solid var(--line-2);border-radius:8px;background:var(--field);color:var(--txt);font:inherit;font-size:12.5px}
 
+  /* Page frame — every mockup <main>: max-width 1280, 28px gutters, the
+     eyebrow (mono, muted) ABOVE a 38px/800 title, then the hub tabs. */
   .main{flex:1;min-width:0;display:flex;flex-direction:column}
-  /* Page header — plain inline eyebrow + title, like every mockup's <main>
-     opener (Home.dc.html, Budget.dc.html, ...), not a sticky glass toolbar. */
+  .top,#hubTabsHost,#viewAsBar,.view{width:100%;max-width:1280px;margin-left:auto;margin-right:auto}
   .top{display:flex;align-items:flex-end;justify-content:space-between;gap:14px 20px;flex-wrap:wrap;padding:32px 28px 0;color:var(--txt)}
-  .top .tl{display:flex;flex-direction:column;gap:4px;min-width:0}
+  .top .tl{display:flex;flex-direction:column;min-width:0}
+  .top .tl-txt{display:flex;flex-direction:column}
   .top .barcol{display:none}
-  .top h1{font-size:32px;font-weight:800;letter-spacing:-.02em;line-height:1.15;margin:0}
-  .top .sub{font-family:var(--mono);font-size:12px;color:var(--txt-3);order:-1}
+  .top h1{font-size:38px;font-weight:800;letter-spacing:-.03em;line-height:1.1;margin:6px 0 0}
+  .top .sub{font-family:var(--mono);font-size:12px;color:var(--txt-2)}
+  .top .sub:empty+h1{margin-top:0}
   .top>div:last-child{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-bottom:2px}
-  /* No overflow-y:auto here — #view never actually gets its own scrollbar
-     (nothing constrains its height, .main just grows taller than 100vh and
-     the PAGE scrolls), so this was dead weight that additionally broke
-     position:sticky for everything inside it: overflow-y:auto with no
-     overflow-x set computes overflow-x to 'auto' too (CSS overflow-spec
-     coupling rule), making #view itself a sticky-positioning containing
-     block — any sticky descendant then sticks to #view's own (never-
-     scrolling) box instead of the page, freezing it at the wrong offset
-     instead of actually tracking scroll. */
-  .view{flex:1;padding:22px 28px 56px}
+  #ctaBox{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  #hubTabsHost{padding:0 28px}
+  #viewAsBar{padding:0 28px}
+  /* No overflow on .view — it would become the sticky containing block for
+     descendants (see syncStickyOffset). The page itself scrolls. */
+  .view{flex:1;padding:22px 28px 64px}
 
   .kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:22px}
-  .kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:15px 15px 13px;position:relative;overflow:hidden;box-shadow:var(--sh-1);transition:box-shadow var(--med) var(--ease),transform var(--med) var(--ease)}
-  .kpi:hover{box-shadow:var(--sh-2);transform:translateY(-1px)}
+  .kpi{background:var(--surf);border:1px solid var(--line-card);border-radius:14px;padding:16px 18px;position:relative;overflow:hidden;box-shadow:none;transition:box-shadow var(--med) var(--ease),transform var(--med) var(--ease)}
+  .kpi:hover{border-color:rgba(255,255,255,.2)}
   .kpi .bar{position:absolute;left:0;right:0;top:0;bottom:auto;width:auto;height:3px}
-  .kpi .lbl{font-size:10.5px;color:var(--txt-2);font-weight:700;text-transform:uppercase;letter-spacing:.06em}
-  .kpi .num{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:25px;font-weight:700;margin-top:8px;letter-spacing:-.045em}
-  .kpi .meta{font-size:11px;color:var(--txt-3);margin-top:4px}
+  .kpi .lbl{font-family:var(--mono);font-size:11.5px;color:var(--txt-3);font-weight:400}
+  .kpi .num{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:26px;font-weight:700;margin-top:4px;letter-spacing:-.03em}
+  .kpi .meta{font-size:12.5px;color:var(--txt-2);margin-top:2px}
   .grid2{display:grid;grid-template-columns:1.45fr 1fr;gap:18px}
-  .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:var(--sh-1)}
-  .panel-h{padding:14px 18px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
-  .panel-h h3{font-size:14px;letter-spacing:-.015em}
-  .panel-h .tag{font-family:var(--mono);font-size:10.5px;color:var(--txt-3);font-weight:500;letter-spacing:.02em}
+  .panel{background:var(--surf);border:1px solid var(--line-card);border-radius:16px;overflow:hidden;box-shadow:var(--sh-card)}
+  .panel-h{padding:16px 22px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .panel-h h3{font-size:15px;font-weight:800;letter-spacing:-.01em}
+  .panel-h .tag{font-family:var(--mono);font-size:11.5px;color:var(--txt-3);font-weight:400}
   .panel-b{padding:6px 8px}
   .row-item{display:flex;gap:11px;padding:12px 11px;border-radius:10px;align-items:flex-start;cursor:pointer;transition:background var(--fast) var(--ease)}
   .row-item:hover{background:var(--paper)}
@@ -192,22 +203,24 @@
      the sticky <th> below (it'd stick to this box's own scroll instead,
      which never happens, so it just sits frozen in the wrong spot). Corner
      rounding is done on the header/body cells instead of via clipping. */
-  .tbl-wrap{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--sh-1)}
+  .tbl-wrap{background:var(--surf);border:1px solid var(--line-card);border-radius:16px;box-shadow:var(--sh-card)}
   .tbl-wrap th:first-child{border-top-left-radius:14px}
   .tbl-wrap th:last-child{border-top-right-radius:14px}
   table{width:100%;border-collapse:collapse}
-  th{text-align:left;font-family:var(--mono);font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.08em;padding:11px 16px;border-bottom:1px solid var(--line);background:var(--paper-2);white-space:nowrap;position:sticky;top:var(--sticky-top,73px);z-index:4}
-  td{padding:12px 16px;border-bottom:1px solid var(--line);font-size:13.5px;vertical-align:middle}
+  /* Header cells read like the mockups' grid headers — plain 12px/600 muted
+     text, no mono caps, no filled band, and no sticky (it floated mid-table). */
+  th{text-align:left;font-family:var(--sans);font-size:12px;font-weight:600;color:var(--txt-3);padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.1);background:transparent;white-space:nowrap}
+  td{padding:13px 16px;border-bottom:1px solid rgba(255,255,255,.06);font-size:13.5px;vertical-align:middle}
   tr:last-child td{border-bottom:none}
   tbody tr{transition:background var(--fast) var(--ease)}
-  tbody tr:hover{background:var(--paper)}
+  tbody tr:hover{background:rgba(255,255,255,.025)}
   th.r,td.r{text-align:right}
-  .prog{height:6px;background:var(--line);border-radius:6px;overflow:hidden;width:90px}
+  .prog{height:6px;background:rgba(255,255,255,.08);border-radius:6px;overflow:hidden;width:90px}
   .prog i{display:block;height:100%;border-radius:6px}
   .meter{height:22px;border-radius:7px;overflow:hidden;display:flex;border:1px solid var(--line);background:var(--paper)}
   .meter span{display:block;height:100%}
   .stage-tag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px}
-  .banner{background:var(--amber-bg);border:1px solid rgba(255,176,32,.3);color:var(--amber);padding:11px 14px;border-radius:11px;font-size:12.5px;margin-bottom:18px}
+  .banner{background:var(--amber-bg);border:1px solid rgba(255,176,32,.3);color:var(--amber);padding:11px 14px;border-radius:12px;font-size:12.5px;margin-bottom:18px}
   .loading{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;height:60vh;color:var(--txt-3);font-size:13px}
   .loading::before{content:'';width:24px;height:24px;border-radius:50%;border:2.5px solid var(--line-2);border-top-color:var(--accent-deep);animation:spin .7s linear infinite}
   @keyframes spin{to{transform:rotate(1turn)}}
@@ -217,27 +230,41 @@
   [contenteditable][data-placeholder]:empty:before{content:attr(data-placeholder);color:var(--txt-3)}
   [contenteditable] ul{margin:4px 0 4px 18px}
 
+  /* v2 controls — segmented switch (List/Board/…), filter chips, search box */
+  .seg{display:inline-flex;padding:4px;border-radius:12px;background:#111931;border:1px solid rgba(255,255,255,.12)}
+  .seg button{padding:7px 14px;border-radius:9px;font-weight:600;font-size:13px;color:var(--txt-2);white-space:nowrap}
+  .seg button:hover{color:var(--txt)}
+  .seg button.on{background:var(--txt);color:#05070d}
+  .chip-sel{padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:transparent;font:inherit;font-size:13px;color:var(--txt-2);font-weight:500}
+  .chip-sel:hover{border-color:rgba(255,255,255,.24);color:var(--txt)}
+  select.chip-sel{appearance:none;-webkit-appearance:none;padding-right:28px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23a7aec2' stroke-width='1.5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center}
+  select.chip-sel option{background:#0f1628;color:var(--txt)}
+  .search-in{padding:9px 14px 9px 34px;border-radius:10px;background:#111931;border:1px solid rgba(255,255,255,.12);min-width:260px;color:var(--txt);font:inherit;font-size:13.5px;outline:none}
+  .search-in::placeholder{color:var(--txt-3)}
+  .search-in:focus{border-color:var(--accent-deep)}
+  .proj-row:hover{background:rgba(255,255,255,.025)}
+
   /* ===== MODAL ===== */
-  .overlay{position:fixed;inset:0;background:rgba(13,15,20,.5);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);z-index:100;display:flex;align-items:flex-start;justify-content:center;padding:36px 20px;overflow-y:auto;animation:fadeIn .16s ease-out}
+  .overlay{position:fixed;inset:0;background:rgba(3,5,10,.7);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);z-index:100;display:flex;align-items:flex-start;justify-content:center;padding:36px 20px;overflow-y:auto;animation:fadeIn .16s ease-out}
   @keyframes fadeIn{from{opacity:0}}
-  .modal{background:var(--card);border-radius:16px;width:100%;max-width:840px;box-shadow:var(--sh-3);animation:modalIn .2s var(--ease)}
+  .modal{background:#0f1628;border:1px solid rgba(255,255,255,.14);border-radius:16px;width:100%;max-width:840px;box-shadow:var(--sh-3);animation:modalIn .2s var(--ease)}
   @keyframes modalIn{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
   .overlay.no-anim,.modal.no-anim{animation:none}
-  .modal-h{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
-  .modal-h h3{font-size:16.5px;letter-spacing:-.02em}
+  .modal-h{padding:18px 22px;border-bottom:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:space-between}
+  .modal-h h3{font-size:18px;font-weight:800;letter-spacing:-.01em}
   .modal-h .x{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;color:var(--txt-3);font-size:18px}
   .modal-h .x:hover{background:var(--paper);color:var(--txt)}
   .modal-b{padding:20px 22px;max-height:74vh;overflow-y:auto}
-  .modal-f{padding:14px 22px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .modal-f{padding:14px 22px;border-top:1px solid rgba(255,255,255,.1);display:flex;justify-content:space-between;align-items:center;gap:10px}
   /* ===== DRAWER (painel lateral) ===== */
   .overlay.right{align-items:stretch;justify-content:flex-end;padding:0}
-  .drawer{width:600px;max-width:94vw;height:100vh;height:100dvh;border-radius:0;display:flex;flex-direction:column;box-shadow:-18px 0 50px rgba(13,15,20,.3);animation:drawerIn .24s var(--ease)}
+  .drawer{width:600px;max-width:94vw;height:100vh;height:100dvh;border-radius:0;border-width:0 0 0 1px;display:flex;flex-direction:column;box-shadow:-30px 0 80px -20px rgba(0,0,0,.9);animation:drawerIn .24s var(--ease)}
   @keyframes drawerIn{from{transform:translateX(48px);opacity:.3}to{transform:translateX(0);opacity:1}}
   .drawer .modal-b{flex:1;max-height:none;position:relative}
   .fgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   .field{margin-bottom:14px}.field.full{grid-column:1/-1}
-  .field label{display:block;font-size:12px;font-weight:600;color:var(--txt-2);margin-bottom:5px}
-  .field input,.field select,.field textarea{width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px;color:var(--txt);outline:none;transition:border-color var(--fast),box-shadow var(--fast),background var(--fast)}
+  .field label{display:block;font-size:12.5px;font-weight:600;color:var(--txt-2);margin-bottom:6px}
+  .field input,.field select,.field textarea{width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--field);font:inherit;font-size:14px;color:var(--txt);outline:none;transition:border-color var(--fast),box-shadow var(--fast),background var(--fast)}
   .field input::placeholder,.field textarea::placeholder{color:var(--txt-3)}
   .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent-deep);background:var(--card);box-shadow:var(--ring)}
 
@@ -366,11 +393,14 @@
   .atv-scroll>*{min-width:840px}
   @media (prefers-reduced-motion:reduce){ .atv-chev,.atv-row,.atv-grip{transition:none} }
 
-  .btn-acc{padding:10px 18px;border-radius:10px;background:var(--accent);color:#fff;font-weight:700;font-size:13.5px;box-shadow:var(--sh-1)}
+  .btn-acc{padding:11px 18px;border-radius:10px;background:var(--accent);color:#fff;font-weight:700;font-size:14px;box-shadow:0 0 24px -6px rgba(77,125,255,.7)}
+  /* Budget/PO primary — the mockups' red CTA (Request PO) */
+  .btn-po{padding:11px 18px;border-radius:10px;background:#b4000b;color:#fff;font-weight:700;font-size:14px;box-shadow:0 0 24px -6px rgba(255,59,78,.7)}
+  .btn-po:hover{filter:brightness(1.1)}
   .btn-acc:hover{filter:brightness(.9) saturate(1.05)}
   .btn-acc:active{transform:scale(.98)}
-  .btn-ghost{padding:10px 16px;border-radius:10px;font-weight:600;font-size:13.5px;color:var(--txt-2);border:1px solid var(--line-2);background:var(--card)}
-  .btn-ghost:hover{background:var(--paper);color:var(--txt);border-color:var(--line-2)}
+  .btn-ghost{padding:10px 16px;border-radius:10px;font-weight:600;font-size:14px;color:var(--txt);border:1px solid rgba(255,255,255,.18);background:rgba(13,18,32,.6)}
+  .btn-ghost:hover{background:rgba(255,255,255,.06);color:var(--txt);border-color:rgba(255,255,255,.3)}
   .btn-ghost:active{transform:scale(.98)}
   .btn-del{padding:10px 16px;border-radius:10px;font-weight:600;font-size:13px;color:var(--red);border:1px solid rgba(255,92,92,.35);background:var(--card)}
   .btn-del:hover{background:var(--red);color:#fff;border-color:var(--red)}
@@ -382,7 +412,7 @@
   .atv-top input.nm:focus{border-color:var(--accent-deep);box-shadow:var(--ring);outline:none}
   .atv-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:9px;align-items:center}
   .atv-meta input,.atv-meta select{padding:6px 9px;border:1px solid var(--line-2);border-radius:7px;background:var(--card);font:inherit;font-size:12px}
-  .chip-btn{font-size:11px;font-weight:600;color:var(--txt-2);border:1px solid var(--line-2);border-radius:7px;padding:5px 9px;background:var(--card)}
+  .chip-btn{font-size:12px;font-weight:600;color:var(--txt-2);border:1px solid var(--line-2);border-radius:8px;padding:6px 11px;background:transparent}
   .chip-btn:hover{border-color:var(--accent-deep);color:var(--accent-deep);background:var(--accent-soft)}
   .sub{display:flex;align-items:center;gap:7px;margin-top:5px;padding-left:6px}
   .sub input.st{flex:1;padding:5px 9px;border:1px solid var(--line-2);border-radius:6px;background:transparent;font:inherit;font-size:12.5px}
@@ -520,19 +550,19 @@
 
   /* card — mesmo padrão de container já usado nas telas atuais
      (var(--card)/var(--line)/16px), como classe reaproveitável */
-  .v2-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:22px 24px;box-shadow:var(--sh-2)}
+  .v2-card{background:var(--surf);border:1px solid var(--line-card);border-radius:var(--r-lg);padding:22px 24px;box-shadow:var(--sh-card)}
   .v2-card--glow{box-shadow:0 0 40px -18px rgba(77,125,255,.5),var(--sh-2)}
-  .v2-card-eyebrow{font-family:var(--mono);font-size:var(--fs-xs);color:var(--txt-3)}
-  .v2-card-title{font-size:var(--fs-xl);font-weight:800;letter-spacing:-.02em;margin-top:2px}
+  .v2-card-eyebrow{font-family:var(--mono);font-size:var(--fs-xs);color:var(--txt-3);text-transform:lowercase}
+  .v2-card-title{font-size:19px;font-weight:800;letter-spacing:-.02em;margin-top:2px}
 
   /* segmented bar — Consumed · Committed · Available · Cut, nessa ordem,
      larguras vindas de style="width:N%" no elemento (dado real, não CSS) */
-  .v2-segbar{display:flex;height:14px;border-radius:6px;overflow:hidden;background:rgba(255,255,255,.08)}
-  .v2-segbar i{display:block;box-shadow:inset -2px 0 0 var(--card)}
+  .v2-segbar{display:flex;height:14px;border-radius:6px;overflow:hidden;background:rgba(255,255,255,.1)}
+  .v2-segbar i{display:block;box-shadow:inset -3px 0 0 #10172a}
   .v2-seg-cons{background:var(--accent-deep)}
   .v2-seg-comp{background:var(--violet)}
   .v2-seg-avail{background:rgba(255,255,255,.16)}
-  .v2-seg-cut{background:repeating-linear-gradient(135deg,var(--po) 0 2px,rgba(226,6,19,.22) 2px 5px);box-shadow:none}
+  .v2-seg-cut{background:repeating-linear-gradient(135deg,#ff3b4e 0 3px,rgba(255,59,78,.22) 3px 7px);box-shadow:none}
   .v2-segbar-legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:10px;font-size:var(--fs-sm);color:var(--txt-2)}
   .v2-segbar-legend span{display:inline-flex;align-items:center;gap:6px}
   .v2-segbar-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
@@ -593,23 +623,33 @@
 <!-- ===== APP ===== -->
 <div class="app" id="app" style="display:none">
   <aside class="side">
-    <div class="brand"><div class="dot">T</div><div><b>TCL Platform</b><span>Work + Budget</span></div></div>
-    <nav id="navGlobal" aria-label="Global"></nav>
-    <nav id="navWork" aria-label="Work"></nav>
-    <nav id="navBudget" aria-label="Budget"></nav>
+   <div class="side-in">
+    <a class="brand" href="javascript:void(0)" onclick="navGo('dash')"><span class="dot"></span><b>MKT Central</b></a>
+    <div class="nav-mid">
+      <nav id="navGlobal" aria-label="Global"></nav>
+      <nav id="navWork" aria-label="Main"></nav>
+      <nav id="navBudget" aria-label="Budget"></nav>
+    </div>
     <div class="side-foot">
       <div id="navBell"></div>
-      <div class="acct"><span class="av" id="acctAv">?</span><span id="acctEmail">—</span></div>
-      <div id="poDiag" style="font-size:10px;color:#7d8493;padding:0 10px 4px"></div>
-      <button onclick="signOut()" aria-label="Sign out of TCL Platform">Sign out</button>
+      <button class="acct" id="acctBtn" onclick="toggleAcctMenu(event)" aria-haspopup="menu" aria-expanded="false">
+        <span class="av" id="acctAv">?</span>
+        <span class="acct-txt"><span class="acct-name" id="acctName">—</span><span class="acct-role" id="acctRole"></span></span>
+      </button>
+      <div class="acct-menu" id="acctMenu" role="menu" hidden>
+        <div class="acct-menu-h"><span id="acctEmail">—</span><span id="poDiag"></span></div>
+        <div id="acctMenuItems"></div>
+        <button role="menuitem" id="btnSync" onclick="location.reload()">Reload page</button>
+        <button role="menuitem" onclick="signOut()">Sign out</button>
+      </div>
     </div>
+   </div>
   </aside>
   <main class="main">
     <header class="top">
-      <div class="tl"><span class="barcol" id="barcol"></span><div><h1 id="scrTitle">Dashboard</h1><div class="sub" id="scrSub"></div></div></div>
+      <div class="tl"><span class="barcol" id="barcol"></span><div class="tl-txt"><div class="sub" id="scrSub"></div><h1 id="scrTitle">Dashboard</h1></div></div>
       <div style="display:flex;align-items:center;gap:10px">
         <div id="ctaBox"></div>
-        <button class="btn-ghost" id="btnSync" onclick="location.reload()" title="Reload page" aria-label="Reload page" style="display:inline-flex;align-items:center;gap:6px"><svg class="icn" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4"/></svg> Reload</button>
       </div>
     </header>
     <div id="hubTabsHost" style="padding:0 28px"></div>
@@ -742,9 +782,9 @@ function setProjQ(v){
   const el=$('#view'); if(el) el.innerHTML=renderProjetos();
 }
 function projSearchHTML(){
-  return `<span style="position:relative;display:inline-flex;align-items:center;margin-right:8px">
-    <span style="position:absolute;left:11px;color:var(--txt-3);pointer-events:none;display:flex">${icn('search',13)}</span>
-    <input id="projQ" value="${esc(PROJ_Q)}" oninput="setProjQ(this.value)" placeholder="Search projects…" style="padding:9px 12px 9px 32px;border:1px solid var(--line-2);border-radius:9px;background:var(--card);font:inherit;font-size:12.5px;color:var(--txt);width:200px">
+  return `<span style="position:relative;display:inline-flex;align-items:center">
+    <span style="position:absolute;left:13px;color:var(--txt-3);pointer-events:none;display:flex">${icn('search',13)}</span>
+    <input id="projQ" value="${esc(PROJ_Q)}" oninput="setProjQ(this.value)" placeholder="Search projects, owners, agencies" class="search-in">
   </span>`;
 }
 function projList(){
@@ -756,16 +796,16 @@ function projList(){
   return l;
 }
 function ptipoFilterHTML(){
-  return `<select onchange="setPTipoFilter(this.value)" style="padding:9px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--card);font:inherit;font-size:12.5px;color:var(--txt-2);margin-right:8px">
-    <option value="">All types</option>
+  return `<select class="chip-sel" onchange="setPTipoFilter(this.value)">
+    <option value="">Type</option>
     ${BUSINESS_TYPES.map(b=>`<option value="${b.id}" ${PTIPO_FILTER===b.id?'selected':''}>${b.name}</option>`).join('')}
   </select>`;
 }
 function catFilterHTML(){
   const cats=[...new Set(visProjs().flatMap(p=>p.categorias||[]))].sort();
   if(!cats.length) return '';
-  return `<select onchange="setCatFilter(this.value)" style="padding:9px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--card);font:inherit;font-size:12.5px;color:var(--txt-2);margin-right:8px">
-    <option value="">All categories</option>
+  return `<select class="chip-sel" onchange="setCatFilter(this.value)">
+    <option value="">Category</option>
     ${cats.map(c=>`<option value="${esc(c)}" ${CAT_FILTER===c?'selected':''}>${esc(catKeyLabel(c))}</option>`).join('')}
   </select>`;
 }
@@ -907,6 +947,8 @@ function visProjs(){
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const BRL=n=>'R$ '+(+n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+/* Compact money, the mockups' summary format: R$ 19.60M · R$ 428k · R$ 950. */
+const BRLc=n=>{const v=+n||0,a=Math.abs(v),sg=v<0?'−':'';return a>=1e6?`${sg}R$ ${(a/1e6).toFixed(2)}M`:a>=1e3?`${sg}R$ ${Math.round(a/1e3)}k`:`${sg}R$ ${Math.round(a)}`;};
 /* Whole-real variant — only for chart axis ticks, where cents are noise. */
 const BRL0=n=>'R$ '+Math.round(+n||0).toLocaleString('pt-BR');
 /* Round to cents for stored money values (avoids float noise like 12.340000001). */
@@ -1668,11 +1710,11 @@ const NAV_HUBS=[
   {id:'list',label:'Projects',screens:['list','timeline','weekly']},
   {id:'bo',label:'Budget',screens:['bo','budgets','costcenter','campanhas','funds','saldos']},
   {id:'pos',label:'POs',screens:['pos','mypos','reqpo']},
-  {id:'team',label:'Team',screens:['team']},
   {id:'mytasks',label:'Notes',screens:['mytasks']},
-  /* Admin-only — People & Roles gets its own top-level item instead of
-     living as a Budget tab, same as every other hub here. */
-  {id:'people',label:'People & Roles',screens:['people'],adminOnly:true}
+  {id:'team',label:'Team',screens:['team'],tag:'ADMIN'},
+  /* People & Roles is reached from the account menu (Nav.dc.html has exactly
+     the six items above); it stays a hub so go()/hubTabsHTML() still know it. */
+  {id:'people',label:'People & Roles',screens:['people'],adminOnly:true,inMenu:true}
 ];
 function navHubFor(screen){ return NAV_HUBS.find(h=>h.screens.includes(screen)); }
 function buildNav(){
@@ -1681,32 +1723,66 @@ function buildNav(){
   let html='';
   NAV_HUBS.forEach(h=>{
     if(h.adminOnly&&PAPEL!=='admin'&&!isManager) return;
+    if(h.inMenu) return;
     const avail=h.screens.filter(s=>valid.has(s));
     if(!avail.length) return;
     const on=avail.includes(SCREEN)||(h.id==='list'&&SCREEN==='projectdetail');
     const badge=h.screens.reduce((n,s)=>n+(navBadge(s)||0),0);
     const go1=avail.includes(SCREEN)?SCREEN:avail[0];
-    html+=`<button class="nav-btn${on?' on':''}" onclick="navGo('${go1}')">${esc(h.label)}${badge?`<span class="badge">${badge>99?'99+':badge}</span>`:''}</button>`;
+    html+=`<button class="nav-btn${on?' on':''}" onclick="navGo('${go1}')">${esc(h.label)}${badge?`<span class="badge">${badge>99?'99+':badge}</span>`:h.tag?`<span class="tag">${esc(h.tag)}</span>`:''}</button>`;
   });
+  acctRefresh();
   $('#navGlobal').innerHTML='';
   $('#navWork').innerHTML=html;
   $('#navBudget').innerHTML='';
   const bell=nav.global.includes('notif')?(()=>{const n=navBadge('notif');return `<button class="nav-bell${SCREEN==='notif'?' on':''}" onclick="navGo('notif')" title="Notifications" aria-label="Notifications">${icn('bell',15)}${n?`<span class="dot">${n>9?'9+':n}</span>`:''}</button>`;})():'';
   $('#navBell').innerHTML=bell;
 }
+/* Account block (right of the nav) — initials, first name and role tag, as
+   in Nav.dc.html. The menu holds what used to be loose chrome: People &
+   Roles, the admin "view as" selector, reload and sign out. */
+const ROLE_TAG={admin:'Admin',marketing:'Marketing',financeiro:'Finance',agencia:'Agency',tcl_member:'TCL member',pendente:'Pending'};
+function acctRefresh(){
+  const email=(currentUser&&currentUser.email)||'';
+  const full=String(respName(email)||email||'').trim();
+  const parts=full.includes('@')?[full.split('@')[0]]:full.split(/\s+/);
+  const ini=(parts.length>1?parts[0][0]+parts[parts.length-1][0]:(parts[0]||'?').slice(0,2)).toUpperCase();
+  const av=document.getElementById('acctAv'); if(av){ av.textContent=ini; av.style.background=''; }
+  const nm=document.getElementById('acctName'); if(nm) nm.textContent=(parts[0]||'—').replace(/^./,c=>c.toUpperCase());
+  const rl=document.getElementById('acctRole'); if(rl) rl.textContent=PAPEL==='agencia'&&MINHA_AGENCIA?MINHA_AGENCIA:(ROLE_TAG[PAPEL]||'');
+  const em=document.getElementById('acctEmail'); if(em) em.textContent=email||'—';
+  const items=document.getElementById('acctMenuItems'); if(!items) return;
+  const isAdm=PAPEL==='admin'||isManager;
+  const nav=currentNav();
+  let h='';
+  if(isAdm&&(nav.budget||[]).includes('people')) h+=`<button role="menuitem" onclick="closeAcctMenu();navGo('people')">People &amp; roles</button>`;
+  if(isAdm&&SCREEN!=='people'&&SCREEN!=='notif') h+=`<div class="mi"><label>View as (read-only)</label>${viewAsSelectHTML()}</div>`;
+  items.innerHTML=h;
+}
+function toggleAcctMenu(ev){
+  if(ev) ev.stopPropagation();
+  const m=document.getElementById('acctMenu'), b=document.getElementById('acctBtn'); if(!m) return;
+  const open=m.hasAttribute('hidden');
+  if(open){ acctRefresh(); m.removeAttribute('hidden'); } else m.setAttribute('hidden','');
+  if(b) b.setAttribute('aria-expanded',open?'true':'false');
+}
+function closeAcctMenu(){ const m=document.getElementById('acctMenu'); if(m&&!m.hasAttribute('hidden')) toggleAcctMenu(); }
+document.addEventListener('click',e=>{ const m=document.getElementById('acctMenu'); if(m&&!m.hasAttribute('hidden')&&!m.contains(e.target)) closeAcctMenu(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeAcctMenu(); });
 /* Sub-tab row for the current hub — sits right under the page title, same
    spot Budget.dc.html's Overview/Categories/Cost center/Timeline tabs sit. */
 function hubTabsHTML(){
   const nav=currentNav();
   const valid=new Set([...nav.work,...(PO_ACCESS?nav.budget:[])]);
   const hub=navHubFor(SCREEN);
-  if(!hub||hub.screens.length<2) return '';
+  if(!hub||hub.screens.length<2||hub.id==='list') return '';
   const avail=hub.screens.filter(s=>valid.has(s));
   if(avail.length<2) return '';
   const label=id=>(W_LABELS[id]||B_LABELS[id]||id);
-  return `<nav style="display:flex;gap:4px;border-bottom:1px solid var(--line);margin:18px 0 4px">${avail.map(id=>{
+  const lineC=hub.id==='bo'?'#ff3b4e':'#4d7dff';
+  return `<nav style="display:flex;gap:4px;border-bottom:1px solid rgba(255,255,255,.1);margin:22px 0 0;overflow-x:auto;scrollbar-width:none">${avail.map(id=>{
     const on=id===SCREEN;
-    return `<button onclick="navGo('${id}')" style="padding:10px 16px;font-weight:${on?700:600};font-size:13.5px;background:none;border:none;border-bottom:2px solid ${on?'var(--accent-deep)':'transparent'};color:${on?'var(--txt)':'var(--txt-2)'};margin-bottom:-1px;cursor:pointer">${esc(label(id))}</button>`;
+    return `<button onclick="navGo('${id}')" style="padding:10px 16px;font-weight:${on?700:600};font-size:14px;background:none;border:none;border-bottom:2px solid ${on?lineC:'transparent'};color:${on?'var(--txt)':'var(--txt-2)'};margin-bottom:-1px;cursor:pointer;white-space:nowrap">${esc(label(id))}</button>`;
   }).join('')}</nav>`;
 }
 function navBtn(it,col){
@@ -1737,6 +1813,24 @@ const SCREEN_META={
   reqpo:{t:'Request PO',s:'Budget · New request',mod:'budget'},
   balance:{t:'Balance',s:'Budget · Balance per fund',mod:'budget'}
 };
+/* Eyebrow above each page title — the mockups' lowercase mono context line
+   ("budget 2026 · accrual", "projects you take part in · 24 active"). */
+function screenEyebrow(screen,meta){
+  const yr=new Date().getFullYear();
+  if(['list','timeline','weekly'].includes(screen)){
+    const l=visProjs(); const act=l.filter(p=>p.status!=='concluido').length, done=l.length-act;
+    return `projects you take part in · ${act} active · ${done} completed`;
+  }
+  if(screen==='team'){
+    const d=new Date(); d.setDate(d.getDate()-((d.getDay()+6)%7));
+    return `admin only · marketing workload · week of ${d.toLocaleDateString('en-US',{month:'short',day:'numeric'})}`;
+  }
+  const M={bo:`budget ${yr} · accrual · spend health`,budgets:`budget ${yr} · one category at a time`,costcenter:`budget ${yr} · cost center / account · rateios`,
+    campanhas:`budget ${yr} · by campaign and fund`,funds:`budget ${yr} · consumption per fund`,saldos:`budget ${yr} · redistribute unused monthly balance`,
+    pos:`${yr} · from request to payment`,mypos:`${yr} · your agency's POs`,reqpo:`${yr} · new request`,mytasks:'private to you · every saved note becomes a task',
+    people:'admin only · access and roles',notif:'all updates · work and budget',agencywork:'shared with your agency'};
+  return M[screen]||String(meta.s||'').toLowerCase();
+}
 /* "View as" selector — lets an admin browse Budget screens as a chosen
    agency or role, read-only, without a real login/role/RLS change. */
 function viewAsAgencias(){
@@ -1755,8 +1849,24 @@ function setViewAs(v){
    module by agency, an admin simulating an agency must be able to see (and
    leave) that state from the very screens it changes, instead of finding the
    project list mysteriously short. */
+function viewAsSelectHTML(){
+  const ags=viewAsAgencias();
+  const cur=VIEW_AS?(VIEW_AS.type==='agencia'?'ag:'+VIEW_AS.value:'r:'+VIEW_AS.value):'';
+  return `<select onchange="closeAcctMenu();setViewAs(this.value)">
+    <option value="" ${cur===''?'selected':''}>My view (Admin — full access)</option>
+    <optgroup label="Role (read-only)">
+      <option value="r:marketing" ${cur==='r:marketing'?'selected':''}>Marketing</option>
+      <option value="r:financeiro" ${cur==='r:financeiro'?'selected':''}>Finance</option>
+      <option value="r:tcl_member" ${cur==='r:tcl_member'?'selected':''}>TCL Member</option>
+    </optgroup>
+    ${ags.length?`<optgroup label="Agency (read-only)">${ags.map(a=>`<option value="ag:${esc(a)}" ${cur==='ag:'+a?'selected':''}>${esc(a)}</option>`).join('')}</optgroup>`:''}</select>`;
+}
+/* Only rendered while an admin IS viewing as someone else — a read-only
+   state must stay impossible to miss. Idle, the selector lives in the
+   account menu instead of a permanent bar across every page. */
 function viewAsBarHTML(screen,meta){
   if(!(isManager||PAPEL==='admin')||screen==='people'||screen==='notif') return '';
+  if(!VIEW_AS) return '';
   const ags=viewAsAgencias();
   const cur=VIEW_AS?(VIEW_AS.type==='agencia'?'ag:'+VIEW_AS.value:'r:'+VIEW_AS.value):'';
   const roleLbl={marketing:'Marketing',financeiro:'Finance',tcl_member:'TCL Member'};
@@ -1767,7 +1877,7 @@ function viewAsBarHTML(screen,meta){
       <option value="r:tcl_member" ${cur==='r:tcl_member'?'selected':''}>TCL Member</option>
     </optgroup>
     ${ags.length?`<optgroup label="Agency (read-only)">${ags.map(a=>`<option value="ag:${esc(a)}" ${cur==='ag:'+a?'selected':''}>${esc(a)}</option>`).join('')}</optgroup>`:''}`;
-  return `<div style="display:flex;align-items:center;gap:10px;padding:9px 24px;background:${VIEW_AS?'var(--amber-bg)':'var(--paper-2)'};border-bottom:1px solid ${VIEW_AS?'rgba(255,176,32,.3)':'var(--line)'};font-size:12.5px">
+  return `<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;margin-top:18px;border-radius:12px;background:var(--amber-bg);border:1px solid rgba(255,176,32,.3);font-size:12.5px">
     ${VIEW_AS?`<span style="width:7px;height:7px;border-radius:50%;background:var(--amber);flex-shrink:0"></span><b style="color:var(--amber)">Viewing as ${VIEW_AS.type==='agencia'?'agency '+esc(VIEW_AS.value):esc(roleLbl[VIEW_AS.value]||VIEW_AS.value)} — read only, nothing here can be edited</b>`:`<span style="color:var(--txt-3);font-weight:600">View as another profile (read-only) — admin tool</span>`}
     <select onchange="setViewAs(this.value)" style="margin-left:${VIEW_AS?'auto':'0'};padding:5px 9px;border:1px solid var(--line-2);border-radius:7px;background:var(--card);font:inherit;font-size:12px">${opts}</select>
     ${VIEW_AS?`<button class="chip-btn" onclick="setViewAs('')">Exit</button>`:''}
@@ -1789,7 +1899,8 @@ function go(screen){
   SCREEN=screen; buildNav();
   const meta=SCREEN_META[screen]||{t:'',s:'',mod:'work'};
   const col=meta.mod==='budget'?'#e20613':'#2b4fdd';
-  $('#scrTitle').textContent=meta.t; $('#scrSub').textContent=meta.s; $('#barcol').style.background=col;
+  $('#scrTitle').textContent=meta.t; $('#scrSub').textContent=screenEyebrow(screen,meta); $('#barcol').style.background=col;
+  $('#scrSub').style.color=screen==='team'?'#ff8a96':'';
   /* Home and the Project detail page build their own full-width hero
      (eyebrow/breadcrumb + title), same shape the generic bar below would
      draw — showing both stacked the same title twice. Every other screen
@@ -1808,14 +1919,14 @@ function go(screen){
     const statusChip=STATUS_FILTER?`<button onclick="setStatusFilter('')" style="padding:8px 12px;border-radius:9px;border:1px solid var(--line-2);background:var(--card);font-size:12px;font-weight:600;color:var(--txt-2);margin-right:8px">Status: ${esc(statusOf(STATUS_FILTER).name)} ✕</button>`:'';
     $('#ctaBox').innerHTML=`${screen==='dash'?ptipoFilterHTML():''}${screen==='timeline'?catFilterHTML():''}${statusChip}`;
   } else if(screen==='funds'&&demoWritable(['admin','marketing'].includes(PAPEL))){
-    $('#ctaBox').innerHTML='<button class="btn-acc" style="background:var(--po)" onclick="openFundNew()">+ New fund</button>';
+    $('#ctaBox').innerHTML='<button class="btn-po" onclick="openFundNew()">+ New fund</button>';
   } else if(screen==='campanhas'&&demoWritable(['admin','marketing'].includes(PAPEL))){
-    $('#ctaBox').innerHTML='<button class="btn-acc" style="background:var(--po)" onclick="openCampanhaNew()">+ New campaign</button>';
+    $('#ctaBox').innerHTML='<button class="btn-po" onclick="openCampanhaNew()">+ New campaign</button>';
   } else if(screen==='budgets'){
     const canBudget=PAPEL==='admin'&&!viewOnly();
-    $('#ctaBox').innerHTML=`<button class="btn-ghost" onclick="exportBudgetXLSX()">Exportar Excel</button>${canBudget?'<button class="btn-acc" style="background:var(--po)" onclick="openOrcNew()">+ New budget</button>':''}`;
+    $('#ctaBox').innerHTML=`<button class="btn-ghost" onclick="exportBudgetXLSX()">Exportar Excel</button>${canBudget?'<button class="btn-po" onclick="openOrcNew()">+ New budget</button>':''}`;
   } else if(['pos','mypos','reqpo'].includes(screen)&&demoWritable(PO_ACCESS)){
-    $('#ctaBox').innerHTML='<button class="btn-acc" style="background:var(--po)" onclick="openReqPO()">+ Request PO</button>';
+    $('#ctaBox').innerHTML='<button class="btn-po" onclick="openReqPO()">Request PO</button>';
   } else if(screen==='mytasks'){
     $('#ctaBox').innerHTML='<button class="btn-acc" onclick="ptNewNote()">New note</button>';
   } else { $('#ctaBox').innerHTML=''; }
@@ -1824,9 +1935,9 @@ function go(screen){
   if(screen==='dash'){ v.innerHTML=renderDash(); buildDashCharts(); }
   else if(screen==='projectdetail') v.innerHTML=renderProjectDetail();
   else if(screen==='list') v.innerHTML=renderProjetos();
-  else if(screen==='timeline') v.innerHTML=renderTimeline();
+  else if(screen==='timeline') v.innerHTML=`<div style="display:flex;justify-content:flex-end;margin-bottom:18px">${projViewSwitchHTML()}</div>`+renderTimeline();
   else if(screen==='team') v.innerHTML=renderTeam();
-  else if(screen==='weekly') v.innerHTML=renderWeekly();
+  else if(screen==='weekly') v.innerHTML=`<div style="display:flex;justify-content:flex-end;margin-bottom:18px">${projViewSwitchHTML()}</div>`+renderWeekly();
   else if(screen==='mytasks') v.innerHTML=renderNotes();
   else if(screen==='agencywork') v.innerHTML=renderAgencyWork();
   else if(screen==='notif') v.innerHTML=renderNotif();
@@ -2026,7 +2137,7 @@ function renderDash(){
     </div>
     <div style="display:flex;gap:10px">
       ${canNewProj?`<button class="btn-ghost" onclick="openProjNew()">New project</button>`:''}
-      ${canReqPO?`<button class="btn-acc" style="background:var(--po)" onclick="openReqPO()">Request PO</button>`:''}
+      ${canReqPO?`<button class="btn-po" onclick="openReqPO()">Request PO</button>`:''}
     </div>
   </div>
   <div style="display:flex;flex-wrap:wrap;gap:18px;align-items:stretch">
@@ -2098,18 +2209,44 @@ function projBase(){
 }
 let PROJ_GROUP='list'; // 'list' | 'board' | 'category' — same 3-way switcher Projects.dc.html has
 function toggleProjGroup(v){ PROJ_GROUP=v; go('list'); }
-function projRowHTML(p,cols,canDup){
-  const stg=stageOf(p.etapa);const hp=healthPill(p.status);const di=deadlineInfo(p);const pr=computeProg(p);const bt=businessTypeOf(p.ptipo);
-  return `<div class="proj-row" onclick="openProj('${esc(p.id)}')" style="display:grid;grid-template-columns:${cols};gap:10px;padding:13px 17px;border-bottom:1px solid var(--line);align-items:center;font-size:13px;cursor:pointer" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
-    <span style="min-width:0"><span style="font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span><span style="font-size:11px;color:var(--txt-3);display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${bt?`<span style="font-weight:800;color:${bt.color}">${esc(bt.name)}</span> · `:''}${esc(projAgencias(p).join(', ')||p.marca||'')}${(p.categorias||[]).length?` · ${esc((p.categorias||[]).join(', '))}`:''}</span></span>
-    <span style="display:flex;align-items:center;gap:7px;min-width:0"><span class="avatar" style="background:${avColor(respName(p.resp))};width:22px;height:22px;font-size:9.5px">${initials(respName(p.resp))}</span><span style="color:var(--txt-2);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(respName(p.resp)||'—')}</span></span>
-    <span style="color:var(--txt-2);font-size:12.5px">${stg.name}</span>
-    <span><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;background:${hp.bg};color:${hp.fg}"><span style="width:6px;height:6px;border-radius:50%;background:${hp.dot}"></span>${hp.name}</span></span>
-    <span style="display:flex;align-items:center;gap:8px"><span class="pbar" style="flex:1;min-width:40px"><span style="width:${pr}%;background:${hp.dot}"></span></span><span class="pct">${pr}%</span></span>
-    <span style="min-width:0">${projBudgetCellHTML(p)}</span>
-    <span class="mono" style="font-size:11.5px;color:${di.color}">${di.txt}</span>
-    <span style="text-align:right">${canDup?`<button onclick="event.stopPropagation();dupProj('${esc(p.id)}')" title="Duplicate project" style="border:none;background:none;color:var(--txt-3);cursor:pointer;padding:4px;display:inline-flex">${icn('copy',14)}</button>`:''}</span>
+/* Projects.dc.html row grid — Project · MKT owner · Health · Progress ·
+   Deadline · Budget. Stage/type/category ride in the project's subtitle line
+   instead of their own columns, exactly as the mockup lays them out. */
+const PROJ_COLS='minmax(220px,2.2fr) minmax(110px,1fr) 96px 110px 96px 150px';
+function projDueHTML(p){
+  if(autoStatus(p)==='concluido') return `<div style="font-size:13px;font-weight:600;color:var(--txt-2)">Completed</div><div style="font-size:11.5px;color:var(--txt-3)">${p.prazo?fmtDate(p.prazo):''}</div>`;
+  const dd=daysTo(p.prazo);
+  if(dd===null) return `<div style="font-size:13px;font-weight:600;color:var(--txt-3)">No date</div>`;
+  const txt=dd<0?`${-dd} day${dd===-1?'':'s'} late`:dd===0?'today':`in ${dd} day${dd===1?'':'s'}`;
+  return `<div style="font-size:13px;font-weight:600;color:${dd<0?'#ff6b6b':'var(--txt)'}">${txt}</div><div style="font-size:11.5px;color:var(--txt-3)">${fmtDate(p.prazo)}</div>`;
+}
+function projSubline(p,withStage){
+  const bt=businessTypeOf(p.ptipo); const cats=p.categorias||[];
+  const c0=cats.length?catMeta(cats[0]).c:'#9aa3b8';
+  const bits=[cats.length?cats.map(catKeyLabel).join(' + '):(p.marca||''), bt?bt.name:'', withStage?stageOf(p.etapa).name:''].filter(Boolean);
+  return `<span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;background:${c0}"></span>${esc(bits.join(' · ')||'—')}`;
+}
+function projRowHTML(p){
+  const hp=healthPill(p.status);const pr=computeProg(p);const own=respName(p.resp);
+  return `<div class="proj-row" onclick="openProj('${esc(p.id)}')" style="display:grid;grid-template-columns:${PROJ_COLS};gap:12px;padding:13px 20px;border-bottom:1px solid rgba(255,255,255,.06);align-items:center;cursor:pointer">
+    <div style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.nome)}</div><div style="font-size:12px;color:var(--txt-3);display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${projSubline(p,true)}</div></div>
+    <div style="display:flex;align-items:center;gap:9px;min-width:0"><span class="avatar" style="width:26px;height:26px;font-size:10.5px;background:${avColor(own)}">${initials(own)}</span><span style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(own||'—')}</span></div>
+    <span style="display:inline-flex;align-items:center;gap:6px;justify-self:start;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:20px;background:${hp.bg};color:${hp.fg}"><span style="width:6px;height:6px;border-radius:50%;background:${hp.dot}"></span>${hp.name}</span>
+    <div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden"><div style="height:100%;border-radius:3px;background:#4d7dff;width:${pr}%"></div></div><span class="mono" style="font-size:12px;color:var(--txt-2);width:34px;text-align:right">${pr}%</span></div>
+    <div>${projDueHTML(p)}</div>
+    <div>${projBudgetCellHTML(p)}</div>
   </div>`;
+}
+/* One view switcher for the whole Projects hub (Projects.dc.html: List ·
+   Board · By category) — the app's Timeline and Weekly screens join it as
+   two more options instead of a separate tab row the mockup doesn't have. */
+function projViewSwitchHTML(){
+  const nav=currentNav(); const has=id=>(nav.work||[]).includes(id);
+  const cur=SCREEN==='list'?PROJ_GROUP:SCREEN;
+  const opts=[['list','List'],['board','Board'],['category','By category']];
+  if(has('timeline')) opts.push(['timeline','Timeline']);
+  if(has('weekly')) opts.push(['weekly','Weekly']);
+  return `<div class="seg">${opts.map(([v,l])=>`<button class="${cur===v?'on':''}" onclick="${['timeline','weekly'].includes(v)?`navGo('${v}')`:`PROJ_GROUP='${v}';navGo('list')`}">${l}</button>`).join('')}</div>`;
 }
 function renderProjetos(){
   const base=projBase();
@@ -2119,64 +2256,54 @@ function renderProjetos(){
     if(!c) c=(a.nome||'').localeCompare(b.nome||'');
     return c*PROJ_SORT.dir;
   });
-  const canDup=!['agencia','tcl_member'].includes(effPapel())&&!VIEW_AS;
-  const cols='1.7fr 1fr 1.1fr 1fr 1.2fr 1fr .7fr .5fr';
-  const summary=[[null,'All active','var(--txt)'],['no_prazo','On track','var(--green)'],['atencao','At risk','var(--amber)'],['atrasado','Late','var(--red)'],['bloqueado','Blocked','var(--violet)']]
-    .map(([id,name,col])=>{const n=id?base.filter(p=>p.status===id).length:base.length;const on=STATUS_FILTER===(id||'');
-      return `<button onclick="setStatusFilter('${id||''}')" class="v2-card" style="text-align:left;cursor:pointer;padding:13px 15px;border-color:${on?col:'var(--line)'};flex:1 1 130px;min-width:130px">
-        <div style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--txt-3)"><span style="width:8px;height:8px;border-radius:50%;background:${col}"></span>${name}</div>
-        <div class="mono" style="font-size:22px;font-weight:700;margin-top:3px">${n}</div>
+  const summary=[[null,'All active','#eef1f8'],['no_prazo','On track','#2fd88a'],['atencao','At risk','#ffb020'],['atrasado','Late','#ff5c5c'],['bloqueado','Blocked','#a685ff']]
+    .map(([id,name,col])=>{const n=id?base.filter(p=>p.status===id).length:base.filter(p=>p.status!=='concluido').length;const on=STATUS_FILTER===(id||'');
+      return `<button onclick="setStatusFilter('${id||''}')" style="text-align:left;cursor:pointer;background:var(--surf);border:1px solid ${on?col:'var(--line-card)'};border-radius:14px;padding:14px 16px;color:var(--txt)">
+        <div style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--txt-2)"><span style="width:8px;height:8px;border-radius:50%;background:${col}"></span>${name}</div>
+        <div class="mono" style="font-size:24px;font-weight:700;margin-top:4px">${n}</div>
       </button>`;
     }).join('');
-  const groupToggle=`<div style="display:flex;padding:4px;border-radius:11px;background:var(--paper-2);border:1px solid var(--line)">
-    ${[['list','List'],['board','Board'],['category','By category']].map(([v,l])=>{const on=PROJ_GROUP===v;
-      return `<button onclick="toggleProjGroup('${v}')" style="padding:6px 14px;border-radius:8px;border:none;cursor:pointer;font-weight:600;font-size:12.5px;background:${on?'var(--accent)':'transparent'};color:${on?'#fff':'var(--txt-2)'}">${l}</button>`;
-    }).join('')}
-  </div>`;
-  const head=`<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:11px 17px;background:var(--paper-2);border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;position:sticky;top:var(--sticky-top,73px);z-index:5">
-    ${sortTh(PROJ_SORT,'name','Project','projSortHeaderClick')}${sortTh(PROJ_SORT,'owner','Owner','projSortHeaderClick')}${sortTh(PROJ_SORT,'stage','Stage','projSortHeaderClick')}${sortTh(PROJ_SORT,'health','Health','projSortHeaderClick')}${sortTh(PROJ_SORT,'progress','Progress','projSortHeaderClick')}<span>Budget</span>${sortTh(PROJ_SORT,'due','Due','projSortHeaderClick')}<span></span></div>`;
+  const head=`<div style="display:grid;grid-template-columns:${PROJ_COLS};gap:12px;padding:12px 20px;border-bottom:1px solid rgba(255,255,255,.1);font-size:12px;color:var(--txt-3);font-weight:600">
+    ${sortTh(PROJ_SORT,'name','Project','projSortHeaderClick')}${sortTh(PROJ_SORT,'owner','MKT owner','projSortHeaderClick')}${sortTh(PROJ_SORT,'health','Health','projSortHeaderClick')}${sortTh(PROJ_SORT,'progress','Progress','projSortHeaderClick')}${sortTh(PROJ_SORT,'due','Deadline','projSortHeaderClick')}<span>Budget</span></div>`;
+  const card=(inner)=>`<div class="v2-card" style="padding:0;overflow-x:auto"><div style="min-width:820px">${inner}</div></div>`;
   let body;
   if(PROJ_GROUP==='board'){
     body=renderKanban();
-  } else if(!list.length){ body='<div class="empty">No projects found.</div>'; }
+  } else if(!list.length){ body=card('<div class="empty">No projects found.</div>'); }
   else if(PROJ_GROUP==='list'){
-    body=`<div style="background:var(--card);border:1px solid var(--line);border-radius:13px;box-shadow:var(--sh-2);border-radius:13px;overflow:hidden">${head}${list.map(p=>projRowHTML(p,cols,canDup)).join('')}</div>`;
+    body=card(head+list.map(projRowHTML).join(''));
   } else {
     const cats=[...new Set(list.flatMap(p=>(p.categorias&&p.categorias.length)?p.categorias:['—']))].sort();
-    body=cats.map(cat=>{
+    body=`<div style="display:flex;flex-direction:column;gap:18px">${cats.map(cat=>{
       const rows=list.filter(p=>(p.categorias&&p.categorias.length)?p.categorias.includes(cat):cat==='—');
       if(!rows.length) return '';
       const cm=cat==='—'?{c:'#9aa3b8'}:catMeta(cat);
-      return `<div style="background:var(--card);border:1px solid var(--line);border-radius:13px;box-shadow:var(--sh-2);overflow:hidden;margin-bottom:16px">
-        <div style="display:flex;align-items:center;gap:10px;padding:14px 17px 6px"><span style="width:10px;height:10px;border-radius:50%;background:${cm.c}"></span><span style="font-size:16px;font-weight:800">${esc(cat==='—'?'Uncategorized':catKeyLabel(cat))}</span><span style="font-size:12.5px;color:var(--txt-3)">${rows.length} project(s)</span></div>
-        ${head}${rows.map(p=>projRowHTML(p,cols,canDup)).join('')}
-      </div>`;
-    }).join('');
-    if(!body) body='<div class="empty">No projects found.</div>';
+      const tb=rows.reduce((s,p)=>{const c=(DATA.campanhas||[]).find(x=>x.id===p.campanha_id);return s+(c?campTotals(c.id).teto:0);},0);
+      return card(`<div style="display:flex;align-items:center;gap:10px;padding:16px 22px 4px"><span style="width:10px;height:10px;border-radius:50%;background:${cm.c}"></span><span style="font-size:17px;font-weight:800">${esc(cat==='—'?'Uncategorized':catKeyLabel(cat))}</span><span style="font-size:13px;color:var(--txt-3)">${rows.length} project(s)${tb?' · '+BRLc(tb)+' budget':''}</span></div>${head}${rows.map(projRowHTML).join('')}`);
+    }).join('')}</div>`;
   }
-  // Filter row — search, type, category, plus the export/stage-guide tools
-  // this app has beyond the prototype — with the List/Board/By category
-  // switcher on the right, same row layout as Projects.dc.html.
-  const filterRow=`<div style="display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:16px">
+  const filterRow=`<div style="display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center">
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       ${projSearchHTML()}${ptipoFilterHTML()}${catFilterHTML()}
-      <button class="btn-ghost" onclick="exportWorkXLSX()">Export Excel</button>
-      <button class="btn-ghost" onclick="openStageGuide()">Stage guide</button>
+      <button class="chip-sel" onclick="exportWorkXLSX()">Export Excel</button>
+      <button class="chip-sel" onclick="openStageGuide()">Stage guide</button>
     </div>
-    ${groupToggle}
+    ${projViewSwitchHTML()}
   </div>`;
-  return `<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px">${summary}</div>
+  return `<div style="display:flex;flex-direction:column;gap:20px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px">${summary}</div>
     ${filterRow}
-    ${body}`;
+    ${body}
+  </div>`;
 }
 /* Compact budget cell for the Projects list (F1, P2) — a thin v2-segbar plus
    the budgeted total when the project is linked to a campaign, "No budget"
    otherwise. Reuses campTotals(), already isAg-scoped. */
 function projBudgetCellHTML(p){
   const camp=(DATA.campanhas||[]).find(c=>c.id===p.campanha_id);
-  if(!camp) return `<span style="font-size:11.5px;color:var(--txt-3)">No budget</span>`;
+  if(!camp) return `<span style="font-size:12.5px;color:#5d6479">No budget</span>`;
   const t=campTotals(camp.id), tot=t.teto||1;
-  return `<span style="display:flex;align-items:center;gap:8px;min-width:0"><span class="v2-segbar" style="flex:1;min-width:34px;height:6px"><i class="v2-seg-cons" style="width:${(t.cons/tot*100).toFixed(2)}%"></i><i class="v2-seg-comp" style="width:${(t.comp/tot*100).toFixed(2)}%"></i></span><span class="mono" style="font-size:11px;color:var(--txt-2);white-space:nowrap">${BRL(t.teto)}</span></span>`;
+  return `<div style="display:flex;align-items:center;gap:8px"><div style="flex:1;display:flex;height:6px;border-radius:3px;overflow:hidden;background:rgba(255,255,255,.1)"><div style="width:${Math.min(100,t.cons/tot*100).toFixed(2)}%;background:#4d7dff"></div><div style="width:${Math.min(100,t.comp/tot*100).toFixed(2)}%;background:#a685ff"></div></div><span class="mono" style="font-size:11.5px;color:var(--txt-2);width:56px;text-align:right;white-space:nowrap">${BRLc(t.teto)}</span></div>`;
 }
 /* Opens the detail against a freshly-read row, not the cached one — clicking
    into an item is the moment its real status matters most, and one indexed
@@ -2268,7 +2395,7 @@ function pdHeroHTML(p){
       </div>
       <div style="display:flex;gap:10px">
         ${canEditProj?`<button class="btn-ghost" onclick="editProj('${esc(p.id)}')">Edit project</button>`:''}
-        <button class="btn-acc" style="background:var(--po)" onclick="openReqPO()">Request PO</button>
+        <button class="btn-po" onclick="openReqPO()">Request PO</button>
       </div>
     </div>
   </div>`;
@@ -2725,7 +2852,7 @@ function fundRejeitadosHTML(){
         <div style="font-size:12px;color:var(--red);margin-top:3px">Reason: ${esc(f.aprovacao_motivo||'—')}</div>
       </div>
       ${pode?`<button class="chip-btn" onclick="openCampEdit('${esc(f.id)}')">Edit</button>
-      <button class="btn-acc" style="background:var(--po)" onclick="reenviarFund('${esc(f.id)}')">Resubmit</button>
+      <button class="btn-po" onclick="reenviarFund('${esc(f.id)}')">Resubmit</button>
       ${PAPEL==='admin'?`<button class="chip-btn" style="color:var(--red)" onclick="deletarFund('${esc(f.id)}')">Delete</button>`:''}`:''}
     </div>`).join('')}</div>
   </div>`;
@@ -3252,7 +3379,7 @@ function openFundDetail(pid){
       ${months.length>1?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">${chips}</div>`:''}
     </div>
     <div class="modal-b">${summary}<div style="font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin:2px 0 10px">Month by month</div>${blocks}</div>
-    <div class="modal-f">${CC_DRILL_BACK?`<button class="btn-ghost" onclick="ccDrillBack()">← Back to breakdown</button>`:'<span></span>'}<div style="display:flex;gap:10px">${canRestrict()?`<button class="btn-ghost" onclick="openCampRestricao('${esc(p.id)}')">${fundRestr(p)?'Blocked — review…':'Block spending'}</button>`:''}${(demoWritable(PO_ACCESS)&&!fundRestr(p)&&!fundArquivado(p))?`<button class="btn-acc" style="background:var(--po)" onclick="openReqPO('${esc(p.id)}')">+ Request PO</button>`:''}${((['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly())?`<button class="btn-ghost" onclick="openCampValues('${esc(p.id)}')">Edit monthly values</button><button class="btn-ghost" onclick="openCampEdit('${esc(p.id)}')">Edit category</button>`:''}<button class="btn-ghost" onclick="closeModal()">Close</button></div></div>
+    <div class="modal-f">${CC_DRILL_BACK?`<button class="btn-ghost" onclick="ccDrillBack()">← Back to breakdown</button>`:'<span></span>'}<div style="display:flex;gap:10px">${canRestrict()?`<button class="btn-ghost" onclick="openCampRestricao('${esc(p.id)}')">${fundRestr(p)?'Blocked — review…':'Block spending'}</button>`:''}${(demoWritable(PO_ACCESS)&&!fundRestr(p)&&!fundArquivado(p))?`<button class="btn-po" onclick="openReqPO('${esc(p.id)}')">+ Request PO</button>`:''}${((['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly())?`<button class="btn-ghost" onclick="openCampValues('${esc(p.id)}')">Edit monthly values</button><button class="btn-ghost" onclick="openCampEdit('${esc(p.id)}')">Edit category</button>`:''}<button class="btn-ghost" onclick="closeModal()">Close</button></div></div>
   </div></div>`;
 }
 
@@ -3323,7 +3450,7 @@ function renderCutBalance(){
       </div>
       <div class="field" style="margin-top:12px"><label>Reason</label><textarea rows="3" oninput="cutBalSet('motivo',this.value)" placeholder="Why is this budget being taken back?">${esc(cb.motivo)}</textarea></div>
     </div>
-    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitCutBalance()">Cut budget</button></div></div>
+    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-po" onclick="submitCutBalance()">Cut budget</button></div></div>
   </div></div>`;
 }
 async function submitCutBalance(){
@@ -3402,7 +3529,7 @@ function renderReallocModal(){
       ${manualRows}
       ${previewHTML}
     </div>
-    <div class="modal-f"><span>${canSeeCorte()?`<button class="btn-ghost" style="color:var(--red)" onclick="openCutBalance('${esc(REALLOC.pid)}','${fromMonth}',${balance})" title="Take this balance back instead of moving it forward">Cut balance instead…</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeRealloc()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitRealloc()">Reallocate</button></div></div>
+    <div class="modal-f"><span>${canSeeCorte()?`<button class="btn-ghost" style="color:var(--red)" onclick="openCutBalance('${esc(REALLOC.pid)}','${fromMonth}',${balance})" title="Take this balance back instead of moving it forward">Cut balance instead…</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeRealloc()">Cancel</button><button class="btn-po" onclick="submitRealloc()">Reallocate</button></div></div>
   </div></div>`;
 }
 function closeRealloc(){ const pid=REALLOC&&REALLOC.pid; REALLOC=null; if(pid) openFundDetail(pid); else closeModal(); }
@@ -3620,7 +3747,7 @@ function renderCapForm(){
       ${below?`<div class="banner" style="background:var(--red-bg);border-color:rgba(255,92,92,.35);color:var(--red)">The months already add up to <b class="mono">${BRL(alloc)}</b>. Lower the monthly values first, then bring the cap down.</div>`:''}
       <div class="field"><label>${ask?'Why do you need more?':'Reason'}</label><textarea rows="3" oninput="capSet('motivo',this.value)" placeholder="${ask?'What changed that needs a bigger budget?':'Why is the cap changing?'}">${esc(CAPEDIT.motivo)}</textarea></div>
     </div>
-    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po);${below?'opacity:.5;cursor:not-allowed':''}" ${below?'disabled':''} onclick="${ask?'submitCapPedido()':'submitCapEdit()'}">${ask?'Send request':'Save cap'}</button></div></div>
+    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-po" style="${below?'opacity:.5;cursor:not-allowed':''}" ${below?'disabled':''} onclick="${ask?'submitCapPedido()':'submitCapEdit()'}">${ask?'Send request':'Save cap'}</button></div></div>
   </div></div>`;
 }
 async function submitCapPedido(){
@@ -3813,7 +3940,7 @@ function renderCampValues(){
         </div>
       </div>
     </div>
-    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button id="cvSave" class="btn-acc" style="background:var(--po);${over?'opacity:.5;cursor:not-allowed':''}" ${over?'disabled':''} onclick="submitCampValues()">Save</button></div></div>
+    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button id="cvSave" class="btn-po" style="${over?'opacity:.5;cursor:not-allowed':''}" ${over?'disabled':''} onclick="submitCampValues()">Save</button></div></div>
   </div></div>`;
 }
 async function submitCampValues(){
@@ -3989,7 +4116,7 @@ function renderCampEditForm(){
       ${classField}
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">Was: <b>${esc((DATA.poProjetos.find(x=>x.id===ce.id)||{}).product_category||'—')}</b>. Months and total value stay the same.</div>
     </div>
-    <div class="modal-f"><span>${(PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarFund('${esc(ce.id)}')">${(DATA.pos||[]).some(x=>x.fund_id===ce.id&&!['REJEITADA','CANCELADA'].includes(x.status))?'Archive fund':'Delete fund'}</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitFundEdit()">Save</button></div></div>
+    <div class="modal-f"><span>${(PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarFund('${esc(ce.id)}')">${(DATA.pos||[]).some(x=>x.fund_id===ce.id&&!['REJEITADA','CANCELADA'].includes(x.status))?'Archive fund':'Delete fund'}</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-po" onclick="submitFundEdit()">Save</button></div></div>
   </div></div>`;
 }
 async function submitFundEdit(){
@@ -6354,7 +6481,7 @@ async function renderPOEdit(){
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:10px">Changing status here is a direct override — use Approve/Reject on the row for the normal lifecycle.</div>
       ${canEditPOFile(po)?`<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line-2)"><button class="chip-btn" onclick="openTrocarArqPO('${esc(pe.id)}')">${icn('paperclip',11)} Change PO file</button>${po.po_arquivo?` <a onclick="abrirAnexo('${esc(po.po_arquivo)}')" style="color:#3ecf9e;cursor:pointer;text-decoration:underline;font-size:12px;margin-left:8px">view current</a>`:''}</div>`:''}
     </div>
-    <div class="modal-f"><span>${(PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarPO('${esc(pe.id)}')">Delete PO</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitPOEdit()">Save</button></div></div>
+    <div class="modal-f"><span>${(PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarPO('${esc(pe.id)}')">Delete PO</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-po" onclick="submitPOEdit()">Save</button></div></div>
   </div></div>`;
 }
 async function submitPOEdit(){
@@ -6829,7 +6956,7 @@ function openCampanhaDetail(id){
       </div>
     </div>
     <div class="modal-b" style="padding:0">${(function(){const strip=campanhaMonthBreakdownHTML(id);return strip?`<div style="padding:16px 18px 2px">${strip}</div>`:'';})()}${rows}</div>
-    <div class="modal-f"><span style="font-size:11px;color:var(--txt-3)">Click a fund for its month-by-month detail.</span><div style="display:flex;gap:10px">${canEdit?`<button class="btn-ghost" onclick="openCampanhaEdit('${esc(id)}')">Edit campaign</button>`:''}<button class="btn-acc" style="background:var(--po)" onclick="closeModal()">Close</button></div></div>
+    <div class="modal-f"><span style="font-size:11px;color:var(--txt-3)">Click a fund for its month-by-month detail.</span><div style="display:flex;gap:10px">${canEdit?`<button class="btn-ghost" onclick="openCampanhaEdit('${esc(id)}')">Edit campaign</button>`:''}<button class="btn-po" onclick="closeModal()">Close</button></div></div>
   </div></div>`;
 }
 let CAMPEDIT=null;
@@ -6891,7 +7018,7 @@ function renderCampanhaForm(){
         <div style="font-size:11px;color:var(--txt-3);margin-top:7px">Budget and categories come from the linked funds.</div>
       </div>
     </div>
-    <div class="modal-f"><span>${(editing&&PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarCampanha('${esc(ce.id)}')">Delete campaign</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitCampanha()">${editing?'Save':'Create campaign'}</button></div></div>
+    <div class="modal-f"><span>${(editing&&PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarCampanha('${esc(ce.id)}')">Delete campaign</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-po" onclick="submitCampanha()">${editing?'Save':'Create campaign'}</button></div></div>
   </div></div>`;
 }
 async function submitCampanha(){
@@ -9169,7 +9296,7 @@ function saldoCardHTML(r){
     <div id="sdManual-${esc(fid)}" style="display:none;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:8px">${manual}
       <div style="font-size:11px;color:var(--txt-3)">Sum<div id="sdSoma-${esc(fid)}" style="font-weight:700;font-size:13px;padding:6px 0">R$ 0,00</div></div></div>
     <div style="margin-top:12px;display:flex;gap:10px;align-items:center">
-      ${pode?`<button class="btn-acc" style="background:var(--po)" id="sdBtn-${esc(fid)}" onclick="salvarSaldo('${esc(fid)}','${esc(r.mes_origem)}')" disabled>Confirm decision</button>`:`<span style="font-size:12px;color:var(--txt-3)">${esc(roMsg())}</span>`}
+      ${pode?`<button class="btn-po" id="sdBtn-${esc(fid)}" onclick="salvarSaldo('${esc(fid)}','${esc(r.mes_origem)}')" disabled>Confirm decision</button>`:`<span style="font-size:12px;color:var(--txt-3)">${esc(roMsg())}</span>`}
       <span id="sdMsg-${esc(fid)}" style="font-size:12.5px"></span></div></div>`;
 }
 function saldoModo(fid,m){ (SALDO_SEL[fid]=SALDO_SEL[fid]||{modo:'',manual:{}}).modo=m; saldoSync(fid); }
@@ -9256,7 +9383,7 @@ function renderCampForm(){
         <div style="padding:11px 14px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:13px">Total caps (sum of months)</b><span class="mono" style="font-size:15px;font-weight:800">${BRL(total)}</span></div>
       </div>
     </div>
-    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="submitFund()">Create fund</button></div></div>
+    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-po" onclick="submitFund()">Create fund</button></div></div>
   </div></div>`;
 }
 async function submitFund(){
@@ -9330,7 +9457,7 @@ function renderOrcForm(){
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:480px">
     <div class="modal-h"><h3>${editing?'Edit budget — '+esc(ORC.cat):'New budget'}</h3><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">${body}</div>
-    <div class="modal-f"><span>${(editing&&PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarOrcamento('${esc(ORC.id)}')">Delete budget</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button>${(editing||free.length)?`<button class="btn-acc" style="background:var(--po)" onclick="submitOrc()">${editing?'Save':'Create budget'}</button>`:''}</div></div>
+    <div class="modal-f"><span>${(editing&&PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarOrcamento('${esc(ORC.id)}')">Delete budget</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button>${(editing||free.length)?`<button class="btn-po" onclick="submitOrc()">${editing?'Save':'Create budget'}</button>`:''}</div></div>
   </div></div>`;
 }
 async function submitOrc(){
@@ -9405,7 +9532,7 @@ function renderFeeEditor(){
       ${rows}
       <button class="btn-ghost" onclick="feeAddRow()" style="margin-top:4px">+ Add split row</button>
     </div>
-    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" style="background:var(--po)" onclick="saveFee()">Save splits</button></div></div>
+    <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-po" onclick="saveFee()">Save splits</button></div></div>
   </div></div>`;
 }
 async function saveFee(){
