@@ -243,6 +243,8 @@
   .search-in::placeholder{color:var(--txt-3)}
   .search-in:focus{border-color:var(--accent-deep)}
   .proj-row:hover{background:rgba(255,255,255,.025)}
+  .rt-btn:hover{background:rgba(255,255,255,.08)!important}
+  #ptBody h3{font-size:16px;font-weight:700;margin:14px 0 6px} #ptBody p{margin:0 0 10px;color:var(--txt-soft)} #ptBody ul,#ptBody ol{margin:0 0 10px 22px;color:var(--txt-soft)} #ptBody li{margin:3px 0}
 
   /* ===== MODAL ===== */
   .overlay{position:fixed;inset:0;background:rgba(3,5,10,.7);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);z-index:100;display:flex;align-items:flex-start;justify-content:center;padding:36px 20px;overflow-y:auto;animation:fadeIn .16s ease-out}
@@ -1403,6 +1405,16 @@ function seedDemoData(){
     {projeto_nome:'[DEMO] Influencer Series — Gaming',mensagem:'Creator shortlist attached. Two contracts pending.',autor:'Eva Martins',criado_em:D(2026,9,21)}
   ];
   DATA={projetos,orcamentos,poProjetos,pos,tetos:normTetos(tetos),rateio:[],notif:[],mencoes,pessoas,fee,ccLayout:[],campanhas};
+  /* A few personal notes so Notes & tasks opens populated in the demo —
+     only when this browser has none of its own. Held in memory, never saved. */
+  const today=new Date().toISOString().slice(0,10);
+  if(!loadPTasksLocal().length) PTASKS=[
+    {id:'demo-note-1',title:'Approve the Gamescom PO',due:today,tag:'[DEMO] Influencer Series — Gaming',done:false,desc:'<p>Creators wave 2 goes live on <b>Oct 14</b>.</p><ul><li>Confirm 6 creators signed (4 of 6 so far)</li><li>Check the fee split</li></ul>'},
+    {id:'demo-note-2',title:'Reply Diego about the live date',due:today,tag:'[DEMO] Product Launch Event',done:false,desc:'<p>Studio has a conflict on the 27th. Check if the coupon can move one day.</p>'},
+    {id:'demo-note-3',title:'Review media plan v3',due:today,tag:'[DEMO] Summer Launch Campaign',done:true,desc:'<p>Approved with a note on the October flight.</p>'},
+    {id:'demo-note-4',title:'Q4 budget review with Finance',due:dAdd(today,4),tag:'—',done:false,desc:'<h3>Gaming over the September cap</h3><p>Options: reallocate unused July balance or move budget from Social.</p><ol><li>Bring the cost center export</li><li>Agree on the reallocation</li></ol>'},
+    {id:'demo-note-5',title:'Ideas · 2027 plan',due:'',tag:'—',done:false,desc:'<p>Always-on creators program instead of waves. One fund per category.</p>'}
+  ];
   TEAM=[];
 }
 function demoSetRole(v){
@@ -1948,6 +1960,8 @@ function go(screen){
     $('#ctaBox').innerHTML=`<button class="btn-ghost" onclick="exportBudgetXLSX()">Export</button>${canBudget?'<button class="btn-po" onclick="openOrcNew()">New budget</button>':''}`;
   } else if(['pos','mypos','reqpo'].includes(screen)&&demoWritable(PO_ACCESS)){
     $('#ctaBox').innerHTML='<button class="btn-po" onclick="openReqPO()">Request PO</button>';
+  } else if(screen==='team'){
+    $('#ctaBox').innerHTML=`<div class="seg">${[['week','This week'],['2w','2 weeks'],['month','Month']].map(([v,l])=>`<button class="${TEAM_RANGE===v?'on':''}" onclick="TEAM_RANGE='${v}';go('team')">${l}</button>`).join('')}</div>`;
   } else if(screen==='mytasks'){
     $('#ctaBox').innerHTML='<button class="btn-acc" onclick="ptNewNote()">New note</button>';
   } else { $('#ctaBox').innerHTML=''; }
@@ -4847,22 +4861,22 @@ function ptSidebarHTML(){
     const on=t.id===PT_ACTIVE;
     const snippet=(t.desc||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,70);
     return `<div onclick="ptOpen('${t.id}')" style="display:grid;grid-template-columns:22px minmax(0,1fr);gap:8px;padding:9px 10px;border-radius:10px;border:1px solid ${on?'rgba(77,125,255,.45)':'transparent'};background:${on?'rgba(77,125,255,.14)':'transparent'};cursor:pointer">
-      <button onclick="event.stopPropagation();ptToggle('${t.id}')" style="width:18px;height:18px;margin-top:2px;border-radius:5px;cursor:pointer;display:grid;place-items:center;font-size:11px;font-weight:800;color:#05070d;background:${t.done?'#2fd88a':'transparent'};border:1.5px solid ${t.done?'#2fd88a':'var(--line-2)'}">${t.done?'✓':''}</button>
+      <button onclick="event.stopPropagation();ptToggle('${t.id}')" style="width:18px;height:18px;margin-top:2px;border-radius:5px;cursor:pointer;display:grid;place-items:center;font-size:11px;font-weight:800;color:#05070d;background:${t.done?'#2fd88a':'transparent'};border:1.5px solid ${t.done?'#2fd88a':'rgba(255,255,255,.3)'}">${t.done?'✓':''}</button>
       <div style="min-width:0">
         <div style="font-weight:700;font-size:13.5px;color:${t.done?'var(--txt-3)':'var(--txt)'};text-decoration:${t.done?'line-through':'none'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.title)}</div>
         <div style="font-size:12px;color:var(--txt-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(snippet)}</div>
-        <div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--txt-3);margin-top:2px"><span style="color:#9fb5ff">${esc(t.tag&&t.tag!=='—'?t.tag:'')}</span><span>${t.due?fmtDate(t.due):''}</span></div>
+        <div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--txt-3);margin-top:2px"><span style="color:#9fb5ff;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.tag&&t.tag!=='—'?t.tag:'')}</span><span style="flex-shrink:0;color:${!t.done&&t.due&&daysTo(t.due)<=0?'#ff8a96':'var(--txt-3)'}">${t.due?(daysTo(t.due)===0?'Today':daysTo(t.due)<0?'Overdue':fmtDate(t.due)):''}</span></div>
       </div>
     </div>`;
   };
   const filters=[['open','Open',open.length],['done','Done',done.length],['all','All',l.length]]
-    .map(f=>`<button onclick="ptSetFilter('${f[0]}')" style="flex:1;padding:7px 8px;border-radius:8px;border:1px solid ${PT_FILTER===f[0]?'var(--accent)':'var(--line-2)'};background:${PT_FILTER===f[0]?'var(--accent-deep)':'transparent'};color:${PT_FILTER===f[0]?'#fff':'var(--txt-2)'};font-weight:600;font-size:12.5px;cursor:pointer">${f[1]} <span style="opacity:.75">${f[2]}</span></button>`).join('');
+    .map(f=>`<button onclick="ptSetFilter('${f[0]}')" style="flex:1;padding:7px 8px;border-radius:8px;border:1px solid ${PT_FILTER===f[0]?'#eef1f8':'rgba(255,255,255,.12)'};background:${PT_FILTER===f[0]?'#eef1f8':'transparent'};color:${PT_FILTER===f[0]?'#05070d':'var(--txt-2)'};font-weight:600;font-size:12.5px;cursor:pointer">${f[1]} <span class="mono" style="opacity:.7">${f[2]}</span></button>`).join('');
   const vis=PT_FILTER==='all'?l:PT_FILTER==='done'?done:open;
   const buckets=[['today','TODAY'],['week','THIS WEEK'],['later','LATER'],['none','NO DATE']];
   const grouped=PT_FILTER==='done'?[['done','DONE',vis]]:buckets.map(b=>[b[0],b[1],vis.filter(t=>!t.done&&ptBucket(t.due)===b[0])]).filter(g=>g[2].length);
   const listHTML=PT_FILTER==='all'
     ? (vis.length?vis.map(row).join(''):'<div style="padding:14px 4px;font-size:12.5px;color:var(--txt-3)">No tasks yet.</div>')
-    : (grouped.length?grouped.map(([id,label,items])=>`<div style="font-family:var(--mono);font-size:11px;letter-spacing:.06em;padding:8px 4px 2px;color:var(--txt-3)">${label}</div>${items.map(row).join('')}`).join(''):`<div style="padding:14px 4px;font-size:12.5px;color:var(--txt-3)">No ${PT_FILTER==='done'?'completed':'open'} tasks.</div>`);
+    : (grouped.length?grouped.map(([id,label,items])=>`<div style="font-family:var(--mono);font-size:11px;letter-spacing:.06em;padding:8px 4px 2px;color:${({today:'#ff8a96',week:'#ffb020',later:'#a7aec2',none:'#747c92',done:'#2fd88a'})[id]||'var(--txt-3)'}">${label}</div>${items.map(row).join('')}`).join(''):`<div style="padding:14px 4px;font-size:12.5px;color:var(--txt-3)">No ${PT_FILTER==='done'?'completed':'open'} tasks.</div>`);
   return `<aside class="v2-card" style="flex:1 1 300px;max-width:400px;min-width:0;padding:14px;display:flex;flex-direction:column;gap:12px">
     <div style="display:flex;gap:6px">${filters}</div>
     <div style="display:flex;flex-direction:column;gap:4px">${listHTML}</div>
@@ -4878,8 +4892,8 @@ function ptEditorHTML(){
     <div style="padding:16px 24px 12px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:12px">
       <input id="ptTitle" value="${esc(PT_BUF.title)}" oninput="PT_BUF.title=this.value" placeholder="Title" style="background:transparent;border:none;outline:none;color:var(--txt);font-size:22px;font-weight:800;letter-spacing:-.01em;font-family:inherit">
       <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
-        <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--txt-2)">Due<input type="date" value="${esc(PT_BUF.due||'')}" onchange="ptBufSet('due',this.value)" style="padding:6px 10px;border-radius:8px;border:1px solid var(--line-2);background:var(--paper-2);color:var(--txt);font:inherit;font-size:13px"></label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--txt-2)">Project<select onchange="ptBufSet('tag',this.value)" style="padding:6px 10px;border-radius:8px;border:1px solid var(--line-2);background:var(--paper-2);color:var(--txt);font:inherit;font-size:13px">${tags.map(o=>`<option value="${esc(o)}" ${PT_BUF.tag===o?'selected':''}>${esc(o)}</option>`).join('')}</select></label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--txt-2)">Due<input type="date" value="${esc(PT_BUF.due||'')}" onchange="ptBufSet('due',this.value)" style="padding:6px 10px;border-radius:8px;border:1px solid var(--line-2);background:var(--field);color:var(--txt);font:inherit;font-size:13px"></label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--txt-2)">Project<select onchange="ptBufSet('tag',this.value)" style="max-width:260px;padding:6px 10px;border-radius:8px;border:1px solid var(--line-2);background:var(--field);color:var(--txt);font:inherit;font-size:13px">${tags.map(o=>`<option value="${esc(o)}" ${PT_BUF.tag===o?'selected':''}>${esc(o)}</option>`).join('')}</select></label>
         <span style="flex:1"></span>
         <span style="font-size:12px;color:var(--txt-3)">${savedLabel}</span>
         ${t?`<button onclick="ptDel('${t.id}')" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:12.5px;font-weight:600">Delete</button>`:''}
@@ -4887,7 +4901,7 @@ function ptEditorHTML(){
       </div>
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:4px;padding:8px 18px;border-bottom:1px solid var(--line)">
-      ${T.map(x=>`<button onmousedown="event.preventDefault();ptRtFmt('ptBody','${x[1]}'${x[2]?`,'${x[2]}'`:''})" title="${x[3]}" style="min-width:32px;height:30px;padding:0 8px;border-radius:7px;border:none;background:transparent;color:var(--txt-2);cursor:pointer;font-size:13px;font-weight:600">${x[0]}</button>`).join('')}
+      ${T.map(x=>`<button onmousedown="event.preventDefault();ptRtFmt('ptBody','${x[1]}'${x[2]?`,'${x[2]}'`:''})" title="${x[3]}" class="rt-btn" style="min-width:32px;height:30px;padding:0 8px;border-radius:7px;border:none;background:transparent;color:var(--txt-soft);cursor:pointer;font-size:13px;font-weight:${x[0]==='B'?800:x[0]==='H'?700:500};font-style:${x[0]==='I'?'italic':'normal'};text-decoration:${x[0]==='U'?'underline':'none'}">${x[0]}</button>`).join('')}
     </div>
     <div style="padding:20px 28px 30px;flex:1">
       <div id="ptBody" contenteditable="true" style="min-height:340px;font-size:15px;line-height:1.65;color:var(--txt);outline:none">${PT_BUF.pendingHtml!=null?PT_BUF.pendingHtml:(t?(t.desc||''):'')}</div>
@@ -7347,7 +7361,9 @@ function renderTimeline(){
     ${TL_HILITE!=null?`<span style="margin-left:auto;color:var(--amber)">Column highlighted — <a onclick="tlToggleWeek(${TL_HILITE})" style="cursor:pointer;text-decoration:underline">clear</a></span>`:''}
   </div>`;
 }
+let TEAM_RANGE='week';
 function renderTeam(){
+  const RANGE={week:[7,'week'],'2w':[14,'2 wks'],month:[30,'month']}[TEAM_RANGE]||[7,'week'];
   const active=visProjs().filter(p=>p.status!=='concluido');
   const load={};
   active.forEach(p=>{const r=respName(p.resp)||'—';(load[r]=load[r]||[]).push(p);});
@@ -7359,22 +7375,22 @@ function renderTeam(){
     const late=items.filter(p=>p.status==='atrasado'||p.status==='bloqueado').length;
     const doneN=DATA.projetos.filter(p=>respName(p.resp)===n&&p.status==='concluido').length;
     const openTasks=items.reduce((s,p)=>s+((p.tasks||[]).filter(t=>!t.done).length),0);
-    const dueWeek=items.reduce((s,p)=>s+((p.tasks||[]).filter(t=>{if(t.done)return false;const dd=daysTo(t.fim);return dd!==null&&dd>=0&&dd<=7;}).length),0);
+    const dueWeek=items.reduce((s,p)=>s+((p.tasks||[]).filter(t=>{if(t.done)return false;const dd=daysTo(t.fim);return dd!==null&&dd>=0&&dd<=RANGE[0];}).length),0);
     const capPct=Math.round(items.length/max*100);
-    const lc=late?'var(--red)':capPct>=90?'var(--amber)':'var(--green)';
-    return `<div style="display:grid;grid-template-columns:minmax(0,1.4fr) 70px 70px 60px 80px minmax(0,1.3fr) minmax(0,2fr);gap:14px;padding:14px 22px;border-bottom:1px solid var(--line);align-items:center">
+    const lc=late?'#ff5c5c':capPct>=90?'#ffb020':'#2fd88a';
+    return `<div style="display:grid;grid-template-columns:minmax(0,1.4fr) 70px 70px 60px 80px minmax(0,1.3fr) minmax(0,2fr);gap:14px;padding:14px 22px;border-bottom:1px solid rgba(255,255,255,.06);align-items:center">
       <div style="display:flex;align-items:center;gap:11px;min-width:0"><span class="avatar" style="width:36px;height:36px;background:${avColor(n)};font-size:12px">${initials(n)}</span><div style="min-width:0"><div style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n)}</div><div style="font-size:12px;color:var(--txt-3)">${items.length} active project(s)</div></div></div>
-      <div style="text-align:right" class="mono">${items.length}</div>
-      <div style="text-align:right" class="mono">${openTasks}</div>
-      <div style="text-align:right" class="mono" style="color:${late?'var(--red)':'var(--txt-2)'};font-weight:700">${late}</div>
-      <div style="text-align:right" class="mono">${dueWeek}</div>
-      <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;height:10px;border-radius:5px;background:var(--line-2);overflow:hidden;position:relative"><div style="height:100%;border-radius:5px;width:${capPct}%;background:${lc}"></div></div><span class="mono" style="font-size:12px;font-weight:700;width:38px;text-align:right;color:${lc}">${capPct}%</span></div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px">${items.slice(0,3).map(p=>`<span onclick="openProj('${esc(p.id)}')" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 9px;border-radius:20px;background:var(--paper-2);border:1px solid var(--line-2)"><span style="width:6px;height:6px;border-radius:50%;background:${healthPill(p.status).dot}"></span>${esc(p.nome.length>20?p.nome.slice(0,18)+'…':p.nome)}</span>`).join('')}${items.length>3?`<span style="font-size:11.5px;color:var(--txt-3);padding:3px 4px">+${items.length-3}</span>`:''}</div>
+      <div class="mono" style="text-align:right;font-size:14px">${items.length}</div>
+      <div class="mono" style="text-align:right;font-size:14px">${openTasks}</div>
+      <div class="mono" style="text-align:right;font-size:14px;color:${late?'#ff6b6b':'var(--txt-3)'};font-weight:700">${late}</div>
+      <div class="mono" style="text-align:right;font-size:14px">${dueWeek}</div>
+      <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;height:10px;border-radius:5px;background:rgba(255,255,255,.08);overflow:hidden;position:relative"><div style="height:100%;border-radius:5px;width:${capPct/120*100}%;background:${lc};box-shadow:0 0 12px ${lc}"></div><div style="position:absolute;top:-2px;bottom:-2px;left:83.3%;width:2px;background:rgba(255,255,255,.5)"></div></div><span class="mono" style="font-size:12.5px;font-weight:700;width:42px;text-align:right;color:${lc}">${capPct}%</span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">${items.slice(0,3).map(p=>`<span onclick="openProj('${esc(p.id)}')" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 9px;border-radius:20px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1)"><span style="width:6px;height:6px;border-radius:50%;background:${(p.categorias||[]).length?catMeta(p.categorias[0]).c:healthPill(p.status).dot}"></span>${esc(p.nome.length>20?p.nome.slice(0,18)+'…':p.nome)}</span>`).join('')}${items.length>3?`<span style="font-size:11.5px;color:var(--txt-3);padding:3px 4px">+${items.length-3}</span>`:''}</div>
     </div>`;
   }).join('');
   const totalOpenTasks=names.reduce((s,n)=>s+load[n].reduce((s2,p)=>s2+((p.tasks||[]).filter(t=>!t.done).length),0),0);
   const totalLate=names.reduce((s,n)=>s+load[n].filter(p=>p.status==='atrasado'||p.status==='bloqueado').length,0);
-  const kpis=[['People',names.length,'in the workload view'],['Active projects',active.length,(active.length/names.length).toFixed(1)+' per person'],['Open tasks',totalOpenTasks,'across active projects'],['Critical',totalLate,'late or blocked','var(--red)']]
+  const kpis=[['people',names.length,'in the workload view'],['active projects',active.length,(active.length/names.length).toFixed(1)+' per person'],['open tasks',totalOpenTasks,'across active projects'],['late',totalLate,'late or blocked projects','#ff6b6b']]
     .map(k=>`<div class="v2-card" style="padding:16px 18px"><div class="v2-card-eyebrow">${esc(k[0])}</div><div class="mono" style="font-size:26px;font-weight:700;margin-top:4px;${k[3]?'color:'+k[3]:''}">${k[1]}</div><div style="font-size:12.5px;color:var(--txt-2)">${esc(k[2])}</div></div>`).join('');
   // "This week" heatmap — one row per person, one cell per weekday, count of
   // their non-done tasks due that day (red = overdue), same grid Team.dc.html
@@ -7394,30 +7410,35 @@ function renderTeam(){
     });
     return {name:n,cells};
   });
-  const heatmap=`<div class="v2-card" style="margin-top:18px">
+  const heatmap=`<div class="v2-card">
     <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:14px;flex-wrap:wrap">
-      <div><div class="v2-card-eyebrow">TASKS DUE PER DAY</div><div class="v2-card-title" style="font-size:19px">This week</div></div>
+      <div><div class="v2-card-eyebrow">tasks due per day</div><div class="v2-card-title">This week</div></div>
       <div style="display:flex;gap:10px;align-items:center;font-size:12px;color:var(--txt-2)">less
         <span style="width:14px;height:14px;border-radius:4px;background:rgba(77,125,255,.12)"></span>
         <span style="width:14px;height:14px;border-radius:4px;background:rgba(77,125,255,.35)"></span>
         <span style="width:14px;height:14px;border-radius:4px;background:rgba(77,125,255,.7)"></span>
-        <span style="width:14px;height:14px;border-radius:4px;background:var(--red)"></span>overdue</div>
+        <span style="width:14px;height:14px;border-radius:4px;background:#ff3b4e"></span>overdue</div>
     </div>
     <div style="display:grid;grid-template-columns:180px repeat(5,minmax(0,1fr));gap:6px;font-size:12.5px;color:var(--txt-2);margin-bottom:6px">
       <div></div>${DOW.map((l,i)=>`<div style="text-align:center;color:${i===((today.getDay()+6)%7)?'var(--txt)':'var(--txt-2)'};font-weight:${i===((today.getDay()+6)%7)?700:400}">${l} ${weekDays[i].getDate()}</div>`).join('')}
     </div>
     ${heatRows.map(r=>`<div style="display:grid;grid-template-columns:180px repeat(5,minmax(0,1fr));gap:6px;margin-bottom:6px;align-items:center">
       <div style="font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name)}</div>
-      ${r.cells.map(c=>`<div style="height:40px;border-radius:8px;display:grid;place-items:center;font-family:var(--mono);font-size:13px;font-weight:700;background:${c.overdue?'var(--red)':c.v?`rgba(77,125,255,${Math.min(.75,.12+c.v*.16).toFixed(2)})`:'rgba(255,255,255,.03)'};color:${c.overdue?'#fff':'var(--txt)'}">${c.v||''}</div>`).join('')}
+      ${r.cells.map(c=>`<div style="height:40px;border-radius:8px;display:grid;place-items:center;font-family:var(--mono);font-size:13px;font-weight:700;background:${c.overdue?'#ff3b4e':c.v?`rgba(77,125,255,${Math.min(.75,.12+c.v*.16).toFixed(2)})`:'rgba(255,255,255,.03)'};color:${c.overdue?'#fff':'var(--txt)'}">${c.v||''}</div>`).join('')}
     </div>`).join('')}
   </div>`;
-  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:18px">${kpis}</div>
-    <div class="v2-card" style="padding:0;overflow-x:auto">
-      <div style="display:grid;grid-template-columns:minmax(0,1.4fr) 70px 70px 60px 80px minmax(0,1.3fr) minmax(0,2fr);gap:14px;padding:14px 22px;border-bottom:1px solid var(--line);font-size:11.5px;color:var(--txt-3);font-weight:700;text-transform:uppercase;letter-spacing:.04em">
-        <span>Person</span><span style="text-align:right">Projects</span><span style="text-align:right">Tasks</span><span style="text-align:right">Late</span><span style="text-align:right">Due 7d</span><span>Load vs capacity</span><span>Projects owned</span></div>
+  return `<div style="display:flex;flex-direction:column;gap:22px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px">${kpis}</div>
+    <div>
+    <div class="v2-card" style="padding:0;overflow-x:auto"><div style="min-width:1080px">
+      <div style="display:grid;grid-template-columns:minmax(0,1.4fr) 70px 70px 60px 80px minmax(0,1.3fr) minmax(0,2fr);gap:14px;padding:14px 22px;border-bottom:1px solid rgba(255,255,255,.1);font-size:12px;color:var(--txt-3);font-weight:600">
+        <span>Person</span><span style="text-align:right">Projects</span><span style="text-align:right">Tasks</span><span style="text-align:right">Late</span><span style="text-align:right">Due ${RANGE[1]}</span><span>Load vs busiest</span><span>Projects owned</span></div>
       ${rows}
+    </div></div>
+    <div style="font-size:12.5px;color:var(--txt-3);margin-top:12px">Load = active projects owned, relative to the busiest person (the white tick marks 100%; the bar scale runs to 120%). Late counts late or blocked projects; Due counts open activities due in the selected window.</div>
     </div>
-    ${heatmap}`;
+    ${heatmap}
+  </div>`;
 }
 function renderWeekly(){
   const list=visProjs();
