@@ -3801,81 +3801,109 @@ function poDisplayList(pos){
   out.forEach(rep=>{ if(rep._sib.length>1) rep.valor=rep._sib.reduce((s,p)=>s+(+p.valor||0),0); });
   return out;
 }
+// Each phase gets its own color + icon (reusing the same green/amber/violet/
+// blue/slate/red tokens the status badges already use) so the six stages
+// read as distinct blocks at a glance.
+const PO_FLOW_PHASES=[
+  {id:'aprovacao',t:'Awaiting approval',n:'01',st:['SOLICITADA','EM_APROVACAO'],icon:'clock',c:'var(--amber)',bg:'var(--amber-bg)',who:'Marketing · Admin'},
+  {id:'emissao',t:'Issue PO number',n:'02',st:['APROVADA'],icon:'receipt',c:'var(--violet)',bg:'var(--violet-bg)',who:'Finance · Admin'},
+  {id:'faturamento',t:'Post invoice (NF)',n:'03',st:['PO_GERADA','ATUALIZAR_INFO'],icon:'paperclip',c:'var(--blue)',bg:'var(--blue-bg)',who:'Agency'},
+  {id:'validacao',t:'Validate invoice',n:'04',st:['FATURADA'],icon:'check',c:'var(--green)',bg:'var(--green-bg)',who:'Finance'},
+  {id:'concluida',t:'Completed',n:'05',st:['VALIDADA','CONCLUIDA'],icon:'check',c:'var(--slate)',bg:'var(--slate-bg)',who:'Payment scheduled'},
+  {id:'encerrada',t:'Rejected / cancelled',n:'—',st:['REJEITADA','CANCELADA'],icon:'alert',c:'var(--red)',bg:'var(--red-bg)',who:'—'}
+];
+function poPhaseOf(po){ return PO_FLOW_PHASES.find(f=>f.st.includes(po.status))||{id:'outros',t:'Other',c:'var(--slate)',bg:'var(--slate-bg)'}; }
+/* Compact 4-segment stage bar for a PO row — same idea as POs.dc.html's
+   `steps` array (Approval → Issue → Invoice → Validate), collapsing this
+   app's fuller PO_STAGE_FLOW down to the phases the mockup shows. */
+function poRowStageHTML(po){
+  const rejected=['REJEITADA','CANCELADA'].includes(po.status);
+  const lvl=rejected?-1:PO_FLOW_PHASES.findIndex(f=>f.id===poPhaseOf(po).id)+1; // 1..5
+  const cur=PO_FLOW_PHASES[Math.max(0,lvl-1)]||PO_FLOW_PHASES[0];
+  const steps=[1,2,3,4].map(i=>rejected?'var(--red)':(i<lvl?'#2fd88a':i===lvl?cur.c:'rgba(255,255,255,.1)'));
+  return `<div><div style="display:flex;gap:3px">${steps.map(c=>`<span style="flex:1;height:4px;border-radius:2px;background:${c}"></span>`).join('')}</div><div style="font-size:11.5px;font-weight:600;margin-top:5px;color:${rejected?'var(--red)':cur.c}">${esc((PO_STATUS[po.status]||{}).t||po.status)}</div></div>`;
+}
 function renderPOs(){
   let pos=DATA.pos.slice();
   if(effPapel()==='agencia'&&effAgencia()) pos=pos.filter(p=>p.agencia===effAgencia());
   pos=poDisplayList(pos);
   const nomeBy={}; DATA.poProjetos.forEach(p=>nomeBy[p.id]=p.nome);
+  const campOfFund={}; DATA.poProjetos.forEach(p=>{ if(p.campanha_id){ const c=(DATA.campanhas||[]).find(x=>x.id===p.campanha_id); if(c) campOfFund[p.id]=c.nome; } });
   pos.sort((a,b)=>String(b.solicitado_em||'').localeCompare(String(a.solicitado_em||'')));
-  const canAprova=demoWritable(['admin','marketing'].includes(PAPEL)||isManager);
   const ags=agencyOpts();
-  const filt=`<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-    <div style="position:relative;flex:1;max-width:260px;min-width:170px">
-      <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--txt-3);display:flex">${icn('search',13)}</span>
-      <input id="poFq" oninput="renderPOsFilter()" placeholder="Search PO, fund…" style="width:100%;padding:8px 10px 8px 32px;border-radius:9px;border:1px solid var(--line-2);background:var(--card);font-size:12.5px;font-family:inherit;outline:none">
+
+  // PO flow — one clickable card per lifecycle phase, matching POs.dc.html.
+  const flowHTML=`<div class="v2-card" style="margin-bottom:20px">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+      <div><div class="v2-card-eyebrow">FROM REQUEST TO COMPLETION · CLICK A STEP TO OPEN ITS WINDOW</div><div class="v2-card-title" style="font-size:19px">PO flow</div></div>
     </div>
-    <select id="poFcamp" onchange="renderPOsFilter()" style="padding:8px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--card);font-size:12.5px;font-weight:600;color:var(--txt-2)"><option value="">All funds</option>${DATA.poProjetos.map(p=>`<option value="${p.id}">${esc(p.nome)}</option>`).join('')}</select>
-    <select id="poFag" onchange="renderPOsFilter()" style="padding:8px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--card);font-size:12.5px;font-weight:600;color:var(--txt-2)"><option value="">All agencies</option>${ags.map(a=>`<option>${esc(a)}</option>`).join('')}</select>
-    <select id="poFst" onchange="renderPOsFilter()" style="padding:8px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--card);font-size:12.5px;font-weight:600;color:var(--txt-2)"><option value="">All statuses</option>${Object.keys(PO_STATUS).map(k=>`<option value="${k}">${PO_STATUS[k].t}</option>`).join('')}</select>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
+      ${PO_FLOW_PHASES.map(f=>{
+        const list=pos.filter(po=>f.st.includes(po.status));
+        const val=list.reduce((s,po)=>s+(+po.valor||0),0);
+        const sample=list[0];
+        const openFn=f.id==='aprovacao'?`openReqPO()`:sample?`openPODetail('${esc(sample.id)}')`:'';
+        return `<button ${openFn?`onclick="${openFn}"`:'disabled'} style="text-align:left;cursor:${openFn?'pointer':'default'};border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--paper-2);color:var(--txt);position:relative;overflow:hidden;opacity:${openFn?1:.6}">
+          <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:${f.c}"></div>
+          <div style="font-family:var(--mono);font-size:11px;color:${f.c}">${f.n} · ${esc(f.t)}</div>
+          <div style="font-size:14px;font-weight:700;margin-top:3px">${esc(f.t)}</div>
+          <div style="font-size:12px;color:var(--txt-3);margin-top:2px">${esc(f.who)}</div>
+          <div class="mono" style="font-size:12px;margin-top:8px">${list.length} <span style="color:var(--txt-3)">· ${BRL(val)}</span></div>
+        </button>`;
+      }).join('')}
+    </div>
   </div>`;
-  const head=`<div style="display:grid;grid-template-columns:1.4fr 1fr .8fr .9fr 1fr .8fr 1.1fr 1.1fr;gap:10px;padding:11px 17px;background:var(--paper-2);border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">
-    <span>Fund</span><span>Agency</span><span>Month</span><span style="text-align:right">Value</span><span>Payment</span><span>PO nº</span><span>Status</span><span>Action</span></div>`;
-  const rowHTML=po=>{const s=PO_STATUS[po.status]||{t:po.status,c:'s-slate',icon:''};const pend=['SOLICITADA','EM_APROVACAO'].includes(po.status);const est=poEstimativaPagamento(po);
+
+  // Tabs (rounded pills, count badge) + search — same row layout as the mockup.
+  const knownSt=new Set(); PO_FLOW_PHASES.forEach(f=>f.st.forEach(x=>knownSt.add(x)));
+  const restPos=pos.filter(po=>!knownSt.has(po.status));
+  const tabDefs=[{id:'all',t:'All',list:pos}, ...PO_FLOW_PHASES.map(f=>({id:f.id,t:f.t,list:pos.filter(po=>f.st.includes(po.status))}))];
+  if(restPos.length) tabDefs.push({id:'outros',t:'Other',list:restPos});
+  const visTabs=tabDefs.filter(t=>t.id==='all'||t.list.length);
+  if(!visTabs.some(t=>t.id===PO_TAB)) PO_TAB='all';
+  const tabsRow=`<div style="display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:16px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap">${visTabs.map(t=>{const on=t.id===PO_TAB;
+      return `<button onclick="poSetTab('${t.id}')" style="padding:7px 13px;border-radius:20px;cursor:pointer;font-weight:600;font-size:13px;border:1px solid ${on?'var(--txt)':'var(--line-2)'};background:${on?'var(--txt)':'transparent'};color:${on?'var(--ink)':'var(--txt-2)'}">${esc(t.t)} <span style="opacity:.7">${t.list.length}</span></button>`;
+    }).join('')}</div>
+    <div style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:10px;background:var(--paper-2);border:1px solid var(--line);min-width:240px">
+      ${icn('search',13)}<input id="poFq" oninput="renderPOsFilter()" placeholder="Search PO, project, vendor" style="border:none;background:none;outline:none;color:var(--txt);font:inherit;font-size:13.5px;flex:1">
+    </div>
+  </div>`;
+  // Secondary filters (fund/agency) — real functionality the mockup's demo
+  // data didn't need, kept as a smaller row under the tabs instead of gone.
+  const filt=`<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+    <select id="poFcamp" onchange="renderPOsFilter()" style="padding:7px 11px;border:1px solid var(--line-2);border-radius:9px;background:var(--card);font-size:12px;font-weight:600;color:var(--txt-2)"><option value="">All funds</option>${DATA.poProjetos.map(p=>`<option value="${p.id}">${esc(p.nome)}</option>`).join('')}</select>
+    <select id="poFag" onchange="renderPOsFilter()" style="padding:7px 11px;border:1px solid var(--line-2);border-radius:9px;background:var(--card);font-size:12px;font-weight:600;color:var(--txt-2)"><option value="">All agencies</option>${ags.map(a=>`<option>${esc(a)}</option>`).join('')}</select>
+  </div>`;
+
+  const head=`<div style="display:grid;grid-template-columns:108px minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,.7fr) 90px 100px 170px 150px;gap:12px;padding:11px 17px;background:var(--paper-2);border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">
+    <span>PO</span><span>Description</span><span>Project · fund</span><span>Vendor</span><span>Month</span><span style="text-align:right">Amount</span><span>Stage</span><span style="text-align:right">Action</span></div>`;
+  const rowHTML=po=>{
     const grouped=po._sib&&po._sib.length>1;
-    const label=grouped?poGroupLabel(po._sib):(nomeBy[po.fund_id]||'—');
+    const fundName=grouped?poGroupLabel(po._sib):(nomeBy[po.fund_id]||'—');
+    const proj=campOfFund[po.fund_id];
     const q=((nomeBy[po.fund_id]||'')+' '+(po.descricao||'')+' '+(po.numero_po||'')+' '+(po.agencia||'')).toLowerCase();
-    return `<div class="po-row" data-camp="${esc(po.fund_id)}" data-ag="${esc(po.agencia||'')}" data-st="${esc(po.status)}" data-q="${esc(q)}" onclick="openPODetail('${esc(po.id)}')" style="display:grid;grid-template-columns:1.4fr 1fr .8fr .9fr 1fr .8fr 1.1fr 1.1fr;gap:10px;padding:12px 17px;border-bottom:1px solid var(--line);align-items:center;font-size:13px;cursor:pointer">
-      <span style="min-width:0"><span style="font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(label)}</span><span style="font-size:11px;color:var(--txt-3)">${esc(po.descricao||'')}${grouped?' · split across '+po._sib.length+' categories':''}</span>${poMetaHTML(po)}</span>
+    return `<div class="po-row" data-camp="${esc(po.fund_id)}" data-ag="${esc(po.agencia||'')}" data-st="${esc(po.status)}" data-q="${esc(q)}" onclick="openPODetail('${esc(po.id)}')" style="display:grid;grid-template-columns:108px minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,.7fr) 90px 100px 170px 150px;gap:12px;padding:12px 17px;border-bottom:1px solid var(--line);align-items:center;font-size:13px;cursor:pointer">
+      <span class="mono" style="font-size:12.5px;color:var(--txt-2)">${esc(po.numero_po||po.id.slice(0,8))}</span>
+      <span style="font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.descricao||'—')}${grouped?' · split':''}</span>
+      <span style="min-width:0"><span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(proj||fundName)}</span><span style="font-size:12px;color:var(--txt-3);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(proj?fundName:'')}</span></span>
       <span style="color:var(--txt-2)">${esc(po.agencia||'—')}</span>
-      <span style="font-size:12px;color:var(--txt-2)">${fmtMes(po.competencia)}</span>
+      <span style="font-size:12.5px;color:var(--txt-2)">${fmtMes(po.competencia)}</span>
       <span class="mono" style="text-align:right;font-size:12.5px">${BRL(po.valor)}</span>
-      <span class="mono" style="font-size:12px;${est?(est.confirmed?'color:var(--green);font-weight:700':'color:var(--txt-3);font-style:italic'):'color:var(--txt-3)'}">${est?(est.confirmed?est.date:'~'+est.date):'—'}</span>
-      <span class="mono" style="font-size:12px;color:var(--txt-3)">${esc(po.numero_po||'—')}</span>
-      <span><span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap" class="badge ${s.c}"><span class="d"></span>${s.t}</span></span>
-      <span style="display:flex;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">${poActionsHTML(po)}</span>
+      ${poRowStageHTML(po)}
+      <span style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap" onclick="event.stopPropagation()">${poActionsHTML(po)}</span>
     </div>`;
   };
-  // Each phase gets its own color + icon (reusing the same green/amber/violet/
-  // blue/slate/red tokens the status badges already use) so the six stages
-  // read as distinct blocks at a glance, instead of one continuous list where
-  // only the small per-row status badge told them apart.
-  const PHASES=[
-    {id:'aprovacao',t:'1 · Awaiting approval',st:['SOLICITADA','EM_APROVACAO'],icon:'clock',c:'var(--amber)',bg:'var(--amber-bg)'},
-    {id:'emissao',t:'2 · Awaiting PO number',st:['APROVADA'],icon:'receipt',c:'var(--violet)',bg:'var(--violet-bg)'},
-    {id:'faturamento',t:'3 · Invoicing (NF)',st:['PO_GERADA','ATUALIZAR_INFO'],icon:'paperclip',c:'var(--blue)',bg:'var(--blue-bg)'},
-    {id:'validacao',t:'4 · Validation',st:['FATURADA'],icon:'check',c:'var(--green)',bg:'var(--green-bg)'},
-    {id:'concluida',t:'Completed',st:['VALIDADA','CONCLUIDA'],icon:'check',c:'var(--slate)',bg:'var(--slate-bg)'},
-    {id:'encerrada',t:'Rejected / cancelled',st:['REJEITADA','CANCELADA'],icon:'alert',c:'var(--red)',bg:'var(--red-bg)'}
-  ];
-  const OUTROS_META={id:'outros',t:'Other',icon:'folder',c:'var(--slate)',bg:'var(--slate-bg)'};
-  const knownSt=new Set(); PHASES.forEach(f=>f.st.forEach(x=>knownSt.add(x)));
-  const restPos=pos.filter(po=>!knownSt.has(po.status));
-  const groups=PHASES.concat([OUTROS_META]).map(f=>({...f,list:f.id==='outros'?restPos:pos.filter(po=>f.st.includes(po.status))})).filter(g=>g.list.length);
-  if(!groups.some(g=>g.id===PO_TAB)) PO_TAB=groups.length?(groups.find(g=>!['concluida','encerrada'].includes(g.id))||groups[0]).id:null;
-  const active=groups.find(g=>g.id===PO_TAB);
-  const tabsHTML=groups.length?`<div class="po-tabs">${groups.map(f=>{const on=f.id===PO_TAB;
-    return `<button class="po-tab${on?' on':''}" onclick="poSetTab('${f.id}')" style="${on?`border-color:${f.c};background:${f.bg}`:''}">
-      <span class="ich" style="width:24px;height:24px;background:${on?'#fff':f.bg};color:${f.c};flex-shrink:0">${icn(f.icon,12)}</span>
-      <span style="font-weight:700;font-size:12px;color:${on?f.c:'var(--txt-2)'};white-space:nowrap">${f.t}</span>
-      <span class="mono" style="font-size:10px;font-weight:800;background:${on?'#fff':'var(--paper)'};border:1px solid ${f.c}40;border-radius:20px;padding:1px 7px;color:${f.c};flex-shrink:0">${f.list.length}</span>
-    </button>`;
-  }).join('')}</div>`:'';
-  const body=active?`<div class="po-phase" style="border:1.5px solid ${active.c}30;border-radius:13px;box-shadow:0 1px 2px rgba(20,22,28,.04);background:var(--card)">
-    <div style="padding:10px 16px;background:${active.bg};display:flex;align-items:center;gap:10px;border-radius:12px 12px 0 0">
-      <span class="ich" style="width:26px;height:26px;background:var(--card);color:${active.c};flex-shrink:0">${icn(active.icon,13)}</span>
-      <b style="font-family:'Hanken Grotesk',sans-serif;font-size:12.5px;letter-spacing:.02em;color:${active.c}">${active.t}</b>
-      <span style="flex:1"></span>
-      <span class="mono" style="font-size:11.5px;font-weight:700;color:${active.c}">${BRL(active.list.reduce((sum,po)=>sum+(+po.valor||0),0))}</span>
-    </div>
-    <div style="background:var(--paper-2);border-top:1px solid var(--line);border-bottom:1px solid var(--line);position:sticky;top:var(--sticky-top,73px);z-index:5">${head}</div>
-    <div class="po-rows">${active.list.map(rowHTML).join('')}</div>
+  const activeList=(visTabs.find(t=>t.id===PO_TAB)||visTabs[0]).list;
+  const body=activeList.length?`<div style="background:var(--card);border:1px solid var(--line);border-radius:13px;overflow:hidden">
+    <div style="overflow-x:auto"><div style="min-width:900px">${head}<div class="po-rows">${activeList.map(rowHTML).join('')}</div></div></div>
     <div class="po-empty-filter" style="display:none;padding:30px 16px;text-align:center;color:var(--txt-3);font-size:12.5px">No POs match your filters in this phase — try another tab above.</div>
   </div>`:'<div class="empty">No POs found for your access.</div>';
+
   // PO-only agency contacts (agencia_nivel='po') don't get this — it surfaces
   // fund budget totals (tetoPend) and category/activity planning info,
   // which is exactly the Overview/Funds-level detail this sub-level is
-  // scoped away from everywhere else. Same restriction, just enforced here
-  // too since this banner renders unconditionally on the one screen they do see.
+  // scoped away from everywhere else.
   const isPoOnly=PAPEL==='agencia'&&AGENCIA_NIVEL==='po';
   const projPend=isPoOnly?[]:DATA.poProjetos.filter(p=>p.aprovacao_status==='PENDENTE');
   const canAprovaCamp=demoWritable(['admin','marketing','financeiro'].includes(PAPEL)||isManager);
@@ -3888,7 +3916,7 @@ function renderPOs(){
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">${esc(p.agencia||'')} · ${esc(catKeyLabel(p.product_category||''))} · ${esc(actColLabel(actKey(p)))}</div>
       ${canAprovaCamp?`<div style="display:flex;gap:7px;margin-top:10px"><button onclick="aprovarCamp('${esc(p.id)}')" style="padding:7px 14px;border-radius:8px;border:none;background:var(--po);color:#fff;font-weight:700;font-size:12px;cursor:pointer">Approve</button><button onclick="rejeitarCamp('${esc(p.id)}')" style="padding:7px 14px;border-radius:8px;border:1px solid var(--line-2);background:var(--card);color:var(--txt-2);font-weight:700;font-size:12px;cursor:pointer">Reject</button></div>`:''}
     </div>`).join('')}</div></div>`:'';
-  return fundPend+filt+tabsHTML+`<div id="poBody">${body}</div>
+  return fundPend+flowHTML+tabsRow+filt+`<div id="poBody">${body}</div>
     <div style="font-size:11.5px;color:var(--txt-3);margin-top:10px">Lifecycle: request → approve → issue nº → invoice (NF + evidence) → validate. Approve/Reject is live for admin and marketing.</div>`;
 }
 let PO_TAB=null;
