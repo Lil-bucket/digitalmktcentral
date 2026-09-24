@@ -3998,6 +3998,7 @@ function renderGerarPO(){
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:480px">
     <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:#3c7a63;flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Issue PO number</h3><div style="font-size:12px;color:var(--txt-3)">${esc(label)} · ${esc(po.agencia||'')} · ${BRL(total)}${grouped?' · one PO nº applied to all '+sibs.length+' categories':''}</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">
+      ${poStepper(po)}
       <div class="field"><label>PO number</label><input value="${esc(GERAR.num)}" onchange="gerarSet('num',this.value)" placeholder="e.g. PO-1183"></div>
       <div class="field"><label>Attach PO document (optional, PDF)</label><input type="file" accept="application/pdf,image/*" onchange="gerarFile(this)"></div>
       ${GERAR.fileName?`<div style="font-size:12px;color:var(--txt-2)">${icn('paperclip',12)} ${esc(GERAR.fileName)}</div>`:''}
@@ -4069,6 +4070,7 @@ function renderFaturarPO(){
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:500px">
     <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:#b5550c;flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Post invoice (NF)</h3><div style="font-size:12px;color:var(--txt-3)">${esc(label)} · PO ${esc(po.numero_po||'—')} · ${BRL(total)}${grouped?' · one NF covers all '+sibs.length+' categories':''}</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">
+      ${poStepper(po)}
       ${redo&&po.motivo_rejeicao?`<div class="banner" style="background:var(--red-bg);border-color:rgba(255,92,92,.35);color:var(--red)">↩ Sent back by finance: ${esc(po.motivo_rejeicao)}</div>`:''}
       <div class="field"><label>NF number</label><input value="${esc(FAT.nf)}" onchange="fatSet('nf',this.value)" placeholder="e.g. NF 8842"></div>
       <div class="field"><label>Invoice file (NF — PDF)</label><input type="file" accept="application/pdf,image/*" onchange="fatFile(this,'nf')">${FAT.nfName?`<div style="font-size:12px;color:var(--txt-2);margin-top:4px">${icn('receipt',12)} ${esc(FAT.nfName)}</div>`:''}</div>
@@ -4116,6 +4118,7 @@ function renderValidarPO(){
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:480px">
     <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:#1f8a4c;flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Validate invoice (NF)</h3><div style="font-size:12px;color:var(--txt-3)">${esc(label)} · ${esc(po.agencia||'')}${grouped?' · covers '+sibs.length+' categories':''}</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">
+      ${poStepper(po)}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
         ${cell('PO number', esc(po.numero_po||'—'))}
         ${cell('Value', BRL(total))}
