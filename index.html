@@ -1074,6 +1074,35 @@ function renderRecommendations(){
       </div>
     </div>`;}).join(''):'<div class="empty">No issues detected.</div>'}</div>`:''}</div>`;
 }
+/* Home month-health card (F1, P1) — same three figures the Budget Overview
+   month bar shows, standalone so Home never depends on that screen's own
+   period/scope state (BO_PER). Health rule is D6: green under 90% of the
+   month's cap, amber 90–100%, red over 100%, measured against consumed +
+   committed only — Pending stays a separate number, never summed in (D2). */
+function homeMonthHealthHTML(){
+  if(!((ROLE_NAV[effPapel()]||{}).budget||[]).includes('bo')) return '';
+  let funds=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO');
+  if(effPapel()==='agencia'&&effAgencia()) funds=funds.filter(p=>p.agencia===effAgencia());
+  const fundIds=new Set(funds.map(p=>p.id));
+  const mNow=new Date().toISOString().slice(0,7);
+  let cap=0; DATA.tetos.forEach(t=>{if(fundIds.has(t.fund_id)&&String(t.competencia).slice(0,7)===mNow)cap+=(+t.teto||0);});
+  DATA.rateio.forEach(r=>{if(fundIds.has(r.fund_id)&&String(r.competencia).slice(0,7)===mNow)cap+=(+r.valor||0);});
+  let cons=0,comp=0,pend=0; DATA.pos.forEach(po=>{if(!fundIds.has(po.fund_id)||String(po.competencia).slice(0,7)!==mNow)return;const v=+po.valor||0;if(CONS.includes(po.status))cons+=v;else if(COMP.includes(po.status))comp+=v;else if(PEND.includes(po.status))pend+=v;});
+  if(!cap) return '';
+  const pct=Math.round((cons+comp)/cap*100);
+  const level=pct>100?{c:'var(--red)',bg:'var(--red-bg)',t:'Over cap'}:pct>=90?{c:'var(--amber)',bg:'var(--amber-bg)',t:'Attention'}:{c:'var(--green)',bg:'var(--green-bg)',t:'On track'};
+  return `<div class="v2-card" style="margin-top:18px;cursor:pointer" onclick="go('bo')">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap">
+      <div><div class="v2-card-eyebrow">CONSUMED + COMMITTED VS MONTHLY CAP</div><div class="v2-card-title" style="font-size:19px">${fmtMes(mNow+'-01')}</div></div>
+      <span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;background:${level.bg};color:${level.c}"><span style="width:6px;height:6px;border-radius:50%;background:${level.c}"></span>${level.t}</span>
+    </div>
+    <div style="display:flex;align-items:baseline;gap:14px;margin:14px 0 10px;flex-wrap:wrap">
+      <span class="mono" style="font-size:32px;font-weight:700;letter-spacing:-.03em;color:${level.c}">${pct}%</span>
+      <span style="font-size:13px;color:var(--txt-2)">${BRL(cons+comp)} of ${BRL(cap)}${pend>0.005?` · ${BRL(pend)} pending`:''}</span>
+    </div>
+    <div class="v2-segbar"><i class="v2-seg-cons" style="width:${Math.min(100,cons/cap*100).toFixed(2)}%"></i><i class="v2-seg-comp" style="width:${Math.min(100-Math.min(100,cons/cap*100),comp/cap*100).toFixed(2)}%"></i></div>
+  </div>`;
+}
 function deadlineInfo(p){if(autoStatus(p)==='concluido')return{cls:'ok',txt:fmtDate(p.prazo),sub:'completed',color:'var(--slate)'};const dd=daysTo(p.prazo);if(dd===null)return{cls:'ok',txt:'—',sub:'',color:'var(--txt-3)'};if(dd<0)return{cls:'late',txt:fmtDate(p.prazo),sub:Math.abs(dd)+'d late',color:'var(--red)'};if(dd<=5)return{cls:'soon',txt:fmtDate(p.prazo),sub:'in '+dd+'d',color:'var(--amber-ink)'};return{cls:'ok',txt:fmtDate(p.prazo),sub:'in '+dd+'d',color:'var(--txt-2)'};}
 
 /* ============================================================
@@ -1808,6 +1837,7 @@ function renderDash(){
         <span style="width:10px;height:10px;border-radius:50%;background:${col};flex-shrink:0"></span><span style="flex:1;font-size:13px;font-weight:600">${name}</span><span class="mono" style="font-size:12.5px;color:var(--txt-2)">${n} · ${pct}%</span></button>`;}).join('')}</div>
     </div>
   </div>
+  ${homeMonthHealthHTML()}
   ${renderRecommendations()}`;
 }
 
@@ -1844,20 +1874,31 @@ function renderProjetos(){
   });
   if(!list.length)return '<div class="empty">No projects found.</div>';
   const canDup=!['agencia','tcl_member'].includes(effPapel())&&!VIEW_AS;
+  const cols='1.7fr 1fr 1.1fr 1fr 1.2fr 1fr .7fr .5fr';
   return `<div style="background:var(--card);border:1px solid var(--line);border-radius:13px;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-    <div style="display:grid;grid-template-columns:1.7fr 1fr 1.1fr 1fr 1.2fr .7fr .5fr;gap:10px;padding:11px 17px;background:var(--paper-2);border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;position:sticky;top:var(--sticky-top,73px);z-index:5;border-radius:13px 13px 0 0">
-      ${sortTh(PROJ_SORT,'name','Project','projSortHeaderClick')}${sortTh(PROJ_SORT,'owner','Owner','projSortHeaderClick')}${sortTh(PROJ_SORT,'stage','Stage','projSortHeaderClick')}${sortTh(PROJ_SORT,'health','Health','projSortHeaderClick')}${sortTh(PROJ_SORT,'progress','Progress','projSortHeaderClick')}${sortTh(PROJ_SORT,'due','Due','projSortHeaderClick')}<span></span></div>
+    <div style="display:grid;grid-template-columns:${cols};gap:10px;padding:11px 17px;background:var(--paper-2);border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;position:sticky;top:var(--sticky-top,73px);z-index:5;border-radius:13px 13px 0 0">
+      ${sortTh(PROJ_SORT,'name','Project','projSortHeaderClick')}${sortTh(PROJ_SORT,'owner','Owner','projSortHeaderClick')}${sortTh(PROJ_SORT,'stage','Stage','projSortHeaderClick')}${sortTh(PROJ_SORT,'health','Health','projSortHeaderClick')}${sortTh(PROJ_SORT,'progress','Progress','projSortHeaderClick')}<span>Budget</span>${sortTh(PROJ_SORT,'due','Due','projSortHeaderClick')}<span></span></div>
     ${list.map(p=>{const stg=stageOf(p.etapa);const hp=healthPill(p.status);const di=deadlineInfo(p);const pr=computeProg(p);const bt=businessTypeOf(p.ptipo);
-      return `<div class="proj-row" onclick="openProj('${esc(p.id)}')" style="display:grid;grid-template-columns:1.7fr 1fr 1.1fr 1fr 1.2fr .7fr .5fr;gap:10px;padding:13px 17px;border-bottom:1px solid var(--line);align-items:center;font-size:13px;cursor:pointer" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
+      return `<div class="proj-row" onclick="openProj('${esc(p.id)}')" style="display:grid;grid-template-columns:${cols};gap:10px;padding:13px 17px;border-bottom:1px solid var(--line);align-items:center;font-size:13px;cursor:pointer" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
         <span style="min-width:0"><span style="font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span><span style="font-size:11px;color:var(--txt-3);display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${bt?`<span style="font-weight:800;color:${bt.color}">${esc(bt.name)}</span> · `:''}${esc(projAgencias(p).join(', ')||p.marca||'')}${(p.categorias||[]).length?` · ${esc((p.categorias||[]).join(', '))}`:''}</span></span>
         <span style="display:flex;align-items:center;gap:7px;min-width:0"><span class="avatar" style="background:${avColor(respName(p.resp))};width:22px;height:22px;font-size:9.5px">${initials(respName(p.resp))}</span><span style="color:var(--txt-2);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(respName(p.resp)||'—')}</span></span>
         <span style="color:var(--txt-2);font-size:12.5px">${stg.name}</span>
         <span><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;background:${hp.bg};color:${hp.fg}"><span style="width:6px;height:6px;border-radius:50%;background:${hp.dot}"></span>${hp.name}</span></span>
         <span style="display:flex;align-items:center;gap:8px"><span class="pbar" style="flex:1;min-width:40px"><span style="width:${pr}%;background:${hp.dot}"></span></span><span class="pct">${pr}%</span></span>
+        <span style="min-width:0">${projBudgetCellHTML(p)}</span>
         <span class="mono" style="font-size:11.5px;color:${di.color}">${di.txt}</span>
         <span style="text-align:right">${canDup?`<button onclick="event.stopPropagation();dupProj('${esc(p.id)}')" title="Duplicate project" style="border:none;background:none;color:var(--txt-3);cursor:pointer;padding:4px;display:inline-flex">${icn('copy',14)}</button>`:''}</span>
       </div>`;
     }).join('')}</div>`;
+}
+/* Compact budget cell for the Projects list (F1, P2) — a thin v2-segbar plus
+   the budgeted total when the project is linked to a campaign, "No budget"
+   otherwise. Reuses campTotals(), already isAg-scoped. */
+function projBudgetCellHTML(p){
+  const camp=(DATA.campanhas||[]).find(c=>c.id===p.campanha_id);
+  if(!camp) return `<span style="font-size:11.5px;color:var(--txt-3)">No budget</span>`;
+  const t=campTotals(camp.id), tot=t.teto||1;
+  return `<span style="display:flex;align-items:center;gap:8px;min-width:0"><span class="v2-segbar" style="flex:1;min-width:34px;height:6px"><i class="v2-seg-cons" style="width:${(t.cons/tot*100).toFixed(2)}%"></i><i class="v2-seg-comp" style="width:${(t.comp/tot*100).toFixed(2)}%"></i></span><span class="mono" style="font-size:11px;color:var(--txt-2);white-space:nowrap">${BRL(t.teto)}</span></span>`;
 }
 /* Opens the detail against a freshly-read row, not the cached one — clicking
    into an item is the moment its real status matters most, and one indexed
