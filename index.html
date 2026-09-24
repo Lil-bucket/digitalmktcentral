@@ -1980,31 +1980,73 @@ function sortTh(state,col,label,onClick,align){
   const active=state.col===col;
   return `<span onclick="${onClick}('${col}')" style="cursor:pointer;user-select:none;display:flex;align-items:center;gap:3px;${align==='right'?'justify-content:flex-end':''}${active?';color:var(--txt-2)':''}">${label}<span style="font-size:9px;color:var(--accent);width:8px;display:inline-block;visibility:${active?'visible':'hidden'}">${active&&state.dir<0?'▼':'▲'}</span></span>`;
 }
+/* Everything projList() filters on except STATUS_FILTER — feeds the health
+   summary buttons so their counts don't collapse to zero once one is picked. */
+function projBase(){
+  let l=visProjs();
+  if(PTIPO_FILTER) l=l.filter(p=>p.ptipo===PTIPO_FILTER);
+  if(CAT_FILTER) l=l.filter(p=>(p.categorias||[]).includes(CAT_FILTER));
+  if(PROJ_Q) l=l.filter(p=>((p.nome||'')+' '+(respName(p.resp)||'')+' '+projAgencias(p).join(' ')+' '+(p.categorias||[]).join(' ')+' '+(p.marca||'')).toLowerCase().includes(PROJ_Q));
+  return l;
+}
+let PROJ_GROUP=false;
+function toggleProjGroup(v){ PROJ_GROUP=v; go('list'); }
+function projRowHTML(p,cols,canDup){
+  const stg=stageOf(p.etapa);const hp=healthPill(p.status);const di=deadlineInfo(p);const pr=computeProg(p);const bt=businessTypeOf(p.ptipo);
+  return `<div class="proj-row" onclick="openProj('${esc(p.id)}')" style="display:grid;grid-template-columns:${cols};gap:10px;padding:13px 17px;border-bottom:1px solid var(--line);align-items:center;font-size:13px;cursor:pointer" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
+    <span style="min-width:0"><span style="font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span><span style="font-size:11px;color:var(--txt-3);display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${bt?`<span style="font-weight:800;color:${bt.color}">${esc(bt.name)}</span> · `:''}${esc(projAgencias(p).join(', ')||p.marca||'')}${(p.categorias||[]).length?` · ${esc((p.categorias||[]).join(', '))}`:''}</span></span>
+    <span style="display:flex;align-items:center;gap:7px;min-width:0"><span class="avatar" style="background:${avColor(respName(p.resp))};width:22px;height:22px;font-size:9.5px">${initials(respName(p.resp))}</span><span style="color:var(--txt-2);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(respName(p.resp)||'—')}</span></span>
+    <span style="color:var(--txt-2);font-size:12.5px">${stg.name}</span>
+    <span><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;background:${hp.bg};color:${hp.fg}"><span style="width:6px;height:6px;border-radius:50%;background:${hp.dot}"></span>${hp.name}</span></span>
+    <span style="display:flex;align-items:center;gap:8px"><span class="pbar" style="flex:1;min-width:40px"><span style="width:${pr}%;background:${hp.dot}"></span></span><span class="pct">${pr}%</span></span>
+    <span style="min-width:0">${projBudgetCellHTML(p)}</span>
+    <span class="mono" style="font-size:11.5px;color:${di.color}">${di.txt}</span>
+    <span style="text-align:right">${canDup?`<button onclick="event.stopPropagation();dupProj('${esc(p.id)}')" title="Duplicate project" style="border:none;background:none;color:var(--txt-3);cursor:pointer;padding:4px;display:inline-flex">${icn('copy',14)}</button>`:''}</span>
+  </div>`;
+}
 function renderProjetos(){
+  const base=projBase();
   const list=projList().slice().sort((a,b)=>{
     const va=projSortVal(a,PROJ_SORT.col), vb=projSortVal(b,PROJ_SORT.col);
     let c=va<vb?-1:va>vb?1:0;
     if(!c) c=(a.nome||'').localeCompare(b.nome||'');
     return c*PROJ_SORT.dir;
   });
-  if(!list.length)return '<div class="empty">No projects found.</div>';
   const canDup=!['agencia','tcl_member'].includes(effPapel())&&!VIEW_AS;
   const cols='1.7fr 1fr 1.1fr 1fr 1.2fr 1fr .7fr .5fr';
-  return `<div style="background:var(--card);border:1px solid var(--line);border-radius:13px;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-    <div style="display:grid;grid-template-columns:${cols};gap:10px;padding:11px 17px;background:var(--paper-2);border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;position:sticky;top:var(--sticky-top,73px);z-index:5;border-radius:13px 13px 0 0">
-      ${sortTh(PROJ_SORT,'name','Project','projSortHeaderClick')}${sortTh(PROJ_SORT,'owner','Owner','projSortHeaderClick')}${sortTh(PROJ_SORT,'stage','Stage','projSortHeaderClick')}${sortTh(PROJ_SORT,'health','Health','projSortHeaderClick')}${sortTh(PROJ_SORT,'progress','Progress','projSortHeaderClick')}<span>Budget</span>${sortTh(PROJ_SORT,'due','Due','projSortHeaderClick')}<span></span></div>
-    ${list.map(p=>{const stg=stageOf(p.etapa);const hp=healthPill(p.status);const di=deadlineInfo(p);const pr=computeProg(p);const bt=businessTypeOf(p.ptipo);
-      return `<div class="proj-row" onclick="openProj('${esc(p.id)}')" style="display:grid;grid-template-columns:${cols};gap:10px;padding:13px 17px;border-bottom:1px solid var(--line);align-items:center;font-size:13px;cursor:pointer" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
-        <span style="min-width:0"><span style="font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span><span style="font-size:11px;color:var(--txt-3);display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${bt?`<span style="font-weight:800;color:${bt.color}">${esc(bt.name)}</span> · `:''}${esc(projAgencias(p).join(', ')||p.marca||'')}${(p.categorias||[]).length?` · ${esc((p.categorias||[]).join(', '))}`:''}</span></span>
-        <span style="display:flex;align-items:center;gap:7px;min-width:0"><span class="avatar" style="background:${avColor(respName(p.resp))};width:22px;height:22px;font-size:9.5px">${initials(respName(p.resp))}</span><span style="color:var(--txt-2);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(respName(p.resp)||'—')}</span></span>
-        <span style="color:var(--txt-2);font-size:12.5px">${stg.name}</span>
-        <span><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;background:${hp.bg};color:${hp.fg}"><span style="width:6px;height:6px;border-radius:50%;background:${hp.dot}"></span>${hp.name}</span></span>
-        <span style="display:flex;align-items:center;gap:8px"><span class="pbar" style="flex:1;min-width:40px"><span style="width:${pr}%;background:${hp.dot}"></span></span><span class="pct">${pr}%</span></span>
-        <span style="min-width:0">${projBudgetCellHTML(p)}</span>
-        <span class="mono" style="font-size:11.5px;color:${di.color}">${di.txt}</span>
-        <span style="text-align:right">${canDup?`<button onclick="event.stopPropagation();dupProj('${esc(p.id)}')" title="Duplicate project" style="border:none;background:none;color:var(--txt-3);cursor:pointer;padding:4px;display:inline-flex">${icn('copy',14)}</button>`:''}</span>
+  const summary=[[null,'All active','var(--txt)'],['no_prazo','On track','var(--green)'],['atencao','At risk','var(--amber)'],['atrasado','Late','var(--red)'],['bloqueado','Blocked','var(--violet)']]
+    .map(([id,name,col])=>{const n=id?base.filter(p=>p.status===id).length:base.length;const on=STATUS_FILTER===(id||'');
+      return `<button onclick="setStatusFilter('${id||''}')" class="v2-card" style="text-align:left;cursor:pointer;padding:13px 15px;border-color:${on?col:'var(--line)'};flex:1 1 130px;min-width:130px">
+        <div style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--txt-3)"><span style="width:8px;height:8px;border-radius:50%;background:${col}"></span>${name}</div>
+        <div class="mono" style="font-size:22px;font-weight:700;margin-top:3px">${n}</div>
+      </button>`;
+    }).join('');
+  const groupToggle=`<div style="display:flex;padding:4px;border-radius:11px;background:var(--paper-2);border:1px solid var(--line)">
+    <button onclick="toggleProjGroup(false)" style="padding:6px 14px;border-radius:8px;border:none;cursor:pointer;font-weight:600;font-size:12.5px;background:${!PROJ_GROUP?'var(--accent)':'transparent'};color:${!PROJ_GROUP?'#fff':'var(--txt-2)'}">List</button>
+    <button onclick="toggleProjGroup(true)" style="padding:6px 14px;border-radius:8px;border:none;cursor:pointer;font-weight:600;font-size:12.5px;background:${PROJ_GROUP?'var(--accent)':'transparent'};color:${PROJ_GROUP?'#fff':'var(--txt-2)'}">By category</button>
+  </div>`;
+  const head=`<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:11px 17px;background:var(--paper-2);border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;position:sticky;top:var(--sticky-top,73px);z-index:5">
+    ${sortTh(PROJ_SORT,'name','Project','projSortHeaderClick')}${sortTh(PROJ_SORT,'owner','Owner','projSortHeaderClick')}${sortTh(PROJ_SORT,'stage','Stage','projSortHeaderClick')}${sortTh(PROJ_SORT,'health','Health','projSortHeaderClick')}${sortTh(PROJ_SORT,'progress','Progress','projSortHeaderClick')}<span>Budget</span>${sortTh(PROJ_SORT,'due','Due','projSortHeaderClick')}<span></span></div>`;
+  let body;
+  if(!list.length){ body='<div class="empty">No projects found.</div>'; }
+  else if(!PROJ_GROUP){
+    body=`<div style="background:var(--card);border:1px solid var(--line);border-radius:13px;box-shadow:var(--sh-2);border-radius:13px;overflow:hidden">${head}${list.map(p=>projRowHTML(p,cols,canDup)).join('')}</div>`;
+  } else {
+    const cats=[...new Set(list.flatMap(p=>(p.categorias&&p.categorias.length)?p.categorias:['—']))].sort();
+    body=cats.map(cat=>{
+      const rows=list.filter(p=>(p.categorias&&p.categorias.length)?p.categorias.includes(cat):cat==='—');
+      if(!rows.length) return '';
+      const cm=cat==='—'?{c:'#9aa3b8'}:catMeta(cat);
+      return `<div style="background:var(--card);border:1px solid var(--line);border-radius:13px;box-shadow:var(--sh-2);overflow:hidden;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:10px;padding:14px 17px 6px"><span style="width:10px;height:10px;border-radius:50%;background:${cm.c}"></span><span style="font-size:16px;font-weight:800">${esc(cat==='—'?'Uncategorized':catKeyLabel(cat))}</span><span style="font-size:12.5px;color:var(--txt-3)">${rows.length} project(s)</span></div>
+        ${head}${rows.map(p=>projRowHTML(p,cols,canDup)).join('')}
       </div>`;
-    }).join('')}</div>`;
+    }).join('');
+    if(!body) body='<div class="empty">No projects found.</div>';
+  }
+  return `<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px">${summary}</div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:12px">${groupToggle}</div>
+    ${body}`;
 }
 /* Compact budget cell for the Projects list (F1, P2) — a thin v2-segbar plus
    the budgeted total when the project is linked to a campaign, "No budget"
