@@ -1807,6 +1807,8 @@ function go(screen){
     $('#ctaBox').innerHTML=`<button class="btn-ghost" onclick="exportBudgetXLSX()">Exportar Excel</button>${canBudget?'<button class="btn-acc" style="background:var(--po)" onclick="openOrcNew()">+ New budget</button>':''}`;
   } else if(['pos','mypos','reqpo'].includes(screen)&&demoWritable(PO_ACCESS)){
     $('#ctaBox').innerHTML='<button class="btn-acc" style="background:var(--po)" onclick="openReqPO()">+ Request PO</button>';
+  } else if(screen==='mytasks'){
+    $('#ctaBox').innerHTML='<button class="btn-acc" onclick="ptNewNote()">New note</button>';
   } else { $('#ctaBox').innerHTML=''; }
   const v=$('#view');
   destroyCharts();
@@ -4290,7 +4292,7 @@ document.addEventListener('keydown',e=>{
 function tasksKey(){ return 'po_ptasks_'+((currentUser&&currentUser.email)||'anon'); }
 /* Personal tasks live in Supabase (painel · tarefas_pessoais, RLS per email).
    localStorage is an offline cache; on first load, local tasks migrate to the server. */
-function normPTask(t){ return typeof t==='string'?({id:uid(),title:t,desc:'',due:'',done:false,t:Date.now(),createdAt:Date.now(),updatedAt:Date.now()}):{id:t.id||uid(),title:t.title!=null?t.title:(t.n||''),desc:t.desc||'',due:t.due||'',done:!!t.done,t:t.t||Date.now(),createdAt:t.createdAt||t.t||Date.now(),updatedAt:t.updatedAt||t.t||Date.now()}; }
+function normPTask(t){ return typeof t==='string'?({id:uid(),title:t,desc:'',due:'',tag:'—',done:false,t:Date.now(),createdAt:Date.now(),updatedAt:Date.now()}):{id:t.id||uid(),title:t.title!=null?t.title:(t.n||''),desc:t.desc||'',due:t.due||'',tag:t.tag||'—',done:!!t.done,t:t.t||Date.now(),createdAt:t.createdAt||t.t||Date.now(),updatedAt:t.updatedAt||t.t||Date.now()}; }
 let PTASKS=null, _ptTimer=null;
 function loadPTasksLocal(){ try{ return JSON.parse(localStorage.getItem(tasksKey())||'[]')||[]; }catch(e){ return []; } }
 function loadPTasks(){ return (PTASKS!=null?PTASKS:loadPTasksLocal()).map(normPTask); }
@@ -4335,7 +4337,15 @@ function sanitizeRich(html){
   Array.from(tmp.childNodes).forEach(process);
   return tmp.innerHTML;
 }
-let PT_EXPANDED={}; let PT_DRAFT={title:'',desc:'',due:''}; let PT_FILTER='open';
+let PT_FILTER='open';
+/* The two-pane editor (Notes.dc.html): PT_ACTIVE is the id of the note
+   currently open in the right-hand editor, or null while drafting a new one.
+   PT_BUF mirrors its title/due/tag fields live; the rich-text body reads
+   straight out of the DOM (#ptBody) on save, same as the old inline editor
+   did. Nothing here is written to loadPTasks()/savePTasks() until "Save as
+   task", matching the mockup's explicit save button instead of autosaving
+   every keystroke. */
+let PT_ACTIVE, PT_BUF={title:'',due:'',tag:'—',pendingHtml:null};
 function ptSetFilter(v){ PT_FILTER=v; renderTasksInto(); }
 /* Same Today/This week/Later/No date buckets the mockup groups by — computed
    from daysTo() so "today" and "this week" track the real calendar, not a
@@ -4349,21 +4359,38 @@ function ptBucket(due){
   return 'later';
 }
 function ptRtFmt(id,cmd){ const el=document.getElementById(id); if(!el)return; el.focus(); document.execCommand(cmd); }
-function ptAdd(){
-  const ti=$('#ptNewTitle'); const de=$('#ptNewDesc'); const du=$('#ptNewDue');
-  const title=(ti&&ti.value||'').trim(); if(!title)return;
-  const desc=sanitizeRich(de?de.innerHTML:''); const due=du?du.value:'';
-  const now=Date.now(); const l=loadPTasks(); l.unshift({id:uid(),title,desc,due,done:false,t:now,createdAt:now,updatedAt:now}); savePTasks(l);
-  PT_DRAFT={title:'',desc:'',due:''};
-  renderTasksInto();
-  const ni=$('#ptNewTitle'); if(ni)ni.focus();
-}
 function ptToggle(id){ const l=loadPTasks(); const t=l.find(x=>x.id===id); if(t){t.done=!t.done;t.updatedAt=Date.now();} savePTasks(l); renderTasksInto(); }
-function ptDel(id){ savePTasks(loadPTasks().filter(x=>x.id!==id)); delete PT_EXPANDED[id]; renderTasksInto(); }
-function ptKey(e){ if(e&&e.key==='Enter'){ e.preventDefault(); ptAdd(); } }
-function ptExpand(id){ PT_EXPANDED[id]=!PT_EXPANDED[id]; renderTasksInto(); }
-function ptField(id,field,val){ const l=loadPTasks(); const t=l.find(x=>x.id===id); if(!t)return; t[field]=val; t.updatedAt=Date.now(); savePTasks(l); if(field==='due'||field==='title') renderTasksInto(); }
-function ptSaveDesc(id){ const el=document.getElementById('ptDesc_'+id); if(!el)return; ptField(id,'desc',sanitizeRich(el.innerHTML)); }
+function ptDel(id){ savePTasks(loadPTasks().filter(x=>x.id!==id)); if(PT_ACTIVE===id){PT_ACTIVE=null;PT_BUF={title:'',due:'',tag:'—',pendingHtml:null};} renderTasksInto(); }
+function ptOpen(id){
+  PT_ACTIVE=id;
+  const t=id?loadPTasks().find(x=>x.id===id):null;
+  PT_BUF={title:t?t.title:'',due:t?t.due:'',tag:t?(t.tag||'—'):'—',pendingHtml:null};
+  renderTasksInto();
+  const ti=$('#ptTitle'); if(ti) ti.focus();
+}
+function ptNewNote(){ ptOpen(null); }
+/* Changing Due/Project re-renders the whole pane (same as any other field
+   here), which would otherwise wipe out text typed into the body but not
+   saved yet — so the current DOM content is snapshotted first and the
+   editor template below reads it back instead of the last-saved value. */
+function ptBufSet(k,v){
+  const ed=$('#ptBody'); if(ed) PT_BUF.pendingHtml=ed.innerHTML;
+  PT_BUF[k]=v; renderTasksInto();
+}
+function ptSaveActive(){
+  const ed=$('#ptBody'); const html=sanitizeRich(ed?ed.innerHTML:'');
+  const title=(PT_BUF.title||'').trim();
+  if(!title){ toast('Give the note a title.'); return; }
+  const l=loadPTasks(); const now=Date.now();
+  if(PT_ACTIVE){
+    const t=l.find(x=>x.id===PT_ACTIVE);
+    if(t){ t.title=title; t.due=PT_BUF.due; t.tag=PT_BUF.tag; t.desc=html; t.updatedAt=now; }
+  } else {
+    const id=uid(); l.unshift({id,title,due:PT_BUF.due,tag:PT_BUF.tag,desc:html,done:false,t:now,createdAt:now,updatedAt:now});
+    PT_ACTIVE=id;
+  }
+  savePTasks(l); toast('Saved ✓'); PT_BUF.pendingHtml=null; renderTasksInto();
+}
 function renderTasksInto(){ const host=$('#tasksHost'); if(host) host.innerHTML=tasksInner(); }
 function dueBadge(due,done){
   if(!due) return '';
@@ -4373,40 +4400,20 @@ function dueBadge(due,done){
   if(dd<0){bg='var(--red-bg)';col='var(--red)';} else if(dd<=2){bg='var(--amber-bg)';col='var(--amber-ink)';}
   return `<span style="font-size:10.5px;font-weight:700;color:${col};background:${bg};border-radius:20px;padding:2px 8px;white-space:nowrap">${dd<0?'Overdue · ':''}${fmtDate(due)}</span>`;
 }
-function tasksInner(){
+/* Left sidebar — compact rows, grouped by due bucket, same as Notes.dc.html's
+   TODAY/THIS WEEK/LATER/NO DATE columns. */
+function ptSidebarHTML(){
   const l=loadPTasks(); const open=l.filter(t=>!t.done), done=l.filter(t=>t.done);
   const row=t=>{
-    const exp=!!PT_EXPANDED[t.id];
-    return `<div style="border-bottom:1px solid var(--line)">
-      <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 4px">
-        <input type="checkbox" ${t.done?'checked':''} onchange="ptToggle('${t.id}')" style="width:17px;height:17px;accent-color:var(--po);margin-top:2px;cursor:pointer;flex-shrink:0">
-        <div style="flex:1;min-width:0;cursor:pointer" onclick="ptExpand('${t.id}')">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <span style="font-size:13.5px;font-weight:600;line-height:1.4;${t.done?'text-decoration:line-through;color:var(--txt-3)':''}">${esc(t.title)}</span>
-            ${dueBadge(t.due,t.done)}
-            <span style="font-size:10px;color:var(--txt-3)" title="Created ${new Date(t.createdAt||t.t).toLocaleString('en-US')} · Updated ${new Date(t.updatedAt||t.t).toLocaleString('en-US')}">created ${fmtDate(new Date(t.createdAt||t.t).toISOString().slice(0,10))}</span>
-          </div>
-          ${(!exp && t.desc)?`<div style="font-size:12px;color:var(--txt-3);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.desc.replace(/<[^>]+>/g,' ').trim()}</div>`:''}
-        </div>
-        ${!t.done?`<button onclick="ptToProject('${t.id}')" title="Turn this task into a project" style="border:1px solid var(--line-2);background:var(--card);color:var(--txt-2);cursor:pointer;font-size:10.5px;font-weight:700;line-height:1;padding:5px 9px;border-radius:7px;flex-shrink:0;white-space:nowrap" onmouseover="this.style.borderColor='var(--po)';this.style.color='var(--po)'" onmouseout="this.style.borderColor='var(--line-2)';this.style.color='var(--txt-2)'">→ Project</button>`:''}
-        <button onclick="ptExpand('${t.id}')" title="Details" style="border:none;background:none;color:var(--txt-3);cursor:pointer;font-size:12px;line-height:1;padding:4px;flex-shrink:0">${exp?'▲':'▼'}</button>
-        <button onclick="ptDel('${t.id}')" style="border:none;background:none;color:var(--txt-3);cursor:pointer;font-size:14px;line-height:1;padding:2px 4px;flex-shrink:0">✕</button>
+    const on=t.id===PT_ACTIVE;
+    const snippet=(t.desc||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,70);
+    return `<div onclick="ptOpen('${t.id}')" style="display:grid;grid-template-columns:22px minmax(0,1fr);gap:8px;padding:9px 10px;border-radius:10px;border:1px solid ${on?'rgba(77,125,255,.45)':'transparent'};background:${on?'rgba(77,125,255,.14)':'transparent'};cursor:pointer">
+      <button onclick="event.stopPropagation();ptToggle('${t.id}')" style="width:18px;height:18px;margin-top:2px;border-radius:5px;cursor:pointer;display:grid;place-items:center;font-size:11px;font-weight:800;color:#05070d;background:${t.done?'#2fd88a':'transparent'};border:1.5px solid ${t.done?'#2fd88a':'var(--line-2)'}">${t.done?'✓':''}</button>
+      <div style="min-width:0">
+        <div style="font-weight:700;font-size:13.5px;color:${t.done?'var(--txt-3)':'var(--txt)'};text-decoration:${t.done?'line-through':'none'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.title)}</div>
+        <div style="font-size:12px;color:var(--txt-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(snippet)}</div>
+        <div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--txt-3);margin-top:2px"><span style="color:#9fb5ff">${esc(t.tag&&t.tag!=='—'?t.tag:'')}</span><span>${t.due?fmtDate(t.due):''}</span></div>
       </div>
-      ${exp?`<div style="padding:2px 4px 14px 35px;display:flex;flex-direction:column;gap:8px">
-        <div style="font-size:11px;color:var(--txt-3)">Created ${fmtDate(new Date(t.createdAt||t.t).toISOString().slice(0,10))} · Last updated ${fmtDate(new Date(t.updatedAt||t.t).toISOString().slice(0,10))} <span style="font-style:italic">(automatic, not editable)</span></div>
-        <div>
-          <label style="display:block;font-size:11px;font-weight:600;color:var(--txt-2);margin-bottom:4px">Deadline <span style="font-weight:600;color:var(--txt-3)">(optional — triggers a notification)</span></label>
-          <input type="date" value="${esc(t.due||'')}" onchange="ptField('${t.id}','due',this.value)" style="padding:7px 9px;border:1px solid var(--line-2);border-radius:7px;background:var(--paper-2);font:inherit;font-size:12.5px">
-        </div>
-        <div>
-          <label style="display:block;font-size:11px;font-weight:600;color:var(--txt-2);margin-bottom:4px">Description</label>
-          <div style="display:flex;gap:5px;margin-bottom:5px">
-            <button class="chip-btn" onclick="ptRtFmt('ptDesc_${t.id}','bold')" style="font-weight:800;width:26px;padding:5px 0">B</button>
-            <button class="chip-btn" onclick="ptRtFmt('ptDesc_${t.id}','insertUnorderedList')" style="width:26px;padding:5px 0">•</button>
-          </div>
-          <div id="ptDesc_${t.id}" contenteditable="true" oninput="ptSaveDesc('${t.id}')" style="min-height:70px;padding:9px 11px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font-size:12.5px;line-height:1.6;outline:none" data-placeholder="Add details…">${t.desc||''}</div>
-        </div>
-      </div>`:''}
     </div>`;
   };
   const filters=[['open','Open',open.length],['done','Done',done.length],['all','All',l.length]]
@@ -4416,20 +4423,47 @@ function tasksInner(){
   const grouped=PT_FILTER==='done'?[['done','DONE',vis]]:buckets.map(b=>[b[0],b[1],vis.filter(t=>!t.done&&ptBucket(t.due)===b[0])]).filter(g=>g[2].length);
   const listHTML=PT_FILTER==='all'
     ? (vis.length?vis.map(row).join(''):'<div style="padding:14px 4px;font-size:12.5px;color:var(--txt-3)">No tasks yet.</div>')
-    : (grouped.length?grouped.map(([id,label,items])=>`<div style="padding:10px 4px 2px;font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">${label}</div>${items.map(row).join('')}`).join(''):`<div style="padding:14px 4px;font-size:12.5px;color:var(--txt-3)">No ${PT_FILTER==='done'?'completed':'open'} tasks.</div>`);
-  return `<div style="max-width:640px">
-    <div style="display:flex;gap:6px;margin-bottom:12px">${filters}</div>
-    <div style="border:1px solid var(--line-2);border-radius:12px;padding:12px;background:var(--card);margin-bottom:12px;display:flex;flex-direction:column;gap:8px">
-      <input id="ptNewTitle" onkeydown="ptKey(event)" placeholder="Task title…" style="padding:9px 11px;border:1px solid var(--line-2);border-radius:8px;background:var(--paper-2);font:inherit;font-size:13px">
-      <div style="display:flex;gap:5px"><button class="chip-btn" onclick="ptRtFmt('ptNewDesc','bold')" style="font-weight:800;width:26px;padding:5px 0">B</button><button class="chip-btn" onclick="ptRtFmt('ptNewDesc','insertUnorderedList')" style="width:26px;padding:5px 0">•</button></div>
-      <div id="ptNewDesc" contenteditable="true" placeholder="Description (optional)…" style="min-height:44px;padding:8px 11px;border:1px solid var(--line-2);border-radius:8px;background:var(--paper-2);font-size:12.5px;line-height:1.6;outline:none"></div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input id="ptNewDue" type="date" title="Due date (optional)" style="flex:1;padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:var(--paper-2);font:inherit;font-size:12.5px">
-        <button class="btn-acc" style="background:var(--po)" onclick="ptAdd()">Add</button>
+    : (grouped.length?grouped.map(([id,label,items])=>`<div style="font-family:var(--mono);font-size:11px;letter-spacing:.06em;padding:8px 4px 2px;color:var(--txt-3)">${label}</div>${items.map(row).join('')}`).join(''):`<div style="padding:14px 4px;font-size:12.5px;color:var(--txt-3)">No ${PT_FILTER==='done'?'completed':'open'} tasks.</div>`);
+  return `<aside class="v2-card" style="flex:1 1 300px;max-width:400px;min-width:0;padding:14px;display:flex;flex-direction:column;gap:12px">
+    <div style="display:flex;gap:6px">${filters}</div>
+    <div style="display:flex;flex-direction:column;gap:4px">${listHTML}</div>
+  </aside>`;
+}
+/* Right editor pane — title, due/tag/save row, rich-text toolbar, body. */
+function ptEditorHTML(){
+  const T=[['H','formatBlock','h3','Heading'],['B','bold',null,'Bold'],['I','italic',null,'Italic'],['U','underline',null,'Underline'],['• List','insertUnorderedList',null,'Bulleted list'],['1. List','insertOrderedList',null,'Numbered list'],['¶','formatBlock','p','Paragraph']];
+  const tags=['—',...new Set(visProjs().map(p=>p.nome).filter(Boolean))];
+  const l=loadPTasks(); const t=PT_ACTIVE?l.find(x=>x.id===PT_ACTIVE):null;
+  const savedLabel=t?`saved · last updated ${fmtDate(new Date(t.updatedAt||t.t).toISOString().slice(0,10))}`:'';
+  return `<section class="v2-card" style="flex:3 1 520px;min-width:0;padding:0;display:flex;flex-direction:column">
+    <div style="padding:16px 24px 12px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:12px">
+      <input id="ptTitle" value="${esc(PT_BUF.title)}" oninput="PT_BUF.title=this.value" placeholder="Title" style="background:transparent;border:none;outline:none;color:var(--txt);font-size:22px;font-weight:800;letter-spacing:-.01em;font-family:inherit">
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+        <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--txt-2)">Due<input type="date" value="${esc(PT_BUF.due||'')}" onchange="ptBufSet('due',this.value)" style="padding:6px 10px;border-radius:8px;border:1px solid var(--line-2);background:var(--paper-2);color:var(--txt);font:inherit;font-size:13px"></label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--txt-2)">Project<select onchange="ptBufSet('tag',this.value)" style="padding:6px 10px;border-radius:8px;border:1px solid var(--line-2);background:var(--paper-2);color:var(--txt);font:inherit;font-size:13px">${tags.map(o=>`<option value="${esc(o)}" ${PT_BUF.tag===o?'selected':''}>${esc(o)}</option>`).join('')}</select></label>
+        <span style="flex:1"></span>
+        <span style="font-size:12px;color:var(--txt-3)">${savedLabel}</span>
+        ${t?`<button onclick="ptDel('${t.id}')" style="border:none;background:none;color:var(--red);cursor:pointer;font-size:12.5px;font-weight:600">Delete</button>`:''}
+        <button class="btn-acc" onclick="ptSaveActive()">Save as task</button>
       </div>
     </div>
-    <div style="border:1px solid var(--line);border-radius:12px;padding:4px 12px;background:var(--card)">${listHTML}</div>
-  </div>`;
+    <div style="display:flex;flex-wrap:wrap;gap:4px;padding:8px 18px;border-bottom:1px solid var(--line)">
+      ${T.map(x=>`<button onmousedown="event.preventDefault();ptRtFmt('ptBody','${x[1]}'${x[2]?`,'${x[2]}'`:''})" title="${x[3]}" style="min-width:32px;height:30px;padding:0 8px;border-radius:7px;border:none;background:transparent;color:var(--txt-2);cursor:pointer;font-size:13px;font-weight:600">${x[0]}</button>`).join('')}
+    </div>
+    <div style="padding:20px 28px 30px;flex:1">
+      <div id="ptBody" contenteditable="true" style="min-height:340px;font-size:15px;line-height:1.65;color:var(--txt);outline:none">${PT_BUF.pendingHtml!=null?PT_BUF.pendingHtml:(t?(t.desc||''):'')}</div>
+    </div>
+  </section>`;
+}
+function tasksInner(){
+  // Opens the first open task by default, like the mockup's INIT[0] — only
+  // on the very first paint (PT_ACTIVE is undefined until something sets it).
+  if(PT_ACTIVE===undefined){
+    const l=loadPTasks(); const first=l.find(t=>!t.done)||l[0]||null;
+    PT_ACTIVE=first?first.id:null;
+    PT_BUF={title:first?first.title:'',due:first?first.due:'',tag:first?(first.tag||'—'):'—',pendingHtml:null};
+  }
+  return `<div style="display:flex;flex-wrap:wrap;gap:18px;align-items:stretch">${ptSidebarHTML()}${ptEditorHTML()}</div>`;
 }
 function ptToProject(id){
   const t=loadPTasks().find(x=>x.id===id); if(!t)return;
@@ -4443,10 +4477,7 @@ function ptToProject(id){
   toast('Task copied into a new project — review and save.');
 }
 function renderNotes(){
-  return `<div style="max-width:1000px">
-    <div style="margin-bottom:14px"><div style="font-family:'Hanken Grotesk',sans-serif;font-weight:700;font-size:16px">Tasks</div><div style="font-size:12px;color:var(--txt-3)">Personal to-dos — not tied to any project. Synced to your account and available on any device.</div></div>
-    <div id="tasksHost">${tasksInner()}</div>
-  </div>`;
+  return `<div id="tasksHost">${tasksInner()}</div>`;
 }
 function pmSet(k,v){ if(EDIT)EDIT[k]=v; }
 /* Budget block on the Project modal (F1) — the "no budget" empty state and
