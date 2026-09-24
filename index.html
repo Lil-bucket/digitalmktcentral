@@ -4236,22 +4236,20 @@ function renderPOs(){
   const ags=agencyOpts();
 
   // PO flow — one clickable card per lifecycle phase, matching POs.dc.html.
-  const flowHTML=`<div class="v2-card" style="margin-bottom:20px">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:14px">
-      <div><div class="v2-card-eyebrow">FROM REQUEST TO COMPLETION · CLICK A STEP TO OPEN ITS WINDOW</div><div class="v2-card-title" style="font-size:19px">PO flow</div></div>
-    </div>
+  const flowHTML=`<div class="v2-card" style="padding:20px 22px">
+    <div style="margin-bottom:14px"><div class="v2-card-eyebrow">from request to completion · click a step to open its window</div><div class="v2-card-title">PO flow</div></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
       ${PO_FLOW_PHASES.map(f=>{
         const list=pos.filter(po=>f.st.includes(po.status));
         const val=list.reduce((s,po)=>s+(+po.valor||0),0);
         const sample=list[0];
         const openFn=f.id==='aprovacao'?`openReqPO()`:sample?`openPODetail('${esc(sample.id)}')`:'';
-        return `<button ${openFn?`onclick="${openFn}"`:'disabled'} style="text-align:left;cursor:${openFn?'pointer':'default'};border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--paper-2);color:var(--txt);position:relative;overflow:hidden;opacity:${openFn?1:.6}">
+        return `<button ${openFn?`onclick="${openFn}"`:'disabled'} style="text-align:left;cursor:${openFn?'pointer':'default'};border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:12px 14px;background:#0f1628;color:var(--txt);position:relative;overflow:hidden;opacity:${openFn?1:.6}">
           <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:${f.c}"></div>
           <div style="font-family:var(--mono);font-size:11px;color:${f.c}">${f.n} · ${esc(f.t)}</div>
           <div style="font-size:14px;font-weight:700;margin-top:3px">${esc(f.t)}</div>
           <div style="font-size:12px;color:var(--txt-3);margin-top:2px">${esc(f.who)}</div>
-          <div class="mono" style="font-size:12px;margin-top:8px">${list.length} <span style="color:var(--txt-3)">· ${BRL(val)}</span></div>
+          <div class="mono" style="font-size:12px;margin-top:8px">${list.length} PO(s) <span style="color:var(--txt-3)">· ${BRLc(val)}</span></div>
         </button>`;
       }).join('')}
     </div>
@@ -4264,41 +4262,39 @@ function renderPOs(){
   if(restPos.length) tabDefs.push({id:'outros',t:'Other',list:restPos});
   const visTabs=tabDefs.filter(t=>t.id==='all'||t.list.length);
   if(!visTabs.some(t=>t.id===PO_TAB)) PO_TAB='all';
-  const tabsRow=`<div style="display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:16px">
+  const tabsRow=`<div style="display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center">
     <div style="display:flex;gap:8px;flex-wrap:wrap">${visTabs.map(t=>{const on=t.id===PO_TAB;
-      return `<button onclick="poSetTab('${t.id}')" style="padding:7px 13px;border-radius:20px;cursor:pointer;font-weight:600;font-size:13px;border:1px solid ${on?'var(--txt)':'var(--line-2)'};background:${on?'var(--txt)':'transparent'};color:${on?'var(--ink)':'var(--txt-2)'}">${esc(t.t)} <span style="opacity:.7">${t.list.length}</span></button>`;
+      return `<button onclick="poSetTab('${t.id}')" style="padding:7px 13px;border-radius:20px;cursor:pointer;font-weight:600;font-size:13px;border:1px solid ${on?'#eef1f8':'rgba(255,255,255,.14)'};background:${on?'#eef1f8':'transparent'};color:${on?'#05070d':'var(--txt-soft)'}">${esc(t.t)} <span class="mono" style="opacity:.7">${t.list.length}</span></button>`;
     }).join('')}</div>
-    <div style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:10px;background:var(--paper-2);border:1px solid var(--line);min-width:240px">
-      ${icn('search',13)}<input id="poFq" oninput="renderPOsFilter()" placeholder="Search PO, project, vendor" style="border:none;background:none;outline:none;color:var(--txt);font:inherit;font-size:13.5px;flex:1">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <select id="poFcamp" class="chip-sel" onchange="renderPOsFilter()"><option value="">All funds</option>${DATA.poProjetos.map(p=>`<option value="${p.id}">${esc(p.nome)}</option>`).join('')}</select>
+      <select id="poFag" class="chip-sel" onchange="renderPOsFilter()"><option value="">All agencies</option>${ags.map(a=>`<option>${esc(a)}</option>`).join('')}</select>
+      <span style="position:relative;display:inline-flex;align-items:center"><span style="position:absolute;left:13px;color:var(--txt-3);pointer-events:none;display:flex">${icn('search',13)}</span><input id="poFq" oninput="renderPOsFilter()" placeholder="Search PO, project, vendor" class="search-in" style="min-width:240px"></span>
     </div>
   </div>`;
-  // Secondary filters (fund/agency) — real functionality the mockup's demo
-  // data didn't need, kept as a smaller row under the tabs instead of gone.
-  const filt=`<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-    <select id="poFcamp" onchange="renderPOsFilter()" style="padding:7px 11px;border:1px solid var(--line-2);border-radius:9px;background:var(--card);font-size:12px;font-weight:600;color:var(--txt-2)"><option value="">All funds</option>${DATA.poProjetos.map(p=>`<option value="${p.id}">${esc(p.nome)}</option>`).join('')}</select>
-    <select id="poFag" onchange="renderPOsFilter()" style="padding:7px 11px;border:1px solid var(--line-2);border-radius:9px;background:var(--card);font-size:12px;font-weight:600;color:var(--txt-2)"><option value="">All agencies</option>${ags.map(a=>`<option>${esc(a)}</option>`).join('')}</select>
-  </div>`;
+  const filt='';
 
-  const head=`<div style="display:grid;grid-template-columns:108px minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,.7fr) 90px 100px 170px 150px;gap:12px;padding:11px 17px;background:var(--paper-2);border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">
+  const PO_COLS='108px minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,.7fr) 60px 128px 180px 160px';
+  const head=`<div style="display:grid;grid-template-columns:${PO_COLS};gap:12px;padding:13px 20px;border-bottom:1px solid rgba(255,255,255,.1);font-size:12px;font-weight:600;color:var(--txt-3)">
     <span>PO</span><span>Description</span><span>Project · fund</span><span>Vendor</span><span>Month</span><span style="text-align:right">Amount</span><span>Stage</span><span style="text-align:right">Action</span></div>`;
   const rowHTML=po=>{
     const grouped=po._sib&&po._sib.length>1;
     const fundName=grouped?poGroupLabel(po._sib):(nomeBy[po.fund_id]||'—');
     const proj=campOfFund[po.fund_id];
     const q=((nomeBy[po.fund_id]||'')+' '+(po.descricao||'')+' '+(po.numero_po||'')+' '+(po.agencia||'')).toLowerCase();
-    return `<div class="po-row" data-camp="${esc(po.fund_id)}" data-ag="${esc(po.agencia||'')}" data-st="${esc(po.status)}" data-q="${esc(q)}" onclick="openPODetail('${esc(po.id)}')" style="display:grid;grid-template-columns:108px minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,.7fr) 90px 100px 170px 150px;gap:12px;padding:12px 17px;border-bottom:1px solid var(--line);align-items:center;font-size:13px;cursor:pointer">
-      <span class="mono" style="font-size:12.5px;color:var(--txt-2)">${esc(po.numero_po||po.id.slice(0,8))}</span>
-      <span style="font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.descricao||'—')}${grouped?' · split':''}</span>
+    return `<div class="po-row proj-row" data-camp="${esc(po.fund_id)}" data-ag="${esc(po.agencia||'')}" data-st="${esc(po.status)}" data-q="${esc(q)}" onclick="openPODetail('${esc(po.id)}')" style="display:grid;grid-template-columns:${PO_COLS};gap:12px;padding:12px 20px;border-bottom:1px solid rgba(255,255,255,.06);align-items:center;font-size:13px;cursor:pointer">
+      <span class="mono" style="font-size:12.5px;color:#9fb5ff">${esc(po.numero_po||('#'+po.id.slice(-6)))}</span>
+      <span style="font-weight:600;font-size:13.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.descricao||'—')}${grouped?' · split':''}</span>
       <span style="min-width:0"><span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(proj||fundName)}</span><span style="font-size:12px;color:var(--txt-3);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(proj?fundName:'')}</span></span>
-      <span style="color:var(--txt-2)">${esc(po.agencia||'—')}</span>
+      <span style="color:var(--txt-2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.agencia||'—')}</span>
       <span style="font-size:12.5px;color:var(--txt-2)">${fmtMes(po.competencia)}</span>
-      <span class="mono" style="text-align:right;font-size:12.5px">${BRL(po.valor)}</span>
+      <span class="mono" style="text-align:right;font-size:12.5px;white-space:nowrap">${BRL(po.valor)}</span>
       ${poRowStageHTML(po)}
-      <span style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap" onclick="event.stopPropagation()">${poActionsHTML(po)}</span>
+      <span style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap" onclick="event.stopPropagation()">${poActionsHTML(po,true)}</span>
     </div>`;
   };
   const activeList=(visTabs.find(t=>t.id===PO_TAB)||visTabs[0]).list;
-  const body=activeList.length?`<div style="background:var(--card);border:1px solid var(--line);border-radius:13px;overflow:hidden">
+  const body=activeList.length?`<div class="v2-card" style="padding:0;overflow:hidden">
     <div style="overflow-x:auto"><div style="min-width:900px">${head}<div class="po-rows">${activeList.map(rowHTML).join('')}</div></div></div>
     <div class="po-empty-filter" style="display:none;padding:30px 16px;text-align:center;color:var(--txt-3);font-size:12.5px">No POs match your filters in this phase — try another tab above.</div>
   </div>`:'<div class="empty">No POs found for your access.</div>';
@@ -4312,15 +4308,15 @@ function renderPOs(){
   const canAprovaCamp=demoWritable(['admin','marketing','financeiro'].includes(PAPEL)||isManager);
   const tetoPend={};
   if(projPend.length){ DATA.tetos.forEach(t=>tetoPend[t.fund_id]=(tetoPend[t.fund_id]||0)+(+t.teto||0)); DATA.rateio.forEach(r=>tetoPend[r.fund_id]=(tetoPend[r.fund_id]||0)+(+r.valor||0)); }
-  const fundPend=projPend.length?`<div style="background:var(--card);border:1px solid rgba(255,92,92,.35);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05);margin-bottom:16px">
-    <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">Funds awaiting approval</b><span style="background:var(--po);color:#fff;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800">${projPend.length}</span></div>
-    <div style="padding:12px 16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">${projPend.map(p=>`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;background:var(--paper-2)">
+  const fundPend=projPend.length?`<div class="v2-card" style="border-color:rgba(255,92,92,.35);padding:20px 22px">
+    <div><div class="v2-card-eyebrow">new funds · need a decision before they can take POs</div><div class="v2-card-title">Funds awaiting approval <span class="mono" style="font-size:14px;color:#ff8a96;margin-left:6px">${projPend.length}</span></div></div>
+    <div style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">${projPend.map(p=>`<div style="border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:13px 15px;background:#0f1628">
       <div style="display:flex;justify-content:space-between;gap:10px"><b style="font-size:13px">${esc(p.nome)}</b><span class="mono" style="font-size:12px">${BRL(tetoPend[p.id]||0)}</span></div>
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">${esc(p.agencia||'')} · ${esc(catKeyLabel(p.product_category||''))} · ${esc(actColLabel(actKey(p)))}</div>
-      ${canAprovaCamp?`<div style="display:flex;gap:7px;margin-top:10px"><button onclick="aprovarCamp('${esc(p.id)}')" style="padding:7px 14px;border-radius:8px;border:none;background:var(--po);color:#fff;font-weight:700;font-size:12px;cursor:pointer">Approve</button><button onclick="rejeitarCamp('${esc(p.id)}')" style="padding:7px 14px;border-radius:8px;border:1px solid var(--line-2);background:var(--card);color:var(--txt-2);font-weight:700;font-size:12px;cursor:pointer">Reject</button></div>`:''}
+      ${canAprovaCamp?`<div style="display:flex;gap:7px;margin-top:10px"><button onclick="aprovarCamp('${esc(p.id)}')" style="${_poBtn('#b4000b')}">Approve</button><button onclick="rejeitarCamp('${esc(p.id)}')" style="padding:7px 12px;border-radius:8px;border:1px solid rgba(255,92,92,.4);background:transparent;color:#ff8a96;font-weight:700;font-size:12px">Reject</button></div>`:''}
     </div>`).join('')}</div></div>`:'';
-  return fundPend+flowHTML+tabsRow+filt+`<div id="poBody">${body}</div>
-    <div style="font-size:11.5px;color:var(--txt-3);margin-top:10px">Lifecycle: request → approve → issue nº → invoice (NF + evidence) → validate. Approve/Reject is live for admin and marketing.</div>`;
+  return `<div style="display:flex;flex-direction:column;gap:22px">${flowHTML}${fundPend}${tabsRow}<div id="poBody">${body}</div></div>
+    <div class="mono" style="font-size:11.5px;color:var(--txt-3);margin-top:14px">request → approve → issue nº → invoice (NF + evidence) → validate</div>`;
 }
 let PO_TAB=null;
 function poSetTab(id){ PO_TAB=id; go(SCREEN); }
@@ -4407,7 +4403,7 @@ function canFaturarPO(po){ return demoWritable(fullAccess() || (PAPEL==='agencia
 function canValidarPO(){ return demoWritable(['admin','financeiro'].includes(PAPEL)); }
 function canEditPOFile(po){ return demoWritable(['admin','financeiro'].includes(PAPEL) && !['SOLICITADA','EM_APROVACAO','APROVADA'].includes(po.status)); }
 function canEditPO(){ return demoWritable(fullAccess()||PAPEL==='financeiro'); }
-const _poBtn=(bg)=>'padding:6px 12px;border-radius:8px;border:none;color:#fff;font-weight:700;font-size:11.5px;cursor:pointer;background:'+bg;
+const _poBtn=(bg)=>'padding:7px 12px;border-radius:8px;border:none;color:#fff;font-weight:700;font-size:12px;cursor:pointer;background:'+bg;
 
 async function reloadNotif(){
   try{ const {data}=await SBPO.from('notificacoes').select('id,mensagem,tipo,po_id,lida,criada_em').order('criada_em',{ascending:false}).limit(200); DATA.notif=data||[]; }catch(e){}
@@ -4503,8 +4499,19 @@ function renderPODetailModal(){
     <div class="modal-f">${CC_DRILL_BACK?`<button class="btn-ghost" onclick="ccDrillBack()">← Back to breakdown</button>`:'<span></span>'}<div style="display:flex;gap:8px;flex-wrap:wrap">${poActionsHTML(po)}</div></div>
   </div></div>`;
 }
-function poActionsHTML(po){
+/* compact: the list row (POs.dc.html) — only the next-step button + View;
+   the detail modal footer keeps the full set (reject, change file, edit). */
+function poActionsHTML(po,compact){
   const pend=['SOLICITADA','EM_APROVACAO'].includes(po.status);
+  if(compact){
+    const canAprova=demoWritable(['admin','marketing'].includes(PAPEL)||isManager);
+    let prim='';
+    if(canAprova&&pend) prim=`<button onclick="aprovarPO('${esc(po.id)}')" style="${_poBtn('#b4000b')}">Approve</button>`;
+    else if(po.status==='APROVADA'&&canGerarPO()) prim=`<button onclick="openGerarPO('${esc(po.id)}')" style="${_poBtn('#3c7a63')}">Issue PO nº</button>`;
+    else if(['PO_GERADA','ATUALIZAR_INFO'].includes(po.status)&&canFaturarPO(po)) prim=`<button onclick="openFaturarPO('${esc(po.id)}')" style="${_poBtn('#b5550c')}">Post NF</button>`;
+    else if(po.status==='FATURADA'&&canValidarPO()) prim=`<button onclick="openValidarPO('${esc(po.id)}')" style="${_poBtn('#1f8a4c')}">Validate</button>`;
+    return prim+`<button onclick="openPODetail('${esc(po.id)}')" style="padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.16);background:transparent;color:var(--txt-2);font-weight:600;font-size:12px">View</button>`;
+  }
   const canAprova=demoWritable(['admin','marketing'].includes(PAPEL)||isManager);
   const b=[];
   if(canAprova&&pend){
