@@ -4201,6 +4201,53 @@ function pmBudgetBlockHTML(canEditProj){
       <span><i style="background:var(--violet)"></i>Committed ${BRL(t.comp)}</span>
       <span><i style="background:rgba(255,255,255,.16)"></i>Available ${BRL(avail)}</span>
     </div>
+  </div>${pmFundsTableHTML(camp)}${pmProjPOsHTML(camp)}`;
+}
+/* Fund × month totals for the linked campaign (F1, P3 — "fundos utilizados,
+   mensalizados"). Budgeted here is fundMonthlyTotals() summed, same figure
+   deletarFund() uses for a fund's cap — no new aggregation invented. Funds
+   already come out of campFunds(), so agency scoping (isAg) is inherited. */
+function pmFundsTableHTML(camp){
+  const funds=campFunds(camp.id);
+  if(!funds.length)return '';
+  const cols='minmax(0,1.6fr) minmax(0,.8fr) minmax(0,.8fr) minmax(0,.8fr)';
+  return `<div class="v2-card" style="margin-top:14px;padding:18px 20px">
+    <div class="v2-card-eyebrow">FUNDS</div>
+    <div style="overflow-x:auto;margin-top:8px"><div style="min-width:520px">
+      <div style="display:grid;grid-template-columns:${cols};gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase">
+        <span>Fund · agency</span><span style="text-align:right">Budgeted</span><span style="text-align:right">Consumed + committed</span><span style="text-align:right">Available</span>
+      </div>
+      ${funds.map(f=>{
+        const cap=Object.values(fundMonthlyTotals(f.id)).reduce((s,v)=>s+v,0);
+        const used=(DATA.pos||[]).filter(po=>po.fund_id===f.id&&(CONS.includes(po.status)||COMP.includes(po.status))).reduce((s,po)=>s+(+po.valor||0),0);
+        const av=Math.max(0,cap-used);
+        return `<div onclick="closeModal();openFundDetail('${esc(f.id)}')" style="display:grid;grid-template-columns:${cols};gap:10px;padding:9px 0;border-bottom:1px solid var(--line);cursor:pointer;font-size:12.5px;align-items:center">
+          <span style="min-width:0"><span style="font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(f.nome)}</span><span style="font-size:11px;color:var(--txt-3)">${esc(f.agencia||'—')}</span></span>
+          <span class="mono" style="text-align:right">${BRL(cap)}</span>
+          <span class="mono" style="text-align:right;color:var(--txt-2)">${BRL(used)}</span>
+          <span class="mono" style="text-align:right;font-weight:700">${BRL(av)}</span>
+        </div>`;
+      }).join('')}
+    </div></div>
+  </div>`;
+}
+/* POs against every fund the linked campaign carries (F1, P3 — "todas as
+   POs atreladas ao projeto"). Capped at 8 rows with a pointer to the
+   campaign for the rest — this modal already carries a lot, and POs has
+   its own full screen. */
+function pmProjPOsHTML(camp){
+  const fundIds=new Set(campFunds(camp.id).map(f=>f.id));
+  const pos=(DATA.pos||[]).filter(po=>fundIds.has(po.fund_id)).sort((a,b)=>String(b.solicitado_em||'').localeCompare(String(a.solicitado_em||'')));
+  if(!pos.length)return '';
+  return `<div class="v2-card" style="margin-top:14px;padding:18px 20px">
+    <div class="v2-card-eyebrow">POs · ${pos.length}</div>
+    <div style="margin-top:8px">${pos.slice(0,8).map(po=>{const st=PO_STATUS[po.status]||{t:po.status,c:'s-slate'};
+      return `<div onclick="closeModal();openPODetail('${esc(po.id)}')" style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);cursor:pointer;font-size:12.5px">
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(poNome(po.fund_id))}${po.descricao?' · '+esc(po.descricao):''}</span>
+        <span class="badge ${st.c}" style="flex-shrink:0"><span class="d"></span>${st.t}</span>
+        <span class="mono" style="flex-shrink:0;width:90px;text-align:right">${BRL(po.valor)}</span>
+      </div>`;}).join('')}
+    ${pos.length>8?`<div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">+${pos.length-8} more — open the campaign for the full list.</div>`:''}</div>
   </div>`;
 }
 function pmLinkCampanha(){ const sel=$('#pmCampPick'); if(!sel||!sel.value)return; pmSet('campanha_id',sel.value); renderProjModal(); }
