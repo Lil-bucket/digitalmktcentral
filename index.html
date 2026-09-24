@@ -172,7 +172,9 @@
   .kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:22px}
   .kpi{background:var(--surf);border:1px solid var(--line-card);border-radius:14px;padding:16px 18px;position:relative;overflow:hidden;box-shadow:none;transition:box-shadow var(--med) var(--ease),transform var(--med) var(--ease)}
   .kpi:hover{border-color:rgba(255,255,255,.2)}
-  .kpi .bar{position:absolute;left:0;right:0;top:0;bottom:auto;width:auto;height:3px}
+  .kpi .bar{position:absolute;left:18px;top:20px;width:10px;height:10px;border-radius:3px}
+  .kpi .bar~.lbl{padding-left:17px}
+  .kpi .num{white-space:nowrap}
   .kpi .lbl{font-family:var(--mono);font-size:11.5px;color:var(--txt-3);font-weight:400}
   .kpi .num{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:26px;font-weight:700;margin-top:4px;letter-spacing:-.03em}
   .kpi .meta{font-size:12.5px;color:var(--txt-2);margin-top:2px}
@@ -2854,29 +2856,33 @@ async function dropOnStage(ev,stageId){
     toast('Could not move — reverted. '+(e.message||e)); go(SCREEN);
   }
 }
+/* Board — Projects.dc.html's columns: one translucent lane per stage, cards
+   with name + health dot, category · type, progress, owner and due. Drag
+   and drop between stages and the stage descriptions work as before. */
 function renderKanban(){
   const list=projList();
-  return `<div style="display:flex;gap:14px;overflow-x:auto;padding-bottom:14px;align-items:flex-start">${STAGES.map(stg=>{
+  const stages=STAGES.filter(stg=>stg.id!=='concluido'||list.some(p=>p.etapa==='concluido'));
+  return `<div style="overflow-x:auto;padding-bottom:6px"><div style="display:grid;grid-template-columns:repeat(${stages.length},minmax(240px,1fr));gap:14px;min-width:${stages.length*254}px;align-items:start">${stages.map(stg=>{
     const items=list.filter(p=>p.etapa===stg.id);
-    return `<div ondragover="dragOverCol(event)" ondrop="dropOnStage(event,'${stg.id}')" style="background:var(--paper-2);border:1px solid var(--line);border-radius:13px;width:250px;flex-shrink:0">
-      <div style="padding:12px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line)">
-        <span style="display:flex;align-items:center;gap:8px;font-weight:700;font-family:'Hanken Grotesk';font-size:13px"><span style="width:8px;height:17px;border-radius:3px;background:${stg.color}"></span>${stg.name}
-          <span title="${esc(STAGE_DESCS[stg.id]||'')}" style="width:15px;height:15px;border-radius:50%;background:var(--card);border:1px solid var(--line-2);color:var(--txt-3);font-size:9.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;cursor:help">i</span>
-          ${(PAPEL==='admin'||isManager)?`<button onclick="editStageDesc('${stg.id}')" title="Edit description" style="border:none;background:none;color:var(--txt-3);cursor:pointer;padding:0;display:inline-flex">${icn('pencil',11)}</button>`:''}
+    return `<div ondragover="dragOverCol(event)" ondrop="dropOnStage(event,'${stg.id}')" style="display:flex;flex-direction:column;gap:10px;background:rgba(17,25,49,.5);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:14px;min-height:120px">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:0 4px">
+        <span style="font-weight:700;display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:${stg.color}"></span>${stg.name}
+          ${STAGE_DESCS[stg.id]?`<span title="${esc(STAGE_DESCS[stg.id])}" style="color:var(--txt-3);font-size:11px;cursor:help">ⓘ</span>`:''}
+          ${(PAPEL==='admin'||isManager)?`<button onclick="editStageDesc('${stg.id}')" title="Edit description" style="color:var(--txt-3);padding:0;display:inline-flex">${icn('pencil',11)}</button>`:''}
         </span>
-        <span style="font-size:11.5px;color:var(--txt-3);font-weight:600;background:var(--card);padding:1px 8px;border-radius:20px">${items.length}</span></div>
-      <div style="padding:10px;display:flex;flex-direction:column;gap:9px;min-height:60px">${items.map(p=>{const hp=healthPill(p.status);const di=deadlineInfo(p);const pr=computeProg(p);const tt=(p.tasks||[]).length;const bt=businessTypeOf(p.ptipo);const cats=p.categorias||[];
-        return `<div class="kcard" draggable="true" ondragstart="dragStartCard(event,'${esc(p.id)}')" onclick="openProj('${esc(p.id)}')" style="background:var(--card);border:1px solid var(--line);border-radius:11px;padding:12px;cursor:grab;box-shadow:0 1px 2px rgba(20,22,28,.04);position:relative">
-          ${projHasSubs(p)?`<button onclick="event.stopPropagation();openProjTimeline('${esc(p.id)}')" title="View timeline" style="position:absolute;top:10px;right:10px;border:1px solid var(--line-2);background:var(--card);color:var(--txt-2);border-radius:7px;padding:3px 7px;cursor:pointer;display:inline-flex">${icn('calendar',12)}</button>`:''}
-          ${bt?`<span style="display:inline-flex;align-items:center;gap:5px;font-size:9.5px;font-weight:800;color:${bt.color};background:${bt.color}18;border-radius:20px;padding:2px 8px;margin-bottom:6px">${esc(bt.name)}</span>`:''}
-          <div style="font-weight:600;font-size:13px;line-height:1.3">${esc(p.nome)}</div>
-          <div style="font-size:11px;color:var(--txt-3);margin-top:5px">${esc(projAgencias(p).join(', ')||p.marca||'')}</div>
-          ${cats.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${cats.slice(0,3).map(c=>`<span style="font-size:9.5px;font-weight:700;color:var(--txt-2);background:var(--paper);border:1px solid var(--line-2);border-radius:20px;padding:2px 7px">${esc(catKeyLabel(c))}</span>`).join('')}${cats.length>3?`<span style="font-size:9.5px;font-weight:700;color:var(--txt-3);padding:2px 4px">+${cats.length-3}</span>`:''}</div>`:''}
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px"><span style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:20px;background:${hp.bg};color:${hp.fg}"><span style="width:6px;height:6px;border-radius:50%;background:${hp.dot}"></span>${hp.name}</span><span class="avatar" style="width:22px;height:22px;background:${avColor(respName(p.resp))};font-size:9.5px" title="${esc(respName(p.resp)||'')}">${initials(respName(p.resp))}</span></div>
-          <div class="pbar" style="margin-top:9px"><span style="width:${pr}%;background:${hp.dot}"></span></div>
-          <div style="font-size:10.5px;color:var(--txt-3);font-weight:600;margin-top:6px">${tt} task(s) · due ${di.txt}</div></div>`;
-      }).join('')||'<div style="padding:16px 8px;font-size:12px;color:var(--txt-3);text-align:center">Empty</div>'}</div></div>`;
-  }).join('')}</div>`;
+        <span class="mono" style="font-size:12px;color:var(--txt-3)">${items.length}</span></div>
+      ${items.map(p=>{const hp=healthPill(p.status);const pr=computeProg(p);const bt=businessTypeOf(p.ptipo);const own=respName(p.resp);const cats=p.categorias||[];const dd=daysTo(p.prazo);
+        const due=p.status==='concluido'?'Completed':dd===null?'No date':dd<0?`${-dd}d late`:dd===0?'today':`in ${dd}d`;
+        return `<div class="kcard" draggable="true" ondragstart="dragStartCard(event,'${esc(p.id)}')" onclick="openProj('${esc(p.id)}')" style="display:flex;flex-direction:column;gap:10px;background:var(--surf);border:1px solid var(--line-card);border-radius:12px;padding:14px;cursor:grab">
+          <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><span style="font-weight:700;font-size:14px;line-height:1.3">${esc(p.nome)}</span><span title="${hp.name}" style="width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px;background:${hp.dot}"></span></div>
+          <div style="font-size:12px;color:var(--txt-3);display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;background:${cats.length?catMeta(cats[0]).c:'#9aa3b8'}"></span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc([cats.map(catKeyLabel).join(' + ')||projAgencias(p).join(', '),bt?bt.name:''].filter(Boolean).join(' · ')||'—')}</span></div>
+          <div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:5px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden"><div style="height:100%;background:#4d7dff;width:${pr}%"></div></div><span class="mono" style="font-size:11.5px;color:var(--txt-2)">${pr}%</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center"><span class="avatar" title="${esc(own||'')}" style="width:24px;height:24px;font-size:10px;background:${avColor(own)}">${initials(own)}</span>
+            <span style="display:flex;align-items:center;gap:8px">${projHasSubs(p)?`<button onclick="event.stopPropagation();openProjTimeline('${esc(p.id)}')" title="View timeline" style="color:var(--txt-3);display:inline-flex">${icn('calendar',12)}</button>`:''}<span style="font-size:12px;font-weight:600;color:${dd!==null&&dd<0&&p.status!=='concluido'?'#ff6b6b':'var(--txt)'}">${due}</span></span></div>
+        </div>`;
+      }).join('')||'<div style="padding:16px 8px;font-size:12px;color:var(--txt-3);text-align:center">Empty</div>'}
+    </div>`;
+  }).join('')}</div></div>`;
 }
 
 /* Aprovações (leitura) */
@@ -3040,16 +3046,16 @@ function fundKpisHTML(){
      must not make it read zero. */
   const doneCount=fundVisible({keepDone:true}).filter(p=>p.aprovacao_status==='APROVADO'&&fundLifecycle(p)==='done').length;
   const filtered=!!(FUND_Q||FUND_FILTER_ACT.length||FUND_FILTER_CAT.length||FUND_HIDE_DONE);
-  const stat=(l,v,col)=>`<div class="kpi"><span class="bar" style="background:${col}"></span><div class="lbl">${l}</div><div class="num" style="font-size:19px;margin-top:7px">${v}</div></div>`;
+  const stat=(l,v,col)=>`<div class="kpi"><span class="bar" style="background:${col}"></span><div class="lbl">${l}</div><div class="num" style="font-size:22px">${v}</div></div>`;
   return `<div id="fundKpis" style="margin-bottom:18px">
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
-      ${stat('Funds',String(vis.length),'#10131a')}
-      ${stat('Budgeted (approved)',BRL(orcado),'#10131a')}
-      ${(canSeeCorte()&&cutTotalOf(aprov)>0.005)?stat('Cut',BRL(cutTotalOf(aprov)),'var(--po)'):''}
-      ${stat('Consumed',BRL(consumido),'var(--po)')}
-      ${stat('Committed',BRL(comprometido),'var(--violet)')}
+      ${stat('Funds',String(vis.length),'#9aa3b8')}
+      ${stat('Budgeted (approved)',`<span title="${BRL(orcado)}">${BRLc(orcado)}</span>`,'#eef1f8')}
+      ${(canSeeCorte()&&cutTotalOf(aprov)>0.005)?stat('Cut',`<span title="${BRL(cutTotalOf(aprov))}">${BRLc(cutTotalOf(aprov))}</span>`,'#ff3b4e'):''}
+      ${stat('Consumed',`<span title="${BRL(consumido)}">${BRLc(consumido)}</span>`,'#4d7dff')}
+      ${stat('Committed',`<span title="${BRL(comprometido)}">${BRLc(comprometido)}</span>`,'#a685ff')}
       ${stat('Pending approval',String(pendCount),'var(--amber)')}
-      ${stat('Completed',String(doneCount),'#59606e')}
+      ${stat('Completed',String(doneCount),'#9aa3b8')}
     </div>
     ${filtered?`<div style="font-size:11.5px;color:var(--txt-3);margin-top:7px">Totals follow the active filters — <a onclick="fundClearAll()" style="cursor:pointer;text-decoration:underline;color:var(--po)">show every fund</a>.</div>`:''}
   </div>`;
@@ -3449,16 +3455,19 @@ function openFundDetail(pid){
     const saldo=cap-totM; const rawM=cap?totM/cap*100:0, overM=rawM>100.5;
     const w1=cap?Math.min(100,cM/cap*100):0, w2=cap?Math.min(100-w1,coM/cap*100):0, w3=cap?Math.min(100-w1-w2,peM/cap*100):0;
     const showRealloc=canRealloc&&m<nowM&&saldo>0.5;
-    return `<div id="cd-${m}" style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;margin-bottom:10px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;flex-wrap:wrap"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:13.5px">${fmtMes(m+'-01')}${fundMonthBlocked(pid,m)?` <span class="badge s-amber" style="font-size:9.5px;padding:1px 7px;vertical-align:middle">${icn('lock',9)} blocked</span>`:''}</b><span class="mono" style="font-size:12px;color:${saldo<0?'var(--po)':'var(--txt-2)'}">balance ${BRL(saldo)} · cap ${BRL(cap)}</span></div>
+    return `<div id="cd-${m}" style="border:1px solid ${m===nowM?'rgba(77,125,255,.5)':'rgba(255,255,255,.1)'};border-radius:12px;padding:13px 15px;margin-bottom:12px;background:#121a30">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;flex-wrap:wrap"><b style="font-size:14px">${fmtMes(m+'-01')}${fundMonthBlocked(pid,m)?` <span class="badge s-amber" style="font-size:9.5px;padding:1px 7px;vertical-align:middle">${icn('lock',9)} blocked</span>`:''}</b><span class="mono" style="font-size:12px;color:var(--txt-2)">${BRLc(totM)} of ${BRLc(cap)} · <b style="color:${saldo<0?'#ff5c6c':'var(--txt)'}">${BRLc(saldo)} balance</b></span></div>
       ${(function(){ const cut=canSeeCorte()?fundMonthCut(pid,m):0; if(!cut)return '';
         const mot=(tetoRow(pid,m)||{}).corte_motivo;
         return `<div style="display:flex;align-items:center;gap:8px;margin:-2px 0 9px;padding:6px 10px;border-radius:8px;background:var(--red-bg);border:1px solid rgba(255,92,92,.35);font-size:11.5px;color:var(--red)">
           <span style="display:flex;flex-shrink:0">${icn('scale',12)}</span>
           <span><b class="mono">${BRL(cut)}</b> cut from this month — approved <b class="mono">${BRL(cap+cut)}</b>, cap above is what remains.${mot?` <span style="opacity:.85">${esc(mot)}</span>`:''}</span>
         </div>`;})()}
-      <div style="height:8px;border-radius:5px;background:var(--line-2);overflow:hidden;margin-bottom:10px;display:flex" title="Consumed · committed · awaiting approval"><span class="seg-fill" style="width:${w1}%;background:${overM?'var(--po)':'var(--blue)'}"></span><span class="seg-fill" style="width:${w2}%;background:var(--violet)"></span><span class="seg-fill" style="width:${w3}%;background:var(--amber)"></span></div>
-      ${list.length?list.map(po=>`<div style="padding:9px 0;border-top:1px dashed var(--line)"><div style="display:flex;align-items:center;gap:10px"><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.descricao||'—')}</div><div style="font-size:11px;color:var(--txt-3)">${esc(po.agencia||'')} · ${esc(po.numero_po||'no number')}</div></div><span class="mono" style="font-weight:700;font-size:12.5px;flex-shrink:0">${BRL(po.valor)}</span></div>${poStepperHTML(po.status)}</div>`).join(''):'<div style="font-size:12px;color:var(--txt-3)">No POs this month.</div>'}
+      <div style="height:8px;border-radius:5px;background:rgba(255,255,255,.1);overflow:hidden;margin-bottom:6px;display:flex" title="Consumed · committed · awaiting approval"><span style="width:${w1}%;background:${overM?'#ff3b4e':'#4d7dff'}"></span><span style="width:${w2}%;background:#a685ff"></span><span style="width:${w3}%;background:#ffb020"></span></div>
+      ${list.length?list.map(po=>{const st=PO_STATUS[po.status]||{t:po.status,c:'s-slate'};return `<div onclick="openPODetail('${esc(po.id)}')" style="display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:8px 0;border-top:1px dashed rgba(255,255,255,.1);font-size:12.5px;cursor:pointer">
+        <div style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(po.descricao||'—')}</div><div class="mono" style="font-size:11px;color:var(--txt-3)">${esc(po.numero_po||'no number')}${po.agencia?' · '+esc(po.agencia):''}</div></div>
+        <span class="badge ${st.c}" style="font-size:11px">${st.t}</span>
+        <span class="mono" style="font-weight:700">${BRL(po.valor)}</span></div>`;}).join(''):'<div style="font-size:12px;color:var(--txt-3);padding-top:4px">No POs this month.</div>'}
       ${showRealloc?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
         <button onclick="openReallocModal('${esc(pid)}','${m}',${saldo})" style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;border:1px solid rgba(79,184,255,.35);background:var(--blue-bg);color:var(--blue);font-weight:700;font-size:12px;cursor:pointer">${icn('calendar',12)} Reallocate ${BRL(saldo)} balance →</button>
         ${canSeeCorte()?`<button onclick="openCutBalance('${esc(pid)}','${m}',${saldo})" title="Take this balance back instead of moving it forward" style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;border:1px solid rgba(255,92,92,.35);background:var(--red-bg);color:var(--red);font-weight:700;font-size:12px;cursor:pointer">${icn('scale',12)} Cut balance</button>`:''}
@@ -3476,10 +3485,10 @@ function openFundDetail(pid){
   const catAlloc={}; DATA.rateio.filter(r=>r.fund_id===pid).forEach(r=>{catAlloc[r.categoria]=(catAlloc[r.categoria]||0)+(+r.valor||0);});
   const catKeys=Object.keys(catAlloc).sort((a,b)=>catAlloc[b]-catAlloc[a]);
   const palette=['#e20613','#2a6fdb','#1f8a4c','#b5550c','#7a5cc4','#0e7c86'];
-  const kpi=(lbl,val,c)=>`<div style="flex:1;min-width:118px;border:1px solid var(--line);border-radius:11px;padding:11px 13px;background:var(--paper-2)"><div style="font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">${lbl}</div><div class="mono stat-num" style="font-size:16px;font-weight:800;margin-top:3px;color:${c||'var(--txt-1)'}">${val}</div></div>`;
+  const kpi=(lbl,val,c,full)=>`<div title="${full||''}" style="border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 12px;background:#141c33"><div style="font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">${lbl}</div><div class="mono" style="font-size:14.5px;font-weight:700;margin-top:3px;color:${c||'var(--txt)'}">${val}</div></div>`;
   const summary=`
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
-      ${(canSeeCorte()&&totCapAprovado>totCap+0.005)?kpi('Approved',BRL(totCapAprovado)):''}${kpi('Total cap',BRL(totCap))}${kpi('Consumed',BRL(totConsu),'var(--blue)')}${kpi('Committed',BRL(totComp),'var(--violet)')}${kpi('Awaiting approval',BRL(totPend),'var(--amber-ink)')}${kpi('Balance',BRL(saldoTot),saldoTot<0?'var(--po)':'var(--txt-1)')}
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:14px">
+      ${(canSeeCorte()&&totCapAprovado>totCap+0.005)?kpi('Approved',BRLc(totCapAprovado),'',BRL(totCapAprovado)):''}${kpi('Total cap',BRLc(totCap),'',BRL(totCap))}${kpi('Consumed',BRLc(totConsu),'#4d7dff',BRL(totConsu))}${kpi('Committed',BRLc(totComp),'#a685ff',BRL(totComp))}${kpi('Awaiting approval',BRLc(totPend),'#ffb020',BRL(totPend))}${kpi('Balance',BRLc(saldoTot),saldoTot<0?'#ff5c6c':'#2fd88a',BRL(saldoTot))}
     </div>
     ${(p.rateio&&catKeys.length)?`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;margin-bottom:14px">
       <div style="font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:9px">Rateio — allocation by budget</div>
@@ -3490,17 +3499,20 @@ function openFundDetail(pid){
     const cap=capByM[m]||0; const lst=posByM[m]||[];
     const consM=lst.filter(po=>!['REJEITADA','CANCELADA'].includes(po.status)).reduce((s,po)=>s+(+po.valor||0),0);
     const over=cap&&consM>cap; const cur=m===mNowD;
-    const st=cur?'background:var(--ink);color:#fff;border:1px solid var(--ink)':(over?'background:var(--red-bg);border:1px solid rgba(255,92,92,.35);color:var(--red)':'background:var(--paper-2);border:1px solid var(--line);color:var(--txt-2)');
+    const st=cur?'background:#eef1f8;color:#05070d;border:1px solid #eef1f8':(over?'background:var(--red-bg);border:1px solid rgba(255,92,92,.35);color:var(--red)':'background:#141c33;border:1px solid rgba(255,255,255,.1);color:var(--txt-2)');
     return `<button class="mono" style="font-size:11.5px;font-weight:700;border-radius:8px;padding:5px 11px;cursor:pointer;${st}" onclick="fundDrawerJump('${m}')">${fmtMes(m+'-01')}${over?' '+Math.round(consM/cap*100)+'%':''}</button>`;
   }).join('');
   const alertHTML=(rawTot>=90&&!allPos.some(po=>po.status==='CONCLUIDA'))?`<div style="display:flex;align-items:center;gap:10px;background:var(--amber-bg);border:1px solid rgba(255,176,32,.3);border-radius:9px;padding:8px 12px;margin-top:12px;font-size:12px;color:var(--amber)"><span style="width:7px;height:7px;border-radius:50%;background:var(--amber);flex-shrink:0"></span>No PO completed yet — check with the agency before approving new ones.</div>`:'';
-  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:820px">
-    <div style="padding:18px 22px 16px;border-bottom:1px solid var(--line)">
-      <div style="display:flex;align-items:flex-start;gap:10px">
-        <div style="flex:1;min-width:0"><h3 style="font-size:16px">${esc(p.nome)}</h3><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px">${metaTagHTML('building',p.agencia,'var(--violet)','var(--violet-bg)')}${metaTagHTML(actMeta(p.activity).icon,actMeta(p.activity).label,'var(--blue)','var(--blue-bg)')}${(function(){const cm=catMeta(String(p.product_category||'').trim()||'Uncategorized');return metaTagHTML(cm.icon,cm.label,cm.c,cm.bg);})()}${p.rateio?metaTagHTML('scale','rateio','var(--amber)','var(--amber-bg)'):''}</div></div>
-        <button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button>
+  /* Budget-Timeline.dc.html fund drawer — slides in from the right. */
+  const campOf=(DATA.campanhas||[]).find(c=>c.id===p.campanha_id);
+  const pill=t=>`<span style="font-size:11.5px;padding:2px 9px;border-radius:20px;border:1px solid rgba(255,255,255,.16);color:var(--txt-2)">${t}</span>`;
+  $('#modalMount').innerHTML=`<div class="overlay right" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal drawer" style="width:min(560px,100vw)">
+    <div style="padding:20px 22px 14px;border-bottom:1px solid rgba(255,255,255,.1)">
+      <div style="display:flex;align-items:flex-start;gap:12px">
+        <div style="flex:1;min-width:0"><div class="mono" style="font-size:11.5px;color:var(--txt-3)">${esc(campOf?campOf.nome:'no campaign')}</div><div style="font-size:20px;font-weight:800;margin-top:2px">${esc(p.nome)}</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${pill(esc(p.agencia||'—'))}${pill(esc(actMeta(p.activity).label))}${pill(esc(catKeyLabel(String(p.product_category||'').trim()||'Uncategorized')))}${p.rateio?pill('rateio'):''}${p.aprovacao_status==='PENDENTE'?'<span style="font-size:11.5px;padding:2px 9px;border-radius:20px;background:rgba(255,176,32,.16);color:#ffb020">Awaiting approval</span>':pill('Approved')}</div></div>
+        <button onclick="closeModal()" aria-label="Close dialog" style="width:32px;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,.16);color:var(--txt)">✕</button>
       </div>
-      <div style="display:flex;height:12px;border-radius:6px;overflow:hidden;background:var(--line-2);margin-top:13px" title="Consumed · committed · awaiting approval"><span class="seg-fill" style="width:${totCap?Math.min(100,totConsu/totCap*100):0}%;background:${overT?'var(--po)':'var(--blue)'}"></span><span class="seg-fill" style="width:${totCap?Math.min(100,totComp/totCap*100):0}%;background:var(--violet)"></span><span class="seg-fill" style="width:${totCap?Math.min(100,totPend/totCap*100):0}%;background:var(--amber)"></span></div>
+      <div style="display:flex;height:10px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.1);margin-top:14px" title="Consumed · committed · awaiting approval"><span style="width:${totCap?Math.min(100,totConsu/totCap*100):0}%;background:${overT?'#ff3b4e':'#4d7dff'}"></span><span style="width:${totCap?Math.min(100,totComp/totCap*100):0}%;background:#a685ff"></span><span style="width:${totCap?Math.min(100,totPend/totCap*100):0}%;background:#ffb020"></span></div>
       <div style="display:flex;justify-content:space-between;margin-top:7px;font-size:12px" class="mono">
         <span class="stat-num" style="font-weight:700;color:${overT?'var(--red)':nearT?'var(--amber)':'var(--txt-1)'}">${Math.round(rawTot)}% committed</span>
         <span style="color:var(--txt-2)">balance <b>${BRL(saldoTot)}</b> of ${BRL(totCap)}</span>
@@ -3539,8 +3551,8 @@ function openFundDetail(pid){
       ${alertHTML}
       ${months.length>1?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">${chips}</div>`:''}
     </div>
-    <div class="modal-b">${summary}<div style="font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin:2px 0 10px">Month by month</div>${blocks}</div>
-    <div class="modal-f">${CC_DRILL_BACK?`<button class="btn-ghost" onclick="ccDrillBack()">← Back to breakdown</button>`:'<span></span>'}<div style="display:flex;gap:10px">${canRestrict()?`<button class="btn-ghost" onclick="openCampRestricao('${esc(p.id)}')">${fundRestr(p)?'Blocked — review…':'Block spending'}</button>`:''}${(demoWritable(PO_ACCESS)&&!fundRestr(p)&&!fundArquivado(p))?`<button class="btn-po" onclick="openReqPO('${esc(p.id)}')">+ Request PO</button>`:''}${((['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly())?`<button class="btn-ghost" onclick="openCampValues('${esc(p.id)}')">Edit monthly values</button><button class="btn-ghost" onclick="openCampEdit('${esc(p.id)}')">Edit category</button>`:''}<button class="btn-ghost" onclick="closeModal()">Close</button></div></div>
+    <div class="modal-b">${summary}<div class="mono" style="font-size:11.5px;color:var(--txt-3);margin:2px 0 10px">month by month</div>${blocks}</div>
+    <div class="modal-f" style="flex-wrap:wrap">${CC_DRILL_BACK?`<button class="btn-ghost" onclick="ccDrillBack()">← Back to breakdown</button>`:'<span></span>'}<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end">${canRestrict()?`<button class="btn-ghost" onclick="openCampRestricao('${esc(p.id)}')">${fundRestr(p)?'Blocked — review…':'Block spending'}</button>`:''}${((['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly())?`<button class="btn-ghost" onclick="openCampValues('${esc(p.id)}')">Edit monthly values</button><button class="btn-ghost" onclick="openCampEdit('${esc(p.id)}')">Edit fund</button>`:''}${(demoWritable(PO_ACCESS)&&!fundRestr(p)&&!fundArquivado(p))?`<button class="btn-po" onclick="openReqPO('${esc(p.id)}')">Request PO</button>`:''}</div></div>
   </div></div>`;
 }
 
@@ -6989,14 +7001,14 @@ function campanhasKpisHTML(list){
   const stat=(l,v,col,sub,tip,onc)=>`<div class="kpi"${tip?` title="${esc(tip)}"`:''}${onc?` onclick="${onc}" style="cursor:pointer" onmouseover="this.style.boxShadow='var(--sh-2)'" onmouseout="this.style.boxShadow=''"`:''}><span class="bar" style="background:${col}"></span><div class="lbl">${l}</div><div class="num" style="font-size:19px;margin-top:7px">${v}</div>${sub?`<div style="font-size:11px;color:var(--txt-3);font-weight:600;margin-top:3px">${sub}</div>`:''}</div>`;
   return `<div style="margin-bottom:18px">
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px">
-      ${stat('Campaigns budgeted',BRL(teto),'#10131a',`${list.length} campaign${list.length===1?'':'s'}`)}
+      ${stat('Campaigns budgeted',BRLc(teto),'#eef1f8',`${list.length} campaign${list.length===1?'':'s'}`)}
       ${(function(){ if(!canSeeCorte())return '';
         const c=list.reduce((s,ca)=>s+cutTotalOf(campFunds(ca.id)),0);
-        return c>0.005?stat('Cut',BRL(c),'var(--po)','already out of the figure to the left','Budget taken back from specific months of these campaigns\' funds'):''; })()}
-      ${stat('Consumed',BRL(cons),'var(--po)',`${Math.round(pct)}% of the cap committed`,'Consumed POs only — the % also counts committed and awaiting-approval')}
-      ${stat('Committed',BRL(comp),'var(--violet)',pend?`+ ${BRL(pend)} awaiting approval`:'')}
-      ${stat('Closed with balance',BRL(closedSaldo),'var(--amber)',`${closedN} closed campaign${closedN===1?'':'s'} still holding budget`,'Campaigns marked Closed whose cap was never fully spent')}
-      ${stat('Funds with no campaign',BRL(soltosTeto),'#59606e',`${soltos.length} fund${soltos.length===1?'':'s'} ungrouped${soltos.length?' · click to see them':''}`,'Approved funds carrying no campanha_id — not counted in the totals to the left',soltos.length?'openUngroupedFunds()':'')}
+        return c>0.005?stat('Cut',BRLc(c),'#ff3b4e','already out of the figure to the left','Budget taken back from specific months of these campaigns\' funds'):''; })()}
+      ${stat('Consumed',BRLc(cons),'#4d7dff',`${Math.round(pct)}% of the cap committed`,'Consumed POs only — the % also counts committed and awaiting-approval')}
+      ${stat('Committed',BRLc(comp),'#a685ff',pend?`+ ${BRL(pend)} awaiting approval`:'')}
+      ${stat('Closed with balance',BRLc(closedSaldo),'#ffb020',`${closedN} closed campaign${closedN===1?'':'s'} still holding budget`,'Campaigns marked Closed whose cap was never fully spent')}
+      ${stat('Funds with no campaign',BRLc(soltosTeto),'#9aa3b8',`${soltos.length} fund${soltos.length===1?'':'s'} ungrouped${soltos.length?' · click to see them':''}`,'Approved funds carrying no campanha_id — not counted in the totals to the left',soltos.length?'openUngroupedFunds()':'')}
     </div>
     ${(over||near)?`<div style="font-size:11.5px;color:${over?'var(--red)':'var(--amber)'};font-weight:600;margin-top:7px">Campaigns are at ${Math.round(pct)}% of their combined cap.</div>`:''}
   </div>`;
