@@ -503,6 +503,55 @@
   @media (prefers-reduced-motion:reduce){
     *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
   }
+
+  /* ===== V2 BASE COMPONENTS (F0 — esteira de mudanças, seção 04) =====
+     Classes puras, ainda não usadas em nenhuma tela: nada aqui muda o visual
+     atual. F1/F2 conectam essas classes nas telas de Projeto e Budget. Cores
+     seguem o vocabulário confirmado (Consumed/Committed/Available/Cut) e os
+     tokens já existentes em :root — nenhuma cor nova foi inventada. */
+
+  /* card — mesmo padrão de container já usado nas telas atuais
+     (var(--card)/var(--line)/16px), como classe reaproveitável */
+  .v2-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:22px 24px;box-shadow:var(--sh-2)}
+  .v2-card--glow{box-shadow:0 0 40px -18px rgba(77,125,255,.5),var(--sh-2)}
+  .v2-card-eyebrow{font-family:var(--mono);font-size:var(--fs-xs);color:var(--txt-3)}
+  .v2-card-title{font-size:var(--fs-xl);font-weight:800;letter-spacing:-.02em;margin-top:2px}
+
+  /* segmented bar — Consumed · Committed · Available · Cut, nessa ordem,
+     larguras vindas de style="width:N%" no elemento (dado real, não CSS) */
+  .v2-segbar{display:flex;height:14px;border-radius:6px;overflow:hidden;background:rgba(255,255,255,.08)}
+  .v2-segbar i{display:block;box-shadow:inset -2px 0 0 var(--card)}
+  .v2-seg-cons{background:var(--accent-deep)}
+  .v2-seg-comp{background:var(--violet)}
+  .v2-seg-avail{background:rgba(255,255,255,.16)}
+  .v2-seg-cut{background:repeating-linear-gradient(135deg,var(--po) 0 2px,rgba(226,6,19,.22) 2px 5px);box-shadow:none}
+  .v2-segbar-legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:10px;font-size:var(--fs-sm);color:var(--txt-2)}
+  .v2-segbar-legend span{display:inline-flex;align-items:center;gap:6px}
+  .v2-segbar-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+
+  /* donut — anel SVG; JS calcula stroke-dasharray/offset por fatia,
+     esta classe só posiciona o rótulo central */
+  .v2-donut{position:relative;display:inline-grid;place-items:center}
+  .v2-donut svg{transform:rotate(-90deg)}
+  .v2-donut-center{position:absolute;inset:0;display:grid;place-items:center;text-align:center}
+  .v2-donut-center b{display:block;font-family:var(--mono);font-size:var(--fs-lg);font-weight:700}
+  .v2-donut-center small{display:block;font-size:var(--fs-xs);color:var(--txt-2)}
+
+  /* gauge — arco de meio-círculo (saúde do mês), mesma lógica de path SVG
+     usada nos protótipos; classe só cuida do rótulo grande sob o arco */
+  .v2-gauge{position:relative}
+  .v2-gauge-value{position:absolute;left:0;right:0;bottom:0;text-align:center;font-family:var(--mono);font-size:28px;font-weight:700;letter-spacing:-.03em}
+  .v2-gauge-value--ok{color:var(--green)} .v2-gauge-value--warn{color:var(--amber)} .v2-gauge-value--over{color:var(--red)}
+
+  /* gantt — uma linha por atividade/campanha, trilha com barra posicionada
+     via style="left:X%;width:Y%" (dado real) */
+  .v2-gantt{position:relative}
+  .v2-gantt-row{display:grid;grid-template-columns:200px minmax(0,1fr);align-items:center;gap:14px;padding:7px 0;border-bottom:1px solid var(--line)}
+  .v2-gantt-row:last-child{border-bottom:none}
+  .v2-gantt-label{font-size:var(--fs-sm);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .v2-gantt-track{position:relative;height:16px}
+  .v2-gantt-bar{position:absolute;top:0;bottom:0;border-radius:5px;border:1.5px solid transparent}
+  .v2-gantt-today{position:absolute;top:0;bottom:0;width:2px;background:var(--accent-deep);box-shadow:0 0 12px var(--accent-deep);pointer-events:none}
 </style>
 </head>
 <body>
