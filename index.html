@@ -6604,23 +6604,34 @@ function renderTeam(){
   const names=Object.keys(load).sort((a,b)=>load[b].length-load[a].length);
   if(!names.length)return '<div class="empty">No active projects assigned.</div>';
   const max=Math.max(1,...names.map(n=>load[n].length));
-  const barColor=n=>{const late=load[n].filter(p=>p.status==='atrasado'||p.status==='bloqueado').length;return late?'#ff5c5c':(load[n].length>=max?'#ffb020':'#2fd88a');};
-  const workload=`<div style="background:var(--card);border:1px solid var(--line);border-radius:13px;padding:17px 19px;margin-bottom:18px;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-    <b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">Workload</b>
-    <div style="display:flex;flex-direction:column;gap:4px;margin-top:12px">${(function(){const totalActive=names.reduce((s,n)=>s+load[n].length,0);return names.map(n=>{const items=load[n];const late=items.filter(p=>p.status==='atrasado'||p.status==='bloqueado').length;const shareOfTeam=totalActive?Math.round(items.length/totalActive*100):0;const capPct=Math.round(items.length/max*100);
-      return `<div style="display:flex;align-items:center;gap:14px;padding:7px 0"><span style="width:190px;flex-shrink:0;display:flex;align-items:center;gap:9px;font-weight:600;font-size:13px"><span class="avatar" style="width:24px;height:24px;background:${avColor(n)};font-size:10px">${initials(n)}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n)}</span>${late?`<span style="font-size:9.5px;font-weight:800;color:var(--red);background:var(--red-bg);border-radius:20px;padding:2px 7px;flex-shrink:0;display:inline-flex;align-items:center;gap:3px">${icn('alert',9)} CRITICAL</span>`:''}</span><span style="flex:1;height:13px;background:var(--line-2);border:1px solid var(--line);border-radius:8px;overflow:hidden"><span style="display:block;height:100%;width:${capPct}%;background:${barColor(n)};border-radius:8px"></span></span><span style="width:210px;flex-shrink:0;text-align:right;font-size:11.5px;color:var(--txt-2)"><b>${items.length}</b> project(s) · <b class="mono">${shareOfTeam}%</b> of team load${late?` · <span style="color:var(--red);font-weight:700">${late} critical</span>`:''}</span></div>`;
-    }).join('');})()}</div></div>`;
-  const cards=names.slice(0,4).map(n=>{const items=load[n];const late=items.filter(p=>p.status==='atrasado'||p.status==='bloqueado').length;const done=DATA.projetos.filter(p=>respName(p.resp)===n&&p.status==='concluido').length;const tasks=items.reduce((s,p)=>s+((p.tasks||[]).filter(t=>!t.done).length),0);
-    return `<div style="background:var(--card);border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-      <div style="padding:14px 17px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line)"><span class="avatar" style="width:38px;height:38px;border-radius:11px;background:${avColor(n)};font-size:14px">${initials(n)}</span><span style="flex:1"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px;display:block">${esc(n)}</b><span style="font-size:11px;color:var(--txt-3)">Owner</span></span>${late?`<span style="font-size:10px;font-weight:800;color:var(--red);background:var(--red-bg);border-radius:20px;padding:3px 9px;display:inline-flex;align-items:center;gap:4px">${icn('alert',10)} ${late} CRITICAL</span>`:''}</div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--line)">
-        <span style="padding:11px 6px;text-align:center;border-right:1px solid var(--line)"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:18px;display:block">${items.length}</b><span style="font-size:9.5px;color:var(--txt-3);font-weight:700;text-transform:uppercase">Active</span></span>
-        <span style="padding:11px 6px;text-align:center;border-right:1px solid var(--line)"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:18px;display:block;color:${late?'var(--red)':'inherit'}">${late}</b><span style="font-size:9.5px;color:var(--txt-3);font-weight:700;text-transform:uppercase">Critical</span></span>
-        <span style="padding:11px 6px;text-align:center;border-right:1px solid var(--line)"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:18px;display:block">${done}</b><span style="font-size:9.5px;color:var(--txt-3);font-weight:700;text-transform:uppercase">Done</span></span>
-        <span style="padding:11px 6px;text-align:center"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:18px;display:block">${tasks}</b><span style="font-size:9.5px;color:var(--txt-3);font-weight:700;text-transform:uppercase">Tasks</span></span></div>
-      <div style="padding:10px 12px;display:flex;flex-direction:column;gap:2px">${items.slice(0,4).map(p=>{const hp=healthPill(p.status);const pr=computeProg(p);const isCrit=p.status==='atrasado'||p.status==='bloqueado';return `<div onclick="openProj('${esc(p.id)}')" style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;cursor:pointer;${isCrit?'background:var(--red-bg)':''}">${isCrit?'<span style="width:7px;height:7px;border-radius:50%;background:var(--red);flex-shrink:0"></span>':''}<span style="flex:1;min-width:0;font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span><span style="width:54px;height:5px;background:var(--line-2);border-radius:5px;overflow:hidden;flex-shrink:0"><span style="display:block;height:100%;width:${pr}%;background:${hp.dot}"></span></span></div>`;}).join('')}</div></div>`;
+  const rows=names.map(n=>{
+    const items=load[n];
+    const late=items.filter(p=>p.status==='atrasado'||p.status==='bloqueado').length;
+    const doneN=DATA.projetos.filter(p=>respName(p.resp)===n&&p.status==='concluido').length;
+    const openTasks=items.reduce((s,p)=>s+((p.tasks||[]).filter(t=>!t.done).length),0);
+    const dueWeek=items.reduce((s,p)=>s+((p.tasks||[]).filter(t=>{if(t.done)return false;const dd=daysTo(t.fim);return dd!==null&&dd>=0&&dd<=7;}).length),0);
+    const capPct=Math.round(items.length/max*100);
+    const lc=late?'var(--red)':capPct>=90?'var(--amber)':'var(--green)';
+    return `<div style="display:grid;grid-template-columns:minmax(0,1.4fr) 70px 70px 60px 80px minmax(0,1.3fr) minmax(0,2fr);gap:14px;padding:14px 22px;border-bottom:1px solid var(--line);align-items:center">
+      <div style="display:flex;align-items:center;gap:11px;min-width:0"><span class="avatar" style="width:36px;height:36px;background:${avColor(n)};font-size:12px">${initials(n)}</span><div style="min-width:0"><div style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n)}</div><div style="font-size:12px;color:var(--txt-3)">${items.length} active project(s)</div></div></div>
+      <div style="text-align:right" class="mono">${items.length}</div>
+      <div style="text-align:right" class="mono">${openTasks}</div>
+      <div style="text-align:right" class="mono" style="color:${late?'var(--red)':'var(--txt-2)'};font-weight:700">${late}</div>
+      <div style="text-align:right" class="mono">${dueWeek}</div>
+      <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;height:10px;border-radius:5px;background:var(--line-2);overflow:hidden;position:relative"><div style="height:100%;border-radius:5px;width:${capPct}%;background:${lc}"></div></div><span class="mono" style="font-size:12px;font-weight:700;width:38px;text-align:right;color:${lc}">${capPct}%</span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">${items.slice(0,3).map(p=>`<span onclick="openProj('${esc(p.id)}')" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 9px;border-radius:20px;background:var(--paper-2);border:1px solid var(--line-2)"><span style="width:6px;height:6px;border-radius:50%;background:${healthPill(p.status).dot}"></span>${esc(p.nome.length>20?p.nome.slice(0,18)+'…':p.nome)}</span>`).join('')}${items.length>3?`<span style="font-size:11.5px;color:var(--txt-3);padding:3px 4px">+${items.length-3}</span>`:''}</div>
+    </div>`;
   }).join('');
-  return workload+`<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">${cards}</div>`;
+  const totalOpenTasks=names.reduce((s,n)=>s+load[n].reduce((s2,p)=>s2+((p.tasks||[]).filter(t=>!t.done).length),0),0);
+  const totalLate=names.reduce((s,n)=>s+load[n].filter(p=>p.status==='atrasado'||p.status==='bloqueado').length,0);
+  const kpis=[['People',names.length,'in the workload view'],['Active projects',active.length,(active.length/names.length).toFixed(1)+' per person'],['Open tasks',totalOpenTasks,'across active projects'],['Critical',totalLate,'late or blocked','var(--red)']]
+    .map(k=>`<div class="v2-card" style="padding:16px 18px"><div class="v2-card-eyebrow">${esc(k[0])}</div><div class="mono" style="font-size:26px;font-weight:700;margin-top:4px;${k[3]?'color:'+k[3]:''}">${k[1]}</div><div style="font-size:12.5px;color:var(--txt-2)">${esc(k[2])}</div></div>`).join('');
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:18px">${kpis}</div>
+    <div class="v2-card" style="padding:0;overflow-x:auto">
+      <div style="display:grid;grid-template-columns:minmax(0,1.4fr) 70px 70px 60px 80px minmax(0,1.3fr) minmax(0,2fr);gap:14px;padding:14px 22px;border-bottom:1px solid var(--line);font-size:11.5px;color:var(--txt-3);font-weight:700;text-transform:uppercase;letter-spacing:.04em">
+        <span>Person</span><span style="text-align:right">Projects</span><span style="text-align:right">Tasks</span><span style="text-align:right">Late</span><span style="text-align:right">Due 7d</span><span>Load vs capacity</span><span>Projects owned</span></div>
+      ${rows}
+    </div>`;
 }
 function renderWeekly(){
   const list=visProjs();
