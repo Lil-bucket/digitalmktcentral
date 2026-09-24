@@ -459,7 +459,7 @@
      scroll) that offset doesn't pin anything — it just shoves the whole header
      ~80px down over the first data rows. Only the frozen s1/s2/s3 columns want
      sticky here, and horizontally only, so top stays auto for them. */
-  .cc-tbl th{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;background:var(--paper-2);border-bottom:1px solid var(--line);padding:8px 10px;position:static;top:auto}
+  .cc-tbl th{font-family:var(--mono);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;background:#161f36;border-bottom:1px solid var(--line);padding:8px 10px;position:static;top:auto}
   .cc-tbl td{padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap;font-size:11.5px}
   .cc-tbl .num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
   .cc-tbl .mband{background:rgba(255,255,255,.02)}
@@ -482,9 +482,9 @@
      scroll position that never happens. Solving both at once needs a
      JS-synced dual-scrollbar split (separate header/body scroll areas),
      which is out of scope here — left as horizontal-only sticky. */
-  .cc-tbl thead .s0,.cc-tbl thead .s1,.cc-tbl thead .s2,.cc-tbl thead .s3{background:var(--paper-2);z-index:5}
-  .cc-tbl tfoot td{background:var(--paper-2);border-top:1px solid var(--line);border-bottom:none;font-weight:700}
-  .cc-tbl tfoot .s0,.cc-tbl tfoot .s1,.cc-tbl tfoot .s2,.cc-tbl tfoot .s3{background:var(--paper-2)}
+  .cc-tbl thead .s0,.cc-tbl thead .s1,.cc-tbl thead .s2,.cc-tbl thead .s3{background:#161f36;z-index:5}
+  .cc-tbl tfoot td{background:#1a2340;border-top:1px solid rgba(255,255,255,.12);border-bottom:none;font-weight:700}
+  .cc-tbl tfoot .s0,.cc-tbl tfoot .s1,.cc-tbl tfoot .s2,.cc-tbl tfoot .s3{background:#1a2340}
   /* current-month highlight — background tint, not a side-stripe accent */
   .cc-tbl .cc-now{background:var(--accent-soft)}
   .cc-tbl thead .cc-now{background:rgba(77,125,255,.22)}
@@ -1938,8 +1938,9 @@ function go(screen){
     $('#ctaBox').innerHTML=`${screen==='dash'?ptipoFilterHTML():''}${screen==='timeline'?catFilterHTML():''}${statusChip}`;
   } else if(screen==='funds'&&demoWritable(['admin','marketing'].includes(PAPEL))){
     $('#ctaBox').innerHTML='<button class="btn-po" onclick="openFundNew()">+ New fund</button>';
-  } else if(screen==='campanhas'&&demoWritable(['admin','marketing'].includes(PAPEL))){
-    $('#ctaBox').innerHTML='<button class="btn-po" onclick="openCampanhaNew()">+ New campaign</button>';
+  } else if(screen==='campanhas'){
+    const w=demoWritable(['admin','marketing'].includes(PAPEL));
+    $('#ctaBox').innerHTML=`${CAMPANHA_VIEW==='tl'?'<button class="btn-ghost" onclick="campTlExpandAll()">Expand all</button>':''}${w?'<button class="btn-ghost" style="border-color:rgba(77,125,255,.5);background:rgba(43,79,221,.18);font-weight:700" onclick="openFundNew()">+ Fund</button><button class="btn-acc" onclick="openCampanhaNew()">+ Campaign</button>':''}`;
   } else if(screen==='bo'&&effPapel()!=='financeiro'){
     $('#ctaBox').innerHTML=boHeaderControls();
   } else if(screen==='budgets'){
@@ -6913,6 +6914,92 @@ function openCampanhaNewWith(fid){
   CAMPEDIT={id:null,nome:'',responsavel:'',status:'planejada',funds:fid?[fid]:[]};
   renderCampanhaForm();
 }
+/* Budget-Timeline.dc.html — campaigns as bars across the year, each one
+   expandable into its funds with a cap cell per month (consumed underlined),
+   a today line, category chips on top. Funds outside every campaign close
+   the list as their own group. Figures come from the same tetos/rateio/pos
+   sums every other Budget screen uses. */
+let CAMP_TL_CAT='', CAMP_TL_OPEN={}, CAMP_TL_YEAR=String(new Date().getFullYear());
+function campTlToggle(id){ CAMP_TL_OPEN[id]=!CAMP_TL_OPEN[id]; go('campanhas'); }
+function campTlExpandAll(){
+  const ids=campTlGroups().map(g=>g.id); const all=ids.every(id=>CAMP_TL_OPEN[id]);
+  CAMP_TL_OPEN={}; if(!all) ids.forEach(id=>CAMP_TL_OPEN[id]=true); go('campanhas');
+}
+function campTlGroups(){
+  const catOk=f=>!CAMP_TL_CAT||String(f.product_category||'').trim()===CAMP_TL_CAT;
+  const groups=visCampanhas().map(c=>({id:c.id,camp:c,name:c.nome,funds:campFunds(c.id).filter(catOk)})).filter(g=>g.funds.length||!CAMP_TL_CAT);
+  const loose=campScoped((DATA.poProjetos||[]).filter(p=>!p.campanha_id&&p.aprovacao_status==='APROVADO'&&!fundArquivado(p))).filter(catOk);
+  if(loose.length) groups.push({id:'__none',camp:null,name:'Funds with no campaign',funds:loose});
+  return groups;
+}
+function campanhaGanttHTML(){
+  const yr=CAMP_TL_YEAR, MM=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const months=MM.map((_,i)=>yr+'-'+String(i+1).padStart(2,'0'));
+  const now=new Date(), nowM=now.toISOString().slice(0,7);
+  const todayPct=String(now.getFullYear())===yr?((now.getMonth()+(now.getDate()-1)/new Date(now.getFullYear(),now.getMonth()+1,0).getDate())/12*100):null;
+  const usedOf=(ids,m)=>{let c=0,u=0;DATA.pos.forEach(po=>{if(!ids.has(po.fund_id)||String(po.competencia).slice(0,7)!==m)return;const v=+po.valor||0;if(CONS.includes(po.status))c+=v;else if(COMP.includes(po.status))u+=v;});return {cons:c,comp:u};};
+  const groups=campTlGroups();
+  const allCats=[...new Set([...(DATA.campanhas||[]).flatMap(c=>campCategorias(c.id)),...campScoped((DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO')).map(p=>String(p.product_category||'').trim()).filter(Boolean)])].sort((a,b)=>{let ia=PRODUCT_CATS.indexOf(a),ib=PRODUCT_CATS.indexOf(b);if(ia<0)ia=99;if(ib<0)ib=99;return ia-ib||a.localeCompare(b);});
+  const chips=`<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center">
+    <div style="display:flex;gap:8px;flex-wrap:wrap">${['',...allCats].map(k=>{const on=CAMP_TL_CAT===k;const c=k?catMeta(k).c:(on?'#05070d':'#a7aec2');
+      return `<button onclick="CAMP_TL_CAT='${esc(k)}';go('campanhas')" style="padding:7px 14px;border-radius:20px;font-weight:600;font-size:13px;border:1px solid ${on?'#eef1f8':'rgba(255,255,255,.16)'};background:${on?'#eef1f8':'rgba(13,18,32,.6)'};color:${on?'#05070d':'var(--txt-soft)'};display:flex;align-items:center;gap:7px"><span style="width:7px;height:7px;border-radius:50%;background:${c}"></span>${k?esc(catKeyLabel(k)):'All'}</button>`;}).join('')}</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select class="chip-sel" onchange="CAMP_TL_YEAR=this.value;go('campanhas')">${[...new Set([String(now.getFullYear()-1),String(now.getFullYear()),String(now.getFullYear()+1),...DATA.tetos.map(t=>String(t.competencia).slice(0,4))])].filter(Boolean).sort().map(y=>`<option ${y===yr?'selected':''}>${y}</option>`).join('')}</select>
+      ${v2Seg([['tl','Timeline'],['list','List']],CAMPANHA_VIEW,v=>`campanhaSetView('${v}')`)}
+    </div>
+  </div>`;
+  const COLS='230px 84px minmax(0,1fr)';
+  const monthHead=`<div style="display:grid;grid-template-columns:repeat(12,1fr)">${MM.map((l,i)=>`<div style="text-align:center;color:${months[i]===nowM?'var(--txt)':'var(--txt-2)'};font-weight:${months[i]===nowM?700:400}">${l}</div>`).join('')}</div>`;
+  let nFunds=0;
+  const rows=groups.map(g=>{
+    const funds=g.funds; nFunds+=funds.length;
+    const ids=new Set(funds.map(f=>f.id));
+    const capM=months.map(m=>funds.reduce((s2,f)=>s2+fundMonthCap(f.id,m),0));
+    const tot=capM.reduce((a,b)=>a+b,0);
+    let used=0; months.forEach(m=>{const u=usedOf(ids,m);used+=u.cons+u.comp;});
+    const on=capM.map((v,i)=>v>0.005?i:-1).filter(i=>i>=0);
+    const s0=on.length?on[0]:-1, e0=on.length?on[on.length-1]:-1;
+    const cats=[...new Set(funds.map(f=>String(f.product_category||'').trim()).filter(Boolean))];
+    const col=cats.length===1?catMeta(cats[0]).c:cats.length>1?'#eef1f8':'#9aa3b8';
+    const period=s0<0?'no caps in '+yr:(s0===0&&e0===11?'always on':MM[s0]+(s0===e0?'':'–'+MM[e0]));
+    const open=!!CAMP_TL_OPEN[g.id];
+    const meta=`${cats.length>1?'Multi-category':cats.length?catKeyLabel(cats[0]):'—'} · ${period} · ${funds.length} fund${funds.length===1?'':'s'}`;
+    const fundRows=open?funds.slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||'')).map(f=>{
+      const fids=new Set([f.id]); const ft=months.reduce((s2,m)=>s2+fundMonthCap(f.id,m),0);
+      const cells=months.map(m=>{const cap=fundMonthCap(f.id,m);if(cap<0.005)return `<div style="height:30px"></div>`;const u=usedOf(fids,m);const w=Math.min(100,(u.cons+u.comp)/cap*100);const a=Math.min(.55,.12+cap/Math.max(1,ft)*1.2);
+        return `<div title="${fmtMes(m+'-01')} · cap ${BRL(cap)} · consumed ${BRL(u.cons)} · committed ${BRL(u.comp)}" style="height:30px;border-radius:5px;position:relative;overflow:hidden;background:${f.aprovacao_status==='PENDENTE'?'rgba(255,176,32,.18)':`rgba(77,125,255,${a.toFixed(2)})`};display:grid;place-items:center;font-family:var(--mono);font-size:9.5px;color:var(--txt-soft)">${BRLc(cap).replace('R$ ','')}<div style="position:absolute;left:0;bottom:0;height:3px;background:#4d7dff;width:${w}%"></div></div>`;}).join('');
+      return `<div onclick="openFundDetail('${esc(f.id)}')" class="proj-row" style="display:grid;grid-template-columns:${COLS};gap:12px;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);background:rgba(255,255,255,.015);cursor:pointer">
+        <div style="padding-left:20px;min-width:0"><div style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#9fb5ff">${esc(f.nome)}</div><div style="font-size:11.5px;color:var(--txt-3);display:flex;gap:6px;align-items:center;white-space:nowrap;overflow:hidden">${esc(f.agencia||'—')} · ${esc(actColLabel(actKey(f)))}${f.aprovacao_status==='PENDENTE'?'<span style="font-size:10px;font-weight:700;padding:0 6px;border-radius:10px;background:rgba(255,176,32,.16);color:#ffb020">awaiting approval</span>':''}</div></div>
+        <div class="mono" style="text-align:right;font-size:12px;color:var(--txt-2)">${BRLc(ft)}</div>
+        <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:3px">${cells}</div>
+      </div>`;}).join(''):'';
+    return `<div>
+      <div onclick="campTlToggle('${esc(g.id)}')" style="display:grid;grid-template-columns:${COLS};gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer">
+        <div style="display:flex;gap:10px;align-items:center;min-width:0"><span style="font-size:10px;color:var(--txt-3);width:10px">${funds.length?(open?'▼':'▶'):''}</span><div style="min-width:0"><div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${g.camp?'':'color:var(--txt-2)'}">${esc(g.name)}</div><div style="font-size:12px;color:var(--txt-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${meta}${g.camp?` · <a onclick="event.stopPropagation();openCampanhaDetail('${esc(g.id)}')" style="cursor:pointer">open</a>`:''}</div></div></div>
+        <div style="text-align:right"><div class="mono" style="font-size:12.5px;font-weight:700">${BRLc(tot)}</div><div class="mono" style="font-size:11px;color:var(--txt-3)">${tot?Math.round(used/tot*100):0}% used</div></div>
+        <div style="position:relative;height:20px">${s0<0?'':`<div style="position:absolute;top:0;bottom:0;border-radius:6px;overflow:hidden;left:${s0/12*100+.3}%;width:${(e0-s0+1)/12*100-.6}%;background:${g.camp?col:'transparent'};border:1.5px ${g.camp?'solid':'dashed'} ${col};box-shadow:0 0 16px -4px ${col}"><div style="height:100%;background:rgba(5,7,13,.38);width:${tot?Math.min(100,used/tot*100):0}%"></div></div>`}</div>
+      </div>
+      ${fundRows}
+    </div>`;
+  }).join('');
+  const nCamps=groups.filter(g=>g.camp).length;
+  const card=`<div style="border-radius:18px;border:1px solid rgba(255,255,255,.16);padding:22px 26px;background:radial-gradient(40rem 22rem at 100% 100%,rgba(255,59,78,.12),transparent 60%),radial-gradient(34rem 18rem at 0% 0%,rgba(77,125,255,.12),transparent 60%),#10172a;overflow-x:auto">
+    <div style="min-width:860px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:14px;margin-bottom:14px;flex-wrap:wrap">
+        <div style="display:flex;align-items:baseline;gap:12px"><div style="font-size:20px;font-weight:800">Campaigns and funds</div><div style="font-size:13px;color:var(--txt-2)">${nCamps} campaign${nCamps===1?'':'s'} · ${nFunds} fund${nFunds===1?'':'s'}</div></div>
+        <div style="font-size:12px;color:var(--txt-2)">click a campaign to expand · a fund to open its detail</div>
+      </div>
+      <div style="display:grid;grid-template-columns:${COLS};gap:12px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.12);font-size:12.5px;color:var(--txt-2)"><div>Campaign · fund</div><div style="text-align:right">Budgeted</div>${monthHead}</div>
+      <div style="position:relative">
+        <div style="position:absolute;left:338px;right:0;top:0;bottom:0;display:grid;grid-template-columns:repeat(12,1fr);pointer-events:none">${MM.map(()=>'<div style="border-left:1px solid rgba(255,255,255,.05)"></div>').join('')}</div>
+        ${todayPct!=null?`<div style="position:absolute;left:338px;right:0;top:0;bottom:0;pointer-events:none"><div style="position:absolute;top:0;bottom:0;width:2px;background:#7d9dff;box-shadow:0 0 12px #4d7dff;z-index:2;left:${todayPct}%"></div></div>`:''}
+        ${rows||'<div class="empty">No campaigns or funds for this filter.</div>'}
+      </div>
+      ${todayPct!=null?`<div style="display:grid;grid-template-columns:${COLS};gap:12px;margin-top:8px"><div></div><div></div><div style="position:relative;height:18px"><div class="mono" style="position:absolute;transform:translateX(-50%);font-size:11.5px;color:#9fb5ff;white-space:nowrap;left:${todayPct}%">today · ${now.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div></div></div>`:''}
+    </div>
+  </div>`;
+  return `<div style="display:flex;flex-direction:column;gap:22px">${chips}${card}</div>`;
+}
 function renderCampanhasList(){
   let list=visCampanhas().sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
   const scoped=effPapel()==='agencia'&&effAgencia();
@@ -6924,11 +7011,11 @@ function renderCampanhasList(){
   // with no campaign" is the whole picture and the only number worth showing.
   const kpis=campanhasKpisHTML(list);
   if(!list.length) return note+kpis+`<div class="empty">${scoped?'No campaign has a fund of yours linked to it yet.':'No campaigns yet. Campaigns group one or more funds under a name, budget and owner — create one and link funds to it from the fund form.'}</div>`;
-  const viewBar=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
-    <div style="display:flex;gap:6px">${[['list','List'],['tl','Timeline']].map(v=>`<button onclick="campanhaSetView('${v[0]}')" style="padding:8px 13px;border-radius:8px;border:1px solid ${CAMPANHA_VIEW===v[0]?'var(--po)':'var(--line-2)'};background:${CAMPANHA_VIEW===v[0]?'var(--po-soft)':'var(--card)'};color:${CAMPANHA_VIEW===v[0]?'var(--red)':'var(--txt-2)'};font-size:12px;font-weight:700;cursor:pointer">${v[1]}</button>`).join('')}</div>
-    <span style="font-size:11.5px;color:var(--txt-3)">${CAMPANHA_VIEW==='tl'?'Row = campaign · each month shows the cap its funds carry and what was used against it. Click a row to open.':'Click a campaign for its funds and its month-by-month split.'}</span>
+  const viewBar=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:18px 0 12px;flex-wrap:wrap">
+    <span style="font-size:12px;color:var(--txt-3)">Click a campaign for its funds and its month-by-month split.</span>
+    ${v2Seg([['tl','Timeline'],['list','List']],CAMPANHA_VIEW,v=>`campanhaSetView('${v}')`)}
   </div>`;
-  if(CAMPANHA_VIEW==='tl') return note+kpis+viewBar+campanhaTimelineHTML(list);
+  if(CAMPANHA_VIEW==='tl') return note+campanhaGanttHTML();
   const rows=list.map(c=>{
     const cats=campCategorias(c.id);
     const funds=campFunds(c.id);
@@ -6945,7 +7032,7 @@ function renderCampanhasList(){
       </div>
     </div>`;
   }).join('');
-  return note+kpis+viewBar+`<div style="background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">${rows}</div>`;
+  return note+kpis+viewBar+`<div class="v2-card" style="padding:0;overflow:hidden">${rows}</div>`;
 }
 /* Campaign detail: the roll-up header (same segmented bar the fund detail
    uses, summed across the campaign) over the list of linked funds, each row
@@ -7964,7 +8051,7 @@ function feeSplitBlock(only){
            printing a bare dash that reads like a bug. */
         const noCC=!String(a.cc||'').trim();
         return `<tr>
-        <td class="s0" style="font-weight:700;font-size:11px;background:${cm.bg};color:${cm.c};box-shadow:inset 3px 0 0 ${cm.c}" title="${esc(catKeyLabel(a.cat)||'')}">${esc(catKeyLabel(a.cat)||'—')}</td>
+        <td class="s0" style="font-weight:700;font-size:11px;background:linear-gradient(${cm.bg},${cm.bg}),#131b31;color:${cm.c};box-shadow:inset 3px 0 0 ${cm.c}" title="${esc(catKeyLabel(a.cat)||'')}">${esc(catKeyLabel(a.cat)||'—')}</td>
         <td class="mono s1" title="${noCC?'No cost center on the fund behind this line — classificar() returned an account and description only':esc(a.cc||'')}">${noCC?'<span style="font-family:var(--sans);font-size:10px;font-weight:700;color:var(--amber);background:var(--amber-bg);border:1px solid rgba(255,176,32,.3);border-radius:20px;padding:1px 7px;white-space:nowrap">no CC</span>':esc(a.cc)}</td>
         <td class="mono s2" title="${esc(a.acc||'')}">${esc(a.acc||'—')}</td>
         <td class="s3" style="font-size:12px" title="${esc(a.desc||'')}">${esc(a.desc||'—')}</td>
