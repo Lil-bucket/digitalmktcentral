@@ -1832,7 +1832,7 @@ function go(screen){
   else if(screen==='notif') v.innerHTML=renderNotif();
   else if(screen==='bo'){ v.innerHTML=renderBudgetOverview(false); buildFundChart(); buildOverviewMonthlyChart(false); buildOverviewPies(); ccAutoScroll(); }
   else if(screen==='costcenter'){ v.innerHTML=feeSplitBlock(); ccAutoScroll(); }
-  else if(screen==='budgets'){ v.innerHTML=renderBudgets(); buildBudgetActivityChart(); ccAutoScroll(); }
+  else if(screen==='budgets'){ v.innerHTML=renderBudgets(); buildBudgetActivityChart(); buildBudgetMonthlyChart(); ccAutoScroll(); }
   else if(screen==='funds'){ v.innerHTML=renderFunds(); buildFundChart(); }
   else if(screen==='campanhas'){ v.innerHTML=renderCampanhasList(); }
   else if(screen==='saldos'){ v.innerHTML=renderSaldos(); carregarSaldos(); }
@@ -8691,6 +8691,84 @@ function buildBudgetActivityChart(){
     {label:'Committed',data:comp,backgroundColor:'#a685ff',borderRadius:5}
   ]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,ticks:{callback:v=>BRL0(v)}}},plugins:{legend:{position:'bottom'}},onClick:(e,els)=>{if(els&&els.length){jumpToFunds(BUDGET_CAT,order[els[0].index]);}}}}));
 }
+/* Month-by-month chart for the active category — same cap-ghost-bar +
+   consumed/committed stack idiom as buildOverviewMonthlyChart/
+   buildBudgetActivityChart, just scoped to the funds of one category
+   instead of all of them or one activity. Mirrors Budget-Category.dc.html's
+   "Month by month" panel. */
+function buildBudgetMonthlyChart(){
+  const el=document.getElementById('chartBudgetMonthly'); if(!el||!window.Chart)return;
+  let funds=(DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO');
+  if(effPapel()==='agencia'&&effAgencia()) funds=funds.filter(p=>p.agencia===effAgencia());
+  funds=funds.filter(p=>(String(p.product_category||'').trim()||'Uncategorized')===BUDGET_CAT);
+  const fundIds=new Set(funds.map(c=>c.id));
+  const months=new Set();
+  DATA.tetos.forEach(t=>{if(fundIds.has(t.fund_id))months.add(String(t.competencia).slice(0,7));});
+  DATA.rateio.forEach(r=>{if(fundIds.has(r.fund_id))months.add(String(r.competencia).slice(0,7));});
+  DATA.pos.forEach(po=>{if(fundIds.has(po.fund_id)&&po.competencia)months.add(String(po.competencia).slice(0,7));});
+  const ml=Array.from(months).sort();
+  if(!ml.length)return;
+  const cap=ml.map(m=>{let v=0; DATA.tetos.forEach(t=>{if(fundIds.has(t.fund_id)&&String(t.competencia).slice(0,7)===m)v+=(+t.teto||0);}); DATA.rateio.forEach(r=>{if(fundIds.has(r.fund_id)&&String(r.competencia).slice(0,7)===m)v+=(+r.valor||0);}); return v;});
+  const cons=ml.map(m=>{let v=0; DATA.pos.forEach(po=>{if(fundIds.has(po.fund_id)&&String(po.competencia).slice(0,7)===m&&CONS.includes(po.status))v+=(+po.valor||0);}); return v;});
+  const comp=ml.map(m=>{let v=0; DATA.pos.forEach(po=>{if(fundIds.has(po.fund_id)&&String(po.competencia).slice(0,7)===m&&COMP.includes(po.status))v+=(+po.valor||0);}); return v;});
+  _charts.push(new Chart(el,{type:'bar',data:{labels:ml.map(m=>fmtMes(m+'-01')),datasets:[
+    {label:'Cap',data:cap,backgroundColor:'rgba(255,255,255,.16)',borderRadius:5},
+    {label:'Consumed',data:cons,backgroundColor:'#4fb8ff',borderRadius:5},
+    {label:'Committed',data:comp,backgroundColor:'#a685ff',borderRadius:5}
+  ]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true,ticks:{callback:v=>BRL0(v)}}},plugins:{legend:{position:'bottom'}}}}));
+}
+/* "Campaigns" table for the active category — one row per campanha (funds
+   in this category grouped by campanha_id), plus one row per standalone
+   fund with no campanha_id. Mirrors Budget-Category.dc.html's own table:
+   Campaign·funds / Period / Budgeted / Consumed / Committed / Available /
+   Use bar. Clicking a campaign row opens its detail; a standalone fund row
+   opens the Funds screen filtered to it. */
+function budgetCategoryCampaignsHTML(list){
+  if(!list.length) return '';
+  const byCamp={}; const standalone=[];
+  list.forEach(p=>{ if(p.campanha_id) (byCamp[p.campanha_id]=byCamp[p.campanha_id]||[]).push(p); else standalone.push(p); });
+  const rowStats=funds=>{
+    const ids=new Set(funds.map(f=>f.id));
+    let b=0,co=0,cm=0;
+    DATA.tetos.forEach(t=>{if(ids.has(t.fund_id))b+=(+t.teto||0);});
+    DATA.rateio.forEach(r=>{if(ids.has(r.fund_id))b+=(+r.valor||0);});
+    DATA.pos.forEach(po=>{if(!ids.has(po.fund_id))return;const v=+po.valor||0;if(CONS.includes(po.status))co+=v;else if(COMP.includes(po.status))cm+=v;});
+    const months=new Set();
+    funds.forEach(f=>Object.keys(fundMonthlyTotals(f.id)).forEach(k=>months.add(k)));
+    const ml=Array.from(months).sort();
+    const period=ml.length?(ml.length===1?fmtMes(ml[0]+'-01'):fmtMes(ml[0]+'-01')+'–'+fmtMes(ml[ml.length-1]+'-01')):'—';
+    const av=b-co-cm;
+    const pct=b?Math.round((co+cm)/b*100):0;
+    return {b,co,cm,av,period,pct,w1:b?Math.min(100,co/b*100):0,w2:b?Math.min(100-(b?co/b*100:0),cm/b*100):0};
+  };
+  const row=(name,funds,onclick)=>{
+    const s=rowStats(funds);
+    return `<a onclick="${onclick}" style="display:grid;grid-template-columns:minmax(0,2fr) 90px repeat(4,minmax(0,.8fr)) 170px;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);align-items:center;color:var(--txt);cursor:pointer">
+      <div style="min-width:0"><div style="font-weight:700;color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(name)}</div><div style="font-size:12px;color:var(--txt-3)">${funds.length} fund${funds.length===1?'':'s'}</div></div>
+      <div style="font-size:12.5px;color:var(--txt-2)">${s.period}</div>
+      <div class="mono" style="text-align:right;font-size:12.5px">${BRL(s.b)}</div>
+      <div class="mono" style="text-align:right;font-size:12.5px;color:var(--txt-2)">${BRL(s.co)}</div>
+      <div class="mono" style="text-align:right;font-size:12.5px;color:var(--txt-2)">${BRL(s.cm)}</div>
+      <div class="mono" style="text-align:right;font-size:12.5px;font-weight:700">${BRL(s.av)}</div>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 42px;gap:8px;align-items:center"><div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:var(--line-2)"><span style="width:${s.w1}%;background:#4fb8ff"></span><span style="width:${s.w2}%;background:#a685ff"></span></div><span class="mono" style="font-size:12px;text-align:right">${s.pct}%</span></div>
+    </a>`;
+  };
+  const campRows=Object.keys(byCamp).sort((a,b)=>{
+    const na=(DATA.campanhas.find(c=>c.id===a)||{}).nome||'', nb=(DATA.campanhas.find(c=>c.id===b)||{}).nome||'';
+    return na.localeCompare(nb);
+  }).map(cid=>{
+    const c=(DATA.campanhas||[]).find(x=>x.id===cid)||{nome:'—'};
+    return row(c.nome,byCamp[cid],`openCampanhaDetail('${esc(cid)}')`);
+  }).join('');
+  const standaloneRows=standalone.map(p=>row(p.nome,[p],`jumpToFunds('${esc(BUDGET_CAT)}','${esc(actKey(p))}')`)).join('');
+  return `<div class="panel" style="margin-top:16px">
+      <div class="panel-h"><h3>Campaigns</h3><span class="tag">campaigns and funds in this category</span></div>
+      <div style="padding:16px 18px;overflow-x:auto"><div style="min-width:820px">
+      <div style="display:grid;grid-template-columns:minmax(0,2fr) 90px repeat(4,minmax(0,.8fr)) 170px;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:12px;color:var(--txt-3);font-weight:600"><div>Campaign · funds</div><div>Period</div><div style="text-align:right">Budgeted</div><div style="text-align:right">Consumed</div><div style="text-align:right">Committed</div><div style="text-align:right">Available</div><div style="text-align:right">Use</div></div>
+      ${campRows}${standaloneRows}
+      </div></div>
+    </div>`;
+}
 function renderBudgets(){
   const orcs=DATA.orcamentos||[];
   const canBudget=(isManager||PAPEL==='admin')&&!viewOnly();
@@ -8762,7 +8840,14 @@ function renderBudgets(){
       <div style="height:280px">${actOrder.length?'<canvas id="chartBudgetAct"></canvas>':'<div class="banner">No funds in this category yet.</div>'}</div>
     </div>
     ${actOrder.length?`<div style="font-size:var(--fs-eyebrow);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--txt-3);margin:0 2px 10px">Activity groups · tap to open in Funds</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px">${actOrder.map(actCard).join('')}</div>`:''}`;
-  return header+tabsHTML+activeHTML+(fee?`<div style="margin-top:24px">${fee}</div>`:'');
+  // "Month by month" — same cap/consumed/committed idiom as the activity
+  // chart above, but across the calendar instead of across activities.
+  // Matches the second panel of Budget-Category.dc.html's split row.
+  const monthlyHTML=`<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>Month by month</h3><span class="tag">consumed + committed vs monthly cap</span></div>
+      <div style="padding:18px;height:260px">${list.length?'<canvas id="chartBudgetMonthly"></canvas>':'<div class="banner">No funds in this category yet.</div>'}</div>
+    </div>`;
+  const campaignsHTML=budgetCategoryCampaignsHTML(list);
+  return header+tabsHTML+activeHTML+monthlyHTML+campaignsHTML+(fee?`<div style="margin-top:24px">${fee}</div>`:'');
 }
 /* Export (read-only) — mirrors renderBudgets' own aggregation exactly, transcribes
    what that screen already displays per fund, never recomputes new business values. */
