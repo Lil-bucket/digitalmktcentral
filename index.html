@@ -1381,7 +1381,7 @@ function normProjeto(p){
   return p;
 }
 const Q_WORK=()=>[
-  SBPO.from('act_projects').select('id,data'),
+  SBPO.from('act_projects').select('id,data,campanha_id'),
   SBPO.from('act_config').select('data').eq('id','app').maybeSingle()
 ];
 const Q_BUDGET=()=>[
@@ -1414,7 +1414,7 @@ async function loadAll(){
   const r=await Promise.all(qs.map(q=>Promise.resolve(q).then(x=>x,e=>({data:null,error:e}))));
   const [pr,cf]=r;
   if(pr&&pr.error) console.error('projetos painel:',pr.error);
-  else DATA.projetos=(pr.data||[]).map(x=>x.data).filter(Boolean).map(normProjeto);
+  else DATA.projetos=(pr.data||[]).map(x=>x.data&&{...x.data,campanha_id:x.campanha_id||null}).filter(Boolean).map(normProjeto);
   if(cf&&!cf.error){
     const s=(cf.data&&cf.data.data)?cf.data.data:{};
     TEAM=(s.team||[]).map(p=>typeof p==='string'?{nome:p,empresa:''}:p);
@@ -1961,7 +1961,7 @@ async function dropOnStage(ev,stageId){
   go(SCREEN);
   try{
     const clean=JSON.parse(JSON.stringify(p)); delete clean._new;
-    const {error}=await SBPO.from('act_projects').upsert({id:clean.id,data:clean});
+    const {error}=await SBPO.from('act_projects').upsert({id:clean.id,data:clean,campanha_id:clean.campanha_id||null});
     if(error)throw error;
   }catch(e){
     p.etapa=prevEtapa; p.etapa_override=prevOverride; p.status=prevStatus; p.logs=prevLogs;
@@ -5029,7 +5029,7 @@ async function saveProj(){
   (clean.tasks||[]).forEach(t=>{ delete t._open; });
   clean.etapa=effectiveEtapa(clean); clean.status=autoStatus(clean);
   try{
-    const {error}=await SBPO.from('act_projects').upsert({id:clean.id,data:clean});
+    const {error}=await SBPO.from('act_projects').upsert({id:clean.id,data:clean,campanha_id:clean.campanha_id||null});
     if(error)throw error;
     const i=DATA.projetos.findIndex(p=>p.id===clean.id);
     if(i>=0)DATA.projetos[i]=clean; else DATA.projetos.push(clean);
