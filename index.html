@@ -1095,11 +1095,20 @@ function homeMonthHealthHTML(){
   let funds=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO');
   if(effPapel()==='agencia'&&effAgencia()) funds=funds.filter(p=>p.agencia===effAgencia());
   const fundIds=new Set(funds.map(p=>p.id));
+  const catOf={}; funds.forEach(p=>{catOf[p.id]=String(p.product_category||'').trim()||'Uncategorized';});
   const mNow=new Date().toISOString().slice(0,7);
-  let cap=0; DATA.tetos.forEach(t=>{if(fundIds.has(t.fund_id)&&String(t.competencia).slice(0,7)===mNow)cap+=(+t.teto||0);});
-  DATA.rateio.forEach(r=>{if(fundIds.has(r.fund_id)&&String(r.competencia).slice(0,7)===mNow)cap+=(+r.valor||0);});
-  let cons=0,comp=0,pend=0; DATA.pos.forEach(po=>{if(!fundIds.has(po.fund_id)||String(po.competencia).slice(0,7)!==mNow)return;const v=+po.valor||0;if(CONS.includes(po.status))cons+=v;else if(COMP.includes(po.status))comp+=v;else if(PEND.includes(po.status))pend+=v;});
+  let cap=0; const capByCat={}, usedByCat={};
+  DATA.tetos.forEach(t=>{if(!fundIds.has(t.fund_id)||String(t.competencia).slice(0,7)!==mNow)return;const v=+t.teto||0;cap+=v;const c=catOf[t.fund_id];capByCat[c]=(capByCat[c]||0)+v;});
+  DATA.rateio.forEach(r=>{if(!fundIds.has(r.fund_id)||String(r.competencia).slice(0,7)!==mNow)return;const v=+r.valor||0;cap+=v;const c=catOf[r.fund_id];capByCat[c]=(capByCat[c]||0)+v;});
+  let cons=0,comp=0,pend=0; DATA.pos.forEach(po=>{if(!fundIds.has(po.fund_id)||String(po.competencia).slice(0,7)!==mNow)return;const v=+po.valor||0;const c=catOf[po.fund_id];if(CONS.includes(po.status)){cons+=v;usedByCat[c]=(usedByCat[c]||0)+v;}else if(COMP.includes(po.status)){comp+=v;usedByCat[c]=(usedByCat[c]||0)+v;}else if(PEND.includes(po.status))pend+=v;});
   if(!cap) return '';
+  // Per-category share of this month's cap (Home.dc.html's monthCats list) —
+  // same health thresholds as the gauge itself (D6): green<90, amber 90-100, red>100.
+  const catHealth=v=>v>100?'var(--red)':v>=90?'var(--amber)':'var(--green)';
+  const catRows=Object.keys(capByCat).filter(c=>capByCat[c]>0.005).sort((a,b)=>capByCat[b]-capByCat[a]).slice(0,6).map(c=>{
+    const capC=capByCat[c], usedC=usedByCat[c]||0, pctC=Math.round(usedC/capC*100);
+    return {name:catKeyLabel(c),pct:pctC,w:Math.min(100,pctC),c:catHealth(pctC)};
+  });
   const pctRaw=(cons+comp)/cap*100, pct=Math.round(pctRaw);
   const level=pct>100?{c:'var(--red)',bg:'var(--red-bg)',t:'Over cap'}:pct>=90?{c:'var(--amber)',bg:'var(--amber-bg)',t:'Attention'}:{c:'var(--green)',bg:'var(--green-bg)',t:'On track'};
   // Same semi-circle gauge math as the v2 mockup (Home.dc.html): arc = πR,
@@ -1127,6 +1136,13 @@ function homeMonthHealthHTML(){
         <div style="font-size:12px;color:var(--txt-3)">tick = 90% threshold</div>
       </div>
     </div>
+    ${catRows.length?`<div style="display:flex;flex-direction:column;gap:9px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
+      ${catRows.map(c=>`<div style="display:grid;grid-template-columns:92px minmax(0,1fr) 48px;gap:10px;align-items:center;font-size:13px">
+        <span style="color:var(--txt-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</span>
+        <span style="height:6px;border-radius:3px;background:var(--line-2);overflow:hidden;display:block"><span style="display:block;height:100%;border-radius:3px;width:${c.w}%;background:${c.c}"></span></span>
+        <span class="mono" style="text-align:right;font-size:12px;font-weight:700;color:${c.c}">${c.pct}%</span>
+      </div>`).join('')}
+    </div>`:''}
   </div>`;
 }
 function deadlineInfo(p){if(autoStatus(p)==='concluido')return{cls:'ok',txt:fmtDate(p.prazo),sub:'completed',color:'var(--slate)'};const dd=daysTo(p.prazo);if(dd===null)return{cls:'ok',txt:'—',sub:'',color:'var(--txt-3)'};if(dd<0)return{cls:'late',txt:fmtDate(p.prazo),sub:Math.abs(dd)+'d late',color:'var(--red)'};if(dd<=5)return{cls:'soon',txt:fmtDate(p.prazo),sub:'in '+dd+'d',color:'var(--amber-ink)'};return{cls:'ok',txt:fmtDate(p.prazo),sub:'in '+dd+'d',color:'var(--txt-2)'};}
@@ -1287,6 +1303,12 @@ function seedDemoData(){
   addTeto('demo-p5',[[6,915895]]);
   addTeto('demo-p6',[[6,150000],[7,150000],[8,150000,25000,'Profit — budget returned']]);
   addTeto('demo-p7',[[8,1100000]]);
+  // September — kept current so Home's month-health card (gauge + per-category
+  // breakdown) always has this-month data to show, whatever "today" is.
+  addTeto('demo-p1',[[9,120000]]);
+  addTeto('demo-p3',[[9,180000]]);
+  addTeto('demo-p4',[[9,240000]]);
+  addTeto('demo-p6',[[9,90000]]);
 
   const pos=[]; let poN=1;
   const addPO=(pid,mes,valor,status,extra)=>{ pos.push(Object.assign({id:'demo-po-'+(poN++),fund_id:pid,competencia:D(2026,mes,1),valor,status,descricao:'Demo PO',numero_po:status==='SOLICITADA'||status==='EM_APROVACAO'?'':'PO-'+(1000+poN),agencia:(poProjetos.find(p=>p.id===pid)||{}).agencia,solicitado_em:D(2026,mes,3)},extra||{})); };
@@ -1298,6 +1320,9 @@ function seedDemoData(){
   addPO('demo-p5',6,313895,'PO_GERADA');
   addPO('demo-p6',6,98000,'VALIDADA');
   addPO('demo-p6',7,52000,'SOLICITADA');
+  addPO('demo-p1',9,108000,'FATURADA');
+  addPO('demo-p3',9,171000,'CONCLUIDA');
+  addPO('demo-p4',9,84000,'PO_GERADA');
 
   const fee=[
     {tipo:'AGENCIA',agencia:'Wavemaker',categoria:'AC',percentual:0.6,cc:'CC-100',account:'6001',descricao:'Agency fee — Wavemaker'},
