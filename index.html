@@ -1235,7 +1235,11 @@ function seedDemoData(){
       return {id:'demo-task-'+i+'-'+ti,n,done,inicio,fim:(ti===names.length-1?p.prazo:fim),
         dep:ti?['demo-task-'+i+'-'+(ti-1)]:[],status:done?'concluido':'no_prazo',pct:done?100:0,obs:'',resp:'',subs:[]};
     });
-    return {id:'demo-proj-'+i,nome:p.nome,tipo:p.tipo,ptipo:p.ptipo,partner:p.partner,agencies:[p.partner],marca:p.partner,resp:p.resp,owner:'demo@example.com',prazo:p.prazo,inicio:D(2026,6,1),
+    // Owner matches the resp persona's real demo login — a hardcoded
+    // 'demo@example.com' owner meant nobody but admin ever passed canEdit()
+    // in the demo, hiding "Edit project" for every other role reviewing it.
+    const RESP_EMAIL={'Bruno Silva':'bruno.silva@demo.tcl','Ana Ramos':'ana.ramos@demo.tcl','Diego Souza':'diego.souza@wavemaker.demo','Eva Martins':'eva.martins@mindshare.demo'};
+    return {id:'demo-proj-'+i,nome:p.nome,tipo:p.tipo,ptipo:p.ptipo,partner:p.partner,agencies:[p.partner],marca:p.partner,resp:p.resp,owner:RESP_EMAIL[p.resp]||'ana.ramos@demo.tcl',prazo:p.prazo,inicio:D(2026,6,1),
       /* Only the first project tags the TCL Member demo persona (Hugo Prado)
          — that's what makes visProjs()'s tcl_member scoping visibly true in
          the demo: switch to that persona and exactly one project shows up. */
@@ -8458,44 +8462,21 @@ function renderBudgetOverview(isBalance){
      guessed against the widest number the row might ever hold, in a font, in
      a locale, and it is wrong the day any of those change. This way a cell is
      never narrower than what is in it, and they share whatever is left over. */
-  const heroStat=(l,v,c,tt,onclick,sub)=>`<div ${onclick?`onclick="${onclick}" `:''}title="${tt||''}" style="flex:1 1 auto;min-width:max-content;white-space:nowrap${onclick?';cursor:pointer':''}"><div style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3);overflow:hidden;text-overflow:ellipsis">${l}</div><div class="mono stat-num" style="font-size:15.5px;font-weight:700;margin-top:2px;color:${c||'var(--txt)'}">${v}</div><div style="font-size:10.5px;color:var(--txt-3);font-weight:600;margin-top:2px;min-height:13px;overflow:hidden;text-overflow:ellipsis">${sub||''}</div></div>`;
+  // Same shape as Budget.dc.html's own KPI row — a grid of equal .v2-card
+  // cells (label/value/sub), not a horizontally-scrolling stat strip.
+  const heroStat=(l,v,c,tt,onclick,sub)=>`<div class="v2-card" ${onclick?`onclick="${onclick}" `:''}title="${tt||''}" style="padding:14px 16px${onclick?';cursor:pointer':''}"><div class="v2-card-eyebrow">${l}</div><div class="mono" style="font-size:19px;font-weight:700;margin-top:5px;color:${c||'var(--txt)'}">${v}</div><div style="font-size:11px;color:var(--txt-3);font-weight:600;margin-top:2px;min-height:13px">${sub||''}</div></div>`;
   const hero=`<div class="v2-card">
-      <div>
-        ${(function(){
-          /* Available answers "how much is there to hand out", and that has
-             always had two halves: the balance still unused inside funds
-             nobody has committed to a campaign, and budget registered on a
-             category that was never given to a fund at all. Showing only the
-             first understated what there is by everything that had not been
-             allocated yet — the freest money of the lot. */
-          const naoAloc=naoAlocTot, disp=livre+naoAloc;
-          const partes=[];
-          if(livre>0.005) partes.push(`<b class="mono">${BRL(livre)}</b> not yet placed in a month`);
-          if(naoAloc>0.005) partes.push(`<b class="mono">${BRL(naoAloc)}</b> never allocated to a fund`);
-          const notas=[];
-          if(partes.length) notas.push(partes.join(' · '));
-          if(BO_PER.mode!=='all') notas.push('Whole-period figure — the period filter does not apply to it');
-          const sub=notas.length?`<div style="font-size:11px;color:var(--txt-3);font-weight:600;margin-top:3px">${notas.join('<br>')}</div>`:'';
-          return `<div onclick="openAvailableByCat()" title="Budget that has not been placed anywhere: what each fund was approved for and has not laid out across its months, plus budget never given to any fund. Click to see which categories it is sitting in." style="cursor:pointer"><div style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3);display:flex;align-items:center;gap:6px">Available <span style="font-weight:600;letter-spacing:0;text-transform:none;color:var(--txt-3);opacity:.8">· by category →</span></div><div class="mono stat-num" style="font-size:32px;font-weight:700;letter-spacing:-.02em;margin-top:2px;color:${disp<0?'var(--po)':'var(--green)'}">${BRL(disp)}</div>${sub}</div>`;
-        })()}
-      </div>
-      <div style="display:flex;gap:20px;margin-top:16px;overflow-x:auto;padding-bottom:2px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
           ${(function(){
-            /* The row reads as the money's route, left to right: the ceiling
-               the year was given, how much of it was budgeted onto funds,
-               how much was taken back, and then what the budgeted part has
-               become. Two identities hold across it, which is what makes it
-               checkable at a glance:
-                 ceiling = budgeted + cut + never allocated
-               Provisioned is not a term of it: it is a slice of the budgeted
-               money that no PO has touched, naming how much of that a
-               campaign has already spoken for. What is left after consumed,
-               committed and awaiting approval has no column of its own — the
-               bar underneath still draws it, and Available above answers the
-               question it was there to answer. */
+            /* Same KPI-row shape as Budget.dc.html — Available included as
+               just another cell in the grid instead of a separate giant
+               headline, but still the first one and still the figure that
+               opens the by-category breakdown on click. */
             const st=[];
-            // Same affordance Cut already had: a figure you can open.
             const arrow=' <span style="font-size:11px;color:var(--txt-3);font-weight:600">&rarr;</span>';
+            const naoAloc=naoAlocTot, disp=livre+naoAloc;
+            const availSub=BO_PER.mode!=='all'?'whole-period figure':(disp<0?'over-allocated':'free to allocate');
+            st.push(heroStat('Available',BRL(disp),disp<0?'var(--po)':'var(--green)','Budget that has not been placed anywhere: what each fund was approved for and has not laid out across its months, plus budget never given to any fund. Click to see which categories it is sitting in.','openAvailableByCat()',availSub));
             if(!isAg){
               const teto=(DATA.orcamentos||[]).filter(o=>boScopeKeep((String(o.product_category||o.nome||'').trim())||'Uncategorized'))
                                               .reduce((s2,o)=>s2+(+o.valor_total||0),0);
@@ -8511,7 +8492,6 @@ function renderBudgetOverview(isBalance){
             st.push(heroStat('Committed',BRL(compTot)+arrow,'var(--violet)','POs approved or issued, not yet invoiced. Click for the POs behind it.',"openBucketDetail('comp')"));
             return st.join('');
           })()}
-        </div>
       </div>
       <div style="display:flex;height:20px;border-radius:8px;overflow:hidden;margin-top:16px;background:var(--green-bg)">
         <span style="width:${pctCons}%;background:var(--blue)"></span><span style="width:${pctComp}%;background:var(--violet)"></span><span style="width:${pctPend}%;background:var(--amber)"></span><span style="width:${pctAloc}%;background:#5cbd93" title="Allocated to campaigns"></span>
@@ -8546,17 +8526,19 @@ function renderBudgetOverview(isBalance){
       </div>
     </div>`;
   const showAccounts=effIsManager()||['admin','financeiro'].includes(effPapel());
-  /* GROUP 1 — Budget overview: hero total, monthly chart and the current-month
-     balance, as plain stacked cards (mockup's Budget.dc.html has no tinted
-     wrapper band — each figure block is its own card). */
-  const budgetGroup=`<div style="display:flex;flex-direction:column;gap:18px">${hero}${chartPanel}${monthBalance}</div>`;
-  /* GROUP 2 — By account, same flat treatment. */
   const accountsGroup=showAccounts?accountsOverviewBlock():'';
-  /* GROUP 3 — where the money sits: category and activity, side by side. */
+  /* Same sequence Budget.dc.html runs: KPI hero + bar, then By category/By
+     activity, then Month by month — with the extra real sections this app
+     has (this-month balance, by-account cards) appended after rather than
+     dropped. */
   return boPeriodBar()+`${alertsHTML}
-    ${budgetGroup}
-    <div style="margin-top:18px">${accountsGroup}</div>
-    <div style="margin-top:18px">${boPiePanel(HIDE_MONEY)}</div>`;
+    <div style="display:flex;flex-direction:column;gap:18px">
+      ${hero}
+      ${boPiePanel(HIDE_MONEY)}
+      ${chartPanel}
+      ${monthBalance}
+      ${accountsGroup}
+    </div>`;
 }
 /* Two part-to-whole charts closing the Overview: allocation by product
    category and by activity.
