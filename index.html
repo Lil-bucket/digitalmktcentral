@@ -8,9 +8,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js" integrity="sha384-WgXwGL6fUsYJWNaKJgVbrJKGRQwc1vieh2oy4kw9nXqpNDz3tdSsqEYUgeHD/NuF" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" integrity="sha384-JUh163oCRItcbPme8pYnROHQMC6fNKTBWtRG3I3I0erJkzNgL7uxKlNwcrcFKeqF" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
 <style>
   :root{
     /* neutrals — cool graphite scale */
@@ -1057,6 +1057,9 @@ function visProjs(){
    ============================================================ */
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+/* Valor dentro de uma string JS que está dentro de um atributo HTML,
+   ex.: onclick="fn('${escJs(v)}')": escapa para JS primeiro, HTML depois. */
+const escJs=s=>esc(String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\r/g,'\\r').replace(/\n/g,'\\n').replace(/</g,'\\x3c').replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029'));
 const BRL=n=>'R$ '+(+n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 /* Compact money, the mockups' summary format: R$ 19.60M · R$ 428k · R$ 950. */
 const BRLc=n=>{const v=+n||0,a=Math.abs(v),sg=v<0?'−':'';return a>=1e6?`${sg}R$ ${(a/1e6).toFixed(2)}M`:a>=1e3?`${sg}R$ ${Math.round(a/1e3)}k`:`${sg}R$ ${Math.round(a)}`;};
@@ -1702,7 +1705,7 @@ function normProjeto(p){
   return p;
 }
 const Q_WORK=()=>[
-  SBPO.from('act_projects').select('id,data,campanha_id'),
+  SBPO.from('act_projects').select('id,data,campanha_id,updated_at'),
   SBPO.from('act_config').select('data').eq('id','app').maybeSingle()
 ];
 const Q_BUDGET=()=>[
@@ -1735,7 +1738,7 @@ async function loadAll(){
   const r=await Promise.all(qs.map(q=>Promise.resolve(q).then(x=>x,e=>({data:null,error:e}))));
   const [pr,cf]=r;
   if(pr&&pr.error) console.error('projetos painel:',pr.error);
-  else DATA.projetos=(pr.data||[]).map(x=>x.data&&{...x.data,campanha_id:x.campanha_id||null}).filter(Boolean).map(normProjeto);
+  else DATA.projetos=(pr.data||[]).map(x=>x.data&&{...x.data,campanha_id:x.campanha_id||null,_ver:x.updated_at||null}).filter(Boolean).map(normProjeto);
   if(cf&&!cf.error){
     const s=(cf.data&&cf.data.data)?cf.data.data:{};
     TEAM=(s.team||[]).map(p=>typeof p==='string'?{nome:p,empresa:''}:p);
@@ -2229,7 +2232,7 @@ function homeApprovalsHTML(){
     const ageD=-daysTo((po.solicitado_em||'').slice(0,10));
     const ageTxt=ageD===null?'—':ageD<=0?'today':ageD===1?'1 day':ageD+' days';
     const f=fundBy[po.fund_id]||{}; const camp=campBy[f.campanha_id];
-    return `<div onclick="openPODetail('${esc(po.id)}')" class="proj-row" style="display:grid;grid-template-columns:${cols};gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06);align-items:center;cursor:pointer">
+    return `<div onclick="openPODetail('${escJs(po.id)}')" class="proj-row" style="display:grid;grid-template-columns:${cols};gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06);align-items:center;cursor:pointer">
       <span class="mono" style="font-size:12.5px;color:var(--txt-2)">${esc(po.numero_po||('#'+po.id.slice(-6)))}</span>
       <span style="font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.descricao||'—')}</span>
       <span style="min-width:0"><span style="display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(camp?camp.nome:(f.nome||'—'))}</span><span style="display:block;font-size:12px;color:var(--txt-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(camp?(f.nome||''):catKeyLabel(f.product_category||''))}</span></span>
@@ -2237,8 +2240,8 @@ function homeApprovalsHTML(){
       <span class="mono" style="text-align:right;font-size:13px">${BRL(po.valor)}</span>
       <span style="font-size:12.5px;font-weight:600;color:${ageD>3?'#ff6b6b':'var(--txt-2)'}">${ageTxt}</span>
       <span style="display:flex;gap:8px;justify-content:flex-end" onclick="event.stopPropagation()">
-        <button class="btn-ghost" style="padding:7px 12px;font-size:12.5px;background:transparent;border-color:rgba(255,255,255,.16)" onclick="openPODetail('${esc(po.id)}')">Review</button>
-        <button class="btn-acc" style="padding:7px 12px;font-size:12.5px;box-shadow:none" onclick="aprovarPO('${esc(po.id)}')">Approve</button>
+        <button class="btn-ghost" style="padding:7px 12px;font-size:12.5px;background:transparent;border-color:rgba(255,255,255,.16)" onclick="openPODetail('${escJs(po.id)}')">Review</button>
+        <button class="btn-acc" style="padding:7px 12px;font-size:12.5px;box-shadow:none" onclick="aprovarPO('${escJs(po.id)}')">Approve</button>
       </span>
     </div>`;
   }).join('');
@@ -2294,7 +2297,7 @@ function homeForYouHTML(up){
   const items=buildNotifList().slice(0,5);
   if(!items.length){
     return v2Card(`${up.length} upcoming`,'Upcoming deadlines',`<div style="margin-top:10px">${up.length?up.map(p=>{const own=respName(p.resp);
-      return `<div class="row-item" onclick="openProj('${esc(p.id)}')" style="display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06);border-radius:0">
+      return `<div class="row-item" onclick="openProj('${escJs(p.id)}')" style="display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06);border-radius:0">
         <span class="avatar" style="width:30px;height:30px;font-size:11px;background:${avColor(own)}">${initials(own)}</span>
         <div style="min-width:0"><div style="font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.nome)}</div><div style="font-size:12px;color:var(--txt-3)">${esc(stageOf(p.etapa).name)}</div></div>
         <div style="text-align:right">${projDueHTML(p)}</div></div>`;}).join(''):'<div class="empty">No upcoming deadlines.</div>'}</div>`,{style:'flex:1 1 320px;min-width:0'});
@@ -2303,7 +2306,7 @@ function homeForYouHTML(up){
   const ago=t=>{const dd=-daysTo(t);return dd===null?'':dd<=0?'today':dd===1?'yesterday':dd+' days ago';};
   return `<div class="v2-card" style="flex:1 1 320px;min-width:0;display:flex;flex-direction:column">
     <div class="v2-card-eyebrow">mentions &amp; notifications · ${unread} unread</div><div class="v2-card-title" style="font-size:21px">For you</div>
-    <div style="display:flex;flex-direction:column;margin-top:10px;flex:1">${items.map(m=>{const who=m.origin==='budget'?'System':(m.autor||'—');const nav=m.origin==='budget'&&m.poId?`notifGoPO('${esc(m.poId)}','${esc(m.tipo)}')`:m.pid?`openProj('${esc(m.pid)}')`:`go('notif')`;
+    <div style="display:flex;flex-direction:column;margin-top:10px;flex:1">${items.map(m=>{const who=m.origin==='budget'?'System':(m.autor||'—');const nav=m.origin==='budget'&&m.poId?`notifGoPO('${escJs(m.poId)}','${escJs(m.tipo)}')`:m.pid?`openProj('${escJs(m.pid)}')`:`go('notif')`;
       return `<div onclick="${nav}" style="display:grid;grid-template-columns:30px minmax(0,1fr) 8px;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer">
         <span class="avatar" style="width:30px;height:30px;font-size:11px;background:${m.origin==='budget'?'#1c2338':avColor(who)}">${m.origin==='budget'?'◆':initials(respName(who)||who)}</span>
         <div style="min-width:0"><div style="font-size:13px"><b>${esc(respName(who)||who)}</b> <span style="color:var(--txt-3)">· ${ago(m.t)}</span></div><div style="font-size:13.5px;color:var(--txt-soft)">${esc(m.txt||'')}</div><div style="font-size:12px;color:#7d9dff;margin-top:2px">${esc(m.proj||'')}</div></div>
@@ -2321,7 +2324,7 @@ function renderDash(){
   const canNewProj=!['agencia','tcl_member'].includes(effPapel())&&!VIEW_AS;
   const canReqPO=demoWritable(PO_ACCESS)&&((ROLE_NAV[effPapel()]||{}).budget||[]).length;
   const attRow=p=>{const hp=healthPill(p.status);const pr=computeProg(p);const own=respName(p.resp);const lu=latestLog(p);
-    return `<div class="proj-row att-row" onclick="openProj('${esc(p.id)}')" style="display:grid;grid-template-columns:minmax(0,1.8fr) 34px 96px minmax(0,1fr) 92px;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer">
+    return `<div class="proj-row att-row" onclick="openProj('${escJs(p.id)}')" style="display:grid;grid-template-columns:minmax(0,1.8fr) 34px 96px minmax(0,1fr) 92px;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer">
       <div style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.nome)}</div><div style="font-size:12px;color:var(--txt-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${lu?esc(lu.txt):esc(stageOf(p.etapa).name)}</div></div>
       <span title="${esc(own||'')}" class="avatar" style="width:28px;height:28px;font-size:11px;background:${avColor(own)}">${initials(own)}</span>
       <span class="att-pill" style="display:inline-flex;align-items:center;gap:6px;justify-self:start;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:20px;background:${hp.bg};color:${hp.fg}"><span style="width:6px;height:6px;border-radius:50%;background:${hp.dot}"></span>${hp.name}</span>
@@ -2417,7 +2420,7 @@ function projSubline(p,withStage){
 }
 function projRowHTML(p){
   const hp=healthPill(p.status);const pr=computeProg(p);const own=respName(p.resp);
-  return `<div class="proj-row" onclick="openProj('${esc(p.id)}')" style="display:grid;grid-template-columns:${projCols()};gap:12px;padding:13px 20px;border-bottom:1px solid rgba(255,255,255,.06);align-items:center;cursor:pointer">
+  return `<div class="proj-row" onclick="openProj('${escJs(p.id)}')" style="display:grid;grid-template-columns:${projCols()};gap:12px;padding:13px 20px;border-bottom:1px solid rgba(255,255,255,.06);align-items:center;cursor:pointer">
     <div style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.nome)}</div><div style="font-size:12px;color:var(--txt-3);display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${projSubline(p,true)}</div></div>
     <div style="display:flex;align-items:center;gap:9px;min-width:0"><span class="avatar" style="width:26px;height:26px;font-size:10.5px;background:${avColor(own)}">${initials(own)}</span><span style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(own||'—')}</span></div>
     <span style="display:inline-flex;align-items:center;gap:6px;justify-self:start;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:20px;background:${hp.bg};color:${hp.fg}"><span style="width:6px;height:6px;border-radius:50%;background:${hp.dot}"></span>${hp.name}</span>
@@ -2505,9 +2508,9 @@ async function openProj(id){
   let p=DATA.projetos.find(x=>x.id===id); if(!p)return;
   if(!DEMO_MODE){
     try{
-      const {data,error}=await SBPO.from('act_projects').select('data').eq('id',id).maybeSingle();
+      const {data,error}=await SBPO.from('act_projects').select('data,campanha_id,updated_at').eq('id',id).maybeSingle();
       if(!error&&data&&data.data){
-        p=normProjeto(data.data);
+        p=normProjeto({...data.data,campanha_id:data.campanha_id||null,_ver:data.updated_at||null});
         const i=DATA.projetos.findIndex(x=>x.id===id);
         if(i>=0)DATA.projetos[i]=p;
       }
@@ -2532,15 +2535,50 @@ function pdScrollTo(id){ const el=document.getElementById(id); if(el) el.scrollI
 let PD_ATV_OPEN={};
 function pdToggleOpen(tid){ PD_ATV_OPEN[tid]=!PD_ATV_OPEN[tid]; go('projectdetail'); }
 /* What goes to act_projects.data — the project minus editor state
-   (_new/_pendingNotifs/_fromTask and which rows are expanded). */
+   (_new/_pendingNotifs/_fromTask/_ver and which rows are expanded). */
 function projClean(p){
-  const c=JSON.parse(JSON.stringify(p)); delete c._new; delete c._pendingNotifs; delete c._fromTask;
+  const c=JSON.parse(JSON.stringify(p)); delete c._new; delete c._pendingNotifs; delete c._fromTask; delete c._ver;
   (c.tasks||[]).forEach(t=>{ delete t._open; });
   return c;
 }
+/* The one place a project is written. A new project is inserted; an
+   existing one is updated only if nobody changed it since this browser read
+   it (p._ver = act_projects.updated_at, bumped by a trigger on every
+   UPDATE) — otherwise nothing is written and the user is offered a reload
+   instead of silently overwriting someone else's edit. Writes are queued so
+   two quick autosaves from this tab never race each other's version. */
+let PROJ_SAVE_Q=Promise.resolve();
+function projWrite(p,isNew){
+  if(DEMO_MODE) return Promise.resolve();
+  const run=PROJ_SAVE_Q.then(async()=>{
+    const c=projClean(p), row={data:c,campanha_id:c.campanha_id||null};
+    let res;
+    if(isNew) res=await SBPO.from('act_projects').insert({id:c.id,...row}).select('updated_at');
+    else{
+      let q=SBPO.from('act_projects').update(row).eq('id',c.id);
+      if(p._ver) q=q.eq('updated_at',p._ver);
+      res=await q.select('updated_at');
+    }
+    if(res.error) throw res.error;
+    if(!res.data||!res.data.length){
+      const {data:cur}=await SBPO.from('act_projects').select('updated_at').eq('id',c.id).maybeSingle();
+      if(cur){ projConflict(c.id); throw new Error('This project was changed by someone else — your last change was not saved. Reload it and try again.'); }
+      throw new Error('You don\'t have permission to save this project.');
+    }
+    p._ver=res.data[0].updated_at||null;
+  });
+  PROJ_SAVE_Q=run.catch(()=>{});
+  return run;
+}
+function projConflict(id){
+  setTimeout(()=>{
+    if(!confirm('Someone else changed this project since you opened it, so your last change was NOT saved.\n\nReload the latest version now?')) return;
+    PD_DIRTY=false; clearTimeout(PD_SAVE_T); if(document.querySelector('#modalMount .pm-modal')) closeModal();
+    openProj(id);
+  },0);
+}
 async function pdPersist(p){
-  if(DEMO_MODE) return;
-  try{ const c=projClean(p); const {error}=await SBPO.from('act_projects').upsert({id:c.id,data:c,campanha_id:c.campanha_id||null}); if(error)throw error; }
+  try{ await projWrite(p); }
   catch(e){ toastErr(e); }
 }
 /* ---- In-place editing on the project page ----
@@ -2582,7 +2620,7 @@ async function pdSaveNow(){
   const c=projClean(p);
   const pend=p._pendingNotifs||{}; p._pendingNotifs={};
   try{
-    if(!DEMO_MODE){ const {error}=await SBPO.from('act_projects').upsert({id:c.id,data:c,campanha_id:c.campanha_id||null}); if(error)throw error; }
+    await projWrite(p);
     const i=DATA.projetos.findIndex(x=>x.id===p.id); if(i>=0&&DATA.projetos[i]!==p) DATA.projetos[i]=p;
     Object.keys(pend).forEach(email=>notifyMarcacao(email,c.nome,pend[email]));
     PD_SAVE_STATE='saved';
@@ -2645,8 +2683,8 @@ function pdHeroHTML(p){
         </div>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        ${canDup?`<button class="btn-ghost" onclick="dupProj('${esc(p.id)}')">Duplicate</button>`:''}
-        ${canEditProj?`<button class="btn-ghost" onclick="editProj('${esc(p.id)}')">Edit project</button>`:''}
+        ${canDup?`<button class="btn-ghost" onclick="dupProj('${escJs(p.id)}')">Duplicate</button>`:''}
+        ${canEditProj?`<button class="btn-ghost" onclick="editProj('${escJs(p.id)}')">Edit project</button>`:''}
         ${demoWritable(PO_ACCESS)&&((ROLE_NAV[effPapel()]||{}).budget||[]).length?`<button class="btn-po" onclick="openReqPO()">Request PO</button>`:''}
       </div>
     </div>
@@ -2769,7 +2807,7 @@ function pdMessagesHTML(p){
     </div>
     <div style="display:flex;gap:8px;margin-top:auto;padding:8px;border-radius:12px;background:#0c1222;border:1px solid rgba(255,255,255,.12)">
       <textarea id="pdMsg" rows="1" placeholder="Write a message, @ to mention" style="flex:1;background:transparent;border:none;outline:none;color:var(--txt);font:inherit;font-size:13.5px;resize:none;padding:6px 8px"></textarea>
-      <button class="btn-acc" style="padding:7px 14px;font-size:13px;box-shadow:none;align-self:center" onclick="pdPostMessage('${esc(p.id)}')">Send</button>
+      <button class="btn-acc" style="padding:7px 14px;font-size:13px;box-shadow:none;align-self:center" onclick="pdPostMessage('${escJs(p.id)}')">Send</button>
     </div>
   </div>`;
 }
@@ -2785,7 +2823,7 @@ function pdBudgetHTML(p){
           <option value="">Select a campaign…</option>
           ${(DATA.campanhas||[]).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||'')).map(c=>`<option value="${esc(c.id)}">${esc(c.nome)}</option>`).join('')}
         </select>
-        <button class="btn-ghost" onclick="pdLinkCampanha('${esc(p.id)}',document.getElementById('pdCampPick').value)">Link</button>
+        <button class="btn-ghost" onclick="pdLinkCampanha('${escJs(p.id)}',document.getElementById('pdCampPick').value)">Link</button>
       </div>`:''}`,{id:'pd-sec-budget',style:'scroll-margin-top:130px'});
   }
   const seeCut=canSeeCorte();
@@ -2812,11 +2850,11 @@ function pdBudgetHTML(p){
     const cell=(v,fid,mo)=>{const u=fid?usedM(fid,mo):{c:0,m:0};return `<div style="text-align:right"><div class="mono" style="font-size:12.5px">${v?k(v).replace('R$ ',''):'—'}</div><div style="display:flex;height:3px;border-radius:2px;overflow:hidden;background:rgba(255,255,255,.06);margin-top:4px"><div style="width:${v?Math.min(100,u.c/v*100):0}%;background:#4d7dff"></div><div style="width:${v?Math.min(100,u.m/v*100):0}%;background:#a685ff"></div></div></div>`;};
     table=`<div style="min-width:${Math.max(700,240+ms.length*90)}px">
       <div style="display:grid;grid-template-columns:${cols};gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.1);font-size:12px;color:var(--txt-3);font-weight:600"><div>Fund · agency</div>${ms.map(mo=>`<div style="text-align:right">${fmtMes(mo+'-01')}</div>`).join('')}<div style="text-align:right">Total</div></div>
-      ${rows.map(r=>`<div onclick="openFundDetail('${esc(r.f.id)}')" class="proj-row" style="display:grid;grid-template-columns:${cols};gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06);align-items:center;cursor:pointer"><div style="min-width:0"><div style="font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.name)}</div><div style="font-size:11.5px;color:var(--txt-3)">${esc(r.ag)}</div></div>${ms.map(mo=>cell(r.mt[mo]||0,r.f.id,mo)).join('')}<div class="mono" style="text-align:right;font-size:13px;font-weight:700">${k(r.b)}</div></div>`).join('')}
+      ${rows.map(r=>`<div onclick="openFundDetail('${escJs(r.f.id)}')" class="proj-row" style="display:grid;grid-template-columns:${cols};gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06);align-items:center;cursor:pointer"><div style="min-width:0"><div style="font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.name)}</div><div style="font-size:11.5px;color:var(--txt-3)">${esc(r.ag)}</div></div>${ms.map(mo=>cell(r.mt[mo]||0,r.f.id,mo)).join('')}<div class="mono" style="text-align:right;font-size:13px;font-weight:700">${k(r.b)}</div></div>`).join('')}
     </div>`;
   } else {
     const cols=`minmax(0,1.8fr) repeat(${seeCut?5:4},minmax(0,.8fr)) 170px`;
-    const tr=(r,bold)=>{const a=r.b-r.c-r.m;return `<div ${r.f?`onclick="openFundDetail('${esc(r.f.id)}')" class="proj-row" `:''}style="display:grid;grid-template-columns:${cols};gap:10px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.06);align-items:center;font-weight:${bold?700:400};${r.f?'cursor:pointer':''}">
+    const tr=(r,bold)=>{const a=r.b-r.c-r.m;return `<div ${r.f?`onclick="openFundDetail('${escJs(r.f.id)}')" class="proj-row" `:''}style="display:grid;grid-template-columns:${cols};gap:10px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.06);align-items:center;font-weight:${bold?700:400};${r.f?'cursor:pointer':''}">
       <div style="min-width:0"><div style="font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.name)}</div><div style="font-size:11.5px;color:var(--txt-3);font-weight:400">${esc(r.ag||'')}</div></div>
       <div class="mono" style="text-align:right;font-size:12.5px">${k(r.b)}</div><div class="mono" style="text-align:right;font-size:12.5px;color:var(--txt-2)">${k(r.c)}</div><div class="mono" style="text-align:right;font-size:12.5px;color:var(--txt-2)">${k(r.m)}</div><div class="mono" style="text-align:right;font-size:12.5px;font-weight:700;${a<0?'color:#ff5c6c':''}">${k(a)}</div>${seeCut?`<div class="mono" style="text-align:right;font-size:12.5px;color:#ff8a96">${k(r.cut)}</div>`:''}
       <div style="display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:8px;align-items:center"><div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:rgba(255,255,255,.1)"><div style="width:${r.b?Math.min(100,r.c/r.b*100):0}%;background:#4d7dff;box-shadow:inset -2px 0 0 #121a32"></div><div style="width:${r.b?Math.min(100,r.m/r.b*100):0}%;background:#a685ff"></div></div><span class="mono" style="font-size:12px;text-align:right">${r.b?Math.round((r.c+r.m)/r.b*100):0}%</span></div></div>`;};
@@ -2829,7 +2867,7 @@ function pdBudgetHTML(p){
     <div style="margin-top:16px">${v2Bar([{w:T.c/base*100,bg:'#4d7dff',t:'Consumed'},{w:T.m/base*100,bg:'#a685ff',t:'Committed'},{w:Math.max(0,av)/base*100,bg:'rgba(255,255,255,.16)',t:'Available'},...(seeCut?[{w:T.cut/base*100,bg:V2_HATCH_S,t:'Cut'}]:[])],14)}</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:14px;margin-top:14px">${kpis.map(v2Kpi).join('')}</div>
     ${funds.length?`<div style="overflow-x:auto;margin-top:18px">${table}</div>`:'<div class="empty">No funds linked to this campaign yet.</div>'}
-    <div style="display:flex;justify-content:space-between;gap:10px;margin-top:12px;font-size:12px"><a onclick="openCampanhaDetail('${esc(camp.id)}')" style="cursor:pointer;font-weight:600">Open campaign →</a>${canEditProj?`<a onclick="pdUnlinkCampanha('${esc(p.id)}')" style="color:var(--txt-3);cursor:pointer">Unlink campaign</a>`:''}</div>`,
+    <div style="display:flex;justify-content:space-between;gap:10px;margin-top:12px;font-size:12px"><a onclick="openCampanhaDetail('${escJs(camp.id)}')" style="cursor:pointer;font-weight:600">Open campaign →</a>${canEditProj?`<a onclick="pdUnlinkCampanha('${escJs(p.id)}')" style="color:var(--txt-3);cursor:pointer">Unlink campaign</a>`:''}</div>`,
     {id:'pd-sec-budget',style:'scroll-margin-top:130px',right:v2Seg([['totals','Totals'],['monthly','By month']],PD_FV,v=>`PD_FV='${v}';go('projectdetail')`)});
 }
 function pdPOsHTML(p){
@@ -2843,7 +2881,7 @@ function pdPOsHTML(p){
   return v2Card(`${pos.length} PO${pos.length===1?'':'s'} · ${BRLc(tot)}`,'POs',pos.length?`
     <div style="overflow-x:auto;margin-top:12px"><div style="min-width:780px">
       <div style="display:grid;grid-template-columns:${cols};gap:12px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.1);font-size:12px;color:var(--txt-3);font-weight:600"><div>PO</div><div>Description · fund</div><div>Vendor</div><div>Month</div><div style="text-align:right">Amount</div><div>Stage</div><div style="text-align:right">Date</div></div>
-      ${pos.slice(0,12).map(po=>`<div onclick="openPODetail('${esc(po.id)}')" class="proj-row" style="display:grid;grid-template-columns:${cols};gap:12px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.06);align-items:center;cursor:pointer">
+      ${pos.slice(0,12).map(po=>`<div onclick="openPODetail('${escJs(po.id)}')" class="proj-row" style="display:grid;grid-template-columns:${cols};gap:12px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.06);align-items:center;cursor:pointer">
         <div class="mono" style="font-size:12.5px;color:var(--txt-2)">${esc(po.numero_po||('#'+po.id.slice(-6)))}</div>
         <div style="min-width:0"><div style="font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(po.descricao||'—')}</div><div style="font-size:12px;color:var(--txt-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(po._sib&&po._sib.length>1?poGroupLabel(po._sib):(nomeBy[po.fund_id]||'—'))}</div></div>
         <div style="font-size:13px;color:var(--txt-2)">${esc(po.agencia||'—')}</div>
@@ -2869,7 +2907,7 @@ function pdPeopleHTML(p){
         <span class="avatar" style="width:32px;height:32px;font-size:10.5px;background:${avColor(pe.n)}">${initials(pe.n)}</span>
         <div style="min-width:0"><div style="font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(pe.n)}</div><div style="font-size:12px;color:var(--txt-3)">${pe.role}</div></div>
         ${pe.t}</div>`).join('')}
-    </div>`,{id:'pd-sec-people',style:'scroll-margin-top:130px;flex:2 1 340px;min-width:0',right:!VIEW_AS?`<a onclick="editProj('${esc(p.id)}')" style="font-size:13px;font-weight:600;cursor:pointer">+ Tag people</a>`:''});
+    </div>`,{id:'pd-sec-people',style:'scroll-margin-top:130px;flex:2 1 340px;min-width:0',right:!VIEW_AS?`<a onclick="editProj('${escJs(p.id)}')" style="font-size:13px;font-weight:600;cursor:pointer">+ Tag people</a>`:''});
 }
 function renderProjectDetail(){
   const p=DATA.projetos.find(x=>x.id===PROJ_VIEW_ID);
@@ -3020,9 +3058,7 @@ async function dropOnStage(ev,stageId){
   p.logs=p.logs||[]; p.logs.push({txt:'Moved to "'+stg.name+'"',autor:(currentUser&&currentUser.email)||'—',t:new Date().toISOString()});
   go(SCREEN);
   try{
-    const clean=JSON.parse(JSON.stringify(p)); delete clean._new;
-    const {error}=await SBPO.from('act_projects').upsert({id:clean.id,data:clean,campanha_id:clean.campanha_id||null});
-    if(error)throw error;
+    await projWrite(p);
   }catch(e){
     p.etapa=prevEtapa; p.etapa_override=prevOverride; p.status=prevStatus; p.logs=prevLogs;
     toast('Could not move — reverted. '+(e.message||e)); go(SCREEN);
@@ -3045,12 +3081,12 @@ function renderKanban(){
         <span class="mono" style="font-size:12px;color:var(--txt-3)">${items.length}</span></div>
       ${items.map(p=>{const hp=healthPill(p.status);const pr=computeProg(p);const bt=businessTypeOf(p.ptipo);const own=respName(p.resp);const cats=p.categorias||[];const dd=daysTo(p.prazo);
         const due=p.status==='concluido'?'Completed':dd===null?'No date':dd<0?`${-dd}d late`:dd===0?'today':`in ${dd}d`;
-        return `<div class="kcard" draggable="true" ondragstart="dragStartCard(event,'${esc(p.id)}')" onclick="openProj('${esc(p.id)}')" style="display:flex;flex-direction:column;gap:10px;background:var(--surf);border:1px solid var(--line-card);border-radius:12px;padding:14px;cursor:grab">
+        return `<div class="kcard" draggable="true" ondragstart="dragStartCard(event,'${escJs(p.id)}')" onclick="openProj('${escJs(p.id)}')" style="display:flex;flex-direction:column;gap:10px;background:var(--surf);border:1px solid var(--line-card);border-radius:12px;padding:14px;cursor:grab">
           <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><span style="font-weight:700;font-size:14px;line-height:1.3">${esc(p.nome)}</span><span title="${hp.name}" style="width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px;background:${hp.dot}"></span></div>
           <div style="font-size:12px;color:var(--txt-3);display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;background:${cats.length?catMeta(cats[0]).c:'#9aa3b8'}"></span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc([cats.map(catKeyLabel).join(' + ')||projAgencias(p).join(', '),bt?bt.name:''].filter(Boolean).join(' · ')||'—')}</span></div>
           <div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:5px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden"><div style="height:100%;background:#4d7dff;width:${pr}%"></div></div><span class="mono" style="font-size:11.5px;color:var(--txt-2)">${pr}%</span></div>
           <div style="display:flex;justify-content:space-between;align-items:center"><span class="avatar" title="${esc(own||'')}" style="width:24px;height:24px;font-size:10px;background:${avColor(own)}">${initials(own)}</span>
-            <span style="display:flex;align-items:center;gap:8px">${projHasSubs(p)?`<button onclick="event.stopPropagation();openProjTimeline('${esc(p.id)}')" title="View timeline" style="color:var(--txt-3);display:inline-flex">${icn('calendar',12)}</button>`:''}<span style="font-size:12px;font-weight:600;color:${dd!==null&&dd<0&&p.status!=='concluido'?'#ff6b6b':'var(--txt)'}">${due}</span></span></div>
+            <span style="display:flex;align-items:center;gap:8px">${projHasSubs(p)?`<button onclick="event.stopPropagation();openProjTimeline('${escJs(p.id)}')" title="View timeline" style="color:var(--txt-3);display:inline-flex">${icn('calendar',12)}</button>`:''}<span style="font-size:12px;font-weight:600;color:${dd!==null&&dd<0&&p.status!=='concluido'?'#ff6b6b':'var(--txt)'}">${due}</span></span></div>
         </div>`;
       }).join('')||'<div style="padding:16px 8px;font-size:12px;color:var(--txt-3);text-align:center">Empty</div>'}
     </div>`;
@@ -3070,14 +3106,14 @@ function renderAprovacoes(){
     <div style="padding:12px 16px;display:flex;flex-direction:column;gap:10px">${projPend.length?projPend.map(p=>`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;background:var(--paper-2)">
       <div style="display:flex;justify-content:space-between;gap:10px"><b style="font-size:13px">${esc(p.nome)}</b><span class="mono" style="font-size:12px">${BRL(tetoBy[p.id]||0)}</span></div>
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">${esc(p.agencia||'')} · ${esc(catKeyLabel(p.product_category||''))} · ${esc(actColLabel(actKey(p)))}</div>
-      ${canAprova?`<div style="display:flex;gap:7px;margin-top:10px"><button onclick="aprovarCamp('${esc(p.id)}')" style="padding:7px 14px;border-radius:8px;border:none;background:var(--po);color:#fff;font-weight:700;font-size:12px;cursor:pointer">Approve</button><button onclick="rejeitarCamp('${esc(p.id)}')" style="padding:7px 14px;border-radius:8px;border:1px solid var(--line-2);background:var(--card);color:var(--txt-2);font-weight:700;font-size:12px;cursor:pointer">Reject</button></div>`:''}
+      ${canAprova?`<div style="display:flex;gap:7px;margin-top:10px"><button onclick="aprovarCamp('${escJs(p.id)}')" style="padding:7px 14px;border-radius:8px;border:none;background:var(--po);color:#fff;font-weight:700;font-size:12px;cursor:pointer">Approve</button><button onclick="rejeitarCamp('${escJs(p.id)}')" style="padding:7px 14px;border-radius:8px;border:1px solid var(--line-2);background:var(--card);color:var(--txt-2);font-weight:700;font-size:12px;cursor:pointer">Reject</button></div>`:''}
     </div>`).join(''):'<div class="empty">No pending funds.</div>'}</div></div>`;
   const poCol=`<div style="background:var(--card);border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
     <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">POs awaiting decision</b>${posPend.length?`<span style="background:var(--po);color:#fff;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:800">${posPend.length}</span>`:''}</div>
     <div style="padding:12px 16px;display:flex;flex-direction:column;gap:10px">${posPend.length?posPend.map(po=>`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;background:var(--paper-2)">
       <div style="display:flex;justify-content:space-between;gap:10px"><b style="font-size:13px">${esc(nomeBy[po.fund_id]||'—')}</b><span class="mono" style="font-size:12px">${BRL(po.valor)}</span></div>
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">${esc(po.agencia||'')} · ${fmtMes(po.competencia)} · ${esc(po.descricao||'')}</div>
-      ${canAprova?`<div style="display:flex;gap:7px;margin-top:10px"><button onclick="aprovarPO('${esc(po.id)}')" style="padding:7px 14px;border-radius:8px;border:none;background:var(--po);color:#fff;font-weight:700;font-size:12px;cursor:pointer">Approve</button><button onclick="rejeitarPO('${esc(po.id)}')" style="padding:7px 14px;border-radius:8px;border:1px solid var(--line-2);background:var(--card);color:var(--txt-2);font-weight:700;font-size:12px;cursor:pointer">Reject</button></div>`:''}
+      ${canAprova?`<div style="display:flex;gap:7px;margin-top:10px"><button onclick="aprovarPO('${escJs(po.id)}')" style="padding:7px 14px;border-radius:8px;border:none;background:var(--po);color:#fff;font-weight:700;font-size:12px;cursor:pointer">Approve</button><button onclick="rejeitarPO('${escJs(po.id)}')" style="padding:7px 14px;border-radius:8px;border:1px solid var(--line-2);background:var(--card);color:var(--txt-2);font-weight:700;font-size:12px;cursor:pointer">Reject</button></div>`:''}
     </div>`).join(''):'<div class="empty">No pending POs.</div>'}</div></div>`;
   return `<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px">${fundCol}${poCol}</div>`;
 }
@@ -3190,9 +3226,9 @@ function fundRejeitadosHTML(){
         <b>${esc(f.nome||'—')}</b> <span style="color:var(--txt-3);font-size:12px">· ${esc(f.product_category||'—')} · ${esc(f.agencia||'—')} · ${esc(f.activity||'—')}</span>
         <div style="font-size:12px;color:var(--red);margin-top:3px">Reason: ${esc(f.aprovacao_motivo||'—')}</div>
       </div>
-      ${pode?`<button class="chip-btn" onclick="openCampEdit('${esc(f.id)}')">Edit</button>
-      <button class="btn-po" onclick="reenviarFund('${esc(f.id)}')">Resubmit</button>
-      ${PAPEL==='admin'?`<button class="chip-btn" style="color:var(--red)" onclick="deletarFund('${esc(f.id)}')">Delete</button>`:''}`:''}
+      ${pode?`<button class="chip-btn" onclick="openCampEdit('${escJs(f.id)}')">Edit</button>
+      <button class="btn-po" onclick="reenviarFund('${escJs(f.id)}')">Resubmit</button>
+      ${PAPEL==='admin'?`<button class="chip-btn" style="color:var(--red)" onclick="deletarFund('${escJs(f.id)}')">Delete</button>`:''}`:''}
     </div>`).join('')}</div>
   </div>`;
 }
@@ -3237,7 +3273,7 @@ function fundKpisHTML(){
    whole choice fits on screen where you can see what is on. Nothing selected
    means everything, so the "All" chip is a state, not an option to pick. */
 function fundChipHTML(kind,v,label,on){
-  return `<button onclick="fundToggleFilter('${kind}','${esc(v)}')" style="padding:5px 11px;border-radius:20px;border:1px solid ${on?'var(--po)':'var(--line-2)'};background:${on?'var(--po-soft)':'var(--card)'};color:${on?'var(--red)':'var(--txt-2)'};font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">${esc(label)}</button>`;
+  return `<button onclick="fundToggleFilter('${kind}','${escJs(v)}')" style="padding:5px 11px;border-radius:20px;border:1px solid ${on?'var(--po)':'var(--line-2)'};background:${on?'var(--po-soft)':'var(--card)'};color:${on?'var(--red)':'var(--txt-2)'};font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">${esc(label)}</button>`;
 }
 function fundFiltersHTML(){
   const acts=fundGlobalActs(), cats=fundGlobalCats();
@@ -3319,7 +3355,7 @@ function renderCampBody(){
     const tot=catTotal[ck], pct=grandTotal?(tot/grandTotal*100):0;
     const open=!!FUND_OPEN[ck]||fundForcedOpen();
     return `<div style="background:var(--card);border:1px solid ${open?m.c+'55':'var(--line)'};border-radius:14px;overflow:hidden;box-shadow:${open?'0 3px 10px rgba(20,22,28,.07)':'0 1px 2px rgba(20,22,28,.05)'};transition:border-color .15s,box-shadow .15s">
-      <div role="button" tabindex="0" aria-expanded="${open}" onclick="fundToggleCat('${esc(ck)}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();fundToggleCat('${esc(ck)}')}" style="padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;background:${open?m.bg:''}" onmouseover="this.style.background='${open?m.bg:'var(--paper-2)'}'" onmouseout="this.style.background='${open?m.bg:''}'">
+      <div role="button" tabindex="0" aria-expanded="${open}" onclick="fundToggleCat('${escJs(ck)}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();fundToggleCat('${escJs(ck)}')}" style="padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;background:${open?m.bg:''}" onmouseover="this.style.background='${open?m.bg:'var(--paper-2)'}'" onmouseout="this.style.background='${open?m.bg:''}'">
         <span class="ich" style="background:${open?'#fff':m.bg};color:${m.c}">${icn(m.icon,15)}</span>
         <span style="min-width:0">
           <b style="font-family:'Hanken Grotesk',sans-serif;font-size:13.5px;display:block">${esc(catKeyLabel(ck))}${m.label!==ck?` <span style=\"font-weight:500;color:var(--txt-3);font-size:11.5px\">· ${m.label}</span>`:''}</b>
@@ -3432,7 +3468,7 @@ function fundItemRowHTML(p,m){
      it sits over the filled or the empty part; a saturated leading edge keeps
      the bar reading as coloured. */
   const bar=fundGaugeHTML(tot,cons,comp,pnd,m.c,270);
-  return `<div class="camp-item" onclick="openFundDetail('${esc(p.id)}')" style="padding:7px 14px;cursor:pointer;border-bottom:1px solid ${m.bg};${lc==='done'?'opacity:.62;':''}" onmouseover="this.style.background='${m.bg}'" onmouseout="this.style.background=''">
+  return `<div class="camp-item" onclick="openFundDetail('${escJs(p.id)}')" style="padding:7px 14px;cursor:pointer;border-bottom:1px solid ${m.bg};${lc==='done'?'opacity:.62;':''}" onmouseover="this.style.background='${m.bg}'" onmouseout="this.style.background=''">
     <div style="display:flex;align-items:center;gap:10px">
       <span style="flex:1;min-width:0;font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</span>
       ${fundRestrBadgeHTML(p)}${fundBadgeHTML(p)}
@@ -3563,7 +3599,7 @@ function fundTimelineHTML(fl,q){
       </div>`;
     }).join('');
     const usedTot=r.months.reduce((s,mm)=>s+fundMonthUsed(r.p.id,mm),0);
-    return `<div onclick="openFundDetail('${esc(r.p.id)}')" style="display:flex;border-bottom:1px solid var(--line);cursor:pointer;${lc==='done'?'opacity:.55':''}" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
+    return `<div onclick="openFundDetail('${escJs(r.p.id)}')" style="display:flex;border-bottom:1px solid var(--line);cursor:pointer;${lc==='done'?'opacity:.55':''}" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
       <div style="width:230px;flex-shrink:0;padding:8px 14px;border-right:1px solid var(--line);min-width:0;display:flex;align-items:center;gap:8px">
         <span style="width:8px;height:8px;border-radius:2px;background:${m.c};flex-shrink:0"></span>
         <span style="min-width:0"><span style="font-weight:600;font-size:12.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.p.nome)}</span><span style="font-size:10.5px;color:var(--txt-3);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.p.agencia||'—')} · ${fmtMes(first+'-01')} → ${fmtMes(last+'-01')}${lc==='done'?' · completed':''}</span></span>
@@ -3637,13 +3673,13 @@ function openFundDetail(pid){
           <span><b class="mono">${BRL(cut)}</b> cut from this month — approved <b class="mono">${BRL(cap+cut)}</b>, cap above is what remains.${mot?` <span style="opacity:.85">${esc(mot)}</span>`:''}</span>
         </div>`;})()}
       <div style="height:8px;border-radius:5px;background:rgba(255,255,255,.1);overflow:hidden;margin-bottom:6px;display:flex" title="Consumed · committed · awaiting approval"><span style="width:${w1}%;background:${overM?'#ff3b4e':'#4d7dff'}"></span><span style="width:${w2}%;background:#a685ff"></span><span style="width:${w3}%;background:#ffb020"></span></div>
-      ${list.length?list.map(po=>{const st=PO_STATUS[po.status]||{t:po.status,c:'s-slate'};return `<div onclick="openPODetail('${esc(po.id)}')" style="display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:8px 0;border-top:1px dashed rgba(255,255,255,.1);font-size:12.5px;cursor:pointer">
+      ${list.length?list.map(po=>{const st=PO_STATUS[po.status]||{t:po.status,c:'s-slate'};return `<div onclick="openPODetail('${escJs(po.id)}')" style="display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:8px 0;border-top:1px dashed rgba(255,255,255,.1);font-size:12.5px;cursor:pointer">
         <div style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(po.descricao||'—')}</div><div class="mono" style="font-size:11px;color:var(--txt-3)">${esc(po.numero_po||'no number')}${po.agencia?' · '+esc(po.agencia):''}</div></div>
         <span class="badge ${st.c}" style="font-size:11px">${st.t}</span>
         <span class="mono" style="font-weight:700">${BRL(po.valor)}</span></div>`;}).join(''):'<div style="font-size:12px;color:var(--txt-3);padding-top:4px">No POs this month.</div>'}
       ${showRealloc?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-        <button onclick="openReallocModal('${esc(pid)}','${m}',${saldo})" style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;border:1px solid rgba(79,184,255,.35);background:var(--blue-bg);color:var(--blue);font-weight:700;font-size:12px;cursor:pointer">${icn('calendar',12)} Reallocate ${BRL(saldo)} balance →</button>
-        ${canSeeCorte()?`<button onclick="openCutBalance('${esc(pid)}','${m}',${saldo})" title="Take this balance back instead of moving it forward" style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;border:1px solid rgba(255,92,92,.35);background:var(--red-bg);color:var(--red);font-weight:700;font-size:12px;cursor:pointer">${icn('scale',12)} Cut balance</button>`:''}
+        <button onclick="openReallocModal('${escJs(pid)}','${m}',${saldo})" style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;border:1px solid rgba(79,184,255,.35);background:var(--blue-bg);color:var(--blue);font-weight:700;font-size:12px;cursor:pointer">${icn('calendar',12)} Reallocate ${BRL(saldo)} balance →</button>
+        ${canSeeCorte()?`<button onclick="openCutBalance('${escJs(pid)}','${m}',${saldo})" title="Take this balance back instead of moving it forward" style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;border:1px solid rgba(255,92,92,.35);background:var(--red-bg);color:var(--red);font-weight:700;font-size:12px;cursor:pointer">${icn('scale',12)} Cut balance</button>`:''}
       </div>`:''}
     </div>`;
   }).join('')||'<div class="empty">No months registered.</div>';
@@ -3721,13 +3757,13 @@ function openFundDetail(pid){
         return `<div style="display:flex;align-items:flex-start;gap:10px;background:var(--blue-bg);border:1px solid rgba(79,184,255,.35);border-radius:9px;padding:10px 12px;margin-top:12px;font-size:12px;color:var(--blue)">
           <span style="display:flex;flex-shrink:0;margin-top:1px">${icn('coins',14)}</span>
           <span style="flex:1"><b>Cap increase requested</b> — from <b class="mono">${BRL(cur)}</b> to <b class="mono">${BRL(pd)}</b>.${p.cap_pedido_motivo?`<div style="margin-top:3px;font-weight:600">${esc(p.cap_pedido_motivo)}</div>`:''}${p.cap_pedido_em?`<div style="margin-top:2px;opacity:.75">asked ${fmtDataBR(p.cap_pedido_em)}</div>`:''}</span>
-          ${canRestrict()?`<span style="display:flex;gap:6px;flex-shrink:0"><button class="chip-btn" onclick="decidirCapPedido('${esc(p.id)}',true)">Approve</button><button class="chip-btn" onclick="decidirCapPedido('${esc(p.id)}',false)">Reject</button></span>`:''}
+          ${canRestrict()?`<span style="display:flex;gap:6px;flex-shrink:0"><button class="chip-btn" onclick="decidirCapPedido('${escJs(p.id)}',true)">Approve</button><button class="chip-btn" onclick="decidirCapPedido('${escJs(p.id)}',false)">Reject</button></span>`:''}
         </div>`;})()}
       ${alertHTML}
       ${months.length>1?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">${chips}</div>`:''}
     </div>
     <div class="modal-b" style="max-height:64vh">${summary}<div class="mono" style="font-size:11.5px;color:var(--txt-3);margin:2px 0 10px">month by month</div>${blocks}</div>
-    <div class="modal-f" style="flex-wrap:wrap">${CC_DRILL_BACK?`<button class="btn-ghost" onclick="ccDrillBack()">← Back to breakdown</button>`:'<span></span>'}<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end">${canRestrict()?`<button class="btn-ghost" onclick="openCampRestricao('${esc(p.id)}')">${fundRestr(p)?'Blocked — review…':'Block spending'}</button>`:''}${((['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly())?`<button class="btn-ghost" onclick="openCampValues('${esc(p.id)}')">Edit monthly values</button><button class="btn-ghost" onclick="openCampEdit('${esc(p.id)}')">Edit fund</button>`:''}${(demoWritable(PO_ACCESS)&&!fundRestr(p)&&!fundArquivado(p))?`<button class="btn-po" onclick="openReqPO('${esc(p.id)}')">Request PO</button>`:''}</div></div>
+    <div class="modal-f" style="flex-wrap:wrap">${CC_DRILL_BACK?`<button class="btn-ghost" onclick="ccDrillBack()">← Back to breakdown</button>`:'<span></span>'}<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end">${canRestrict()?`<button class="btn-ghost" onclick="openCampRestricao('${escJs(p.id)}')">${fundRestr(p)?'Blocked — review…':'Block spending'}</button>`:''}${((['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly())?`<button class="btn-ghost" onclick="openCampValues('${escJs(p.id)}')">Edit monthly values</button><button class="btn-ghost" onclick="openCampEdit('${escJs(p.id)}')">Edit fund</button>`:''}${(demoWritable(PO_ACCESS)&&!fundRestr(p)&&!fundArquivado(p))?`<button class="btn-po" onclick="openReqPO('${escJs(p.id)}')">Request PO</button>`:''}</div></div>
   </div></div>`;
 }
 
@@ -3879,7 +3915,7 @@ function renderReallocModal(){
       ${manualRows}
       ${previewHTML}
     </div>
-    <div class="modal-f"><span>${canSeeCorte()?`<button class="btn-ghost" style="color:var(--red)" onclick="openCutBalance('${esc(REALLOC.pid)}','${fromMonth}',${balance})" title="Take this balance back instead of moving it forward">Cut balance instead…</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeRealloc()">Cancel</button><button class="btn-po" onclick="submitRealloc()">Reallocate</button></div></div>
+    <div class="modal-f"><span>${canSeeCorte()?`<button class="btn-ghost" style="color:var(--red)" onclick="openCutBalance('${escJs(REALLOC.pid)}','${fromMonth}',${balance})" title="Take this balance back instead of moving it forward">Cut balance instead…</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeRealloc()">Cancel</button><button class="btn-po" onclick="submitRealloc()">Reallocate</button></div></div>
   </div></div>`;
 }
 function closeRealloc(){ const pid=REALLOC&&REALLOC.pid; REALLOC=null; if(pid) openFundDetail(pid); else closeModal(); }
@@ -4270,8 +4306,8 @@ function renderCampValues(){
     <div id="cvWarn" class="banner" style="display:${over?'':'none'};margin-bottom:12px;background:var(--red-bg);border-color:rgba(255,92,92,.35);color:var(--red)">The months add up to more than the approved cap. Reduce them to save${canRestrict()?'':', or ask for an increase'}.</div>
     ${pedido!=null?`<div class="banner" style="margin-bottom:12px;background:var(--blue-bg);border-color:rgba(79,184,255,.35);color:var(--blue)">An increase to <b class="mono">${BRL(pedido)}</b> has been requested and is awaiting a decision. Until it's approved the cap above is what applies.</div>`:''}
     ${canRestrict()
-      ? `<div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="chip-btn" onclick="openCapEdit('${esc(FUNDVAL.id)}')">Change approved cap…</button></div>`
-      : `<div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="chip-btn" onclick="openCapPedido('${esc(FUNDVAL.id)}')">Request a higher cap…</button></div>`}`
+      ? `<div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="chip-btn" onclick="openCapEdit('${escJs(FUNDVAL.id)}')">Change approved cap…</button></div>`
+      : `<div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="chip-btn" onclick="openCapPedido('${escJs(FUNDVAL.id)}')">Request a higher cap…</button></div>`}`
    :`<div class="banner" style="margin-bottom:12px">This fund has no approved cap yet, so nothing is enforced here.</div>`;
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:600px">
     <div class="modal-h"><h3>Monthly values — ${esc(p.nome||'')}</h3><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
@@ -4476,7 +4512,7 @@ function renderCampEditForm(){
       ${classField}
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">Was: <b>${esc((DATA.poProjetos.find(x=>x.id===ce.id)||{}).product_category||'—')}</b>. Months and total value stay the same.</div>
     </div>
-    <div class="modal-f"><span>${(PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarFund('${esc(ce.id)}')">${(DATA.pos||[]).some(x=>x.fund_id===ce.id&&!['REJEITADA','CANCELADA'].includes(x.status))?'Archive fund':'Delete fund'}</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-po" onclick="submitFundEdit()">Save</button></div></div>
+    <div class="modal-f"><span>${(PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarFund('${escJs(ce.id)}')">${(DATA.pos||[]).some(x=>x.fund_id===ce.id&&!['REJEITADA','CANCELADA'].includes(x.status))?'Archive fund':'Delete fund'}</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-po" onclick="submitFundEdit()">Save</button></div></div>
   </div></div>`;
 }
 async function submitFundEdit(){
@@ -4567,7 +4603,7 @@ function renderPOs(){
         const list=pos.filter(po=>f.st.includes(po.status));
         const val=list.reduce((s,po)=>s+(+po.valor||0),0);
         const sample=list[0];
-        const openFn=f.id==='aprovacao'?`openReqPO()`:sample?`openPODetail('${esc(sample.id)}')`:'';
+        const openFn=f.id==='aprovacao'?`openReqPO()`:sample?`openPODetail('${escJs(sample.id)}')`:'';
         return `<button ${openFn?`onclick="${openFn}"`:'disabled'} style="text-align:left;cursor:${openFn?'pointer':'default'};border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:12px 14px;background:#0f1628;color:var(--txt);position:relative;overflow:hidden;opacity:${openFn?1:.6}">
           <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:${f.c}"></div>
           <div style="font-family:var(--mono);font-size:11px;color:${f.c}">${f.n} · ${esc(f.t)}</div>
@@ -4606,7 +4642,7 @@ function renderPOs(){
     const fundName=grouped?poGroupLabel(po._sib):(nomeBy[po.fund_id]||'—');
     const proj=campOfFund[po.fund_id];
     const q=((nomeBy[po.fund_id]||'')+' '+(po.descricao||'')+' '+(po.numero_po||'')+' '+(po.agencia||'')).toLowerCase();
-    return `<div class="po-row proj-row" data-camp="${esc(po.fund_id)}" data-ag="${esc(po.agencia||'')}" data-st="${esc(po.status)}" data-q="${esc(q)}" onclick="openPODetail('${esc(po.id)}')" style="display:grid;grid-template-columns:${PO_COLS};gap:12px;padding:12px 20px;border-bottom:1px solid rgba(255,255,255,.06);align-items:center;font-size:13px;cursor:pointer">
+    return `<div class="po-row proj-row" data-camp="${esc(po.fund_id)}" data-ag="${esc(po.agencia||'')}" data-st="${esc(po.status)}" data-q="${esc(q)}" onclick="openPODetail('${escJs(po.id)}')" style="display:grid;grid-template-columns:${PO_COLS};gap:12px;padding:12px 20px;border-bottom:1px solid rgba(255,255,255,.06);align-items:center;font-size:13px;cursor:pointer">
       <span class="mono" style="font-size:12.5px;color:#9fb5ff">${esc(po.numero_po||('#'+po.id.slice(-6)))}</span>
       <span style="font-weight:600;font-size:13.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.descricao||'—')}${grouped?' · split':''}</span>
       <span style="min-width:0"><span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(proj||fundName)}</span><span style="font-size:12px;color:var(--txt-3);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(proj?fundName:'')}</span></span>
@@ -4637,7 +4673,7 @@ function renderPOs(){
     <div style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">${projPend.map(p=>`<div style="border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:13px 15px;background:#0f1628">
       <div style="display:flex;justify-content:space-between;gap:10px"><b style="font-size:13px">${esc(p.nome)}</b><span class="mono" style="font-size:12px">${BRL(tetoPend[p.id]||0)}</span></div>
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">${esc(p.agencia||'')} · ${esc(catKeyLabel(p.product_category||''))} · ${esc(actColLabel(actKey(p)))}</div>
-      ${canAprovaCamp?`<div style="display:flex;gap:7px;margin-top:10px"><button onclick="aprovarCamp('${esc(p.id)}')" style="${_poBtn('#b4000b')}">Approve</button><button onclick="rejeitarCamp('${esc(p.id)}')" style="padding:7px 12px;border-radius:8px;border:1px solid rgba(255,92,92,.4);background:transparent;color:#ff8a96;font-weight:700;font-size:12px">Reject</button></div>`:''}
+      ${canAprovaCamp?`<div style="display:flex;gap:7px;margin-top:10px"><button onclick="aprovarCamp('${escJs(p.id)}')" style="${_poBtn('#b4000b')}">Approve</button><button onclick="rejeitarCamp('${escJs(p.id)}')" style="padding:7px 12px;border-radius:8px;border:1px solid rgba(255,92,92,.4);background:transparent;color:#ff8a96;font-weight:700;font-size:12px">Reject</button></div>`:''}
     </div>`).join('')}</div></div>`:'';
   return `<div style="display:flex;flex-direction:column;gap:22px">${flowHTML}${fundPend}${tabsRow}<div id="poBody">${body}</div></div>
     <div class="mono" style="font-size:11.5px;color:var(--txt-3);margin-top:14px">request → approve → issue nº → invoice (NF + evidence) → validate</div>`;
@@ -4746,10 +4782,10 @@ async function abrirAnexo(path){
 function poMetaHTML(po){
   const b=[];
   if(po.numero_po) b.push('nº '+esc(po.numero_po));
-  if(po.po_arquivo) b.push(`<a onclick="abrirAnexo('${esc(po.po_arquivo)}')" style="color:#3ecf9e;cursor:pointer;text-decoration:underline">${icn('paperclip',11)} PO</a>`);
+  if(po.po_arquivo) b.push(`<a onclick="abrirAnexo('${escJs(po.po_arquivo)}')" style="color:#3ecf9e;cursor:pointer;text-decoration:underline">${icn('paperclip',11)} PO</a>`);
   if(po.nf_numero) b.push('NF '+esc(po.nf_numero));
-  if(po.fatura_url) b.push(`<a onclick="abrirAnexo('${esc(po.fatura_url)}')" style="color:#e08428;cursor:pointer;text-decoration:underline">${icn('receipt',11)} NF</a>`);
-  if(po.evidencia_url) b.push(`<a onclick="abrirAnexo('${esc(po.evidencia_url)}')" style="color:#e08428;cursor:pointer;text-decoration:underline">${icn('paperclip',11)} evidence</a>`);
+  if(po.fatura_url) b.push(`<a onclick="abrirAnexo('${escJs(po.fatura_url)}')" style="color:#e08428;cursor:pointer;text-decoration:underline">${icn('receipt',11)} NF</a>`);
+  if(po.evidencia_url) b.push(`<a onclick="abrirAnexo('${escJs(po.evidencia_url)}')" style="color:#e08428;cursor:pointer;text-decoration:underline">${icn('paperclip',11)} evidence</a>`);
   if(po.status==='ATUALIZAR_INFO' && po.motivo_rejeicao) b.push('<span style="color:var(--red)">'+icn('alert',11)+' '+esc(po.motivo_rejeicao)+'</span>');
   return b.length?`<span style="font-size:11px;color:var(--txt-3);display:block;margin-top:3px;line-height:1.6">${b.join(' · ')}</span>`:'';
 }
@@ -4803,8 +4839,8 @@ function renderPODetailModal(){
     const rows=sibs.map(p=>{const pr=nomeBy[p.fund_id]||{}; return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border-bottom:1px dashed var(--line-2);font-size:12.5px"><span>${esc(pr.product_category||pr.nome||'—')}</span><span class="mono" style="font-weight:700">${BRL(p.valor)}</span></div>`;}).join('');
     sections.push(`<div style="border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:12px"><div style="padding:8px 10px;background:var(--paper-2);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em">Budget split by category</div>${rows}</div>`);
   }
-  if(poFieldVisible('numero',po)&&po.numero_po) sections.push(`<div style="margin-bottom:12px">${cell('PO number',esc(po.numero_po)+(po.po_arquivo?` · <a onclick="abrirAnexo('${esc(po.po_arquivo)}')" style="color:#3ecf9e;cursor:pointer;text-decoration:underline">view file</a>`:''))}</div>`);
-  if(poFieldVisible('fatura',po)&&(po.nf_numero||po.fatura_url||po.evidencia_url)) sections.push(`<div style="margin-bottom:12px">${cell('Invoice (NF)',(po.nf_numero?esc(po.nf_numero):'—')+(po.fatura_url?` · <a onclick="abrirAnexo('${esc(po.fatura_url)}')" style="color:#e08428;cursor:pointer;text-decoration:underline">NF file</a>`:'')+(po.evidencia_url?` · <a onclick="abrirAnexo('${esc(po.evidencia_url)}')" style="color:#e08428;cursor:pointer;text-decoration:underline">evidence</a>`:''))}</div>`);
+  if(poFieldVisible('numero',po)&&po.numero_po) sections.push(`<div style="margin-bottom:12px">${cell('PO number',esc(po.numero_po)+(po.po_arquivo?` · <a onclick="abrirAnexo('${escJs(po.po_arquivo)}')" style="color:#3ecf9e;cursor:pointer;text-decoration:underline">view file</a>`:''))}</div>`);
+  if(poFieldVisible('fatura',po)&&(po.nf_numero||po.fatura_url||po.evidencia_url)) sections.push(`<div style="margin-bottom:12px">${cell('Invoice (NF)',(po.nf_numero?esc(po.nf_numero):'—')+(po.fatura_url?` · <a onclick="abrirAnexo('${escJs(po.fatura_url)}')" style="color:#e08428;cursor:pointer;text-decoration:underline">NF file</a>`:'')+(po.evidencia_url?` · <a onclick="abrirAnexo('${escJs(po.evidencia_url)}')" style="color:#e08428;cursor:pointer;text-decoration:underline">evidence</a>`:''))}</div>`);
   if(poFieldVisible('pagamento',po)&&po.vencimento) sections.push(`<div style="display:flex;align-items:center;gap:10px;border:1.5px solid rgba(255,176,32,.3);border-radius:10px;padding:11px 13px;background:var(--amber-bg);margin-bottom:12px"><span style="width:30px;height:30px;border-radius:9px;background:var(--card);color:var(--amber);display:grid;place-items:center;flex-shrink:0">${icn('coins',15)}</span><div><div style="font-size:10px;font-weight:800;color:var(--amber);text-transform:uppercase;letter-spacing:.06em">Payment forecast</div><div style="font-size:15.5px;font-weight:800;color:var(--amber);margin-top:2px">${fmtDataBR(po.vencimento)}</div></div></div>`);
   else if(!['REJEITADA','CANCELADA'].includes(po.status)){ const est=poEstimativaPagamento(po); if(est) sections.push(`<div style="margin-bottom:12px">${cell('Estimated payment (based on request date)',icn('calendar',13)+' ~'+est.date)}</div>`); }
   if(po.motivo_rejeicao&&['ATUALIZAR_INFO','REJEITADA'].includes(po.status)) sections.push(`<div style="padding:10px 12px;border-radius:9px;background:var(--red-bg);color:var(--red);font-size:12.5px;font-weight:600;margin-bottom:12px">${icn('alert',12)} ${esc(po.motivo_rejeicao)}</div>`);
@@ -4830,23 +4866,23 @@ function poActionsHTML(po,compact){
   if(compact){
     const canAprova=demoWritable(['admin','marketing'].includes(PAPEL)||isManager);
     let prim='';
-    if(canAprova&&pend) prim=`<button onclick="aprovarPO('${esc(po.id)}')" style="${_poBtn('#b4000b')}">Approve</button>`;
-    else if(po.status==='APROVADA'&&canGerarPO()) prim=`<button onclick="openGerarPO('${esc(po.id)}')" style="${_poBtn('#3c7a63')}">Issue PO nº</button>`;
-    else if(['PO_GERADA','ATUALIZAR_INFO'].includes(po.status)&&canFaturarPO(po)) prim=`<button onclick="openFaturarPO('${esc(po.id)}')" style="${_poBtn('#b5550c')}">Post NF</button>`;
-    else if(po.status==='FATURADA'&&canValidarPO()) prim=`<button onclick="openValidarPO('${esc(po.id)}')" style="${_poBtn('#1f8a4c')}">Validate</button>`;
-    return prim+`<button onclick="openPODetail('${esc(po.id)}')" style="padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.16);background:transparent;color:var(--txt-2);font-weight:600;font-size:12px">View</button>`;
+    if(canAprova&&pend) prim=`<button onclick="aprovarPO('${escJs(po.id)}')" style="${_poBtn('#b4000b')}">Approve</button>`;
+    else if(po.status==='APROVADA'&&canGerarPO()) prim=`<button onclick="openGerarPO('${escJs(po.id)}')" style="${_poBtn('#3c7a63')}">Issue PO nº</button>`;
+    else if(['PO_GERADA','ATUALIZAR_INFO'].includes(po.status)&&canFaturarPO(po)) prim=`<button onclick="openFaturarPO('${escJs(po.id)}')" style="${_poBtn('#b5550c')}">Post NF</button>`;
+    else if(po.status==='FATURADA'&&canValidarPO()) prim=`<button onclick="openValidarPO('${escJs(po.id)}')" style="${_poBtn('#1f8a4c')}">Validate</button>`;
+    return prim+`<button onclick="openPODetail('${escJs(po.id)}')" style="padding:7px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.16);background:transparent;color:var(--txt-2);font-weight:600;font-size:12px">View</button>`;
   }
   const canAprova=demoWritable(['admin','marketing'].includes(PAPEL)||isManager);
   const b=[];
   if(canAprova&&pend){
-    b.push(`<button onclick="aprovarPO('${esc(po.id)}')" style="${_poBtn('var(--po)')}">Approve</button>`);
-    b.push(`<button onclick="rejeitarPO('${esc(po.id)}')" style="padding:6px 12px;border-radius:8px;border:1px solid var(--line-2);background:var(--card);color:var(--txt-2);font-weight:700;font-size:11.5px;cursor:pointer">Reject</button>`);
+    b.push(`<button onclick="aprovarPO('${escJs(po.id)}')" style="${_poBtn('var(--po)')}">Approve</button>`);
+    b.push(`<button onclick="rejeitarPO('${escJs(po.id)}')" style="padding:6px 12px;border-radius:8px;border:1px solid var(--line-2);background:var(--card);color:var(--txt-2);font-weight:700;font-size:11.5px;cursor:pointer">Reject</button>`);
   }
-  if(po.status==='APROVADA'&&canGerarPO()) b.push(`<button onclick="openGerarPO('${esc(po.id)}')" style="${_poBtn('#3c7a63')}">Issue PO nº</button>`);
-  if(['PO_GERADA','ATUALIZAR_INFO'].includes(po.status)&&canFaturarPO(po)) b.push(`<button onclick="openFaturarPO('${esc(po.id)}')" style="${_poBtn('#b5550c')}">Post NF</button>`);
-  if(po.status==='FATURADA'&&canValidarPO()) b.push(`<button onclick="openValidarPO('${esc(po.id)}')" style="${_poBtn('#1f8a4c')}">Validate</button>`);
-  if(canEditPOFile(po)) b.push(`<button class="chip-btn" onclick="openTrocarArqPO('${esc(po.id)}')">${icn('paperclip',11)} Change file</button>`);
-  if(canEditPO()&&!viewOnly()) b.push(`<button class="chip-btn" onclick="editarPO('${esc(po.id)}')">Edit</button>`);
+  if(po.status==='APROVADA'&&canGerarPO()) b.push(`<button onclick="openGerarPO('${escJs(po.id)}')" style="${_poBtn('#3c7a63')}">Issue PO nº</button>`);
+  if(['PO_GERADA','ATUALIZAR_INFO'].includes(po.status)&&canFaturarPO(po)) b.push(`<button onclick="openFaturarPO('${escJs(po.id)}')" style="${_poBtn('#b5550c')}">Post NF</button>`);
+  if(po.status==='FATURADA'&&canValidarPO()) b.push(`<button onclick="openValidarPO('${escJs(po.id)}')" style="${_poBtn('#1f8a4c')}">Validate</button>`);
+  if(canEditPOFile(po)) b.push(`<button class="chip-btn" onclick="openTrocarArqPO('${escJs(po.id)}')">${icn('paperclip',11)} Change file</button>`);
+  if(canEditPO()&&!viewOnly()) b.push(`<button class="chip-btn" onclick="editarPO('${escJs(po.id)}')">Edit</button>`);
   return b.length?b.join(''):'<span style="font-size:11.5px;color:var(--txt-3)">—</span>';
 }
 function notifGoPO(poId,tipo){
@@ -4905,7 +4941,7 @@ function renderTrocarArqPO(){
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:480px">
     <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:#3c7a63;flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Change PO file</h3><div style="font-size:12px;color:var(--txt-3)">${esc(label)} · PO ${esc(po.numero_po||'—')}</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">
-      ${po.po_arquivo?`<div style="font-size:12px;color:var(--txt-2);margin-bottom:10px">Current file: <a onclick="abrirAnexo('${esc(po.po_arquivo)}')" style="color:#3ecf9e;cursor:pointer;text-decoration:underline">view</a></div>`:''}
+      ${po.po_arquivo?`<div style="font-size:12px;color:var(--txt-2);margin-bottom:10px">Current file: <a onclick="abrirAnexo('${escJs(po.po_arquivo)}')" style="color:#3ecf9e;cursor:pointer;text-decoration:underline">view</a></div>`:''}
       <div class="field"><label>New PO document (PDF)</label><input type="file" accept="application/pdf,image/*" onchange="arqpoFile(this)"></div>
       ${ARQPO.fileName?`<div style="font-size:12px;color:var(--txt-2)">${icn('paperclip',12)} ${esc(ARQPO.fileName)}</div>`:''}
     </div>
@@ -5000,8 +5036,8 @@ function renderValidarPO(){
       </div>
       <div style="font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Attachments to review</div>
       <div style="display:flex;flex-direction:column;gap:8px">
-        <button onclick="abrirAnexo('${esc(po.fatura_url||'')}')" style="display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--card);font-size:12.5px;font-weight:600;color:var(--txt-1);cursor:pointer;text-align:left"><span style="color:var(--txt-2);display:flex">${icn('receipt',15)}</span><span style="flex:1">Open Nota Fiscal (NF)</span><span style="font-size:11px;color:var(--txt-3)">↗</span></button>
-        <button onclick="abrirAnexo('${esc(po.evidencia_url||'')}')" style="display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--card);font-size:12.5px;font-weight:600;color:var(--txt-1);cursor:pointer;text-align:left"><span style="color:var(--txt-2);display:flex">${icn('paperclip',15)}</span><span style="flex:1">Open evidence</span><span style="font-size:11px;color:var(--txt-3)">↗</span></button>
+        <button onclick="abrirAnexo('${escJs(po.fatura_url||'')}')" style="display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--card);font-size:12.5px;font-weight:600;color:var(--txt-1);cursor:pointer;text-align:left"><span style="color:var(--txt-2);display:flex">${icn('receipt',15)}</span><span style="flex:1">Open Nota Fiscal (NF)</span><span style="font-size:11px;color:var(--txt-3)">↗</span></button>
+        <button onclick="abrirAnexo('${escJs(po.evidencia_url||'')}')" style="display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--card);font-size:12.5px;font-weight:600;color:var(--txt-1);cursor:pointer;text-align:left"><span style="color:var(--txt-2);display:flex">${icn('paperclip',15)}</span><span style="flex:1">Open evidence</span><span style="font-size:11px;color:var(--txt-3)">↗</span></button>
       </div>
     </div>
     <div class="modal-f"><span></span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="rejeitarFatPO()">Request update</button><button class="btn-acc" style="background:#1f8a4c" onclick="submitValidarPO()">Validate &amp; schedule payment</button></div></div>
@@ -5277,7 +5313,7 @@ function pmBudgetBlockHTML(canEditProj){
   const seg=[['v2-seg-cons',t.cons],['v2-seg-comp',t.comp],['v2-seg-avail',avail]];
   return `<div class="v2-card" style="margin-top:14px;padding:18px 20px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-      <div style="cursor:pointer" onclick="closeModal();openCampanhaDetail('${esc(camp.id)}')"><div class="v2-card-eyebrow">BUDGET · ${esc(camp.nome)}</div><div class="v2-card-title" style="font-size:15px;margin-top:3px">${BRL(t.teto)} budgeted</div></div>
+      <div style="cursor:pointer" onclick="closeModal();openCampanhaDetail('${escJs(camp.id)}')"><div class="v2-card-eyebrow">BUDGET · ${esc(camp.nome)}</div><div class="v2-card-title" style="font-size:15px;margin-top:3px">${BRL(t.teto)} budgeted</div></div>
       <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
         ${t.pend>0?`<span style="font-size:11px;font-weight:700;color:var(--amber-ink);white-space:nowrap">${BRL(t.pend)} pending</span>`:''}
         ${canEditProj?`<a onclick="pmUnlinkCampanha()" style="font-size:11px;color:var(--txt-3);cursor:pointer">Unlink</a>`:''}
@@ -5309,7 +5345,7 @@ function pmFundsTableHTML(camp){
         const cap=Object.values(fundMonthlyTotals(f.id)).reduce((s,v)=>s+v,0);
         const used=(DATA.pos||[]).filter(po=>po.fund_id===f.id&&(CONS.includes(po.status)||COMP.includes(po.status))).reduce((s,po)=>s+(+po.valor||0),0);
         const av=Math.max(0,cap-used);
-        return `<div onclick="closeModal();openFundDetail('${esc(f.id)}')" style="display:grid;grid-template-columns:${cols};gap:10px;padding:9px 0;border-bottom:1px solid var(--line);cursor:pointer;font-size:12.5px;align-items:center">
+        return `<div onclick="closeModal();openFundDetail('${escJs(f.id)}')" style="display:grid;grid-template-columns:${cols};gap:10px;padding:9px 0;border-bottom:1px solid var(--line);cursor:pointer;font-size:12.5px;align-items:center">
           <span style="min-width:0"><span style="font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(f.nome)}</span><span style="font-size:11px;color:var(--txt-3)">${esc(f.agencia||'—')}</span></span>
           <span class="mono" style="text-align:right">${BRL(cap)}</span>
           <span class="mono" style="text-align:right;color:var(--txt-2)">${BRL(used)}</span>
@@ -5330,7 +5366,7 @@ function pmProjPOsHTML(camp){
   return `<div class="v2-card" style="margin-top:14px;padding:18px 20px">
     <div class="v2-card-eyebrow">POs · ${pos.length}</div>
     <div style="margin-top:8px">${pos.slice(0,8).map(po=>{const st=PO_STATUS[po.status]||{t:po.status,c:'s-slate'};
-      return `<div onclick="closeModal();openPODetail('${esc(po.id)}')" style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);cursor:pointer;font-size:12.5px">
+      return `<div onclick="closeModal();openPODetail('${escJs(po.id)}')" style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);cursor:pointer;font-size:12.5px">
         <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(poNome(po.fund_id))}${po.descricao?' · '+esc(po.descricao):''}</span>
         <span class="badge ${st.c}" style="flex-shrink:0"><span class="d"></span>${st.t}</span>
         <span class="mono" style="flex-shrink:0;width:90px;text-align:right">${BRL(po.valor)}</span>
@@ -5359,7 +5395,7 @@ function pmAgenciasHTML(ED){
   if(!all.length) return '<div style="font-size:12.5px;color:var(--txt-3)">No agency profiles registered yet.</div>';
   return `<div style="display:flex;flex-wrap:wrap;gap:6px">${all.map(a=>{
     const sel=on.includes(a);
-    return `<button ${ED?'':'disabled'} onclick="pmToggleAgencia('${esc(a)}')" style="display:inline-flex;align-items:center;gap:6px;padding:6px 13px;border-radius:18px;border:1px solid ${sel?'var(--violet)':'var(--line-2)'};background:${sel?'var(--violet-bg)':'var(--card)'};color:${sel?'var(--violet)':'var(--txt-2)'};font-weight:700;font-size:12px;cursor:${ED?'pointer':'default'}">${sel?icn('check',11):''}${esc(a)}</button>`;
+    return `<button ${ED?'':'disabled'} onclick="pmToggleAgencia('${escJs(a)}')" style="display:inline-flex;align-items:center;gap:6px;padding:6px 13px;border-radius:18px;border:1px solid ${sel?'var(--violet)':'var(--line-2)'};background:${sel?'var(--violet-bg)':'var(--card)'};color:${sel?'var(--violet)':'var(--txt-2)'};font-weight:700;font-size:12px;cursor:${ED?'pointer':'default'}">${sel?icn('check',11):''}${esc(a)}</button>`;
   }).join('')}</div>${on.length?'':'<div style="font-size:11.5px;color:var(--txt-3);margin-top:6px">Not shared with any agency — only the internal team sees it.</div>'}`;
 }
 function atv(tid){ return (EDIT.tasks||[]).find(t=>t.id===tid); }
@@ -5606,7 +5642,7 @@ function renderTLModal(){
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:920px">
     <div class="modal-h"><div style="min-width:0"><h3>Timeline — ${esc(p.nome)}</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">${rows.length} dated item${rows.length===1?'':'s'} · arrows read "starts after"</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">${body}</div>
-    <div class="modal-f"><button class="btn-ghost" onclick="exportProjTimeline('${esc(p.id)}')" style="display:inline-flex;align-items:center;gap:6px">${icn('link',13)} Share link</button><button class="btn-ghost" onclick="closeModal()">Close</button></div>
+    <div class="modal-f"><button class="btn-ghost" onclick="exportProjTimeline('${escJs(p.id)}')" style="display:inline-flex;align-items:center;gap:6px">${icn('link',13)} Share link</button><button class="btn-ghost" onclick="closeModal()">Close</button></div>
   </div></div>`;
 }
 /* Per-project timeline share — ONE link per project (id keyed by project_id
@@ -5745,7 +5781,7 @@ function openShareLinkModal(url,name){
       <div style="font-size:12.5px;color:var(--txt-2);margin-bottom:12px">Anyone with this link can view the timeline for <b>${esc(name)}</b> — no login required. It's the same link every time and always shows the project's current state, no need to reshare as work progresses.</div>
       <div style="display:flex;gap:8px">
         <input readonly value="${esc(url)}" onclick="this.select()" style="flex:1;min-width:0;padding:9px 11px;border:1px solid var(--line-2);border-radius:8px;font-size:12px;font-family:var(--mono);color:var(--txt)">
-        <button class="btn-acc" onclick="copyShareLink('${esc(url)}')" style="flex-shrink:0;display:inline-flex;align-items:center;gap:6px">${icn('copy',13)} Copy</button>
+        <button class="btn-acc" onclick="copyShareLink('${escJs(url)}')" style="flex-shrink:0;display:inline-flex;align-items:center;gap:6px">${icn('copy',13)} Copy</button>
       </div>
     </div>
     <div class="modal-f"><a href="${esc(url)}" target="_blank" rel="noopener" style="font-size:12.5px;color:var(--txt-2);text-decoration:underline">Open in new tab</a><button class="btn-ghost" onclick="closeModal()">Close</button></div>
@@ -5848,7 +5884,7 @@ function pmDepPop(tid,sid,ev,keepOpen){
     const on=(it.dep||[]).includes(x.id);
     const bad=!on&&depWouldCycle(list,selfId,x.id);
     const ix=sid?(list.indexOf(x)+1):(list.indexOf(x)+1);
-    return `<button class="dep-opt${on?' on':''}" ${bad?'disabled title="Would create a loop"':''} onclick="pmDepToggle('${esc(tid)}',${sid?"'"+esc(sid)+"'":'null'},'${esc(x.id)}')">
+    return `<button class="dep-opt${on?' on':''}" ${bad?'disabled title="Would create a loop"':''} onclick="pmDepToggle('${escJs(tid)}',${sid?"'"+esc(sid)+"'":'null'},'${escJs(x.id)}')">
       <span class="ix">${String(ix).padStart(2,'0')}</span><span class="nm">${esc(x.n||'(untitled)')}</span>
       <span style="flex-shrink:0;color:${on?'var(--accent)':'var(--txt-3)'};font-family:var(--mono);font-size:10px">${x.fim?fmtDate(x.fim):'no date'}</span>
       ${on?icn('check',12):''}</button>`;
@@ -5973,7 +6009,7 @@ function pmTaggedChipsHTML(){
   const canTag=canTagPeople(EDIT);
   const list=EDIT.envolvidos||[];
   if(!list.length) return '<span style="font-size:12px;color:var(--txt-3)">No one tagged yet.</span>';
-  return list.map(pe=>`<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 6px 4px 4px;border-radius:20px;background:var(--paper-2);border:1px solid var(--line-2);font-size:12px;font-weight:600"><span class="avatar" style="width:20px;height:20px;font-size:9px;background:${avColor(pe.nome||pe.email)}">${initials(pe.nome||pe.email)}</span>${esc(pe.nome||pe.email)}${canTag?`<button onclick="pmTogglePessoa('${esc(pe.email)}','')" title="Remove" style="border:none;background:none;color:var(--txt-3);cursor:pointer;font-size:11px;padding:0 2px;line-height:1">✕</button>`:''}</span>`).join('');
+  return list.map(pe=>`<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 6px 4px 4px;border-radius:20px;background:var(--paper-2);border:1px solid var(--line-2);font-size:12px;font-weight:600"><span class="avatar" style="width:20px;height:20px;font-size:9px;background:${avColor(pe.nome||pe.email)}">${initials(pe.nome||pe.email)}</span>${esc(pe.nome||pe.email)}${canTag?`<button onclick="pmTogglePessoa('${escJs(pe.email)}','')" title="Remove" style="border:none;background:none;color:var(--txt-3);cursor:pointer;font-size:11px;padding:0 2px;line-height:1">✕</button>`:''}</span>`).join('');
 }
 /* Adds a person straight from a comment mention, WITHOUT the usual full
    renderProjModal() — a full re-render would wipe whatever the user is still
@@ -5998,7 +6034,7 @@ function pmPeopleFilter(q){
   }).slice(0,8);
   if(!matches.length){ dd.style.display='none'; dd.innerHTML=''; return; }
   dd.innerHTML=matches.map(pe=>{const nome=[pe.nome,pe.sobrenome].filter(Boolean).join(' ')||pe.email;
-    return `<div onmousedown="event.preventDefault();pmPickPerson('${esc(pe.email)}','${esc(nome)}')" style="padding:8px 12px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--paper-2)'" onmouseout="this.style.background=''"><span class="avatar" style="width:20px;height:20px;font-size:9px;background:${avColor(nome)}">${initials(nome)}</span><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(nome)}${pe.agencia?` <span style="color:var(--txt-3);font-weight:500">· ${esc(pe.agencia)}</span>`:''}</span></div>`;
+    return `<div onmousedown="event.preventDefault();pmPickPerson('${escJs(pe.email)}','${escJs(nome)}')" style="padding:8px 12px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--paper-2)'" onmouseout="this.style.background=''"><span class="avatar" style="width:20px;height:20px;font-size:9px;background:${avColor(nome)}">${initials(nome)}</span><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(nome)}${pe.agencia?` <span style="color:var(--txt-3);font-weight:500">· ${esc(pe.agencia)}</span>`:''}</span></div>`;
   }).join('');
   dd.style.display='block';
 }
@@ -6008,10 +6044,11 @@ function pmPeopleBlur(){ const dd=document.getElementById('pmPeopleDD'); if(dd)d
    Sends the session's own token so the function can show the real author
    instead of trusting whatever `autor` the client claims. */
 async function notifyMarcacao(to,projeto,comentario){
-  if(!to)return;
+  if(!to||DEMO_MODE||READONLY)return;
   try{
     const {data:sPO}=await SBPO.auth.getSession();
-    const token=(sPO&&sPO.session&&sPO.session.access_token)||PO_KEY;
+    const token=sPO&&sPO.session&&sPO.session.access_token;
+    if(!token)return;
     await fetch(PO_URL+'/functions/v1/notifica-marcacao',{method:'POST',headers:{'Content-Type':'application/json','apikey':PO_KEY,'Authorization':'Bearer '+token},
       body:JSON.stringify({to,autor:(currentUser&&currentUser.email)||'Alguém',projeto:projeto||'',comentario:comentario||null})});
   }catch(e){ console.warn('notifica-marcacao:',e); }
@@ -6059,7 +6096,7 @@ function pmMentionInput(ta){
   const matches=mentionablePessoas().filter(pe=>(pe.nome||'').toLowerCase().includes(ql)).slice(0,8);
   if(!matches.length){ dd.style.display='none'; dd.innerHTML=''; return; }
   dd.innerHTML=matches.map(pe=>{const nome=pe.nome||pe.email;
-    return `<div onmousedown="event.preventDefault();pmMentionPick('${esc(pe.email)}','${esc(nome)}')" style="padding:8px 12px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--paper-2)'" onmouseout="this.style.background=''"><span class="avatar" style="width:20px;height:20px;font-size:9px;background:${avColor(nome)}">${initials(nome)}</span><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(nome)}${pe.agencia?` <span style="color:var(--txt-3);font-weight:500">· ${esc(pe.agencia)}</span>`:''}</span></div>`;
+    return `<div onmousedown="event.preventDefault();pmMentionPick('${escJs(pe.email)}','${escJs(nome)}')" style="padding:8px 12px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--paper-2)'" onmouseout="this.style.background=''"><span class="avatar" style="width:20px;height:20px;font-size:9px;background:${avColor(nome)}">${initials(nome)}</span><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(nome)}${pe.agencia?` <span style="color:var(--txt-3);font-weight:500">· ${esc(pe.agencia)}</span>`:''}</span></div>`;
   }).join('');
   dd.style.display='block';
 }
@@ -6128,9 +6165,9 @@ function pmDepCellHTML(tid,sid,item,list,EDA){
     const d=list[ix];
     const lbl=String(ix+1).padStart(2,'0');
     const t=`Starts after "${(d&&d.n)||'?'}"${d&&d.fim?' (due '+fmtDate(d.fim)+')':''}${EDA?' — click to unlink':''}`;
-    return `<button class="dep-chip${bad?' warn':''}" title="${esc(t)}" onclick="event.stopPropagation();${EDA?`pmDepToggle('${esc(tid)}',${sid?"'"+esc(sid)+"'":'null'},'${esc(id)}')`:''}">${lbl}${bad?' !':''}</button>`;
+    return `<button class="dep-chip${bad?' warn':''}" title="${esc(t)}" onclick="event.stopPropagation();${EDA?`pmDepToggle('${escJs(tid)}',${sid?"'"+esc(sid)+"'":'null'},'${escJs(id)}')`:''}">${lbl}${bad?' !':''}</button>`;
   }).join('');
-  const add=EDA?`<button class="dep-add" id="depBtn-${esc(key)}" title="Link to a predecessor" onclick="pmDepPop('${esc(tid)}',${sid?"'"+esc(sid)+"'":'null'},event)">+</button>`:'';
+  const add=EDA?`<button class="dep-add" id="depBtn-${esc(key)}" title="Link to a predecessor" onclick="pmDepPop('${escJs(tid)}',${sid?"'"+esc(sid)+"'":'null'},event)">+</button>`:'';
   return `<span class="atv-c-dep"><span class="atv-dep">${chips||(EDA?'':'<span class="dep-none">—</span>')}${add}</span></span>`;
 }
 function pmSubRowHTML(t,s,j,EDA){
@@ -6140,14 +6177,14 @@ function pmSubRowHTML(t,s,j,EDA){
   const conf=depConflict(list,s);
   return `<div class="atv-row is-sub">
     <span class="atv-num"><span class="n">${(EDIT.tasks||[]).indexOf(t)+1}.${j+1}</span></span>
-    <button class="atv-check${s.done?' on':''}" ${disA} onclick="pmSubDone('${esc(t.id)}','${esc(s.id)}')" title="${s.done?'Mark not done':'Mark done'}" aria-pressed="${!!s.done}">${s.done?'✓':''}</button>
-    <span class="atv-name"><span class="atv-sub-tick">${icn('arrowR',11)}</span><input class="atv-in${s.done?' done':''}" value="${esc(s.n)}" ${disA} onchange="pmSubSet('${esc(t.id)}','${esc(s.id)}','n',this.value)" placeholder="Sub-item name…"></span>
-    <span class="atv-c-owner"><select class="atv-in mini" ${disA} onchange="pmSubSet('${esc(t.id)}','${esc(s.id)}','resp',this.value)" title="Assigned to">${subPersonOpts(s.resp)}</select></span>
-    <span><input type="date" class="atv-in d8${s.inicio?'':' empty'}" value="${esc(s.inicio||'')}" ${disA} onchange="pmSubSet('${esc(t.id)}','${esc(s.id)}','inicio',this.value)" title="Start date"></span>
-    <span><input type="date" class="atv-in d8 ${dcls}" value="${esc(s.fim||'')}" ${disA} onchange="pmSubSet('${esc(t.id)}','${esc(s.id)}','fim',this.value)" title="${conf?'Starts before a linked sub-item finishes':'Due date'}"></span>
+    <button class="atv-check${s.done?' on':''}" ${disA} onclick="pmSubDone('${escJs(t.id)}','${escJs(s.id)}')" title="${s.done?'Mark not done':'Mark done'}" aria-pressed="${!!s.done}">${s.done?'✓':''}</button>
+    <span class="atv-name"><span class="atv-sub-tick">${icn('arrowR',11)}</span><input class="atv-in${s.done?' done':''}" value="${esc(s.n)}" ${disA} onchange="pmSubSet('${escJs(t.id)}','${escJs(s.id)}','n',this.value)" placeholder="Sub-item name…"></span>
+    <span class="atv-c-owner"><select class="atv-in mini" ${disA} onchange="pmSubSet('${escJs(t.id)}','${escJs(s.id)}','resp',this.value)" title="Assigned to">${subPersonOpts(s.resp)}</select></span>
+    <span><input type="date" class="atv-in d8${s.inicio?'':' empty'}" value="${esc(s.inicio||'')}" ${disA} onchange="pmSubSet('${escJs(t.id)}','${escJs(s.id)}','inicio',this.value)" title="Start date"></span>
+    <span><input type="date" class="atv-in d8 ${dcls}" value="${esc(s.fim||'')}" ${disA} onchange="pmSubSet('${escJs(t.id)}','${escJs(s.id)}','fim',this.value)" title="${conf?'Starts before a linked sub-item finishes':'Due date'}"></span>
     ${pmDepCellHTML(t.id,s.id,s,list,EDA)}
     <span></span><span></span>
-    <span class="atv-act">${EDA?`<button class="atv-ico del" onclick="pmDelSub('${esc(t.id)}','${esc(s.id)}')" title="Remove sub-item">${icn('trash',13)}</button>`:''}</span>
+    <span class="atv-act">${EDA?`<button class="atv-ico del" onclick="pmDelSub('${escJs(t.id)}','${escJs(s.id)}')" title="Remove sub-item">${icn('trash',13)}</button>`:''}</span>
   </div>`;
 }
 function pmAtvRowsHTML(EDA){
@@ -6157,19 +6194,19 @@ function pmAtvRowsHTML(EDA){
     const list=tasks, dcls=pmDateCls(t,list), conf=depConflict(list,t);
     const hp=healthPill(t.status), pct=t.pct||0;
     const subs=t.subs||[];
-    let h=`<div class="atv-row" ondragover="atvDragOver(event)" ondragleave="atvDragLeave(event)" ondrop="atvDrop(event,'${esc(t.id)}')">
-      <span class="atv-num"><span class="n">${String(i+1).padStart(2,'0')}</span>${(EDA&&tasks.length>1)?`<span class="atv-grip" draggable="true" ondragstart="atvDragStart(event,'${esc(t.id)}')" title="Drag to reorder">${icn('grip',13)}</span>`:''}</span>
-      <button class="atv-check${t.done?' on':''}" ${disA} onclick="pmAtvDone('${esc(t.id)}')" title="${t.done?'Mark not done':'Mark done'}" aria-pressed="${!!t.done}">${t.done?'✓':''}</button>
-      <span class="atv-name"><input class="atv-in${t.done?' done':''}" value="${esc(t.n)}" ${disA} onchange="pmAtvSet('${esc(t.id)}','n',this.value)" placeholder="Activity name…"></span>
-      <span class="atv-c-owner"><select class="atv-in mini" ${disA} onchange="pmAtvSet('${esc(t.id)}','resp',this.value)" title="Assigned to">${subPersonOpts(t.resp)}</select></span>
-      <span><input type="date" class="atv-in d8${t.inicio?'':' empty'}" value="${esc(t.inicio||'')}" ${disA} onchange="pmAtvSet('${esc(t.id)}','inicio',this.value)" title="Start date"></span>
-      <span><input type="date" class="atv-in d8 ${dcls}" value="${esc(t.fim||'')}" ${disA} onchange="pmAtvSet('${esc(t.id)}','fim',this.value)" title="${conf?'Starts before a linked activity finishes':'Due date'}"></span>
+    let h=`<div class="atv-row" ondragover="atvDragOver(event)" ondragleave="atvDragLeave(event)" ondrop="atvDrop(event,'${escJs(t.id)}')">
+      <span class="atv-num"><span class="n">${String(i+1).padStart(2,'0')}</span>${(EDA&&tasks.length>1)?`<span class="atv-grip" draggable="true" ondragstart="atvDragStart(event,'${escJs(t.id)}')" title="Drag to reorder">${icn('grip',13)}</span>`:''}</span>
+      <button class="atv-check${t.done?' on':''}" ${disA} onclick="pmAtvDone('${escJs(t.id)}')" title="${t.done?'Mark not done':'Mark done'}" aria-pressed="${!!t.done}">${t.done?'✓':''}</button>
+      <span class="atv-name"><input class="atv-in${t.done?' done':''}" value="${esc(t.n)}" ${disA} onchange="pmAtvSet('${escJs(t.id)}','n',this.value)" placeholder="Activity name…"></span>
+      <span class="atv-c-owner"><select class="atv-in mini" ${disA} onchange="pmAtvSet('${escJs(t.id)}','resp',this.value)" title="Assigned to">${subPersonOpts(t.resp)}</select></span>
+      <span><input type="date" class="atv-in d8${t.inicio?'':' empty'}" value="${esc(t.inicio||'')}" ${disA} onchange="pmAtvSet('${escJs(t.id)}','inicio',this.value)" title="Start date"></span>
+      <span><input type="date" class="atv-in d8 ${dcls}" value="${esc(t.fim||'')}" ${disA} onchange="pmAtvSet('${escJs(t.id)}','fim',this.value)" title="${conf?'Starts before a linked activity finishes':'Due date'}"></span>
       ${pmDepCellHTML(t.id,null,t,list,EDA)}
       <span class="atv-prog" title="${esc(hp.name)} · ${pct}%">${EDIT._new?'':`<span class="pbar" style="flex:1;min-width:22px"><span style="width:${pct}%;background:${hp.dot}"></span></span><span class="pct">${pct}%</span>`}</span>
-      <span>${t.done?`<button class="atv-st" style="background:var(--green-bg);color:var(--green)" onclick="pmToggleOpen('${esc(t.id)}')">Done</button>`:`<button class="atv-st" style="background:${hp.bg};color:${hp.fg}" onclick="pmToggleOpen('${esc(t.id)}')" title="Status and note">${hp.name}</button>`}</span>
+      <span>${t.done?`<button class="atv-st" style="background:var(--green-bg);color:var(--green)" onclick="pmToggleOpen('${escJs(t.id)}')">Done</button>`:`<button class="atv-st" style="background:${hp.bg};color:${hp.fg}" onclick="pmToggleOpen('${escJs(t.id)}')" title="Status and note">${hp.name}</button>`}</span>
       <span class="atv-act">
-        <button class="atv-ico${t._open?' open':''}" onclick="pmToggleOpen('${esc(t.id)}')" title="${t._open?'Hide details':'Details & sub-items'}" aria-expanded="${!!t._open}">${subs.length?`<span class="mono" style="font-size:10px;font-weight:700">${subs.length}</span>`:`<span class="atv-chev" style="display:inline-flex">${icn('chevR',13)}</span>`}</button>
-        ${EDA?`<button class="atv-ico del" onclick="pmDelAtv('${esc(t.id)}')" title="Remove activity">${icn('trash',13)}</button>`:''}
+        <button class="atv-ico${t._open?' open':''}" onclick="pmToggleOpen('${escJs(t.id)}')" title="${t._open?'Hide details':'Details & sub-items'}" aria-expanded="${!!t._open}">${subs.length?`<span class="mono" style="font-size:10px;font-weight:700">${subs.length}</span>`:`<span class="atv-chev" style="display:inline-flex">${icn('chevR',13)}</span>`}</button>
+        ${EDA?`<button class="atv-ico del" onclick="pmDelAtv('${escJs(t.id)}')" title="Remove activity">${icn('trash',13)}</button>`:''}
       </span>
     </div>`;
     if(t._open){
@@ -6177,17 +6214,17 @@ function pmAtvRowsHTML(EDA){
       h+=`<div class="atv-panel">
         <div class="atv-panel-row">
           <label for="atvSt-${esc(t.id)}">Status</label>
-          <select id="atvSt-${esc(t.id)}" ${disA} onchange="pmAtvSet('${esc(t.id)}','status',this.value)">${STATUS.map(s=>`<option value="${s.id}" ${t.status===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select>
+          <select id="atvSt-${esc(t.id)}" ${disA} onchange="pmAtvSet('${escJs(t.id)}','status',this.value)">${STATUS.map(s=>`<option value="${s.id}" ${t.status===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select>
           <label>Progress</label>
           ${subs.length?`<span class="mono" style="font-size:var(--fs-sm);font-weight:700">${pct}%</span><span style="font-size:var(--fs-xs);color:var(--txt-3)">auto from ${subs.length} sub-item${subs.length===1?'':'s'}</span>`
-            :`<input type="number" min="0" max="100" step="5" ${disA} value="${pct}" onchange="pmAtvSet('${esc(t.id)}','pct',this.value)" style="width:64px">`}
+            :`<input type="number" min="0" max="100" step="5" ${disA} value="${pct}" onchange="pmAtvSet('${escJs(t.id)}','pct',this.value)" style="width:64px">`}
           ${dur?`<span style="font-size:var(--fs-xs);color:var(--txt-3);margin-left:auto">${fmtDate(t.inicio)} → ${fmtDate(t.fim)} · <b class="mono">${dur}</b> day${dur===1?'':'s'}</span>`:''}
         </div>
-        <input class="atv-in" style="width:100%;border:1px dashed var(--line-2);background:var(--card)" value="${esc(t.obs||'')}" ${disA} onchange="pmAtvSet('${esc(t.id)}','obs',this.value)" placeholder="Note for this activity…">
+        <input class="atv-in" style="width:100%;border:1px dashed var(--line-2);background:var(--card)" value="${esc(t.obs||'')}" ${disA} onchange="pmAtvSet('${escJs(t.id)}','obs',this.value)" placeholder="Note for this activity…">
       </div>`;
       h+=subs.map((s,j)=>pmSubRowHTML(t,s,j,EDA)).join('');
       if(EDA) h+=`<div class="atv-add" style="border-bottom:1px solid var(--line)">
-        <input id="pmQuickSub-${esc(t.id)}" placeholder="Add a sub-item and press Enter…" onkeydown="pmQuickSub(event,'${esc(t.id)}')" onpaste="pmPasteLines(event,'${esc(t.id)}')" autocomplete="off">
+        <input id="pmQuickSub-${esc(t.id)}" placeholder="Add a sub-item and press Enter…" onkeydown="pmQuickSub(event,'${escJs(t.id)}')" onpaste="pmPasteLines(event,'${escJs(t.id)}')" autocomplete="off">
       </div>`;
     }
     return h;
@@ -6250,7 +6287,7 @@ function pmAtvBlockHTML(EDA){
       <span class="sub">${tasks.length} item${tasks.length===1?'':'s'}${tasks.length?' · '+done+' done':''} · "${esc(tName)}" pattern</span>
       <span style="flex:1"></span>
       ${issues?`<button class="chip-btn" onclick="pmReschedule()" style="display:inline-flex;align-items:center;gap:5px;background:var(--amber-bg);border-color:rgba(255,176,32,.3);color:var(--amber-ink);font-weight:700"${EDA?'':' disabled'}>${icn('alert',12)} ${issues===1?'1 item starts before its link':issues+' items start before their links'} — reschedule</button>`:''}
-      ${(!EDIT._new&&projHasDates(EDIT))?`<button class="chip-btn" onclick="openProjTimeline('${esc(EDIT.id)}')" style="display:inline-flex;align-items:center;gap:5px">${icn('calendar',12)} Timeline</button>`:''}
+      ${(!EDIT._new&&projHasDates(EDIT))?`<button class="chip-btn" onclick="openProjTimeline('${escJs(EDIT.id)}')" style="display:inline-flex;align-items:center;gap:5px">${icn('calendar',12)} Timeline</button>`:''}
     </div>
     <div class="atv-scroll">
       <div class="atv-hd">
@@ -6291,8 +6328,8 @@ function renderProjHeaderModal(){
       ${ED?'':`<div class="banner">The header belongs to the project owner and admins — you can tag people, but not change the other fields.</div>`}
       ${sec('Project name','',`<input value="${esc(EDIT.nome||'')}" onchange="pmSet('nome',this.value)" ${dis} placeholder="e.g. Holiday Campaign 2026" class="pm-in" style="font-size:15px;font-weight:600">`)}
       ${sec('Type',EDIT._new?'sets the starting activity plan':'',`<select onchange="pmPTipo(this.value)" ${dis} class="pm-in"><option value="">Select…</option>${BUSINESS_TYPES.map(b=>`<option value="${b.id}" ${EDIT.ptipo===b.id?'selected':''}>${b.name}</option>`).join('')}</select>${EDIT._new&&(EDIT.tasks||[]).length?`<div style="font-size:12px;color:var(--txt-3);margin-top:6px">${EDIT.tasks.length} activities will be created — dates, owners, sub-items and links are set on the project page.</div>`:''}`)}
-      ${sec('Categories','multi-select',`<div style="display:flex;flex-wrap:wrap;gap:6px">${CAT_CHIPS.map(c=>chip((EDIT.categorias||[]).includes(c),esc(catKeyLabel(c)),`pmToggleCat('${esc(c)}')`,catMeta(c).c)).join('')}</div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"><span style="font-size:12px;color:var(--txt-3);align-self:center;margin-right:4px">Brand</span>${BRAND_CHIPS.map(b=>chip(EDIT.marca===b,esc(b),`pmSet('marca','${esc(b)}');renderProjModal()`)).join('')}</div>`)}
+      ${sec('Categories','multi-select',`<div style="display:flex;flex-wrap:wrap;gap:6px">${CAT_CHIPS.map(c=>chip((EDIT.categorias||[]).includes(c),esc(catKeyLabel(c)),`pmToggleCat('${escJs(c)}')`,catMeta(c).c)).join('')}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"><span style="font-size:12px;color:var(--txt-3);align-self:center;margin-right:4px">Brand</span>${BRAND_CHIPS.map(b=>chip(EDIT.marca===b,esc(b),`pmSet('marca','${escJs(b)}');renderProjModal()`)).join('')}</div>`)}
       ${sec('People','owner, tagged people and the agencies that see it',`
         <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px"><span class="avatar" style="width:26px;height:26px;font-size:10px;background:${avColor(respName(EDIT.owner||EDIT.resp))}">${initials(respName(EDIT.owner||EDIT.resp)||'?')}</span><b style="font-size:13px">${esc(respName(EDIT.owner||EDIT.resp)||'—')}</b><span class="mono" style="font-size:10.5px;padding:2px 7px;border-radius:5px;background:rgba(77,125,255,.18);color:#9fb5ff">OWNER</span></div>
         <div id="pmTaggedChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:${canTag?'8px':'0'}">${pmTaggedChipsHTML()}</div>
@@ -6336,8 +6373,7 @@ async function saveProj(){
   clean.etapa=effectiveEtapa(clean); clean.status=autoStatus(clean);
   try{
     // Demo keeps changes in memory only (its fake client refuses writes).
-    if(!DEMO_MODE){ const {error}=await SBPO.from('act_projects').upsert({id:clean.id,data:clean,campanha_id:clean.campanha_id||null});
-    if(error)throw error; }
+    await projWrite(clean,wasNew);
     const i=DATA.projetos.findIndex(p=>p.id===clean.id);
     if(i>=0)DATA.projetos[i]=clean; else DATA.projetos.push(clean);
     if(fromTask){ const l=loadPTasks(); const t=l.find(x=>x.id===fromTask); if(t&&!t.done){ t.done=true; t.updatedAt=Date.now(); savePTasks(l); } }
@@ -6352,7 +6388,8 @@ async function delProj(id){
   if(VIEW_AS){ toast(roMsg()); return; }
   if(!confirm('Delete this project? This action cannot be undone.'))return;
   try{
-    await SBPO.from('act_projects').delete().eq('id',id); DATA.projetos=DATA.projetos.filter(p=>p.id!==id); toast('Project deleted');
+    if(!DEMO_MODE){ const {data,error}=await SBPO.from('act_projects').delete().eq('id',id).select('id'); if(error)throw error; if(!data||!data.length)throw new Error('Only the project owner or an admin can delete it.'); }
+    DATA.projetos=DATA.projetos.filter(p=>p.id!==id); toast('Project deleted');
     closeModal();
     if(SCREEN==='projectdetail') go('list'); else go(SCREEN);
   }
@@ -6453,13 +6490,13 @@ function renderNotif(){
     <div class="panel-b">${all.length?all.map(m=>{
       const unread=!m.lida;
       const clickable=(m.origin==='budget'&&(m.poId||m.projId))||m.pid;
-      const navigate=(m.origin==='budget'&&m.poId)?`notifGoPO('${esc(m.poId)}','${esc(m.tipo)}')`:(m.origin==='budget'&&m.projId)?`notifGoProjeto('${esc(m.projId)}','${esc(m.tipo)}')`:(m.pid?`openProj('${esc(m.pid)}')`:'');
-      const readToggle=m.origin==='budget'?`notifMarkRead(${m.id},${!unread})`:`notifMarkReadWork('${esc(m.key)}',${!unread})`;
-      const del=m.origin==='budget'?`notifDelete(${m.id})`:`notifDeleteWork('${esc(m.key)}')`;
+      const navigate=(m.origin==='budget'&&m.poId)?`notifGoPO('${escJs(m.poId)}','${escJs(m.tipo)}')`:(m.origin==='budget'&&m.projId)?`notifGoProjeto('${escJs(m.projId)}','${escJs(m.tipo)}')`:(m.pid?`openProj('${escJs(m.pid)}')`:'');
+      const readToggle=m.origin==='budget'?`notifMarkRead(${m.id},${!unread})`:`notifMarkReadWork('${escJs(m.key)}',${!unread})`;
+      const del=m.origin==='budget'?`notifDelete(${m.id})`:`notifDeleteWork('${escJs(m.key)}')`;
       // Clicking anywhere on the row marks it read, in addition to whatever
       // navigation the row already supported — separate from the explicit
       // ●/○ toggle button, which still lets you flip it back to unread.
-      const markRead=m.origin==='budget'?`notifMarkRead(${m.id},true)`:`notifMarkReadWork('${esc(m.key)}',true)`;
+      const markRead=m.origin==='budget'?`notifMarkRead(${m.id},true)`:`notifMarkReadWork('${escJs(m.key)}',true)`;
       const rowClick=[unread?markRead:'',navigate].filter(Boolean).join(';');
       return `<div class="row-item" style="${unread?'':'opacity:.62'};${(clickable||unread)?'cursor:pointer':'cursor:default'}" ${rowClick?`onclick="${rowClick}"`:''}>
         <span class="pin" style="background:${unread?(m.origin==='budget'?'var(--po)':'var(--accent)'):'var(--line-2)'}"></span>
@@ -6836,9 +6873,9 @@ async function renderPOEdit(){
       </div>
       <div class="field full" style="margin-top:14px"><label>Description</label><input value="${esc(pe.descricao)}" onchange="poeSet('descricao',this.value)" placeholder="—" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:10px">Changing status here is a direct override — use Approve/Reject on the row for the normal lifecycle.</div>
-      ${canEditPOFile(po)?`<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line-2)"><button class="chip-btn" onclick="openTrocarArqPO('${esc(pe.id)}')">${icn('paperclip',11)} Change PO file</button>${po.po_arquivo?` <a onclick="abrirAnexo('${esc(po.po_arquivo)}')" style="color:#3ecf9e;cursor:pointer;text-decoration:underline;font-size:12px;margin-left:8px">view current</a>`:''}</div>`:''}
+      ${canEditPOFile(po)?`<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line-2)"><button class="chip-btn" onclick="openTrocarArqPO('${escJs(pe.id)}')">${icn('paperclip',11)} Change PO file</button>${po.po_arquivo?` <a onclick="abrirAnexo('${escJs(po.po_arquivo)}')" style="color:#3ecf9e;cursor:pointer;text-decoration:underline;font-size:12px;margin-left:8px">view current</a>`:''}</div>`:''}
     </div>
-    <div class="modal-f"><span>${(PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarPO('${esc(pe.id)}')">Delete PO</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-po" onclick="submitPOEdit()">Save</button></div></div>
+    <div class="modal-f"><span>${(PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarPO('${escJs(pe.id)}')">Delete PO</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-po" onclick="submitPOEdit()">Save</button></div></div>
   </div></div>`;
 }
 async function submitPOEdit(){
@@ -7047,7 +7084,7 @@ function campanhaTimelineHTML(list){
     const sm=campStatusMeta(r.c.status);
     const cells=axis.map(mm=>campMonthCellHTML(mm,+r.mt[mm]||0,campMonthUsed(r.c.id,mm),{maxVal,first,last,col:'var(--po)'})).join('');
     const usedTot=r.months.reduce((s,mm)=>s+campMonthUsed(r.c.id,mm),0);
-    return `<div onclick="openCampanhaDetail('${esc(r.c.id)}')" style="display:flex;border-bottom:1px solid var(--line);cursor:pointer;${r.c.status==='encerrada'?'opacity:.6':''}" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
+    return `<div onclick="openCampanhaDetail('${escJs(r.c.id)}')" style="display:flex;border-bottom:1px solid var(--line);cursor:pointer;${r.c.status==='encerrada'?'opacity:.6':''}" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
       <div style="width:230px;flex-shrink:0;padding:8px 14px;border-right:1px solid var(--line);min-width:0;display:flex;align-items:center;gap:8px">
         <span style="width:8px;height:8px;border-radius:2px;background:var(--po);flex-shrink:0"></span>
         <span style="min-width:0"><span style="font-weight:600;font-size:12.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.c.nome)}</span><span style="font-size:10.5px;color:var(--txt-3);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(sm.t)} · ${campFunds(r.c.id).length} fund${campFunds(r.c.id).length===1?'':'s'} · ${fmtMes(first+'-01')} → ${fmtMes(last+'-01')}</span></span>
@@ -7112,7 +7149,7 @@ function campanhaMonthBreakdownHTML(campId){
     const cells=axis.map(mm=>campMonthCellHTML(mm,+r.mt[mm]||0,fundMonthUsed(r.f.id,mm),{maxVal,first,last,col:km.c,cut:canSeeCorte()?fundMonthCut(r.f.id,mm):0})).join('');
     const cap=r.months.reduce((s,mm)=>s+(+r.mt[mm]||0),0);
     const used=r.months.reduce((s,mm)=>s+fundMonthUsed(r.f.id,mm),0);
-    return `<div onclick="closeModal();openFundDetail('${esc(r.f.id)}')" style="display:flex;border-bottom:1px solid var(--line);cursor:pointer" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''" title="Open the month-by-month detail of ${esc(r.f.nome)}">
+    return `<div onclick="closeModal();openFundDetail('${escJs(r.f.id)}')" style="display:flex;border-bottom:1px solid var(--line);cursor:pointer" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''" title="Open the month-by-month detail of ${esc(r.f.nome)}">
       <div style="width:${NAMEW}px;flex-shrink:0;padding:7px 11px;border-right:1px solid var(--line);min-width:0;display:flex;align-items:center;gap:7px">
         <span style="width:8px;height:8px;border-radius:2px;background:${km.c};flex-shrink:0"></span>
         <span style="min-width:0"><span style="font-weight:600;font-size:12px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.f.nome)}</span><span style="font-size:10px;color:var(--txt-3);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fmtMes(first+'-01')} → ${fmtMes(last+'-01')}</span></span>
@@ -7208,12 +7245,12 @@ function openUngroupedFunds(){
     const cm=catMeta(String(p.product_category||'').trim()||'Uncategorized');
     return `<div style="display:flex;align-items:center;gap:11px;padding:10px 4px;border-bottom:1px solid var(--line)">
       <span class="ich" style="width:26px;height:26px;background:${cm.bg};color:${cm.c};flex-shrink:0">${icn(cm.icon,13)}</span>
-      <span style="flex:1;min-width:0;cursor:pointer" onclick="closeModal();openFundDetail('${esc(p.id)}')">
+      <span style="flex:1;min-width:0;cursor:pointer" onclick="closeModal();openFundDetail('${escJs(p.id)}')">
         <b style="font-size:13px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome)}</b>
         <span style="font-size:11px;color:var(--txt-3);font-weight:600">${esc(p.agencia||'—')} · ${esc(catKeyLabel(p.product_category||'—'))} · ${esc(actColLabel(actKey(p)))}</span>
       </span>
       <span class="mono" style="font-size:12.5px;font-weight:700;flex-shrink:0">${cap?BRL(cap):'—'}</span>
-      ${canLink?`<button class="chip-btn" style="flex-shrink:0" onclick="closeModal();openCampanhaNewWith('${esc(p.id)}')">Link…</button>`:''}
+      ${canLink?`<button class="chip-btn" style="flex-shrink:0" onclick="closeModal();openCampanhaNewWith('${escJs(p.id)}')">Link…</button>`:''}
     </div>`;
   }).join('');
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:620px">
@@ -7255,7 +7292,7 @@ function campanhaGanttHTML(){
   const allCats=[...new Set([...(DATA.campanhas||[]).flatMap(c=>campCategorias(c.id)),...campScoped((DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO')).map(p=>String(p.product_category||'').trim()).filter(Boolean)])].filter(k=>boScopeKeep(k)).sort((a,b)=>{let ia=PRODUCT_CATS.indexOf(a),ib=PRODUCT_CATS.indexOf(b);if(ia<0)ia=99;if(ib<0)ib=99;return ia-ib||a.localeCompare(b);});
   const chips=`<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center">
     <div style="display:flex;gap:8px;flex-wrap:wrap">${['',...allCats].map(k=>{const on=CAMP_TL_CAT===k;const c=k?catMeta(k).c:(on?'#05070d':'#a7aec2');
-      return `<button onclick="CAMP_TL_CAT='${esc(k)}';go('campanhas')" style="padding:7px 14px;border-radius:20px;font-weight:600;font-size:13px;border:1px solid ${on?'#eef1f8':'rgba(255,255,255,.16)'};background:${on?'#eef1f8':'rgba(13,18,32,.6)'};color:${on?'#05070d':'var(--txt-soft)'};display:flex;align-items:center;gap:7px"><span style="width:7px;height:7px;border-radius:50%;background:${c}"></span>${k?esc(catKeyLabel(k)):'All'}</button>`;}).join('')}</div>
+      return `<button onclick="CAMP_TL_CAT='${escJs(k)}';go('campanhas')" style="padding:7px 14px;border-radius:20px;font-weight:600;font-size:13px;border:1px solid ${on?'#eef1f8':'rgba(255,255,255,.16)'};background:${on?'#eef1f8':'rgba(13,18,32,.6)'};color:${on?'#05070d':'var(--txt-soft)'};display:flex;align-items:center;gap:7px"><span style="width:7px;height:7px;border-radius:50%;background:${c}"></span>${k?esc(catKeyLabel(k)):'All'}</button>`;}).join('')}</div>
     <div style="display:flex;gap:8px;align-items:center">
       <select class="chip-sel" onchange="CAMP_TL_YEAR=this.value;go('campanhas')">${[...new Set([String(now.getFullYear()-1),String(now.getFullYear()),String(now.getFullYear()+1),...DATA.tetos.map(t=>String(t.competencia).slice(0,4))])].filter(Boolean).sort().map(y=>`<option ${y===yr?'selected':''}>${y}</option>`).join('')}</select>
       ${v2Seg([['tl','Timeline'],['list','List']],CAMPANHA_VIEW,v=>`campanhaSetView('${v}')`)}
@@ -7281,14 +7318,14 @@ function campanhaGanttHTML(){
       const fids=new Set([f.id]); const ft=months.reduce((s2,m)=>s2+fundMonthCap(f.id,m),0);
       const cells=months.map(m=>{const cap=fundMonthCap(f.id,m);if(cap<0.005)return `<div style="height:30px"></div>`;const u=usedOf(fids,m);const w=Math.min(100,(u.cons+u.comp)/cap*100);const a=Math.min(.55,.12+cap/Math.max(1,ft)*1.2);
         return `<div title="${fmtMes(m+'-01')} · cap ${BRL(cap)} · consumed ${BRL(u.cons)} · committed ${BRL(u.comp)}" style="height:30px;border-radius:5px;position:relative;overflow:hidden;background:${f.aprovacao_status==='PENDENTE'?'rgba(255,176,32,.18)':`rgba(77,125,255,${a.toFixed(2)})`};display:grid;place-items:center;font-family:var(--mono);font-size:9.5px;color:var(--txt-soft)">${BRLc(cap).replace('R$ ','')}<div style="position:absolute;left:0;bottom:0;height:3px;background:#4d7dff;width:${w}%"></div></div>`;}).join('');
-      return `<div onclick="openFundDetail('${esc(f.id)}')" class="proj-row" style="display:grid;grid-template-columns:${COLS};gap:12px;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);background:rgba(255,255,255,.015);cursor:pointer">
+      return `<div onclick="openFundDetail('${escJs(f.id)}')" class="proj-row" style="display:grid;grid-template-columns:${COLS};gap:12px;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);background:rgba(255,255,255,.015);cursor:pointer">
         <div style="padding-left:20px;min-width:0"><div style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#9fb5ff">${esc(f.nome)}</div><div style="font-size:11.5px;color:var(--txt-3);display:flex;gap:6px;align-items:center;white-space:nowrap;overflow:hidden">${esc(f.agencia||'—')} · ${esc(actColLabel(actKey(f)))}${f.aprovacao_status==='PENDENTE'?'<span style="font-size:10px;font-weight:700;padding:0 6px;border-radius:10px;background:rgba(255,176,32,.16);color:#ffb020">awaiting approval</span>':''}</div></div>
         <div class="mono" style="text-align:right;font-size:12px;color:var(--txt-2)">${BRLc(ft)}</div>
         <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:3px">${cells}</div>
       </div>`;}).join(''):'';
     return `<div>
-      <div onclick="campTlToggle('${esc(g.id)}')" style="display:grid;grid-template-columns:${COLS};gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer">
-        <div style="display:flex;gap:10px;align-items:center;min-width:0"><span style="font-size:10px;color:var(--txt-3);width:10px">${funds.length?(open?'▼':'▶'):''}</span><div style="min-width:0"><div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${g.camp?'':'color:var(--txt-2)'}">${esc(g.name)}</div><div style="font-size:12px;color:var(--txt-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${meta}${g.camp?` · <a onclick="event.stopPropagation();openCampanhaDetail('${esc(g.id)}')" style="cursor:pointer">open</a>`:''}</div></div></div>
+      <div onclick="campTlToggle('${escJs(g.id)}')" style="display:grid;grid-template-columns:${COLS};gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer">
+        <div style="display:flex;gap:10px;align-items:center;min-width:0"><span style="font-size:10px;color:var(--txt-3);width:10px">${funds.length?(open?'▼':'▶'):''}</span><div style="min-width:0"><div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${g.camp?'':'color:var(--txt-2)'}">${esc(g.name)}</div><div style="font-size:12px;color:var(--txt-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${meta}${g.camp?` · <a onclick="event.stopPropagation();openCampanhaDetail('${escJs(g.id)}')" style="cursor:pointer">open</a>`:''}</div></div></div>
         <div style="text-align:right"><div class="mono" style="font-size:12.5px;font-weight:700">${BRLc(tot)}</div><div class="mono" style="font-size:11px;color:var(--txt-3)">${tot?Math.round(used/tot*100):0}% used</div></div>
         <div style="position:relative;height:20px">${s0<0?'':`<div style="position:absolute;top:0;bottom:0;border-radius:6px;overflow:hidden;left:${s0/12*100+.3}%;width:${(e0-s0+1)/12*100-.6}%;background:${g.camp?col:'transparent'};border:1.5px ${g.camp?'solid':'dashed'} ${col};box-shadow:0 0 16px -4px ${col}"><div style="height:100%;background:rgba(5,7,13,.38);width:${tot?Math.min(100,used/tot*100):0}%"></div></div>`}</div>
       </div>
@@ -7333,7 +7370,7 @@ function renderCampanhasList(){
     const cats=campCategorias(c.id);
     const funds=campFunds(c.id);
     const sm=campStatusMeta(c.status);
-    return `<div class="camp-item" onclick="openCampanhaDetail('${esc(c.id)}')" style="padding:12px 14px;cursor:pointer;border-bottom:1px solid var(--line)" onmouseover="this.style.background='var(--paper-2)'" onmouseout="this.style.background=''">
+    return `<div class="camp-item" onclick="openCampanhaDetail('${escJs(c.id)}')" style="padding:12px 14px;cursor:pointer;border-bottom:1px solid var(--line)" onmouseover="this.style.background='var(--paper-2)'" onmouseout="this.style.background=''">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <span style="flex:1;min-width:160px">
           <b style="font-family:'Hanken Grotesk',sans-serif;font-size:13.5px;display:block">${esc(c.nome)}</b>
@@ -7364,7 +7401,7 @@ function openCampanhaDetail(id){
   const rows=funds.length?funds.map(f=>{
     const cap=st.cap[f.id]||0, cn=st.cons[f.id]||0, cm=st.comp[f.id]||0, pd=st.pend[f.id]||0;
     const am=actMeta(f.activity), km=catMeta(String(f.product_category||'').trim()||'Uncategorized');
-    return `<div onclick="openFundDetail('${esc(f.id)}')" style="padding:11px 14px;border-bottom:1px solid var(--line);cursor:pointer" onmouseover="this.style.background='var(--paper-2)'" onmouseout="this.style.background=''">
+    return `<div onclick="openFundDetail('${escJs(f.id)}')" style="padding:11px 14px;border-bottom:1px solid var(--line);cursor:pointer" onmouseover="this.style.background='var(--paper-2)'" onmouseout="this.style.background=''">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <span style="flex:1;min-width:180px">
           <b style="font-size:13px;display:block">${esc(f.nome)}</b>
@@ -7399,7 +7436,7 @@ function openCampanhaDetail(id){
       </div>
     </div>
     <div class="modal-b" style="padding:0">${(function(){const strip=campanhaMonthBreakdownHTML(id);return strip?`<div style="padding:16px 18px 2px">${strip}</div>`:'';})()}${rows}</div>
-    <div class="modal-f"><span style="font-size:11px;color:var(--txt-3)">Click a fund for its month-by-month detail.</span><div style="display:flex;gap:10px">${canEdit?`<button class="btn-ghost" onclick="openCampanhaEdit('${esc(id)}')">Edit campaign</button>`:''}<button class="btn-po" onclick="closeModal()">Close</button></div></div>
+    <div class="modal-f"><span style="font-size:11px;color:var(--txt-3)">Click a fund for its month-by-month detail.</span><div style="display:flex;gap:10px">${canEdit?`<button class="btn-ghost" onclick="openCampanhaEdit('${escJs(id)}')">Edit campaign</button>`:''}<button class="btn-po" onclick="closeModal()">Close</button></div></div>
   </div></div>`;
 }
 let CAMPEDIT=null;
@@ -7438,7 +7475,7 @@ function campFundPickerHTML(ce){
     const checked=ce.funds.includes(f.id);
     const elsewhere=f.campanha_id&&f.campanha_id!==ce.id?(DATA.campanhas||[]).find(c=>c.id===f.campanha_id):null;
     return `<label style="display:flex;align-items:center;gap:9px;padding:7px 4px;cursor:pointer;border-bottom:1px solid var(--line)">
-      <input type="checkbox" ${checked?'checked':''} onchange="campEditToggleFund('${esc(f.id)}')" style="flex-shrink:0;width:auto;margin:0">
+      <input type="checkbox" ${checked?'checked':''} onchange="campEditToggleFund('${escJs(f.id)}')" style="flex-shrink:0;width:auto;margin:0">
       <span style="flex:1;min-width:0;font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.nome)}</span>
       <span style="font-size:10.5px;color:var(--txt-3);flex-shrink:0">${esc(f.agencia||'—')}</span>
       ${elsewhere?`<span class="badge s-amber" style="flex-shrink:0;font-size:9.5px;padding:1px 7px">reassign from ${esc(elsewhere.nome)}</span>`:''}
@@ -7461,7 +7498,7 @@ function renderCampanhaForm(){
         <div style="font-size:11px;color:var(--txt-3);margin-top:7px">Budget and categories come from the linked funds.</div>
       </div>
     </div>
-    <div class="modal-f"><span>${(editing&&PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarCampanha('${esc(ce.id)}')">Delete campaign</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-po" onclick="submitCampanha()">${editing?'Save':'Create campaign'}</button></div></div>
+    <div class="modal-f"><span>${(editing&&PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarCampanha('${escJs(ce.id)}')">Delete campaign</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-po" onclick="submitCampanha()">${editing?'Save':'Create campaign'}</button></div></div>
   </div></div>`;
 }
 async function submitCampanha(){
@@ -7556,7 +7593,7 @@ function tlProjActivitiesHTML(p,min,dayPct,weeks){
     prevEnd=endStr;
     let bar;
     if(e<min){
-      bar=t.fim?`<span onclick="tlJumpTo('${esc(t.fim)}')" title="Jump the timeline back to this date" style="position:absolute;left:8px;top:9px;font-size:9.5px;font-weight:700;color:var(--txt-3);cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px">◀ ${fmtDate(t.fim)}</span>`
+      bar=t.fim?`<span onclick="tlJumpTo('${escJs(t.fim)}')" title="Jump the timeline back to this date" style="position:absolute;left:8px;top:9px;font-size:9.5px;font-weight:700;color:var(--txt-3);cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px">◀ ${fmtDate(t.fim)}</span>`
         :`<span style="position:absolute;left:8px;top:9px;font-size:9.5px;font-weight:700;color:var(--txt-3)">◀ —</span>`;
     }else if(s>=winEnd){
       bar=`<span style="position:absolute;right:8px;top:9px;font-size:9.5px;font-weight:700;color:var(--txt-3)">${t.fim?fmtDate(t.fim):'—'} ▶</span>`;
@@ -7615,7 +7652,7 @@ function renderTimeline(){
     const s=new Date(projEffStart(p)+'T00:00:00'), e=new Date(p.prazo+'T00:00:00');
     let bar;
     if(e<min){
-      bar=`<span onclick="event.stopPropagation();tlJumpTo('${esc(p.prazo)}')" title="Jump the timeline back to this date" style="position:absolute;left:8px;top:15px;font-size:10px;font-weight:700;color:var(--txt-3);cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px">◀ ended ${fmtDate(p.prazo)}</span>`;
+      bar=`<span onclick="event.stopPropagation();tlJumpTo('${escJs(p.prazo)}')" title="Jump the timeline back to this date" style="position:absolute;left:8px;top:15px;font-size:10px;font-weight:700;color:var(--txt-3);cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px">◀ ended ${fmtDate(p.prazo)}</span>`;
     }else if(s>=winEnd){
       bar=`<span style="position:absolute;right:8px;top:15px;font-size:10px;font-weight:700;color:var(--txt-3)">starts ${fmtDate(projEffStart(p))} ▶</span>`;
     }else{
@@ -7626,12 +7663,12 @@ function renderTimeline(){
     }
     const open=!!TL_EXPANDED[p.id];
     return `<div>
-    <div onclick="tlToggleProjRow('${esc(p.id)}')" style="display:flex;border-bottom:1px solid var(--line);align-items:center;cursor:pointer;background:${open?'var(--paper-2)':''}">
+    <div onclick="tlToggleProjRow('${escJs(p.id)}')" style="display:flex;border-bottom:1px solid var(--line);align-items:center;cursor:pointer;background:${open?'var(--paper-2)':''}">
       <div style="width:230px;flex-shrink:0;padding:11px 16px;border-right:1px solid var(--line);min-width:0;display:flex;align-items:center;gap:7px">
         <span style="color:var(--txt-3);display:flex;flex-shrink:0;transform:rotate(${open?'0deg':'-90deg'});transition:transform .15s">${icn('chev',11)}</span>
         <span style="min-width:0"><div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.nome)}</div><div style="font-size:11px;color:var(--txt-3);margin-top:1px">${esc(respName(p.resp)||'—')} · ${esc(stg.name)}</div></span>
-        <button onclick="event.stopPropagation();openProj('${esc(p.id)}')" title="Open project" style="margin-left:auto;flex-shrink:0;border:none;background:none;color:var(--txt-3);cursor:pointer;padding:2px;display:inline-flex">${icn('pencil',12)}</button>
-        <button onclick="event.stopPropagation();exportProjTimeline('${esc(p.id)}')" title="Share timeline (link)" style="flex-shrink:0;border:none;background:none;color:var(--txt-3);cursor:pointer;padding:2px;display:inline-flex">${icn('link',12)}</button>
+        <button onclick="event.stopPropagation();openProj('${escJs(p.id)}')" title="Open project" style="margin-left:auto;flex-shrink:0;border:none;background:none;color:var(--txt-3);cursor:pointer;padding:2px;display:inline-flex">${icn('pencil',12)}</button>
+        <button onclick="event.stopPropagation();exportProjTimeline('${escJs(p.id)}')" title="Share timeline (link)" style="flex-shrink:0;border:none;background:none;color:var(--txt-3);cursor:pointer;padding:2px;display:inline-flex">${icn('link',12)}</button>
       </div>
       <div style="flex:1;position:relative;height:46px">${hiliteStripe}${bar}</div>
     </div>
@@ -7684,7 +7721,7 @@ function renderTeam(){
       <div class="mono" style="text-align:right;font-size:14px;color:${late?'#ff6b6b':'var(--txt-3)'};font-weight:700">${late}</div>
       <div class="mono" style="text-align:right;font-size:14px">${dueWeek}</div>
       <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;height:10px;border-radius:5px;background:rgba(255,255,255,.08);overflow:hidden;position:relative"><div style="height:100%;border-radius:5px;width:${capPct/120*100}%;background:${lc};box-shadow:0 0 12px ${lc}"></div><div style="position:absolute;top:-2px;bottom:-2px;left:83.3%;width:2px;background:rgba(255,255,255,.5)"></div></div><span class="mono" style="font-size:12.5px;font-weight:700;width:42px;text-align:right;color:${lc}">${capPct}%</span></div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px">${items.slice(0,3).map(p=>`<span onclick="openProj('${esc(p.id)}')" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 9px;border-radius:20px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1)"><span style="width:6px;height:6px;border-radius:50%;background:${(p.categorias||[]).length?catMeta(p.categorias[0]).c:healthPill(p.status).dot}"></span>${esc(p.nome.length>20?p.nome.slice(0,18)+'…':p.nome)}</span>`).join('')}${items.length>3?`<span style="font-size:11.5px;color:var(--txt-3);padding:3px 4px">+${items.length-3}</span>`:''}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">${items.slice(0,3).map(p=>`<span onclick="openProj('${escJs(p.id)}')" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 9px;border-radius:20px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1)"><span style="width:6px;height:6px;border-radius:50%;background:${(p.categorias||[]).length?catMeta(p.categorias[0]).c:healthPill(p.status).dot}"></span>${esc(p.nome.length>20?p.nome.slice(0,18)+'…':p.nome)}</span>`).join('')}${items.length>3?`<span style="font-size:11.5px;color:var(--txt-3);padding:3px 4px">+${items.length-3}</span>`:''}</div>
     </div>`;
   }).join('');
   const totalOpenTasks=names.reduce((s,n)=>s+load[n].reduce((s2,p)=>s2+((p.tasks||[]).filter(t=>!t.done).length),0),0);
@@ -7749,12 +7786,12 @@ function renderWeekly(){
   const tasksDone=list.reduce((s,p)=>s+((p.tasks||[]).filter(t=>t.done).length),0);
   const kpi=(l,n,sub,c)=>`<div style="background:var(--surf);border:1px solid var(--line-card);border-radius:14px;padding:16px 18px"><div class="mono" style="font-size:11.5px;color:var(--txt-3)">${l}</div><div class="mono" style="font-size:26px;font-weight:700;margin-top:4px;color:${c||'var(--txt)'}">${n}</div><div style="font-size:12.5px;color:var(--txt-2)">${sub}</div></div>`;
   const row=(p,showConclude)=>{const hp=healthPill(p.status);const pr=computeProg(p);const own=respName(p.resp);const lu=latestLog(p);
-    return `<div class="proj-row" onclick="openProj('${esc(p.id)}')" style="display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) 96px 120px ${showConclude?'150px':'0'};gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer">
+    return `<div class="proj-row" onclick="openProj('${escJs(p.id)}')" style="display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) 96px 120px ${showConclude?'150px':'0'};gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer">
       <div style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.nome)}</div><div style="font-size:12px;color:var(--txt-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${lu?esc(lu.txt):esc(stageOf(p.etapa).name)}</div></div>
       <div style="display:flex;align-items:center;gap:9px;min-width:0"><span class="avatar" style="width:26px;height:26px;font-size:10.5px;background:${avColor(own)}">${initials(own)}</span><span style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(own||'—')}</span></div>
       <span style="display:inline-flex;align-items:center;gap:6px;justify-self:start;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:20px;background:${hp.bg};color:${hp.fg}"><span style="width:6px;height:6px;border-radius:50%;background:${hp.dot}"></span>${hp.name}</span>
       <div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden"><div style="height:100%;border-radius:3px;background:#4d7dff;width:${pr}%"></div></div><span class="mono" style="font-size:12px;color:var(--txt-2)">${pr}%</span></div>
-      ${showConclude?`<span style="text-align:right">${canEdit(p)&&!VIEW_AS?`<button onclick="event.stopPropagation();weeklyMarkConcluded('${esc(p.id)}')" class="chip-sel" style="font-size:12px;padding:6px 11px;display:inline-flex;align-items:center;gap:5px">${icn('check',11)} Mark concluded</button>`:''}</span>`:'<span></span>'}
+      ${showConclude?`<span style="text-align:right">${canEdit(p)&&!VIEW_AS?`<button onclick="event.stopPropagation();weeklyMarkConcluded('${escJs(p.id)}')" class="chip-sel" style="font-size:12px;padding:6px 11px;display:inline-flex;align-items:center;gap:5px">${icn('check',11)} Mark concluded</button>`:''}</span>`:'<span></span>'}
     </div>`;};
   const sec=(eyebrow,title,col,items,showConclude,empty)=>v2Card(`<span style="color:${col}">●</span> ${eyebrow}`,`${title} <span class="mono" style="font-size:14px;color:var(--txt-3);margin-left:6px">${items.length}</span>`,
     items.length?`<div style="overflow-x:auto;margin-top:8px"><div style="min-width:720px">${items.map(p=>row(p,showConclude)).join('')}</div></div>`:`<div style="font-size:13px;color:var(--txt-3);margin-top:8px">${empty}</div>`);
@@ -7784,7 +7821,7 @@ async function weeklyMarkConcluded(pid){
   if(!canEdit(p)){ toast('Only the owner or admin can do this.'); return; }
   if(VIEW_AS){ toast(roMsg()); return; }
   p.weeklyConcluded=true;
-  try{ if(!DEMO_MODE){ const {error}=await SBPO.from('act_projects').upsert({id:p.id,data:projClean(p)}); if(error)throw error; } toast('Moved to Concluded ✓'); }
+  try{ await projWrite(p); toast('Moved to Concluded ✓'); }
   catch(e){ p.weeklyConcluded=false; toastErr(e); return; }
   go(SCREEN);
 }
@@ -7806,10 +7843,10 @@ function renderMyTasks(){
   return `<div style="display:grid;grid-template-columns:1.3fr 1fr;gap:18px">
     <div style="background:var(--card);border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
       <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">My checklist</b><span style="font-size:11px;color:var(--txt-3);font-weight:600">${checks.length} pending</span></div>
-      <div style="padding:4px 10px 10px">${checks.length?checks.map(c=>{const d=dueTag(c.fim);return `<div style="display:flex;align-items:center;gap:11px;padding:11px 6px;border-bottom:1px solid var(--line)"><button onclick="toggleMyTask('${esc(c.pid)}','${esc(c.tid)}')" style="width:19px;height:19px;border-radius:6px;border:2px solid #c7ccd8;background:var(--card);cursor:pointer;flex-shrink:0"></button><div style="flex:1;min-width:0;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.title)} <span style="color:var(--txt-3);font-size:11.5px">· ${esc(c.proj)}</span></div><span style="flex-shrink:0;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;background:${d.bg};color:${d.fg}">${d.txt}</span></div>`;}).join(''):'<div class="empty">No pending tasks.</div>'}</div></div>
+      <div style="padding:4px 10px 10px">${checks.length?checks.map(c=>{const d=dueTag(c.fim);return `<div style="display:flex;align-items:center;gap:11px;padding:11px 6px;border-bottom:1px solid var(--line)"><button onclick="toggleMyTask('${escJs(c.pid)}','${escJs(c.tid)}')" style="width:19px;height:19px;border-radius:6px;border:2px solid #c7ccd8;background:var(--card);cursor:pointer;flex-shrink:0"></button><div style="flex:1;min-width:0;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.title)} <span style="color:var(--txt-3);font-size:11.5px">· ${esc(c.proj)}</span></div><span style="flex-shrink:0;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;background:${d.bg};color:${d.fg}">${d.txt}</span></div>`;}).join(''):'<div class="empty">No pending tasks.</div>'}</div></div>
     <div style="background:var(--card);border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
       <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line)"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:14px">Requests / mentions</b></div>
-      <div style="padding:12px 14px;display:flex;flex-direction:column;gap:10px">${ms.length?ms.map(m=>`<div style="border:1px solid var(--line);border-radius:11px;padding:12px 14px;background:var(--violet-bg);cursor:${m.pid?'pointer':'default'}" ${m.pid?`onclick="openProj('${esc(m.pid)}')"`:''}><div style="font-weight:600;font-size:13px">${esc(m.proj)}</div><div style="font-size:12px;color:var(--txt-2);margin-top:3px">${fmtLogTxt(m.txt)}</div><div style="font-size:11px;color:var(--txt-3);margin-top:4px">from <b style="color:var(--txt-2)">${esc(m.autor)}</b> · ${fmtDate(m.t)}</div></div>`).join(''):'<div class="empty">No requests.</div>'}</div></div>
+      <div style="padding:12px 14px;display:flex;flex-direction:column;gap:10px">${ms.length?ms.map(m=>`<div style="border:1px solid var(--line);border-radius:11px;padding:12px 14px;background:var(--violet-bg);cursor:${m.pid?'pointer':'default'}" ${m.pid?`onclick="openProj('${escJs(m.pid)}')"`:''}><div style="font-weight:600;font-size:13px">${esc(m.proj)}</div><div style="font-size:12px;color:var(--txt-2);margin-top:3px">${fmtLogTxt(m.txt)}</div><div style="font-size:11px;color:var(--txt-3);margin-top:4px">from <b style="color:var(--txt-2)">${esc(m.autor)}</b> · ${fmtDate(m.t)}</div></div>`).join(''):'<div class="empty">No requests.</div>'}</div></div>
   </div>`;
 }
 async function toggleMyTask(pid,tid){
@@ -7817,7 +7854,7 @@ async function toggleMyTask(pid,tid){
   const t=(p.tasks||[]).find(x=>x.id===tid); if(!t)return;
   t.done=!t.done; if(t.done)t.pct=100;
   p.etapa=effectiveEtapa(p); p.status=autoStatus(p);
-  try{ await SBPO.from('act_projects').upsert({id:p.id,data:p}); toast('Activity updated ✓'); }catch(e){ toast('Error saving.'); }
+  try{ await projWrite(p); toast('Activity updated ✓'); }catch(e){ toastErr(e); }
   go(SCREEN);
 }
 let AGWORK_SORT={col:null,dir:1};
@@ -8206,7 +8243,7 @@ function ccDrillCons(a,m){
        every one of them was inert. Clicking a line now opens that PO, and
        CC_DRILL_BACK (already set above) gives the detail a way back to this
        breakdown. */
-    return `<div class="cc-camp-row" onclick="openPODetail('${esc(po.id)}')" title="Open this PO" style="display:grid;grid-template-columns:${cols};gap:10px;padding:9px 12px;border-bottom:1px solid var(--line);font-size:12px;align-items:center;cursor:pointer">
+    return `<div class="cc-camp-row" onclick="openPODetail('${escJs(po.id)}')" title="Open this PO" style="display:grid;grid-template-columns:${cols};gap:10px;padding:9px 12px;border-bottom:1px solid var(--line);font-size:12px;align-items:center;cursor:pointer">
       <span style="min-width:0"><b style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.descricao||'—')}</b><span class="mono" style="font-size:10.5px;color:var(--txt-3)">${esc(po.numero_po||'no PO number')}${po.nf_numero?' · NF '+esc(po.nf_numero):''} · ${esc(po.agencia||'—')}</span></span>
       <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txt-2)">${esc(d.proj.nome||'—')}${d.categoria?`<span style="font-size:10.5px;color:var(--txt-3)"> · ${esc(d.categoria)}</span>`:''}</span>
       <span><span class="badge ${s.c}" style="font-size:10px"><span class="d"></span>${esc(s.t)}</span></span>
@@ -8241,7 +8278,7 @@ function ccDrillBudget(a,m){
   const rows=det.map(d=>{
     const c=consBy[d.proj.id]||0, bal=d.valor-c;
     const cut=canSeeCorte()?fundMonthCut(d.proj.id,m):0;
-    return `<div class="cc-camp-row" onclick="openFundDetail('${esc(d.proj.id)}')" title="Open fund" style="display:grid;grid-template-columns:${cols};gap:10px;padding:9px 12px;border-bottom:1px solid var(--line);font-size:12px;align-items:center">
+    return `<div class="cc-camp-row" onclick="openFundDetail('${escJs(d.proj.id)}')" title="Open fund" style="display:grid;grid-template-columns:${cols};gap:10px;padding:9px 12px;border-bottom:1px solid var(--line);font-size:12px;align-items:center">
       <span style="min-width:0"><b style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.proj.nome||'—')}</b><span style="font-size:10.5px;color:var(--txt-3)">${esc(d.proj.agencia||'—')}${d.proj.rateio?' · rateio '+esc(d.proj.rateio_tipo||''):''}${cut?`<span style="color:var(--red);font-weight:700"> · ${BRL(cut)} cut (approved ${BRL(d.valor+cut)})</span>`:''}</span></span>
       <span style="font-size:11px;font-weight:700;color:var(--txt-2)">${esc(d.categoria||'—')}</span>
       <span class="mono" style="text-align:right;font-weight:700">${BRL(d.valor)}</span>
@@ -8346,7 +8383,7 @@ function feeSplitBlock(only){
   const rateioRow=k=>{
     const rows=groups[k]; const open=!!RATEIO_ACC_OPEN[k];
     return `<div style="border-bottom:1px solid var(--line)">
-      <div style="display:flex;align-items:center;gap:10px;padding:11px 4px;cursor:pointer" onclick="toggleRateioAcc('${esc(k)}')">
+      <div style="display:flex;align-items:center;gap:10px;padding:11px 4px;cursor:pointer" onclick="toggleRateioAcc('${escJs(k)}')">
         <span style="flex:1;font-weight:600;font-size:13px">Rateio ${esc(k)}</span>
         <span style="font-size:11px;color:var(--txt-3);font-weight:600">${rows.length} split(s)</span>
         <span style="font-size:11px;color:var(--txt-3)">${open?'▲':'▼'}</span>
@@ -8577,7 +8614,7 @@ function fundPOsListHTML(p){
   let pos=(DATA.pos||[]).filter(po=>po.fund_id===p.id);
   if(PAPEL==='agencia'&&MINHA_AGENCIA) pos=pos.filter(po=>po.agencia===MINHA_AGENCIA);
   pos.sort((a,b)=>String(b.competencia||'').localeCompare(String(a.competencia||'')));
-  const poRow=po=>{const s=PO_STATUS[po.status]||{t:po.status,c:'s-slate'};return `<div onclick="event.stopPropagation();openPODetail('${esc(po.id)}')" style="display:flex;align-items:center;gap:10px;padding:8px 11px;border:1px solid var(--line);border-radius:9px;margin-bottom:6px;cursor:pointer;background:var(--card)" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background='#fff'">
+  const poRow=po=>{const s=PO_STATUS[po.status]||{t:po.status,c:'s-slate'};return `<div onclick="event.stopPropagation();openPODetail('${escJs(po.id)}')" style="display:flex;align-items:center;gap:10px;padding:8px 11px;border:1px solid var(--line);border-radius:9px;margin-bottom:6px;cursor:pointer;background:var(--card)" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background='#fff'">
     <span style="flex:1;min-width:0;font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.numero_po||po.descricao||'PO')}${po.numero_po&&po.descricao?` <span style="font-weight:400;color:var(--txt-3)">· ${esc(po.descricao)}</span>`:''}</span>
     <span class="mono" style="font-size:11px;color:var(--txt-3);flex-shrink:0">${fmtMes(po.competencia)}</span>
     <span class="badge ${s.c}" style="font-size:10.5px;flex-shrink:0"><span class="d"></span>${s.t}</span>
@@ -8846,7 +8883,7 @@ function openCutDetail(){
   const body=linhas.length?linhas.map(l=>{
     const corte=l.tipo==='corte';
     const cm=catMeta(String(l.p.product_category||'').trim()||'Uncategorized');
-    return `<div onclick="closeModal();openFundDetail('${esc(l.p.id)}')" style="display:flex;align-items:flex-start;gap:11px;padding:10px 4px;border-bottom:1px solid var(--line);cursor:pointer" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
+    return `<div onclick="closeModal();openFundDetail('${escJs(l.p.id)}')" style="display:flex;align-items:flex-start;gap:11px;padding:10px 4px;border-bottom:1px solid var(--line);cursor:pointer" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
       <span class="ich" style="width:26px;height:26px;background:${corte?'var(--red-bg)':'var(--blue-bg)'};color:${corte?'var(--red)':'var(--blue)'};flex-shrink:0">${icn(corte?'scale':'calendar',13)}</span>
       <span style="flex:1;min-width:0">
         <b style="font-size:12.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.p.nome||'—')}</b>
@@ -8894,7 +8931,7 @@ function openBucketDetail(kind){
   const total=pos.reduce((s2,po)=>s2+(+po.valor||0),0);
   const body=pos.length?pos.map(po=>{
     const f=nomeDe[po.fund_id]||{}, sm=PO_STATUS[po.status]||{t:po.status,c:'s-slate'};
-    return `<div onclick="closeModal();openPODetail('${esc(po.id)}')" style="display:flex;align-items:center;gap:11px;padding:10px 4px;border-bottom:1px solid var(--line);cursor:pointer" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
+    return `<div onclick="closeModal();openPODetail('${escJs(po.id)}')" style="display:flex;align-items:center;gap:11px;padding:10px 4px;border-bottom:1px solid var(--line);cursor:pointer" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
       <span style="flex:1;min-width:0">
         <b style="font-size:12.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.descricao||po.numero_po||'PO')}</b>
         <span style="font-size:11px;color:var(--txt-3);font-weight:600">${esc(f.nome||'—')} · ${esc(fmtMes(po.competencia))} · ${esc(po.agencia||'—')}${po.numero_po?' · '+esc(po.numero_po):''}</span>
@@ -8935,7 +8972,7 @@ function openProvisionedDetail(){
         <span class="mono" style="flex-shrink:0;font-size:14px;font-weight:800;color:${g.total<-0.005?'var(--po)':'var(--green)'}">${BRL(g.total)}</span>
       </div>
       ${g.funds.sort((a,b)=>b.free-a.free).map(({p,free})=>`
-        <div onclick="closeModal();openFundDetail('${esc(p.id)}')" style="display:flex;align-items:center;gap:9px;padding:6px 0 6px 37px;cursor:pointer;font-size:12px" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
+        <div onclick="closeModal();openFundDetail('${escJs(p.id)}')" style="display:flex;align-items:center;gap:9px;padding:6px 0 6px 37px;cursor:pointer;font-size:12px" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
           <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome||'—')}<span style="color:var(--txt-3);font-size:10.5px"> · ${esc(p.agencia||'—')}${free<-0.005?' · spent over its cap':''}</span></span>
           <span class="mono" style="flex-shrink:0;font-weight:700;color:${free<-0.005?'var(--po)':'var(--txt)'}">${BRL(free)}</span>
         </div>`).join('')}
@@ -9000,7 +9037,7 @@ function openAvailableByCat(){
         <span class="mono" style="flex-shrink:0;font-weight:700;color:var(--blue)">${BRL(u.livre)}</span>
       </div>`).join('');
     const fl=ul+r.funds.slice().sort((a,b)=>b.free-a.free).map(({p,free})=>`
-      <div onclick="closeModal();openFundDetail('${esc(p.id)}')" style="display:flex;align-items:center;gap:9px;padding:6px 0 6px 37px;cursor:pointer;font-size:12px" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
+      <div onclick="closeModal();openFundDetail('${escJs(p.id)}')" style="display:flex;align-items:center;gap:9px;padding:6px 0 6px 37px;cursor:pointer;font-size:12px" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
         <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nome||'—')}<span style="color:var(--txt-3);font-size:10.5px"> · ${esc(p.agencia||'—')} · ${free<-0.005?'allocated over its approved cap':'approved '+BRL(+p.cap_aprovado||0)+', not yet placed in a month'}</span></span>
         <span class="mono" style="flex-shrink:0;font-weight:700;color:${free<-0.005?'var(--po)':'var(--txt)'}">${BRL(free)}</span>
       </div>`).join('');
@@ -9234,7 +9271,7 @@ function renderBudgetOverview(isBalance){
   /* Alerts (over cap / near cap / unused past months) — kept, as one quiet
      list card under the hero instead of a stack of coloured banners. */
   const ALERT_C={over:'#ff5c6c',near:'#ffb020',realloc:'#4fb8ff'};
-  const alertsHTML=alerts.length?v2Card(`needs attention · ${alerts.length}`,'Alerts',`<div style="margin-top:8px">${alerts.slice(0,BO_ALERTS_ALL?99:4).map(a=>{const action=a.sev==='realloc'?`openReallocModal('${esc(a.id)}','${a.mes}',${a.saldo})`:`openFundDetail('${esc(a.id)}')`;
+  const alertsHTML=alerts.length?v2Card(`needs attention · ${alerts.length}`,'Alerts',`<div style="margin-top:8px">${alerts.slice(0,BO_ALERTS_ALL?99:4).map(a=>{const action=a.sev==='realloc'?`openReallocModal('${escJs(a.id)}','${a.mes}',${a.saldo})`:`openFundDetail('${escJs(a.id)}')`;
       return `<div style="display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.06)"><span style="width:8px;height:8px;border-radius:50%;background:${ALERT_C[a.sev]||ALERT_C.near}"></span><span style="font-size:13px;color:var(--txt-soft)">${a.html}</span><a onclick="${action}" style="font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">${a.sev==='realloc'?'Reallocate →':'View fund →'}</a></div>`;}).join('')}${alerts.length>4?`<a onclick="BO_ALERTS_ALL=!BO_ALERTS_ALL;go('bo')" style="display:inline-block;font-size:13px;font-weight:600;margin-top:12px;cursor:pointer">${BO_ALERTS_ALL?'Show fewer':`Show all ${alerts.length} →`}</a>`:''}</div>`):'';
   const mRows=v2MonthRows(fundIds,true);
   const monthChart=v2Card('consumed + committed per month vs monthly cap','Month by month',`<div style="margin-top:18px">${v2MonthChart(mRows)}</div>`);
@@ -9336,7 +9373,7 @@ function boPiePanel(hideMoney,_c){
   const cats=d.cats;
   const catCard=v2Card('share of budgeted','By category',cats.items.length?`<div style="display:grid;grid-template-columns:170px minmax(0,1fr);gap:20px;align-items:center;margin-top:14px">
       ${v2Donut(cats.items,cats.total,hideMoney?'100%':BRLc(cats.total),'budgeted')}
-      <div style="display:flex;flex-direction:column;gap:9px">${cats.items.map(it=>`<a ${it.k==='__other'?'':`onclick="budgetSetCat('${esc(it.k)}')" `}style="display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:10px;align-items:center;color:var(--txt);cursor:${it.k==='__other'?'default':'pointer'}">
+      <div style="display:flex;flex-direction:column;gap:9px">${cats.items.map(it=>`<a ${it.k==='__other'?'':`onclick="budgetSetCat('${escJs(it.k)}')" `}style="display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:10px;align-items:center;color:var(--txt);cursor:${it.k==='__other'?'default':'pointer'}">
         <span style="width:10px;height:10px;border-radius:3px;background:${it.color}"></span>
         <span style="font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(catKeyLabel(it.label))}</span>
         <span style="text-align:right;white-space:nowrap"><b class="mono" style="font-size:13px">${cats.total?(it.v/cats.total*100).toFixed(1):0}%</b>${hideMoney?'':` <span class="mono" style="font-size:11.5px;color:var(--txt-3)">${BRLc(it.v)}</span>`}</span>
@@ -9501,9 +9538,9 @@ function budgetCategoryCampaignsHTML(list){
     return na.localeCompare(nb);
   }).map(cid=>{
     const c=(DATA.campanhas||[]).find(x=>x.id===cid)||{nome:'—'};
-    return row(c.nome,byCamp[cid],`openCampanhaDetail('${esc(cid)}')`);
+    return row(c.nome,byCamp[cid],`openCampanhaDetail('${escJs(cid)}')`);
   }).join('');
-  const standaloneRows=standalone.map(p=>row(p.nome,[p],`jumpToFunds('${esc(BUDGET_CAT)}','${esc(actKey(p))}')`)).join('');
+  const standaloneRows=standalone.map(p=>row(p.nome,[p],`jumpToFunds('${escJs(BUDGET_CAT)}','${escJs(actKey(p))}')`)).join('');
   return v2Card('campaigns and funds in this category','Campaigns',`<div style="overflow-x:auto;margin-top:10px"><div style="min-width:820px">
       <div style="display:grid;grid-template-columns:${cols};gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.1);font-size:12px;color:var(--txt-3);font-weight:600"><div>Campaign · funds</div><div>Period</div><div style="text-align:right">Budgeted</div><div style="text-align:right">Consumed</div><div style="text-align:right">Committed</div><div style="text-align:right">Available</div><div style="text-align:right">Use</div></div>
       ${campRows}${standaloneRows}
@@ -9535,7 +9572,7 @@ function renderBudgets(){
   const sums=l=>({tot:l.reduce((s,p)=>s+(tetoBy[p.id]||0),0),cons:l.reduce((s,p)=>s+(consBy[p.id]||0),0),comp:l.reduce((s,p)=>s+(compBy[p.id]||0),0),pnd:l.reduce((s,p)=>s+(pendBy[p.id]||0),0)});
   const grand=catKeys.reduce((g,k)=>g+sums(byCat[k]||[]).tot,0)||1;
   const chips=`<div style="display:flex;gap:8px;flex-wrap:wrap">${catKeys.map(k=>{const mm=catMeta(k);const on=k===BUDGET_CAT;const st=sums(byCat[k]||[]);
-    return `<button onclick="budgetSetCat('${esc(k)}')" style="padding:9px 16px;border-radius:12px;font-weight:700;font-size:14px;border:1px solid ${on?mm.c:'rgba(255,255,255,.14)'};background:${on?'rgba(255,255,255,.07)':'transparent'};color:var(--txt);display:flex;align-items:center;gap:9px"><span style="width:9px;height:9px;border-radius:50%;background:${mm.c}"></span>${esc(catKeyLabel(k))}<span class="mono" style="font-size:12px;color:var(--txt-2);font-weight:500">${Math.round(st.tot/grand*100)}%</span></button>`;}).join('')}</div>`;
+    return `<button onclick="budgetSetCat('${escJs(k)}')" style="padding:9px 16px;border-radius:12px;font-weight:700;font-size:14px;border:1px solid ${on?mm.c:'rgba(255,255,255,.14)'};background:${on?'rgba(255,255,255,.07)':'transparent'};color:var(--txt);display:flex;align-items:center;gap:9px"><span style="width:9px;height:9px;border-radius:50%;background:${mm.c}"></span>${esc(catKeyLabel(k))}<span class="mono" style="font-size:12px;color:var(--txt-2);font-weight:500">${Math.round(st.tot/grand*100)}%</span></button>`;}).join('')}</div>`;
   const m=catMeta(BUDGET_CAT);
   const list=byCat[BUDGET_CAT]||[];
   const orc=orcByCat[BUDGET_CAT];
@@ -9559,8 +9596,8 @@ function renderBudgets(){
       <span style="font-size:24px;font-weight:800;letter-spacing:-.02em">${esc(orc?catKeyLabel(orc.nome||m.label):catKeyLabel(m.label))}</span>
       <span style="font-size:13px;color:var(--txt-2)">${campN?`${campN} campaign${campN===1?'':'s'} · `:''}${list.length} fund${list.length===1?'':'s'} · ${(t.tot/grand*100).toFixed(1)}% of the budget</span>
       <span style="flex:1"></span>
-      ${canBudget&&orc?`<button class="chip-sel" onclick="openOrcEdit('${esc(orc.id)}')">Edit budget</button>`:''}
-      <button class="chip-sel" style="color:var(--txt)" onclick="jumpToFunds('${esc(BUDGET_CAT)}','')">View funds →</button>
+      ${canBudget&&orc?`<button class="chip-sel" onclick="openOrcEdit('${escJs(orc.id)}')">Edit budget</button>`:''}
+      <button class="chip-sel" style="color:var(--txt)" onclick="jumpToFunds('${escJs(BUDGET_CAT)}','')">View funds →</button>
     </div>
     <div style="margin-top:18px">${v2KpiGrid(kpis)}</div>
     <div style="margin-top:18px">${v2Bar([{w:t.cons/base*100,bg:'#4d7dff',t:'Consumed'},{w:t.comp/base*100,bg:'#a685ff',t:'Committed'},{w:Math.max(0,av)/base*100,bg:'rgba(255,255,255,.16)',t:'Available'},...(seeCut?[{w:cut/base*100,bg:V2_HATCH,t:'Cut'}]:[])],14)}</div>
@@ -9569,7 +9606,7 @@ function renderBudgets(){
   const actOrder=Object.keys(byAct).sort((a,b)=>sums(byAct[b]).tot-sums(byAct[a]).tot);
   const actMax=Math.max(1,...actOrder.map(k=>sums(byAct[k]).tot));
   const actCard=v2Card('budgeted by activity · click to open its funds','By activity',actOrder.length?`<div style="display:flex;flex-direction:column;gap:12px;margin-top:14px">${actOrder.map(k=>{const a=sums(byAct[k]);const used=a.tot?Math.round((a.cons+a.comp)/a.tot*100):0;
-      return `<div onclick="jumpToFunds('${esc(BUDGET_CAT)}','${esc(k)}')" title="${byAct[k].length} fund(s) · ${used}% used" style="display:grid;grid-template-columns:96px minmax(0,1fr) 70px;gap:10px;align-items:center;cursor:pointer">
+      return `<div onclick="jumpToFunds('${escJs(BUDGET_CAT)}','${escJs(k)}')" title="${byAct[k].length} fund(s) · ${used}% used" style="display:grid;grid-template-columns:96px minmax(0,1fr) 70px;gap:10px;align-items:center;cursor:pointer">
         <span style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(actColLabel(k))}</span>
         <div style="height:8px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden;position:relative"><div style="position:absolute;inset:0 auto 0 0;border-radius:4px;opacity:.35;width:${a.tot/actMax*100}%;background:${m.c}"></div><div style="position:absolute;inset:0 auto 0 0;border-radius:4px;width:${Math.min(a.tot,a.cons+a.comp)/actMax*100}%;background:${m.c}"></div></div>
         <span class="mono" style="text-align:right;font-size:12px">${BRLc(a.tot)}</span></div>`;}).join('')}</div>`:'<div class="empty">No funds in this category yet.</div>',{style:'flex:1 1 320px;min-width:0'});
@@ -9696,7 +9733,7 @@ function renderPeople(){
       <span style="display:flex;align-items:center;gap:9px;min-width:0"><span class="avatar" style="width:26px;height:26px;background:${avColor(nome)};font-size:10px">${initials(nome)}</span><span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(nome)}</span></span>
       <span class="mono" style="font-size:11.5px;color:var(--txt-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(pe.email||'')}</span>
       <span><span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:${r.bg};color:${r.fg}">${r.t}</span>${pe.agencia_nivel==='po'?`<span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;background:var(--slate-bg);color:var(--txt-2);margin-left:5px" title="Only sees POs & Approvals; notified only when a PO number is issued">PO only</span>`:''}</span>
-      <span style="display:flex;justify-content:flex-end">${isManager||PAPEL==='admin'?`<button class="chip-btn" onclick="editPerson('${esc(pe.user_id)}')">Edit</button>`:'<span style="font-size:11px;color:var(--txt-3)">—</span>'}</span>
+      <span style="display:flex;justify-content:flex-end">${isManager||PAPEL==='admin'?`<button class="chip-btn" onclick="editPerson('${escJs(pe.user_id)}')">Edit</button>`:'<span style="font-size:11px;color:var(--txt-3)">—</span>'}</span>
     </div>`;
   };
   const groupsHTML=keys.map(k=>{
@@ -9758,7 +9795,7 @@ function renderPersonModal(){
       </div>`:''}
       <div style="font-size:11px;color:var(--txt-3);margin-top:2px">${isNew?'A temporary account is created right away; the code lets them finish setup via "First access".':'Password is managed by the user (first-access flow) and can’t be edited here.'}</div>
     </div>
-    <div class="modal-f"><span>${(!isNew&&PAPEL==='admin')?`<button class="btn-del" onclick="deletarPessoa('${esc(PERSON.user_id)}')">Delete user</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" onclick="savePerson()">${isNew?'Send invite':'Save'}</button></div></div>
+    <div class="modal-f"><span>${(!isNew&&PAPEL==='admin')?`<button class="btn-del" onclick="deletarPessoa('${escJs(PERSON.user_id)}')">Delete user</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" onclick="savePerson()">${isNew?'Send invite':'Save'}</button></div></div>
   </div></div>`;
 }
 async function savePerson(){
@@ -9855,9 +9892,9 @@ function saldoCardHTML(r){
     <div style="text-align:right"><div style="font-size:10.5px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.06em">Eligible balance</div>
       <div style="font-weight:800;font-size:18px;font-family:var(--mono,inherit)">${BRL(saldo)}</div>${dec}</div></div>`;
   if(!alvos.length) return `<div style="border:1px solid var(--line);border-radius:12px;padding:14px;margin:10px 0">${head}<div style="font-size:12.5px;color:var(--amber);margin-top:8px">No later month in this fiscal year — nothing to redistribute to.</div></div>`;
-  const radio=(m,lbl,dis)=>`<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:${dis?'not-allowed':'pointer'};opacity:${dis?.5:1}"><input type="radio" name="sdModo-${esc(fid)}" value="${m}" ${sel.modo===m?'checked':''} ${dis||!pode?'disabled':''} onchange="saldoModo('${esc(fid)}','${m}')"> ${lbl}</label>`;
+  const radio=(m,lbl,dis)=>`<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:${dis?'not-allowed':'pointer'};opacity:${dis?.5:1}"><input type="radio" name="sdModo-${esc(fid)}" value="${m}" ${sel.modo===m?'checked':''} ${dis||!pode?'disabled':''} onchange="saldoModo('${escJs(fid)}','${m}')"> ${lbl}</label>`;
   const manual=alvos.map(a=>`<label style="display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--txt-3)">${fmtMes(a)}
-      <input type="number" min="0" step="0.01" value="${sel.manual[a]!=null?esc(sel.manual[a]):''}" ${pode?'':'disabled'} oninput="saldoManual('${esc(fid)}','${esc(a)}',this.value)" style="width:120px;padding:7px 9px;border:1px solid var(--line-2);border-radius:8px;background:var(--card);font:inherit;color:var(--txt)"></label>`).join('');
+      <input type="number" min="0" step="0.01" value="${sel.manual[a]!=null?esc(sel.manual[a]):''}" ${pode?'':'disabled'} oninput="saldoManual('${escJs(fid)}','${escJs(a)}',this.value)" style="width:120px;padding:7px 9px;border:1px solid var(--line-2);border-radius:8px;background:var(--card);font:inherit;color:var(--txt)"></label>`).join('');
   return `<div style="border:1px solid var(--line);border-radius:12px;padding:14px;margin:10px 0">${head}
     <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:12px">
       ${radio('total',`Total <span style="color:var(--txt-3)">(all in ${fmtMes(alvos[0])})</span>`,false)}
@@ -9868,7 +9905,7 @@ function saldoCardHTML(r){
     <div id="sdManual-${esc(fid)}" style="display:none;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:8px">${manual}
       <div style="font-size:11px;color:var(--txt-3)">Sum<div id="sdSoma-${esc(fid)}" style="font-weight:700;font-size:13px;padding:6px 0">R$ 0,00</div></div></div>
     <div style="margin-top:12px;display:flex;gap:10px;align-items:center">
-      ${pode?`<button class="btn-po" id="sdBtn-${esc(fid)}" onclick="salvarSaldo('${esc(fid)}','${esc(r.mes_origem)}')" disabled>Confirm decision</button>`:`<span style="font-size:12px;color:var(--txt-3)">${esc(roMsg())}</span>`}
+      ${pode?`<button class="btn-po" id="sdBtn-${esc(fid)}" onclick="salvarSaldo('${escJs(fid)}','${escJs(r.mes_origem)}')" disabled>Confirm decision</button>`:`<span style="font-size:12px;color:var(--txt-3)">${esc(roMsg())}</span>`}
       <span id="sdMsg-${esc(fid)}" style="font-size:12.5px"></span></div></div>`;
 }
 function saldoModo(fid,m){ (SALDO_SEL[fid]=SALDO_SEL[fid]||{modo:'',manual:{}}).modo=m; saldoSync(fid); }
@@ -10029,7 +10066,7 @@ function renderOrcForm(){
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:480px">
     <div class="modal-h"><h3>${editing?'Edit budget — '+esc(ORC.cat):'New budget'}</h3><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">${body}</div>
-    <div class="modal-f"><span>${(editing&&PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarOrcamento('${esc(ORC.id)}')">Delete budget</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button>${(editing||free.length)?`<button class="btn-po" onclick="submitOrc()">${editing?'Save':'Create budget'}</button>`:''}</div></div>
+    <div class="modal-f"><span>${(editing&&PAPEL==='admin'&&!viewOnly())?`<button class="btn-del" onclick="deletarOrcamento('${escJs(ORC.id)}')">Delete budget</button>`:''}</span><div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button>${(editing||free.length)?`<button class="btn-po" onclick="submitOrc()">${editing?'Save':'Create budget'}</button>`:''}</div></div>
   </div></div>`;
 }
 async function submitOrc(){
