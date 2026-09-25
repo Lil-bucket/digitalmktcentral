@@ -1837,8 +1837,11 @@ function currentNav(){
   // no Work screens, no Overview/Budgets/Funds (those carry budget caps
   // this sub-level shouldn't see; enforced again at the RLS level, this is
   // just the nav — see repoint_role_functions_to_perfis-era RLS policies).
-  if(PAPEL==='agencia'&&AGENCIA_NIVEL==='po') return {global:GLOBAL_NAV, work:[], budget:(PO_ACCESS?['pos']:[])};
-  const role=ROLE_NAV[PAPEL];
+  if(!VIEW_AS&&PAPEL==='agencia'&&AGENCIA_NIVEL==='po') return {global:GLOBAL_NAV, work:[], budget:(PO_ACCESS?['pos']:[])};
+  /* An admin using "View as" gets the nav of the role/agency being simulated
+     (effPapel), not their own — otherwise screens that role can't open, like
+     Cost center for an agency, stay in the menu while viewing as it. */
+  const role=ROLE_NAV[effPapel()];
   /* No role (or 'pendente'): nothing to navigate. The Work tables now require
      a valid role at the RLS level too, so showing the Work nav here would only
      render empty screens — go() shows the "no access yet" screen instead. */
