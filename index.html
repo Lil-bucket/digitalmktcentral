@@ -711,6 +711,46 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
+/* ============================================================
+   READ-ONLY TEST MODE (?readonly=1) — real data, nothing written.
+   Installed before the Supabase client is created (it captures fetch), so
+   every request the app makes goes through here. Reads pass; any write to
+   the database, storage or edge functions is answered locally with an
+   error and never leaves the browser. Allowed: sign-in/session (auth), the
+   account-access function, GET reads, signed download URLs, and RPCs that
+   were checked to be read-only (STABLE / no writes).
+   ============================================================ */
+const READONLY=/[?&]readonly=1\b/.test(location.search);
+let READONLY_BLOCKED=0;
+if(READONLY){
+  const RO_READ_RPC=['papel_atual','agencia_atual','agencia_nivel_atual','listar_pessoas','classificar','saldos_para_decisao','get_timeline_share_project'];
+  const realFetch=window.fetch.bind(window);
+  window.fetch=function(input,init){
+    const url=typeof input==='string'?input:(input&&input.url)||'';
+    const method=String((init&&init.method)||(input&&input.method)||'GET').toUpperCase();
+    if(/supabase\.co/.test(url)&&!['GET','HEAD','OPTIONS'].includes(method)){
+      const path=url.replace(/^https?:\/\/[^/]+/,'').split('?')[0];
+      const ok=path.startsWith('/auth/v1/')||path==='/functions/v1/acesso'||path.startsWith('/storage/v1/object/sign/')
+        ||(path.startsWith('/rest/v1/rpc/')&&RO_READ_RPC.includes(path.slice('/rest/v1/rpc/'.length)));
+      if(!ok){
+        READONLY_BLOCKED++; console.warn('[read-only] blocked',method,path);
+        setTimeout(()=>{ try{ renderReadonlyBadge(); }catch(e){} },0);
+        return Promise.resolve(new Response(JSON.stringify({message:'Read-only test mode — nothing was saved.',code:'READONLY',details:'',hint:''}),{status:403,headers:{'Content-Type':'application/json'}}));
+      }
+    }
+    return realFetch(input,init);
+  };
+}
+function renderReadonlyBadge(){
+  if(!READONLY) return;
+  let el=document.getElementById('roBadge');
+  if(!el){ el=document.createElement('div'); el.id='roBadge'; document.body.appendChild(el); }
+  el.style.cssText='position:fixed;bottom:16px;left:16px;z-index:400;background:rgba(255,176,32,.14);border:1px solid rgba(255,176,32,.45);color:#ffb020;border-radius:12px;padding:9px 14px;font:600 12px "Hanken Grotesk",sans-serif;backdrop-filter:blur(8px);display:flex;align-items:center;gap:9px;box-shadow:0 10px 30px -10px rgba(0,0,0,.8)';
+  el.innerHTML=`<span style="width:7px;height:7px;border-radius:50%;background:#ffb020"></span><b>READ-ONLY TEST</b><span style="color:#e8c98a;font-weight:500">real data · nothing is saved${READONLY_BLOCKED?` · ${READONLY_BLOCKED} write${READONLY_BLOCKED===1?'':'s'} blocked`:''}</span>`;
+}
+if(READONLY) document.addEventListener('DOMContentLoaded',renderReadonlyBadge);
+</script>
+<script>
 /* Estilo Realidade Virtual — Chart.js não lê variáveis CSS (desenha em
    canvas), então os textos/linhas padrão dos gráficos precisam de cor
    explícita aqui; sem isso ficam pretos (ilegíveis) sobre os cards escuros. */
