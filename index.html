@@ -1855,7 +1855,10 @@ function navBadge(id){
    screen set this app actually has instead of the prototype's 4. */
 const NAV_HUBS=[
   {id:'dash',label:'Home',screens:['dash']},
-  {id:'list',label:'Projects',screens:['list','timeline','weekly']},
+  {id:'list',label:'Projects',screens:['list','timeline']},
+  /* Its own nav item; ROLE_NAV gives the 'weekly' screen to Admin and
+     Marketing only, so nobody else sees the item or can open the screen. */
+  {id:'weekly',label:'Weekly status',screens:['weekly']},
   {id:'bo',label:'Budget',screens:['bo','budgets','costcenter','campanhas','funds','saldos']},
   {id:'pos',label:'POs',screens:['pos','mypos','reqpo']},
   {id:'mytasks',label:'Notes',screens:['mytasks']},
@@ -1944,7 +1947,7 @@ const SCREEN_META={
   list:{t:'Projects',s:'Work · All projects',mod:'work'},
   timeline:{t:'Projects',s:'Work · Gantt view',mod:'work'},
   team:{t:'Team',s:'Work · Capacity',mod:'work'},
-  weekly:{t:'Projects',s:'Work · Weekly summary',mod:'work'},
+  weekly:{t:'Weekly status',s:'Work · Weekly summary',mod:'work'},
   mytasks:{t:'Notes & tasks',s:'Work · Personal to-dos',mod:'work'},
   agencywork:{t:'Assigned Work',s:'Work · Shared with your agency',mod:'work'},
   notif:{t:'Notifications',s:'All updates — Work and Budget',mod:'work'},
@@ -1965,7 +1968,11 @@ const SCREEN_META={
    ("budget 2026 · accrual", "projects you take part in · 24 active"). */
 function screenEyebrow(screen,meta){
   const yr=new Date().getFullYear();
-  if(['list','timeline','weekly'].includes(screen)){
+  if(screen==='weekly'){
+    const d=new Date(); d.setDate(d.getDate()-((d.getDay()+6)%7));
+    return `admin & marketing · week of ${d.toLocaleDateString('en-US',{month:'short',day:'numeric'})} · built from project data`;
+  }
+  if(['list','timeline'].includes(screen)){
     const l=visProjs(); const act=l.filter(p=>p.status!=='concluido').length, done=l.length-act;
     return `projects you take part in · ${act} active · ${done} completed`;
   }
@@ -2080,6 +2087,8 @@ function go(screen){
     $('#ctaBox').innerHTML='<button class="btn-po" onclick="openReqPO()">Request PO</button>';
   } else if(screen==='team'){
     $('#ctaBox').innerHTML=`<div class="seg">${[['week','This week'],['2w','2 weeks'],['month','Month']].map(([v,l])=>`<button class="${TEAM_RANGE===v?'on':''}" onclick="TEAM_RANGE='${v}';go('team')">${l}</button>`).join('')}</div>`;
+  } else if(screen==='weekly'){
+    $('#ctaBox').innerHTML=`<button class="btn-ghost" onclick="copyWeekly()" style="display:inline-flex;align-items:center;gap:7px">${icn('copy',13)} Copy report</button>`;
   } else if(screen==='mytasks'){
     $('#ctaBox').innerHTML='<button class="btn-acc" onclick="ptNewNote()">New note</button>';
   } else { $('#ctaBox').innerHTML=''; }
@@ -2091,7 +2100,7 @@ function go(screen){
   else if(screen==='list') v.innerHTML=renderProjetos();
   else if(screen==='timeline') v.innerHTML=`<div style="display:flex;justify-content:flex-end;margin-bottom:18px">${projViewSwitchHTML()}</div>`+renderTimeline();
   else if(screen==='team') v.innerHTML=renderTeam();
-  else if(screen==='weekly') v.innerHTML=`<div style="display:flex;justify-content:flex-end;margin-bottom:18px">${projViewSwitchHTML()}</div>`+renderWeekly();
+  else if(screen==='weekly') v.innerHTML=renderWeekly();
   else if(screen==='mytasks') v.innerHTML=renderNotes();
   else if(screen==='agencywork') v.innerHTML=renderAgencyWork();
   else if(screen==='notif') v.innerHTML=renderNotif();
@@ -2418,7 +2427,6 @@ function projViewSwitchHTML(){
   const cur=SCREEN==='list'?PROJ_GROUP:SCREEN;
   const opts=[['list','List'],['board','Board'],['category','By category']];
   if(has('timeline')) opts.push(['timeline','Timeline']);
-  if(has('weekly')) opts.push(['weekly','Weekly']);
   return `<div class="seg">${opts.map(([v,l])=>`<button class="${cur===v?'on':''}" onclick="${['timeline','weekly'].includes(v)?`navGo('${v}')`:`PROJ_GROUP='${v}';navGo('list')`}">${l}</button>`).join('')}</div>`;
 }
 function renderProjetos(){
@@ -7732,25 +7740,29 @@ function renderWeekly(){
   const risk=list.filter(p=>p.status==='atrasado'||p.status==='bloqueado');
   const progress=list.filter(p=>p.status==='no_prazo'||p.status==='atencao');
   const tasksDone=list.reduce((s,p)=>s+((p.tasks||[]).filter(t=>t.done).length),0);
-  const now=new Date().toLocaleDateString('en-US',{day:'2-digit',month:'long',year:'numeric'});
-  const st=(n,l,col)=>`<span><b style="font-family:'Hanken Grotesk',sans-serif;font-size:24px;display:block${col?';color:'+col:''}">${n}</b><span style="font-size:11.5px;color:var(--txt-2);font-weight:600">${l}</span></span>`;
-  const line=(p,extra,showConclude)=>`<div style="padding:9px 0;border-bottom:1px dashed var(--line);font-size:13px;display:flex;align-items:center;gap:10px">
-      <span style="flex:1;min-width:0;cursor:pointer" onclick="openProj('${esc(p.id)}')"><b>${esc(p.nome)}</b>${extra?' — '+extra:''} <span style="color:var(--txt-2)">· ${esc(respName(p.resp)||'—')}</span></span>
-      ${showConclude&&canEdit(p)?`<button onclick="event.stopPropagation();weeklyMarkConcluded('${esc(p.id)}')" class="chip-btn" style="flex-shrink:0;font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:5px">${icn('check',11)} Mark concluded</button>`:''}
-    </div>`;
-  const sec=(label,col,items,extraFn,showConclude)=>`<div style="padding:16px 22px;border-bottom:1px solid var(--line)"><div style="font-size:11.5px;font-weight:800;letter-spacing:.06em;color:${col};margin-bottom:9px;display:flex;align-items:center;gap:7px"><span style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></span>${label}</div>${items.length?items.map(p=>line(p,extraFn(p),showConclude)).join(''):'<div style="font-size:12.5px;color:var(--txt-3)">Nothing here.</div>'}</div>`;
-  const luTxt=p=>{const lu=latestLog(p);return lu?esc(lu.txt):'';};
-  return `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;gap:16px;flex-wrap:wrap">
-      <div style="max-width:520px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:15px">Week of ${now}</b><div style="font-size:12.5px;color:var(--txt-2);margin-top:2px">Auto-generated from project data — copy or email.</div></div>
-      <div style="display:flex;gap:8px"><button onclick="copyWeekly()" style="padding:9px 15px;border-radius:9px;border:none;background:#10131a;color:#fff;font-weight:600;font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center;gap:7px">${icn('copy',13)} Copy report</button></div></div>
-    <div style="background:var(--card);border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05)">
-      <div style="padding:18px 22px;border-bottom:1px solid var(--line);background:var(--paper-2);display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
-        ${st(done.length,'Delivered')}${st(progress.length,'In progress')}${st(risk.length,'At risk','var(--red)')}${st(tasksDone,'Tasks completed')}</div>
-      ${sec('DELIVERED','var(--green)',delivered,luTxt,true)}
-      ${sec('AT RISK','var(--amber)',risk,luTxt,false)}
-      ${sec('IN PROGRESS','var(--blue)',progress,p=>luTxt(p)+' ('+computeProg(p)+'%)',false)}
-      <div style="padding:16px 22px;background:var(--paper-2)"><div style="font-size:11.5px;font-weight:800;letter-spacing:.06em;color:var(--txt-3);margin-bottom:9px;display:flex;align-items:center;gap:7px"><span style="width:8px;height:8px;border-radius:50%;background:var(--txt-3);flex-shrink:0"></span>CONCLUDED</div>${concluded.length?concluded.map(p=>line(p,luTxt(p),false)).join(''):'<div style="font-size:12.5px;color:var(--txt-3)">Nothing here.</div>'}</div>
-    </div>`;
+  const kpi=(l,n,sub,c)=>`<div style="background:var(--surf);border:1px solid var(--line-card);border-radius:14px;padding:16px 18px"><div class="mono" style="font-size:11.5px;color:var(--txt-3)">${l}</div><div class="mono" style="font-size:26px;font-weight:700;margin-top:4px;color:${c||'var(--txt)'}">${n}</div><div style="font-size:12.5px;color:var(--txt-2)">${sub}</div></div>`;
+  const row=(p,showConclude)=>{const hp=healthPill(p.status);const pr=computeProg(p);const own=respName(p.resp);const lu=latestLog(p);
+    return `<div class="proj-row" onclick="openProj('${esc(p.id)}')" style="display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) 96px 120px ${showConclude?'150px':'0'};gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer">
+      <div style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.nome)}</div><div style="font-size:12px;color:var(--txt-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${lu?esc(lu.txt):esc(stageOf(p.etapa).name)}</div></div>
+      <div style="display:flex;align-items:center;gap:9px;min-width:0"><span class="avatar" style="width:26px;height:26px;font-size:10.5px;background:${avColor(own)}">${initials(own)}</span><span style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(own||'—')}</span></div>
+      <span style="display:inline-flex;align-items:center;gap:6px;justify-self:start;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:20px;background:${hp.bg};color:${hp.fg}"><span style="width:6px;height:6px;border-radius:50%;background:${hp.dot}"></span>${hp.name}</span>
+      <div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden"><div style="height:100%;border-radius:3px;background:#4d7dff;width:${pr}%"></div></div><span class="mono" style="font-size:12px;color:var(--txt-2)">${pr}%</span></div>
+      ${showConclude?`<span style="text-align:right">${canEdit(p)&&!VIEW_AS?`<button onclick="event.stopPropagation();weeklyMarkConcluded('${esc(p.id)}')" class="chip-sel" style="font-size:12px;padding:6px 11px;display:inline-flex;align-items:center;gap:5px">${icn('check',11)} Mark concluded</button>`:''}</span>`:'<span></span>'}
+    </div>`;};
+  const sec=(eyebrow,title,col,items,showConclude,empty)=>v2Card(`<span style="color:${col}">●</span> ${eyebrow}`,`${title} <span class="mono" style="font-size:14px;color:var(--txt-3);margin-left:6px">${items.length}</span>`,
+    items.length?`<div style="overflow-x:auto;margin-top:8px"><div style="min-width:720px">${items.map(p=>row(p,showConclude)).join('')}</div></div>`:`<div style="font-size:13px;color:var(--txt-3);margin-top:8px">${empty}</div>`);
+  return `<div style="display:flex;flex-direction:column;gap:22px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px">
+      ${kpi('delivered',done.length,`${delivered.length} to report · ${concluded.length} archived`,'#2fd88a')}
+      ${kpi('in progress',progress.length,'on track or at risk')}
+      ${kpi('at risk',risk.length,'late or blocked',risk.length?'#ff6b6b':'')}
+      ${kpi('tasks completed',tasksDone,'across these projects')}
+    </div>
+    ${sec('finished · report, then mark concluded','Delivered','#2fd88a',delivered,true,'Nothing delivered to report.')}
+    ${sec('late or blocked','At risk','#ffb020',risk,false,'Nothing at risk.')}
+    ${sec('on track or at risk','In progress','#4d7dff',progress,false,'Nothing in progress.')}
+    ${sec('already reported','Concluded','#9aa3b8',concluded,false,'Nothing archived yet.')}
+  </div>`;
 }
 /* "Mark concluded" only ever shows on DELIVERED rows (project status is
    already "concluido" there — all tasks done). This does NOT touch task/
@@ -7763,9 +7775,10 @@ function renderWeekly(){
 async function weeklyMarkConcluded(pid){
   const p=DATA.projetos.find(x=>x.id===pid); if(!p)return;
   if(!canEdit(p)){ toast('Only the owner or admin can do this.'); return; }
+  if(VIEW_AS){ toast(roMsg()); return; }
   p.weeklyConcluded=true;
-  try{ await SBPO.from('act_projects').upsert({id:p.id,data:p}); toast('Moved to Concluded ✓'); }
-  catch(e){ toastErr(e); return; }
+  try{ if(!DEMO_MODE){ const {error}=await SBPO.from('act_projects').upsert({id:p.id,data:projClean(p)}); if(error)throw error; } toast('Moved to Concluded ✓'); }
+  catch(e){ p.weeklyConcluded=false; toastErr(e); return; }
   go(SCREEN);
 }
 function copyWeekly(){
