@@ -1736,7 +1736,9 @@ const W_LABELS={dash:'Dashboard',board:'Board',list:'List',timeline:'Timeline',t
 const B_LABELS={saldos:'Balance decisions',bo:'Overview',budgets:'Categories',costcenter:'Cost center',funds:'Funds',campanhas:'Timeline',pos:'POs & Approvals',approvals:'Approvals',podesk:'PO Desk',people:'People & Roles',reqpo:'Request PO',mypos:'My POs',balance:'Balance'};
 const ROLE_NAV={
   admin:      {work:['dash','list','timeline','team','weekly','mytasks'], budget:['bo','costcenter','budgets','campanhas','funds','pos','saldos','people']},
-  marketing:  {work:['dash','list','timeline','weekly','mytasks'],        budget:['bo','costcenter','budgets','campanhas','funds','pos','saldos']},
+  /* No 'costcenter' for Marketing: rateios and the cost-center/account table
+     are the accounting layer (Admin/Finance), same line as production. */
+  marketing:  {work:['dash','list','timeline','weekly','mytasks'],        budget:['bo','budgets','campanhas','funds','pos','saldos']},
   financeiro: {work:[],                                                          budget:['bo','funds','pos']},
   agencia:    {work:['dash','list','timeline','mytasks'],               budget:['bo','campanhas','funds','pos']},
   /* TCL Member: internal staff with Work-only access, no Budget nav at all —
@@ -2305,7 +2307,8 @@ function toggleProjGroup(v){ PROJ_GROUP=v; go('list'); }
 /* Projects.dc.html row grid — Project · MKT owner · Health · Progress ·
    Deadline · Budget. Stage/type/category ride in the project's subtitle line
    instead of their own columns, exactly as the mockup lays them out. */
-const PROJ_COLS='minmax(220px,2.2fr) minmax(110px,1fr) 96px 110px 96px 150px';
+const PROJ_COLS_ALL='minmax(220px,2.2fr) minmax(110px,1fr) 96px 110px 96px 150px';
+function projCols(){ return canSeeBudget()?PROJ_COLS_ALL:'minmax(220px,2.2fr) minmax(110px,1fr) 96px 110px 96px'; }
 function projDueHTML(p){
   if(autoStatus(p)==='concluido') return `<div style="font-size:13px;font-weight:600;color:var(--txt-2)">Completed</div><div style="font-size:11.5px;color:var(--txt-3)">${p.prazo?fmtDate(p.prazo):''}</div>`;
   const dd=daysTo(p.prazo);
@@ -2321,13 +2324,13 @@ function projSubline(p,withStage){
 }
 function projRowHTML(p){
   const hp=healthPill(p.status);const pr=computeProg(p);const own=respName(p.resp);
-  return `<div class="proj-row" onclick="openProj('${esc(p.id)}')" style="display:grid;grid-template-columns:${PROJ_COLS};gap:12px;padding:13px 20px;border-bottom:1px solid rgba(255,255,255,.06);align-items:center;cursor:pointer">
+  return `<div class="proj-row" onclick="openProj('${esc(p.id)}')" style="display:grid;grid-template-columns:${projCols()};gap:12px;padding:13px 20px;border-bottom:1px solid rgba(255,255,255,.06);align-items:center;cursor:pointer">
     <div style="min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.nome)}</div><div style="font-size:12px;color:var(--txt-3);display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${projSubline(p,true)}</div></div>
     <div style="display:flex;align-items:center;gap:9px;min-width:0"><span class="avatar" style="width:26px;height:26px;font-size:10.5px;background:${avColor(own)}">${initials(own)}</span><span style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(own||'—')}</span></div>
     <span style="display:inline-flex;align-items:center;gap:6px;justify-self:start;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:20px;background:${hp.bg};color:${hp.fg}"><span style="width:6px;height:6px;border-radius:50%;background:${hp.dot}"></span>${hp.name}</span>
     <div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden"><div style="height:100%;border-radius:3px;background:#4d7dff;width:${pr}%"></div></div><span class="mono" style="font-size:12px;color:var(--txt-2);width:34px;text-align:right">${pr}%</span></div>
     <div>${projDueHTML(p)}</div>
-    <div>${projBudgetCellHTML(p)}</div>
+    ${canSeeBudget()?`<div>${projBudgetCellHTML(p)}</div>`:''}
   </div>`;
 }
 /* One view switcher for the whole Projects hub (Projects.dc.html: List ·
@@ -2356,8 +2359,8 @@ function renderProjetos(){
         <div class="mono" style="font-size:24px;font-weight:700;margin-top:4px">${n}</div>
       </button>`;
     }).join('');
-  const head=`<div style="display:grid;grid-template-columns:${PROJ_COLS};gap:12px;padding:12px 20px;border-bottom:1px solid rgba(255,255,255,.1);font-size:12px;color:var(--txt-3);font-weight:600">
-    ${sortTh(PROJ_SORT,'name','Project','projSortHeaderClick')}${sortTh(PROJ_SORT,'owner','MKT owner','projSortHeaderClick')}${sortTh(PROJ_SORT,'health','Health','projSortHeaderClick')}${sortTh(PROJ_SORT,'progress','Progress','projSortHeaderClick')}${sortTh(PROJ_SORT,'due','Deadline','projSortHeaderClick')}<span>Budget</span></div>`;
+  const head=`<div style="display:grid;grid-template-columns:${projCols()};gap:12px;padding:12px 20px;border-bottom:1px solid rgba(255,255,255,.1);font-size:12px;color:var(--txt-3);font-weight:600">
+    ${sortTh(PROJ_SORT,'name','Project','projSortHeaderClick')}${sortTh(PROJ_SORT,'owner','MKT owner','projSortHeaderClick')}${sortTh(PROJ_SORT,'health','Health','projSortHeaderClick')}${sortTh(PROJ_SORT,'progress','Progress','projSortHeaderClick')}${sortTh(PROJ_SORT,'due','Deadline','projSortHeaderClick')}${canSeeBudget()?'<span>Budget</span>':''}</div>`;
   const card=(inner)=>`<div class="v2-card" style="padding:0;overflow-x:auto"><div style="min-width:820px">${inner}</div></div>`;
   let body;
   if(PROJ_GROUP==='board'){
@@ -2371,7 +2374,7 @@ function renderProjetos(){
       const rows=list.filter(p=>(p.categorias&&p.categorias.length)?p.categorias.includes(cat):cat==='—');
       if(!rows.length) return '';
       const cm=cat==='—'?{c:'#9aa3b8'}:catMeta(cat);
-      const tb=rows.reduce((s,p)=>{const c=(DATA.campanhas||[]).find(x=>x.id===p.campanha_id);return s+(c?campTotals(c.id).teto:0);},0);
+      const tb=canSeeBudget()?rows.reduce((s,p)=>{const c=(DATA.campanhas||[]).find(x=>x.id===p.campanha_id);return s+(c?campTotals(c.id).teto:0);},0):0;
       return card(`<div style="display:flex;align-items:center;gap:10px;padding:16px 22px 4px"><span style="width:10px;height:10px;border-radius:50%;background:${cm.c}"></span><span style="font-size:17px;font-weight:800">${esc(cat==='—'?'Uncategorized':catKeyLabel(cat))}</span><span style="font-size:13px;color:var(--txt-3)">${rows.length} project(s)${tb?' · '+BRLc(tb)+' budget':''}</span></div>${head}${rows.map(projRowHTML).join('')}`);
     }).join('')}</div>`;
   }
@@ -2569,7 +2572,8 @@ function pdStatsHTML(p){
   const card=(inner,bd,glow,click)=>`<div ${click?`onclick="${click}" `:''}style="background:var(--surf);border:1px solid ${bd||'var(--line-card)'};border-radius:14px;padding:16px 18px;${glow?`box-shadow:0 0 30px -16px ${glow};`:''}${click?'cursor:pointer':''}">${inner}</div>`;
   const eb=t=>`<div class="mono" style="font-size:11.5px;color:var(--txt-3)">${t}</div>`;
   let budCard;
-  if(bud){
+  if(!canSeeBudget()) budCard=card(`${eb('activities done')}<div class="mono" style="font-size:26px;font-weight:700;margin-top:4px">${(p.tasks||[]).filter(t=>t.done).length}<span style="font-size:15px;color:var(--txt-3)"> / ${(p.tasks||[]).length}</span></div><div style="font-size:12.5px;color:var(--txt-2)">${prog}% of the plan</div>`,null,null,"pdScrollTo('pd-sec-activities')");
+  else if(bud){
     let cut=0; if(canSeeCorte()) campFunds(camp.id).forEach(f=>{const cm=fundMonthlyCuts(f.id);Object.keys(cm).forEach(k=>cut+=cm[k]);});
     const pct=bud.teto?Math.round(bud.cons/bud.teto*100):0;
     budCard=card(`${eb('budget total · consumed')}
@@ -2587,7 +2591,7 @@ function pdStatsHTML(p){
 let PD_SEC='pd-sec-schedule';
 function pdGoSec(id){ PD_SEC=id; document.querySelectorAll('.pd-subnav button').forEach(b=>b.classList.toggle('on',b.dataset.sec===id)); pdScrollTo(id); }
 function pdSubnavHTML(p){
-  const hasBudget=((ROLE_NAV[effPapel()]||{}).budget||[]).length>0&&PO_ACCESS;
+  const hasBudget=canSeeBudget();
   const items=[['pd-sec-schedule','Schedule'],['pd-sec-activities','Activities'],['pd-sec-messages','Messages & people'],...(hasBudget?[['pd-sec-budget','Budget & funds'],['pd-sec-pos','POs']]:[])];
   return `<nav class="pd-subnav" style="position:sticky;top:var(--nav-h,62px);z-index:25;display:flex;gap:4px;flex-wrap:wrap;padding:6px;border-radius:0 0 12px 12px;background:rgba(10,14,24,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.1);border-top:none;box-shadow:0 12px 24px -12px rgba(0,0,0,.8)">
     ${items.map(([id,l])=>`<button data-sec="${id}" class="${PD_SEC===id?'on':''}" onclick="pdGoSec('${id}')">${l}</button>`).join('')}
@@ -2783,7 +2787,7 @@ function renderProjectDetail(){
      People. */
   pdEnsureEdit(p);
   const q=EDIT&&EDIT.id===p.id?EDIT:p;
-  const hasBudget=((ROLE_NAV[effPapel()]||{}).budget||[]).length>0&&PO_ACCESS;
+  const hasBudget=canSeeBudget();
   return `<div style="display:flex;flex-direction:column;gap:20px;padding-top:6px">
     ${pdHeroHTML(q)}${pdStatsHTML(q)}${pdSubnavHTML(q)}
     ${pdScheduleHTML(q)}
@@ -4327,6 +4331,14 @@ function fundMonthBlocked(pid,mm){ const t=tetoRow(pid,mm); return !!(t&&t.bloqu
    month's cap, already net — because the cut is a budget decision on our
    side, not a fact it has to reconcile. */
 function canSeeCorte(){ return effPapel()!=='agencia'; }
+/* Any budget figure outside the Budget screens themselves (project list,
+   project page, header form) follows the effective role's Budget nav: TCL
+   Member and pending profiles have none, so they see no money at all. */
+function canSeeBudget(){
+  if(!PO_ACCESS&&!VIEW_AS) return false;
+  if(!VIEW_AS&&PAPEL==='agencia'&&AGENCIA_NIVEL==='po') return false;
+  return ((ROLE_NAV[effPapel()]||{}).budget||[]).length>0;
+}
 function cutTotalOf(funds){ return (funds||[]).reduce((s,p)=>s+fundCutTotal(p.id),0); }
 function fundMonthlyTotals(pid){
   const m={};
@@ -6176,7 +6188,7 @@ function renderProjHeaderModal(){
   if(!EDIT)return; const ED=canEdit(EDIT)&&!VIEW_AS; const dis=ED?'':'disabled'; const canTag=canTagPeople(EDIT)&&!VIEW_AS;
   const reopen=PM_OPEN; PM_OPEN=true;
   const prevScroll=$('.modal-b')?$('.modal-b').scrollTop:0;
-  const hasBudget=((ROLE_NAV[effPapel()]||{}).budget||[]).length>0;
+  const hasBudget=canSeeBudget();
   const chip=(on,label,onclick,c)=>`<button ${dis} onclick="${onclick}" style="padding:6px 13px;border-radius:18px;border:1px solid ${on?(c||'#4d7dff'):'rgba(255,255,255,.14)'};background:${on?'rgba(255,255,255,.07)':'transparent'};color:${on?'var(--txt)':'var(--txt-2)'};font-weight:700;font-size:12.5px;display:inline-flex;align-items:center;gap:7px">${c?`<span style="width:7px;height:7px;border-radius:50%;background:${c}"></span>`:''}${label}</button>`;
   const sec=(t,sub,body)=>`<div style="margin-bottom:18px"><div style="font-size:12.5px;font-weight:600;color:var(--txt-2);margin-bottom:8px">${t}${sub?` <span style="font-weight:500;color:var(--txt-3)">${sub}</span>`:''}</div>${body}</div>`;
   const camps=(DATA.campanhas||[]).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
@@ -9118,7 +9130,7 @@ function boHeaderControls(){
   return `<select class="chip-sel" title="Period" onchange="boSetMode(this.value)">${[['all','All periods'],['year','Year'],['quarter','Quarter'],['month','Month']].map(([v,l])=>`<option value="${v}" ${BO_PER.mode===v?'selected':''}>${l}</option>`).join('')}</select>
     ${opts.length?`<select class="chip-sel" onchange="boSetVal(this.value)">${opts.map(o=>`<option value="${o}" ${BO_PER.val===o?'selected':''}>${lbl(o)}</option>`).join('')}</select>`:''}
     <select class="chip-sel" title="Scope" onchange="boSetScope(this.value)"><option value="all" ${BO_SCOPE==='all'?'selected':''}>All categories</option><option value="nolabg" ${BO_SCOPE==='nolabg'?'selected':''}>Excl. LABG</option></select>
-    <button class="btn-ghost" onclick="exportBudgetXLSX()">Export</button>`;
+    ${((ROLE_NAV[effPapel()]||{}).budget||[]).includes('budgets')?'<button class="btn-ghost" onclick="exportBudgetXLSX()">Export</button>':''}`;
 }
 /* Two part-to-whole charts closing the Overview: allocation by product
    category and by activity.
