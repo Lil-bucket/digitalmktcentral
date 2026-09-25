@@ -264,12 +264,18 @@
   .pd-atv .atv-hd>span{font-family:var(--sans);font-size:12px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--txt-3);padding:8px 0}
   .pd-atv .atv-row{border-bottom:1px solid rgba(255,255,255,.06);min-height:44px;padding:0}
   .pd-atv .atv-row:hover{background:rgba(255,255,255,.02)}
-  .pd-atv .atv-row.is-sub{background:rgba(255,255,255,.025)}
+  /* Expanded activity = one darker block (details panel, sub-items and the
+     sub-item quick-add), so sub-items stay distinguishable when every row
+     is open. */
+  .pd-atv .atv-row.is-sub{background:#0a0f1d;border-bottom-color:rgba(255,255,255,.04)}
+  .pd-atv .atv-row.is-sub:hover{background:#0d1324}
+  .pd-atv .atv-row.is-sub .atv-in{color:var(--txt-soft)}
+  .pd-atv .atv-add:has(input[id^="pmQuickSub"]){background:#0a0f1d}
   .pd-atv .atv-in{font-size:13.5px}
   .pd-atv .atv-row:not(.is-sub) .atv-name .atv-in{font-weight:600}
   .pd-atv .atv-check{width:18px;height:18px;border-color:rgba(255,255,255,.3);background:transparent}
   .pd-atv .atv-check.on{background:#2fd88a;border-color:#2fd88a;color:#05070d}
-  .pd-atv .atv-panel{background:#0f1628;border-bottom:1px solid rgba(255,255,255,.06);padding-left:76px}
+  .pd-atv .atv-panel{background:#0a0f1d;border-bottom:1px solid rgba(255,255,255,.04);padding-left:76px}
   .pd-atv .atv-add{padding-left:76px}
   .pd-atv .atv-add input{border-color:rgba(255,255,255,.16);color:var(--txt)}
   .pd-atv .atv-num{font-size:10.5px}
