@@ -1131,6 +1131,13 @@ function initials(n){if(!n)return'?';const p=String(n).trim().split(/\s+/);retur
 function respName(r){if(!r)return r;const pe=(DATA.pessoas||[]).find(x=>x.email&&x.email.toLowerCase()===String(r).toLowerCase());if(pe){const full=[pe.nome,pe.sobrenome].filter(Boolean).join(' ');if(full)return full;}return r;}
 function today0(){const d=new Date();d.setHours(0,0,0,0);return d;}
 function daysTo(s){if(!s)return null;const d=new Date(s+'T00:00:00');return Math.round((d-today0())/864e5);}
+/* Full date, plus the time when the value carries one: "Sep 23, 2026 · 14:32". */
+function fmtDateTime(s){
+  if(!s) return '—'; const str=String(s), hasT=/[T ]\d{2}:\d{2}/.test(str);
+  const d=new Date(hasT?str.replace(' ','T').replace(/([+-]\d{2})$/,'$1:00'):str.slice(0,10)+'T00:00:00'); if(isNaN(d)) return str;
+  const day=d.toLocaleDateString('en-US',{day:'2-digit',month:'short',year:'numeric'});
+  return hasT?day+' · '+d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false}):day;
+}
 function fmtDate(s){if(!s)return'—';const d=new Date(String(s).includes('T')?s:s+'T00:00:00');return d.toLocaleDateString('en-US',{day:'2-digit',month:'short'});}
 function fmtMes(s){if(!s)return'—';const [y,m]=String(s).slice(0,7).split('-');const MM=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return (MM[(+m)-1]||m)+'/'+String(y).slice(2);}
 function stageOf(i){return STAGES.find(s=>s.id===i)||STAGES[0];}
@@ -1614,7 +1621,7 @@ function startDemo(){
    project's CURRENT data (act_projects itself is authenticated-only, and
    act_timeline_shares has no SELECT policy at all, so neither is readable
    any other way). Because it's fetched live and rebuilt with
-   buildTimelineExportHTML() on every visit, the same link keeps reflecting
+   buildProjectStatusHTML() on every visit, the same link keeps reflecting
    new stages/activities as they're completed — nothing to regenerate.
    Replaces the whole document with the built HTML, same document.
    open/write/close technique used elsewhere to preview exports. */
@@ -1627,9 +1634,9 @@ async function renderSharedTimeline(shareId){
   try{
     const {data,error}=await SBPO.rpc('get_timeline_share_project',{share_id:shareId});
     if(error) throw error;
-    if(!data){ fail('This link is invalid or the timeline is no longer available.'); return; }
-    document.open(); document.write(buildTimelineExportHTML(data)); document.close();
-  }catch(e){ fail('Could not load this timeline.'); }
+    if(!data){ fail('This link is invalid or the project status is no longer available.'); return; }
+    document.open(); document.write(buildProjectStatusHTML(data)); document.close();
+  }catch(e){ fail('Could not load this project status.'); }
 }
 async function boot(){
   try{
@@ -2330,7 +2337,7 @@ function homeForYouHTML(up){
     <div style="display:flex;flex-direction:column;margin-top:10px;flex:1">${items.map(m=>{const who=m.origin==='budget'?'System':(m.autor||'—');const nav=m.origin==='budget'&&m.poId?`notifGoPO('${escJs(m.poId)}','${escJs(m.tipo)}')`:m.pid?`openProj('${escJs(m.pid)}')`:`go('notif')`;
       return `<div onclick="${nav}" style="display:grid;grid-template-columns:30px minmax(0,1fr) 8px;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer">
         <span class="avatar" style="width:30px;height:30px;font-size:11px;background:${m.origin==='budget'?'#1c2338':avColor(who)}">${m.origin==='budget'?'◆':initials(respName(who)||who)}</span>
-        <div style="min-width:0"><div style="font-size:13px"><b>${esc(respName(who)||who)}</b> <span style="color:var(--txt-3)">· ${ago(m.t)}</span></div><div style="font-size:13.5px;color:var(--txt-soft)">${esc(m.txt||'')}</div><div style="font-size:12px;color:#7d9dff;margin-top:2px">${esc(m.proj||'')}</div></div>
+        <div style="min-width:0"><div style="font-size:13px"><b>${esc(respName(who)||who)}</b> <span style="color:var(--txt-3)">· ${fmtDateTime(m.ts||m.t)} (${ago(m.t)})</span></div><div style="font-size:13.5px;color:var(--txt-soft)">${esc(m.txt||'')}</div><div style="font-size:12px;color:#7d9dff;margin-top:2px">${esc(m.proj||'')}</div></div>
         <span style="width:8px;height:8px;border-radius:50%;margin-top:6px;background:${m.lida?'transparent':'#ff3b4e'}"></span></div>`;}).join('')}</div>
     <a onclick="go('notif')" style="font-weight:600;font-size:13.5px;margin-top:14px;cursor:pointer">All messages →</a>
   </div>`;
@@ -2669,7 +2676,7 @@ async function pdPostMessage(pid){
   const ta=$('#pdMsg'); if(!ta)return; const txt=(ta.value||'').trim(); if(!txt)return;
   const men=pmMentionScan(txt);
   p.logs=p.logs||[];
-  p.logs.push({id:uid(),txt,autor:(currentUser&&currentUser.email)||'you',t:new Date().toISOString().slice(0,10),mencoes:men.map(m=>({nome:m.nome,email:m.email||''}))});
+  p.logs.push({id:uid(),txt,autor:(currentUser&&currentUser.email)||'you',t:new Date().toISOString().slice(0,10),ts:new Date().toISOString(),mencoes:men.map(m=>({nome:m.nome,email:m.email||''}))});
   await pdPersist(p);
   men.forEach(m=>{ if(m.email) notifyMarcacao(m.email,p.nome,txt); });
   go('projectdetail');
@@ -2705,6 +2712,7 @@ function pdHeroHTML(p){
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         ${canDup?`<button class="btn-ghost" onclick="dupProj('${escJs(p.id)}')">Duplicate</button>`:''}
+        ${!VIEW_AS?`<button class="btn-ghost" onclick="exportProjTimeline('${escJs(p.id)}')" title="Fixed public link to this project's live status (no budget)" style="display:inline-flex;align-items:center;gap:6px">${icn('link',13)} Share status</button>`:''}
         ${canEditProj?`<button class="btn-ghost" onclick="editProj('${escJs(p.id)}')">Edit project</button>`:''}
         ${demoWritable(PO_ACCESS)&&((ROLE_NAV[effPapel()]||{}).budget||[]).length?`<button class="btn-po" onclick="openReqPO()">Request PO</button>`:''}
       </div>
@@ -5673,19 +5681,21 @@ function renderTLModal(){
    SECURITY DEFINER RPC — act_projects is authenticated-only otherwise) and
    rebuilds the timeline from it, so the same link keeps reflecting the
    project's real state as stages/activities are completed, with no need to
-   regenerate or reshare. buildTimelineExportHTML() is the pure renderer,
+   regenerate or reshare. buildProjectStatusHTML() is the pure renderer,
    shared between "Share link" (just to preview/validate) and the public
    ?share= viewer. */
-function buildTimelineExportHTML(p){
+/* Public project status page (?share=<id>): one fixed link per project,
+   rebuilt live from get_timeline_share_project() on every visit (and every
+   5 minutes while open), so it follows the project as it advances. No
+   budget: the RPC only sends schedule/status fields, with names instead of
+   e-mails. Standalone document, so it carries its own light palette. */
+function buildProjectStatusHTML(p){
   const tasks=(p.tasks||[]).slice().sort((a,b)=>String(a.fim||'9999').localeCompare(String(b.fim||'9999')));
   let minStr=null,maxStr=null;
   const pushD=d=>{ if(!d)return; const s=String(d).slice(0,10); if(!minStr||s<minStr)minStr=s; if(!maxStr||s>maxStr)maxStr=s; };
   tasks.forEach(t=>{ pushD(t.inicio); pushD(t.fim); (t.subs||[]).forEach(s2=>{ pushD(s2.inicio); pushD(s2.fim); }); });
-  if(!minStr){
-    return `<!doctype html><html><head><meta charset="utf-8"><title>Timeline — ${esc(p.nome)}</title>
-    <style>:root{color-scheme:light}body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#fff;color:#14161c;font-size:14px}</style>
-    </head><body>This project has no dated activities to plot yet.</body></html>`;
-  }
+  const hasDates=!!minStr;
+  if(!hasDates){ minStr=maxStr=new Date().toISOString().slice(0,10); }
   const rawMin=new Date(minStr+'T00:00:00'), rawMax=new Date(maxStr+'T00:00:00');
   let min=new Date(rawMin);
   min.setDate(min.getDate()-min.getDay());
@@ -5755,29 +5765,78 @@ function buildTimelineExportHTML(p){
       rowsTbl.push(`<tr><td style="padding-left:22px;color:#3c3f46">↳ ${esc(s2.n||'(untitled)')}</td><td>${esc(s2.resp||'—')}</td><td>${s2.inicio?fmtDate(s2.inicio):'—'}</td><td>${s2.fim?fmtDate(s2.fim):'—'}</td><td>${s2.done?'Done':'Pending'}</td><td style="text-align:right">${s2.done?'100%':'—'}</td><td>${esc(s2.obs||'')}</td></tr>`);
     });
   });
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Timeline — ${esc(p.nome)}</title>
+  const fmtY=d=>{ if(!d) return '—'; const x=new Date(String(d).includes('T')?d:d+'T00:00:00'); return x.toLocaleDateString('en-US',{day:'2-digit',month:'short',year:'numeric'}); };
+  const hpP=healthPill(p.status), bt=businessTypeOf(p.ptipo);
+  const nAll=tasks.length, nDone=tasks.filter(t=>t.done).length;
+  const late=tasks.filter(t=>!t.done&&t.fim&&daysTo(t.fim)<0);
+  const next=tasks.filter(t=>!t.done).sort((a,b)=>String(a.fim||'9999').localeCompare(String(b.fim||'9999'))).slice(0,5);
+  const start=p.inicio||(hasDates?minStr:''), due=p.prazo||(hasDates?maxStr:'');
+  const dd=due?daysTo(String(due).slice(0,10)):null;
+  const dueTxt=p.status==='concluido'?'Completed':dd===null?'No due date':dd<0?(-dd)+(dd===-1?' day':' days')+' overdue':dd===0?'Due today':dd+(dd===1?' day':' days')+' left';
+  const stIdx=Math.max(0,STAGES.findIndex(x=>x.id===stg.id));
+  const pipeline=STAGES.map((x,i)=>`<div class="stp${i===stIdx?' cur':''}"><i style="background:${i<=stIdx?x.color:'#d9dce3'}"></i><span>${esc(x.name)}</span></div>`).join('');
+  const upd=p._atualizado_em?new Date(p._atualizado_em).toLocaleString('en-US',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+  const nextHTML=next.length?next.map(t=>{ const d=t.fim?daysTo(t.fim):null, hp=healthPill(t.status);
+      return `<li><span class="dot" style="background:${hp.dot}"></span><div class="nx"><b>${esc(t.n||'(untitled)')}</b><small>${esc(respName(t.resp)||'Unassigned')}</small></div><span class="due${d!==null&&d<0?' late':''}">${t.fim?fmtY(t.fim):'no date'}${d!==null&&d<0?' · late':''}</span></li>`; }).join('')
+    :`<li class="empty">${nAll?'All activities are done.':'No activities yet.'}</li>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="300"><meta name="robots" content="noindex">
+  <title>Status — ${esc(p.nome)}</title>
   <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
+    :root{color-scheme:light;--card:#fff;--paper:#f3f4f7;--paper-2:#f5f6f8;--line:#e3e5ea;--txt:#14161c;--txt-2:#3c3f46;--txt-3:#767b87;
+      --green:#12a150;--green-bg:#e3f6ea;--amber:#c27c00;--amber-bg:#fff3d6;--red:#d92d3a;--red-bg:#fde7e9;--violet:#7a5af8;--violet-bg:#efeafe;--blue:#1f7ae0;--blue-bg:#e4f0fd}
     @page{size:A4 landscape;margin:12mm}
     *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    :root{color-scheme:light}
-    body{font-family:'Hanken Grotesk',Arial,sans-serif;color:#14161c;background:var(--card);margin:0;padding:26px;font-size:12px}
-    table{border-collapse:collapse;width:100%;margin-top:18px;font-size:10.5px}
-    th{background:var(--paper-2);text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3)}
-    th,td{border:1px solid var(--line);padding:5px 8px;vertical-align:top}
-    .noprint{position:fixed;top:10px;right:10px}
-    @media print{.noprint{display:none}}
-  </style></head><body>
-  <button class="noprint" onclick="window.print()" style="padding:8px 14px;border-radius:8px;border:none;background:#10131a;color:#fff;font-weight:700;cursor:pointer">Print / Save PDF</button>
-  <div style="font-size:20px;font-weight:800">${esc(p.nome)}</div>
-  <div style="font-size:11px;color:var(--txt-3);margin:4px 0 16px">${esc(respName(p.resp)||'—')} · ${esc(stg.name)} · ${st.name} · ${fmtDate(minStr)} → ${fmtDate(maxStr)} · ${pr}% complete</div>
-  <div style="border:1px solid var(--line);border-radius:10px;overflow:hidden">
-    <div style="display:flex;border-bottom:1px solid var(--line);background:var(--paper-2)"><div style="width:220px;flex-shrink:0;padding:6px 10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);border-right:1px solid var(--line)">Project / activity / sub-item</div><div style="flex:1;display:flex">${wkHead}</div></div>
-    ${gantt}
+    body{font-family:'Hanken Grotesk',Arial,sans-serif;color:var(--txt);background:var(--paper);margin:0;font-size:13px}
+    .wrap{max-width:1120px;margin:0 auto;padding:28px 16px 40px}
+    .eyebrow{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--txt-3)}
+    h1{font-size:30px;line-height:1.1;letter-spacing:-.02em;margin:6px 0 10px}
+    .chips{display:flex;flex-wrap:wrap;gap:6px}
+    .chip{font-size:12px;padding:3px 10px;border-radius:20px;border:1px solid var(--line);background:var(--card);color:var(--txt-2)}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:20px 0}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+    .card .k{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--txt-3)}
+    .card .v{font-size:22px;font-weight:800;margin-top:6px}
+    .card .s{font-size:12px;color:var(--txt-3);margin-top:4px}
+    .pill{display:inline-flex;align-items:center;gap:7px;font-size:15px;font-weight:800;padding:4px 12px;border-radius:20px;margin-top:8px}
+    .bar{height:8px;border-radius:6px;background:var(--paper-2);overflow:hidden;margin-top:10px}.bar>i{display:block;height:100%;border-radius:6px}
+    .pipe{display:flex;gap:4px;margin-top:12px;flex-wrap:wrap}
+    .stp{flex:1 1 90px;min-width:0;font-size:11px;color:var(--txt-3)}.stp i{display:block;height:6px;border-radius:4px;margin-bottom:5px}
+    .stp.cur{color:var(--txt);font-weight:800}
+    .row2{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;margin-bottom:12px}
+    h2{font-size:15px;margin:0 0 10px}
+    ul.next{list-style:none;margin:0;padding:0}
+    ul.next li{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}ul.next li:last-child{border-bottom:none}
+    ul.next .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}.nx{flex:1;min-width:0}.nx b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.nx small{color:var(--txt-3)}
+    .due{font-size:12px;color:var(--txt-2);white-space:nowrap}.due.late{color:var(--red);font-weight:700}
+    ul.next li.empty{color:var(--txt-3)}
+    .scroll{overflow-x:auto}.gantt{min-width:760px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--card)}
+    table{border-collapse:collapse;width:100%;min-width:760px;font-size:12px;background:var(--card)}
+    th{background:var(--paper-2);text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3)}
+    th,td{border:1px solid var(--line);padding:6px 9px;vertical-align:top}
+    .foot{margin-top:18px;font-size:11.5px;color:var(--txt-3)}
+    .noprint{position:fixed;top:12px;right:12px;padding:8px 14px;border-radius:8px;border:none;background:#10131a;color:#fff;font-weight:700;cursor:pointer;font-family:inherit}
+    @media print{.noprint{display:none}body{background:#fff}}
+    @media (max-width:600px){h1{font-size:24px}.noprint{position:static;margin-bottom:12px}}
+  </style></head><body><div class="wrap">
+  <button class="noprint" onclick="window.print()">Print / Save PDF</button>
+  <div class="eyebrow">Project status</div>
+  <h1>${esc(p.nome)}</h1>
+  <div class="chips">${bt?`<span class="chip">${esc(bt.name)}</span>`:''}${p.owner||p.resp?`<span class="chip">Owner: ${esc(respName(p.owner||p.resp))}</span>`:''}</div>
+  <div class="grid">
+    <div class="card"><div class="k">Status</div><div class="pill" style="background:${hpP.bg};color:${hpP.fg}"><span style="width:8px;height:8px;border-radius:50%;background:${hpP.dot}"></span>${esc(hpP.name)}</div>${late.length?`<div class="s" style="color:var(--red)">${late.length} activit${late.length===1?'y':'ies'} past due</div>`:''}</div>
+    <div class="card"><div class="k">Progress</div><div class="v">${pr}%</div><div class="bar"><i style="width:${Math.min(100,Math.max(0,pr))}%;background:${stg.color}"></i></div><div class="s">${nDone} of ${nAll} activities done</div></div>
+    <div class="card"><div class="k">Dates</div><div class="v" style="font-size:17px">${start?fmtY(start):'—'} → ${due?fmtY(due):'—'}</div><div class="s" style="${dd!==null&&dd<0&&p.status!=='concluido'?'color:var(--red);font-weight:700':''}">${dueTxt}</div></div>
   </div>
-  <table><thead><tr><th>Activity / sub-item</th><th>Assignee</th><th>Start</th><th>Due</th><th>Status</th><th style="text-align:right">%</th><th>Notes</th></tr></thead><tbody>${rowsTbl.join('')||'<tr><td colspan="7">No activities.</td></tr>'}</tbody></table>
-  <div style="margin-top:14px;font-size:9.5px;color:var(--txt-3)">Live from TCL Platform · loaded ${new Date().toLocaleDateString('en-US',{day:'2-digit',month:'short',year:'numeric'})} · updates automatically as the project progresses</div>
-  </body></html>`;
+  <div class="card" style="margin-bottom:12px"><div class="k">Stage · ${esc(stg.name)}</div><div class="s" style="font-size:13px;color:var(--txt-2)">${esc(STAGE_DESCS_DEFAULT[stg.id]||'')}</div><div class="pipe">${pipeline}</div></div>
+  <div class="card" style="margin-bottom:12px"><h2>Next up</h2><ul class="next">${nextHTML}</ul></div>
+  ${hasDates?`<div class="card" style="margin-bottom:12px"><h2>Timeline</h2><div class="scroll"><div class="gantt">
+    <div style="display:flex;border-bottom:1px solid var(--line);background:var(--paper-2)"><div style="width:220px;flex-shrink:0;padding:6px 10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--txt-3);border-right:1px solid var(--line)">Activity</div><div style="flex:1;display:flex">${wkHead}</div></div>
+    ${gantt}
+  </div></div></div>`:''}
+  <div class="card"><h2>Activities</h2><div class="scroll"><table><thead><tr><th>Activity / sub-item</th><th>Assignee</th><th>Start</th><th>Due</th><th>Status</th><th style="text-align:right">%</th><th>Notes</th></tr></thead><tbody>${rowsTbl.join('')||'<tr><td colspan="7">No activities.</td></tr>'}</tbody></table></div></div>
+  <div class="foot">Live from TCL Platform${upd?` · last change ${upd}`:''} · this page updates automatically as the project progresses (refreshes every 5 minutes).</div>
+  </div></body></html>`;
 }
 /* "Share link" now just resolves (or mints, once) the one link this project
    will ever have — no snapshot is generated or uploaded here. The link
@@ -5786,8 +5845,7 @@ function buildTimelineExportHTML(p){
 async function exportProjTimeline(pid){
   if(DEMO_MODE){ toast('Demo mode — sharing is disabled.'); return; }
   const p=DATA.projetos.find(x=>x.id===pid); if(!p){toast('Project not found.');return;}
-  if(!projHasDates(p)){ toast('This project has no dated activities to plot yet.'); return; }
-  toast('Getting the share link…');
+  toast('Getting the status link…');
   try{
     const {data:shareId,error}=await SBPO.rpc('get_or_create_timeline_share',{p_project_id:pid});
     if(error) throw error;
@@ -5797,9 +5855,9 @@ async function exportProjTimeline(pid){
 }
 function openShareLinkModal(url,name){
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:520px">
-    <div class="modal-h"><h3>Shareable link</h3><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
+    <div class="modal-h"><h3>Project status link</h3><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">
-      <div style="font-size:12.5px;color:var(--txt-2);margin-bottom:12px">Anyone with this link can view the timeline for <b>${esc(name)}</b> — no login required. It's the same link every time and always shows the project's current state, no need to reshare as work progresses.</div>
+      <div style="font-size:12.5px;color:var(--txt-2);margin-bottom:12px">Anyone with this link can follow the status of <b>${esc(name)}</b> — stage, progress, next activities and timeline, no budget figures, no login required. It's the same link every time and updates by itself as the project advances, so there's no need to reshare it.</div>
       <div style="display:flex;gap:8px">
         <input readonly value="${esc(url)}" onclick="this.select()" style="flex:1;min-width:0;padding:9px 11px;border:1px solid var(--line-2);border-radius:8px;font-size:12px;font-family:var(--mono);color:var(--txt)">
         <button class="btn-acc" onclick="copyShareLink('${escJs(url)}')" style="flex-shrink:0;display:inline-flex;align-items:center;gap:6px">${icn('copy',13)} Copy</button>
@@ -6136,7 +6194,7 @@ function pmAddLog(){
   const ta=$('#pmLog'); if(!ta)return; const txt=(ta.value||'').trim(); if(!txt)return;
   const men=pmMentionScan(txt);
   EDIT.logs=EDIT.logs||[];
-  EDIT.logs.push({id:uid(),txt,autor:(currentUser&&currentUser.email)||'you',t:new Date().toISOString().slice(0,10),mencoes:men.map(m=>({nome:m.nome,email:m.email||''}))});
+  EDIT.logs.push({id:uid(),txt,autor:(currentUser&&currentUser.email)||'you',t:new Date().toISOString().slice(0,10),ts:new Date().toISOString(),mencoes:men.map(m=>({nome:m.nome,email:m.email||''}))});
   ta.value=''; renderProjModal();
   // enfileira o e-mail pros mencionados — sai só quando o projeto for salvo (saveProj)
   men.forEach(m=>{ if(m.email) pmQueueNotif(m.email,txt); });
@@ -6425,7 +6483,7 @@ function myMentions(){
   const out=[];
   visProjs().forEach(p=>{(p.logs||[]).forEach(l=>{(l.mencoes||[]).forEach(mn=>{
     const hit=(mn.email&&mn.email.toLowerCase()===me)||(meName&&mn.nome===meName)||isManager;
-    if(hit)out.push({proj:p.nome,pid:p.id,txt:l.txt,autor:l.autor,t:l.t});
+    if(hit)out.push({proj:p.nome,pid:p.id,txt:l.txt,autor:l.autor,t:l.t,ts:l.ts||l.t});
   });});});
   return out.sort((a,b)=>String(b.t).localeCompare(String(a.t)));
 }
@@ -6474,8 +6532,8 @@ async function notifClearAll(){
 function buildNotifList(){
   const wn=wnState();
   const ms=myMentions().map(m=>({...m,origin:'work'}));
-  const tbl=(DATA.mencoes||[]).map(m=>({proj:m.projeto_nome,pid:'',txt:m.mensagem,autor:m.autor,t:String(m.criado_em||'').slice(0,10),origin:'work'}));
-  const budget=(DATA.notif||[]).map(n=>({proj:'Budget · PO',pid:'',poId:n.po_id||'',projId:n.fund_id||'',tipo:n.tipo||'',txt:n.mensagem||'PO update requiring your attention',autor:'PO',t:String(n.criada_em||'').slice(0,10),origin:'budget',id:n.id,lida:!!n.lida}));
+  const tbl=(DATA.mencoes||[]).map(m=>({proj:m.projeto_nome,pid:'',txt:m.mensagem,autor:m.autor,t:String(m.criado_em||'').slice(0,10),ts:m.criado_em||'',origin:'work'}));
+  const budget=(DATA.notif||[]).map(n=>({proj:'Budget · PO',pid:'',poId:n.po_id||'',projId:n.fund_id||'',tipo:n.tipo||'',txt:n.mensagem||'PO update requiring your attention',autor:'PO',t:String(n.criada_em||'').slice(0,10),ts:n.criada_em||'',origin:'budget',id:n.id,lida:!!n.lida}));
   const seen=new Set();
   return [...tbl,...ms,...budget].filter(x=>{const k=x.proj+'|'+x.txt+'|'+x.t;if(seen.has(k))return false;seen.add(k);return true;})
     .map(x=>{
@@ -6484,7 +6542,7 @@ function buildNotifList(){
       if(st==='dismissed')return null;
       return {...x,key,lida:st==='read'};
     }).filter(Boolean)
-    .sort((a,b)=>String(b.t).localeCompare(String(a.t)));
+    .sort((a,b)=>String(b.ts||b.t).localeCompare(String(a.ts||a.t)));
 }
 function notifUnreadCount(){ return buildNotifList().filter(x=>!x.lida).length; }
 function approvalsPendingCount(){
@@ -6521,7 +6579,7 @@ function renderNotif(){
       const rowClick=[unread?markRead:'',navigate].filter(Boolean).join(';');
       return `<div class="row-item" style="${unread?'':'opacity:.62'};${(clickable||unread)?'cursor:pointer':'cursor:default'}" ${rowClick?`onclick="${rowClick}"`:''}>
         <span class="pin" style="background:${unread?(m.origin==='budget'?'var(--po)':'var(--accent)'):'var(--line-2)'}"></span>
-        <div style="flex:1;min-width:0"><div style="font-weight:${unread?700:600};font-size:13.5px">${esc(m.proj)}${(m.origin==='budget'&&(m.poId||m.projId))?' <span style=\'color:var(--po);font-weight:700\'>· open →</span>':''}</div><div style="font-size:12.5px;color:var(--txt-2);margin-top:1px">${fmtLogTxt(m.txt)}</div><span class="who">${esc(m.autor)} · ${fmtDate(m.t)}</span></div>
+        <div style="flex:1;min-width:0"><div style="font-weight:${unread?700:600};font-size:13.5px">${esc(m.proj)}${(m.origin==='budget'&&(m.poId||m.projId))?' <span style=\'color:var(--po);font-weight:700\'>· open →</span>':''}</div><div style="font-size:12.5px;color:var(--txt-2);margin-top:1px">${fmtLogTxt(m.txt)}</div><span class="who">${esc(m.autor)} · ${fmtDateTime(m.ts||m.t)}</span></div>
         <div style="display:flex;gap:4px;flex-shrink:0" onclick="event.stopPropagation()">
           <button title="${unread?'Mark as read':'Mark as unread'}" onclick="${readToggle}" style="border:none;background:none;color:var(--txt-3);cursor:pointer;font-size:13px;padding:4px">${unread?'●':'○'}</button>
           <button title="Delete" onclick="${del}" style="border:none;background:none;color:var(--txt-3);cursor:pointer;font-size:13px;padding:4px">✕</button>
@@ -7689,7 +7747,7 @@ function renderTimeline(){
         <span style="color:var(--txt-3);display:flex;flex-shrink:0;transform:rotate(${open?'0deg':'-90deg'});transition:transform .15s">${icn('chev',11)}</span>
         <span style="min-width:0"><div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.nome)}</div><div style="font-size:11px;color:var(--txt-3);margin-top:1px">${esc(respName(p.resp)||'—')} · ${esc(stg.name)}</div></span>
         <button onclick="event.stopPropagation();openProj('${escJs(p.id)}')" title="Open project" style="margin-left:auto;flex-shrink:0;border:none;background:none;color:var(--txt-3);cursor:pointer;padding:2px;display:inline-flex">${icn('pencil',12)}</button>
-        <button onclick="event.stopPropagation();exportProjTimeline('${escJs(p.id)}')" title="Share timeline (link)" style="flex-shrink:0;border:none;background:none;color:var(--txt-3);cursor:pointer;padding:2px;display:inline-flex">${icn('link',12)}</button>
+        <button onclick="event.stopPropagation();exportProjTimeline('${escJs(p.id)}')" title="Share project status (link)" style="flex-shrink:0;border:none;background:none;color:var(--txt-3);cursor:pointer;padding:2px;display:inline-flex">${icn('link',12)}</button>
       </div>
       <div style="flex:1;position:relative;height:46px">${hiliteStripe}${bar}</div>
     </div>
