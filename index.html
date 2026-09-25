@@ -22,7 +22,7 @@
     --field:#0a0f1d;
     --bg:#05070d; /* Estilo Realidade Virtual — canvas preto da página */
     --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
-    --txt:#eef1f8; --txt-soft:#dfe3ee; --txt-2:#a7aec2; --txt-3:#747c92;
+    --txt:#eef1f8; --txt-soft:#dfe3ee; --txt-1:#eef1f8; --txt-2:#a7aec2; --txt-3:#747c92;
     /* brand duality — Work (cobalt) + Budget (TCL red)
        accent/po ficam com o tom "deep" original (preenchimento sólido com
        texto branco, já testado ≥6:1); accent-deep passou a ser o tom "bright"
@@ -52,6 +52,14 @@
     --ring:0 0 0 3px rgba(43,79,221,.18);
   }
   *{box-sizing:border-box;margin:0;padding:0}
+  /* Dark UI end to end: native controls (date-picker icons, select popups,
+     scrollbars) render in their dark variant, and any field or option that
+     doesn't set its own colour inherits the light text instead of the
+     browser's default black — which read as black-on-navy across modals. */
+  :root{color-scheme:dark}
+  input,select,textarea{color:var(--txt)}
+  input::placeholder,textarea::placeholder{color:var(--txt-3)}
+  option,optgroup{background:#0f1628;color:#eef1f8}
   html,body{height:100%}
   body{font-family:var(--sans);background:var(--bg);color:var(--txt);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
     /* Estilo Realidade Virtual (Etapa 2) — grade + glow discretos sobre o canvas; cards/paineis internos não mudam nesta etapa */
@@ -245,6 +253,27 @@
   .search-in::placeholder{color:var(--txt-3)}
   .search-in:focus{border-color:var(--accent-deep)}
   .proj-row:hover{background:rgba(255,255,255,.025)}
+  .pm-in{width:100%;padding:10px 12px;border:1px solid rgba(255,255,255,.14);border-radius:9px;background:var(--field);color:var(--txt);font:inherit;font-size:14px;outline:none}
+  .pm-in:focus{border-color:var(--accent-deep)}
+  /* Activity planner, page version (Project.dc.html's Activities table with
+     the v1 editing mechanics underneath). */
+  .pd-atv .atv-wrap{border:none;background:transparent;margin:0;border-radius:0;--atv-cols:34px 22px minmax(170px,1fr) 128px 108px 108px 128px 84px 98px 52px}
+  .pd-atv .atv-top{display:none}
+  .pd-atv .atv-scroll>*{min-width:960px}
+  .pd-atv .atv-hd{border-bottom:1px solid rgba(255,255,255,.1);padding:0}
+  .pd-atv .atv-hd>span{font-family:var(--sans);font-size:12px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--txt-3);padding:8px 0}
+  .pd-atv .atv-row{border-bottom:1px solid rgba(255,255,255,.06);min-height:44px;padding:0}
+  .pd-atv .atv-row:hover{background:rgba(255,255,255,.02)}
+  .pd-atv .atv-row.is-sub{background:rgba(255,255,255,.025)}
+  .pd-atv .atv-in{font-size:13.5px}
+  .pd-atv .atv-row:not(.is-sub) .atv-name .atv-in{font-weight:600}
+  .pd-atv .atv-check{width:18px;height:18px;border-color:rgba(255,255,255,.3);background:transparent}
+  .pd-atv .atv-check.on{background:#2fd88a;border-color:#2fd88a;color:#05070d}
+  .pd-atv .atv-panel{background:#0f1628;border-bottom:1px solid rgba(255,255,255,.06);padding-left:76px}
+  .pd-atv .atv-add{padding-left:76px}
+  .pd-atv .atv-add input{border-color:rgba(255,255,255,.16);color:var(--txt)}
+  .pd-atv .atv-num{font-size:10.5px}
+  .atv-st{justify-self:start;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap;border:none;cursor:pointer}
   .rt-btn:hover{background:rgba(255,255,255,.08)!important}
   .pd-subnav button{padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;color:var(--txt-2)}
   .pd-subnav button:hover{color:var(--txt)}
@@ -2407,11 +2436,69 @@ function editProj(id){
 function pdScrollTo(id){ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); }
 let PD_ATV_OPEN={};
 function pdToggleOpen(tid){ PD_ATV_OPEN[tid]=!PD_ATV_OPEN[tid]; go('projectdetail'); }
+/* What goes to act_projects.data — the project minus editor state
+   (_new/_pendingNotifs/_fromTask and which rows are expanded). */
+function projClean(p){
+  const c=JSON.parse(JSON.stringify(p)); delete c._new; delete c._pendingNotifs; delete c._fromTask;
+  (c.tasks||[]).forEach(t=>{ delete t._open; });
+  return c;
+}
 async function pdPersist(p){
   if(DEMO_MODE) return;
-  try{ const {error}=await SBPO.from('act_projects').upsert({id:p.id,data:p,campanha_id:p.campanha_id||null}); if(error)throw error; }
+  try{ const c=projClean(p); const {error}=await SBPO.from('act_projects').upsert({id:c.id,data:c,campanha_id:c.campanha_id||null}); if(error)throw error; }
   catch(e){ toastErr(e); }
 }
+/* ---- In-place editing on the project page ----
+   EDIT is bound to the project being viewed (the DATA.projetos object
+   itself), the pm* planner functions mutate it, and every change repaints
+   the page and schedules a save — there is no Save button for the body of
+   the project any more, only for its header (renderProjHeaderModal). */
+let PD_DIRTY=false, PD_SAVE_T=null, PD_SAVE_P=null, PD_SAVE_STATE='';
+function pdEnsureEdit(p){
+  if(document.querySelector('#modalMount .pm-modal')) return;
+  if(EDIT&&EDIT.id===p.id&&!EDIT._new){
+    if(EDIT===p) return;
+    if(PD_DIRTY){ const i=DATA.projetos.findIndex(x=>x.id===p.id); if(i>=0) DATA.projetos[i]=EDIT; return; }
+    const open=new Set((EDIT.tasks||[]).filter(t=>t._open).map(t=>t.id));
+    (p.tasks||[]).forEach(t=>{ if(open.has(t.id)) t._open=true; });
+  } else if(PD_DIRTY) pdFlushSave();
+  EDIT=p; EDIT._pendingNotifs=EDIT._pendingNotifs||{};
+}
+function pdInlineRerender(uiOnly){
+  if(!uiOnly){
+    if(!canEditAtividades(EDIT)||VIEW_AS){ toast(VIEW_AS?roMsg():'You can\'t edit this project\'s activities.'); }
+    else { PD_DIRTY=true; PD_SAVE_P=EDIT; PD_SAVE_STATE='saving'; clearTimeout(PD_SAVE_T); PD_SAVE_T=setTimeout(pdSaveNow,700); }
+  }
+  const v=$('#view'); if(!v) return;
+  v.innerHTML=renderProjectDetail();
+  if(PM_REFOCUS){ const el=$(PM_REFOCUS.sel); if(el){ try{ el.focus({preventScroll:true}); }catch(e){ el.focus(); } } PM_REFOCUS=null; }
+  if(DEP_POP) pmDepPop(DEP_POP.tid,DEP_POP.sid,null,true);
+}
+function pdSetDue(v){
+  if(!EDIT||!canEdit(EDIT)||VIEW_AS) return;
+  EDIT.prazo=v; PD_DIRTY=true; PD_SAVE_P=EDIT; PD_SAVE_STATE='saving'; pdSaveNow().then(()=>{ if(SCREEN==='projectdetail') $('#view').innerHTML=renderProjectDetail(); });
+}
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&DEP_POP&&!$('#modalMount').firstElementChild) pmDepClosePop(); });
+function pdFlushSave(){ if(PD_DIRTY){ clearTimeout(PD_SAVE_T); pdSaveNow(); } }
+async function pdSaveNow(){
+  const p=PD_SAVE_P; if(!p||!PD_DIRTY) return;
+  PD_DIRTY=false; clearTimeout(PD_SAVE_T);
+  p.etapa=effectiveEtapa(p); p.status=autoStatus(p);
+  const c=projClean(p);
+  const pend=p._pendingNotifs||{}; p._pendingNotifs={};
+  try{
+    if(!DEMO_MODE){ const {error}=await SBPO.from('act_projects').upsert({id:c.id,data:c,campanha_id:c.campanha_id||null}); if(error)throw error; }
+    const i=DATA.projetos.findIndex(x=>x.id===p.id); if(i>=0&&DATA.projetos[i]!==p) DATA.projetos[i]=p;
+    Object.keys(pend).forEach(email=>notifyMarcacao(email,c.nome,pend[email]));
+    PD_SAVE_STATE='saved';
+  }catch(e){ PD_DIRTY=true; PD_SAVE_STATE='error'; toastErr(e); }
+  const b=document.getElementById('pdSaveState'); if(b) b.outerHTML=pdSaveBadge();
+}
+function pdSaveBadge(){
+  const m={saving:['Saving…','var(--txt-3)'],saved:['All changes saved','#2fd88a'],error:['Not saved — retry by editing again','#ff6b6b']}[PD_SAVE_STATE];
+  return `<span id="pdSaveState" class="mono" style="font-size:11.5px;color:${m?m[1]:'var(--txt-3)'}">${m?m[0]:''}</span>`;
+}
+window.addEventListener('beforeunload',e=>{ if(PD_DIRTY){ pdFlushSave(); e.preventDefault(); e.returnValue=''; } });
 async function pdToggleTask(pid,tid,sid){
   const p=DATA.projetos.find(x=>x.id===pid); if(!p)return;
   if(!canEditAtividades(p)){ toast('You can\'t edit this project\'s activities.'); return; }
@@ -2447,6 +2534,7 @@ function pdHeroHTML(p){
   const canDup=!['agencia','tcl_member'].includes(effPapel())&&!VIEW_AS;
   const st=projEffStart(p);
   const range=st&&p.prazo?`${fmtDate(st)} – ${fmtDate(p.prazo)}`:p.prazo?'Due '+fmtDate(p.prazo):'No dates';
+  const dueEd=canEditProj&&!VIEW_AS;
   const chip=(t,c)=>`<span style="font-size:12.5px;padding:4px 12px;border-radius:20px;border:1px solid ${c?c+'73':'rgba(255,255,255,.18)'};color:${c||'var(--txt-2)'}">${t}</span>`;
   return `<div style="display:flex;flex-direction:column;gap:10px">
     <div style="font-size:13px;color:var(--txt-2);display:flex;gap:8px"><a onclick="go('list')" style="cursor:pointer">Projects</a><span>/</span><span style="color:var(--txt)">${esc(p.nome)}</span></div>
@@ -2456,7 +2544,7 @@ function pdHeroHTML(p){
         <div style="display:flex;flex-wrap:wrap;gap:8px">
           ${bt?chip(esc(bt.name)):''}
           ${(p.categorias||[]).map(c=>chip(esc(catKeyLabel(c)),catMeta(c).c)).join('')}
-          ${chip(esc(range))}
+          ${dueEd?`<label title="Project due date" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;padding:2px 6px 2px 12px;border-radius:20px;border:1px solid rgba(255,255,255,.18);color:var(--txt-2)">${st&&p.prazo?esc(fmtDate(st))+' –':'Due'}<input type="date" value="${esc(p.prazo||'')}" onchange="pdSetDue(this.value)" style="background:transparent;border:none;color:var(--txt);font:inherit;font-size:12.5px;padding:2px 0;outline:none"></label>`:chip(esc(range))}
           ${chip('Owner: '+esc(respName(p.owner||p.resp)||'—'))}
           ${projAgencias(p).map(a=>chip(esc(a))).join('')}
         </div>
@@ -2499,7 +2587,8 @@ function pdStatsHTML(p){
 let PD_SEC='pd-sec-schedule';
 function pdGoSec(id){ PD_SEC=id; document.querySelectorAll('.pd-subnav button').forEach(b=>b.classList.toggle('on',b.dataset.sec===id)); pdScrollTo(id); }
 function pdSubnavHTML(p){
-  const items=[['pd-sec-schedule','Schedule'],['pd-sec-activities','Activities & messages'],['pd-sec-budget','Budget & funds'],['pd-sec-pos','POs'],['pd-sec-people','People']];
+  const hasBudget=((ROLE_NAV[effPapel()]||{}).budget||[]).length>0&&PO_ACCESS;
+  const items=[['pd-sec-schedule','Schedule'],['pd-sec-activities','Activities'],['pd-sec-messages','Messages & people'],...(hasBudget?[['pd-sec-budget','Budget & funds'],['pd-sec-pos','POs']]:[])];
   return `<nav class="pd-subnav" style="position:sticky;top:var(--nav-h,62px);z-index:25;display:flex;gap:4px;flex-wrap:wrap;padding:6px;border-radius:0 0 12px 12px;background:rgba(10,14,24,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.1);border-top:none;box-shadow:0 12px 24px -12px rgba(0,0,0,.8)">
     ${items.map(([id,l])=>`<button data-sec="${id}" class="${PD_SEC===id?'on':''}" onclick="pdGoSec('${id}')">${l}</button>`).join('')}
   </nav>`;
@@ -2511,7 +2600,7 @@ let PD_SCHED='timeline';
 function pdScheduleHTML(p){
   const tasks=(p.tasks||[]).filter(t=>t.inicio||t.fim);
   const ds=[projEffStart(p),p.prazo,...tasks.flatMap(t=>[t.inicio,t.fim])].filter(Boolean).sort();
-  if(!ds.length) return '';
+  if(!ds.length) return v2Card('','Schedule','<div style="font-size:13px;color:var(--txt-2);margin-top:8px">No dates yet — give the activities below a start and end date (and the project a due date, in the header) and the timeline appears here.</div>',{id:'pd-sec-schedule',style:'scroll-margin-top:130px'});
   const d0=new Date(ds[0].slice(0,7)+'-01T00:00:00'); const dl=new Date(ds[ds.length-1]+'T00:00:00');
   const d1=new Date(dl.getFullYear(),dl.getMonth()+1,1);
   const span=(d1-d0)/864e5;
@@ -2557,48 +2646,23 @@ function pdScheduleHTML(p){
     </div>
   </div>`;
 }
+/* Activities — the planner (numbered rows, sub-items, "depends on" by
+   number, dates, owner, drag to reorder, quick-add and paste-a-list) edited
+   in place, in the Project.dc.html table look. */
 function pdActivitiesHTML(p){
-  const tasks=p.tasks||[]; const EDA=canEditAtividades(p);
-  const rows=tasks.map((t,i)=>{
-    const open=!!PD_ATV_OPEN[t.id];
-    const stMeta=healthPill(t.status||'no_prazo');
-    const di=t.fim?deadlineInfo({prazo:t.fim,status:t.done?'concluido':(t.status||'no_prazo'),tasks:[]}):null;
-    const subsDone=(t.subs||[]).filter(s=>s.done).length;
-    return `<div style="border-bottom:1px solid rgba(255,255,255,.06)">
-      <div class="proj-row" style="display:grid;grid-template-columns:18px 20px minmax(0,1.8fr) minmax(0,1fr) 70px 70px minmax(0,1.2fr) 100px 96px;gap:10px;align-items:center;padding:11px 0;cursor:pointer" onclick="pdToggleOpen('${t.id}')">
-        <span style="font-size:10px;color:var(--txt-3)">${(t.subs||[]).length?(open?'▼':'▶'):''}</span>
-        <button onclick="event.stopPropagation();pdToggleTask('${esc(p.id)}','${t.id}')" ${EDA?'':'disabled'} style="width:18px;height:18px;border-radius:5px;display:grid;place-items:center;font-size:11px;font-weight:800;background:${t.done?'#2fd88a':'transparent'};border:1.5px solid ${t.done?'#2fd88a':'var(--line-2)'};color:#05070d;cursor:${EDA?'pointer':'default'}">${t.done?'✓':''}</button>
-        <div style="font-weight:600;font-size:13.5px;color:${t.done?'var(--txt-3)':'var(--txt)'};text-decoration:${t.done?'line-through':'none'}">${esc(t.n||'(untitled)')}</div>
-        <div style="display:flex;align-items:center;gap:8px;min-width:0"><span class="avatar" style="width:22px;height:22px;font-size:9px;background:${avColor(respName(t.resp))}">${initials(respName(t.resp)||'?')}</span><span style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(respName(t.resp)||'—')}</span></div>
-        <div class="mono" style="font-size:11.5px;color:var(--txt-3)">${t.inicio?fmtDate(t.inicio):'—'}</div>
-        <div class="mono" style="font-size:11.5px;color:${di?di.color:'var(--txt-3)'}">${t.fim?fmtDate(t.fim):'—'}</div>
-        <div style="font-size:12px;color:var(--txt-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(t.dep||[]).length?(t.dep||[]).map(id=>{const dt=tasks.find(x=>x.id===id);return dt?esc(dt.n):'';}).filter(Boolean).join(', ')||'—':'—'}</div>
-        <div style="display:flex;align-items:center;gap:6px"><div class="pbar" style="flex:1;min-width:40px"><span style="width:${t.subs&&t.subs.length?Math.round(subsDone/t.subs.length*100):(t.done?100:0)}%;background:${stMeta.dot}"></span></div><span style="font-size:10.5px;color:var(--txt-3)">${(t.subs||[]).length?subsDone+'/'+t.subs.length:''}</span></div>
-        <span style="justify-self:start;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;background:${stMeta.bg};color:${stMeta.fg}">${t.done?'Done':stMeta.name}</span>
-      </div>
-      ${open&&(t.subs||[]).length?`<div style="display:flex;flex-direction:column;gap:3px;padding:0 0 12px 48px">${(t.subs||[]).map(s=>`
-        <div style="display:grid;grid-template-columns:16px minmax(0,1.8fr) minmax(0,1fr) 70px 70px;gap:10px;align-items:center;padding:6px 10px;border-radius:8px;background:rgba(255,255,255,.025)">
-          <button onclick="pdToggleTask('${esc(p.id)}','${t.id}','${s.id}')" ${EDA?'':'disabled'} style="width:15px;height:15px;border-radius:4px;display:grid;place-items:center;font-size:9px;font-weight:800;color:#05070d;background:${s.done?'#2fd88a':'transparent'};border:1.5px solid ${s.done?'#2fd88a':'var(--line-2)'};cursor:${EDA?'pointer':'default'}">${s.done?'✓':''}</button>
-          <span style="font-size:13px;color:${s.done?'var(--txt-3)':'var(--txt)'};text-decoration:${s.done?'line-through':'none'}">${esc(s.n||'(untitled)')}</span>
-          <span style="font-size:12px;color:var(--txt-2)">${esc(respName(s.resp)||'')}</span>
-          <span class="mono" style="font-size:11.5px;color:var(--txt-3)">${s.inicio?fmtDate(s.inicio):'—'}</span>
-          <span class="mono" style="font-size:11.5px;color:var(--txt-3)">${s.fim?fmtDate(s.fim):'—'}</span>
-        </div>`).join('')}</div>`:''}
-    </div>`;
-  }).join('');
-  const subsN=tasks.reduce((n,t)=>n+(t.subs||[]).length,0);
-  return `<div id="pd-sec-activities" class="v2-card" style="scroll-margin-top:130px;flex:2 1 620px;min-width:0">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><div><div class="v2-card-eyebrow">${tasks.length} activities · ${subsN} sub-activities · click a row to open</div><div class="v2-card-title">Activities</div></div>${canEdit(p)?`<a onclick="editProj('${esc(p.id)}')" style="font-size:13px;font-weight:600;cursor:pointer">+ Activity</a>`:''}</div>
-    <div style="overflow-x:auto;margin-top:10px"><div style="min-width:920px">
-      <div style="display:grid;grid-template-columns:18px 20px minmax(0,1.8fr) minmax(0,1fr) 70px 70px minmax(0,1.2fr) 100px 96px;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.1);font-size:12px;color:var(--txt-3);font-weight:600">
-        <span></span><span></span><span>Activity</span><span>Owner</span><span>Start</span><span>End</span><span>Depends on</span><span>Progress</span><span>Status</span></div>
-      ${rows||'<div class="empty">No activities yet.</div>'}
-    </div></div>
-  </div>`;
+  const EDA=canEditAtividades(p)&&!VIEW_AS;
+  const tasks=p.tasks||[]; const subsN=tasks.reduce((n,t)=>n+(t.subs||[]).length,0);
+  let issues=schedIssues(tasks).length; tasks.forEach(t=>{ issues+=schedIssues(t.subs||[]).length; });
+  const right=`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">${pdSaveBadge()}
+    ${issues&&EDA?`<button class="chip-sel" onclick="pmReschedule()" style="color:#ffb020;border-color:rgba(255,176,32,.35)">${icn('alert',12)} ${issues===1?'1 item starts before its link':issues+' items start before their links'} — reschedule</button>`:''}</div>`;
+  return v2Card(`${tasks.length} activities · ${subsN} sub-activities · ${EDA?'edit in place, changes save automatically':'read only'}`,'Activities',`
+    <div class="pd-atv" style="margin-top:10px">${pmAtvBlockHTML(EDA)}</div>
+    ${EDA?'<div style="font-size:12px;color:var(--txt-3);margin-top:10px">Open a row (the arrow on the right) for status, note and sub-items · "Depends on" links by number · drag the number to reorder.</div>':''}`,
+    {id:'pd-sec-activities',style:'scroll-margin-top:130px',right});
 }
 function pdMessagesHTML(p){
   const logs=(p.logs||[]).slice().reverse();
-  return `<div id="pd-sec-messages" class="v2-card" style="flex:1 1 340px;min-width:0;align-self:stretch;display:flex;flex-direction:column">
+  return `<div id="pd-sec-messages" class="v2-card" style="scroll-margin-top:130px;flex:3 1 480px;min-width:0;display:flex;flex-direction:column">
     <div class="v2-card-eyebrow">messages + system events</div>
     <div class="v2-card-title" style="margin-bottom:12px">Message history</div>
     <div style="display:flex;flex-direction:column;gap:14px;max-height:420px;overflow-y:auto">
@@ -2704,12 +2768,12 @@ function pdPeopleHTML(p){
     ...(p.envolvidos||[]).map(e=>{const pe=(DATA.pessoas||[]).find(x=>x.email&&e.email&&x.email.toLowerCase()===e.email.toLowerCase());const r=pe?pe.papel:'';
       return {n:e.nome||e.email,role:r==='tcl_member'?'TCL member · tagged':r==='financeiro'?'Finance · tagged':r==='agencia'?'Agency · tagged':'Marketing · tagged',t:r==='financeiro'?tag('FIN','rgba(255,176,32,.14)','#ffb020'):r==='agencia'?tag('AGENCY','rgba(45,212,196,.14)','#2dd4c4'):tag('MKT','rgba(255,255,255,.08)','#a7aec2')};}),
     ...projAgencias(p).map(a=>({n:a,role:'Agency',t:tag('AGENCY','rgba(45,212,196,.14)','#2dd4c4')}))];
-  return v2Card('','People',`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px 24px;margin-top:14px">
+  return v2Card('','People',`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px 24px;margin-top:14px">
       ${people.map(pe=>`<div style="display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:12px;align-items:center">
         <span class="avatar" style="width:32px;height:32px;font-size:10.5px;background:${avColor(pe.n)}">${initials(pe.n)}</span>
         <div style="min-width:0"><div style="font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(pe.n)}</div><div style="font-size:12px;color:var(--txt-3)">${pe.role}</div></div>
         ${pe.t}</div>`).join('')}
-    </div>`,{id:'pd-sec-people',style:'scroll-margin-top:130px',right:canEdit(p)?`<a onclick="editProj('${esc(p.id)}')" style="font-size:13px;font-weight:600;cursor:pointer">+ Add</a>`:''});
+    </div>`,{id:'pd-sec-people',style:'scroll-margin-top:130px;flex:2 1 340px;min-width:0',right:!VIEW_AS?`<a onclick="editProj('${esc(p.id)}')" style="font-size:13px;font-weight:600;cursor:pointer">+ Tag people</a>`:''});
 }
 function renderProjectDetail(){
   const p=DATA.projetos.find(x=>x.id===PROJ_VIEW_ID);
@@ -2717,12 +2781,16 @@ function renderProjectDetail(){
   /* Project.dc.html order: breadcrumb/hero → 4 stat cards → sticky sub-nav →
      Schedule → Activities beside Message history → Budget and funds → POs →
      People. */
+  pdEnsureEdit(p);
+  const q=EDIT&&EDIT.id===p.id?EDIT:p;
+  const hasBudget=((ROLE_NAV[effPapel()]||{}).budget||[]).length>0&&PO_ACCESS;
   return `<div style="display:flex;flex-direction:column;gap:20px;padding-top:6px">
-    ${pdHeroHTML(p)}${pdStatsHTML(p)}${pdSubnavHTML(p)}
-    ${pdScheduleHTML(p)}
-    <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start">${pdActivitiesHTML(p)}${pdMessagesHTML(p)}</div>
-    ${pdBudgetHTML(p)}${pdPOsHTML(p)}${pdPeopleHTML(p)}
-  </div>`;
+    ${pdHeroHTML(q)}${pdStatsHTML(q)}${pdSubnavHTML(q)}
+    ${pdScheduleHTML(q)}
+    ${pdActivitiesHTML(q)}
+    <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:stretch">${pdMessagesHTML(q)}${pdPeopleHTML(q)}</div>
+    ${hasBudget?pdBudgetHTML(q)+pdPOsHTML(q):''}
+  </div><div id="pmPop"></div>`;
 }
 /* Duplicate: opens a prefilled "new project" form (same type/categories/brand/
    activity names) rather than silently creating a copy — nothing is saved
@@ -3165,7 +3233,7 @@ function renderCampBody(){
           <span class="pbar" style="flex:1"><span style="width:${pct}%;background:${m.c}"></span></span>
           <span class="pct">${pct.toFixed(1)}%</span>
         </span>
-        <span class="mono" style="font-size:12.5px;font-weight:700;color:var(--ink);width:110px;text-align:right;flex-shrink:0">${BRL(tot)}</span>
+        <span class="mono" style="font-size:12.5px;font-weight:700;color:var(--txt);width:110px;text-align:right;flex-shrink:0">${BRL(tot)}</span>
         <span style="color:${open?m.c:'var(--txt-3)'};display:flex;transform:rotate(${open?'0deg':'-90deg'});transition:transform .15s">${icn('chev',14)}</span>
       </div>
       ${open?fundCatBody(funds,m):''}
@@ -3197,7 +3265,7 @@ function fundCampBodyHTML(fl){
           <b style="font-family:'Hanken Grotesk',sans-serif;font-size:13.5px;display:block">${esc(label)}</b>
           <span style="font-size:11px;color:var(--txt-3);font-weight:600">${funds.length} fund${funds.length===1?'':'s'}${sub?' · '+esc(sub):''}${open?'':' · click to open'}</span>
         </span>
-        ${key!=='__avulsos'?fundGaugeHTML(t.teto,t.cons,t.comp,0,'var(--po)',220):`<span class="mono" style="font-size:12.5px;font-weight:700;color:var(--ink)">${BRL(tot)}</span>`}
+        ${key!=='__avulsos'?fundGaugeHTML(t.teto,t.cons,t.comp,0,'var(--po)',220):`<span class="mono" style="font-size:12.5px;font-weight:700;color:var(--txt)">${BRL(tot)}</span>`}
         <span style="color:${open?'var(--po)':'var(--txt-3)'};display:flex;transform:rotate(${open?'0deg':'-90deg'});transition:transform .15s">${icn('chev',14)}</span>
       </div>
       ${open?fundCatBody(funds,m):''}
@@ -3493,9 +3561,9 @@ function openFundDetail(pid){
   const catAlloc={}; DATA.rateio.filter(r=>r.fund_id===pid).forEach(r=>{catAlloc[r.categoria]=(catAlloc[r.categoria]||0)+(+r.valor||0);});
   const catKeys=Object.keys(catAlloc).sort((a,b)=>catAlloc[b]-catAlloc[a]);
   const palette=['#e20613','#2a6fdb','#1f8a4c','#b5550c','#7a5cc4','#0e7c86'];
-  const kpi=(lbl,val,c,full)=>`<div title="${full||''}" style="border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 12px;background:#141c33"><div style="font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">${lbl}</div><div class="mono" style="font-size:14.5px;font-weight:700;margin-top:3px;color:${c||'var(--txt)'}">${val}</div></div>`;
+  const kpi=(lbl,val,c,full)=>`<div title="${full||''}" style="border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 12px;background:#141c33;min-width:0"><div style="font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">${lbl}</div><div class="mono" style="font-size:14.5px;font-weight:700;margin-top:3px;color:${c||'var(--txt)'}">${val}</div></div>`;
   const summary=`
-    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:14px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:14px">
       ${(canSeeCorte()&&totCapAprovado>totCap+0.005)?kpi('Approved',BRLc(totCapAprovado),'',BRL(totCapAprovado)):''}${kpi('Total cap',BRLc(totCap),'',BRL(totCap))}${kpi('Consumed',BRLc(totConsu),'#4d7dff',BRL(totConsu))}${kpi('Committed',BRLc(totComp),'#a685ff',BRL(totComp))}${kpi('Awaiting approval',BRLc(totPend),'#ffb020',BRL(totPend))}${kpi('Balance',BRLc(saldoTot),saldoTot<0?'#ff5c6c':'#2fd88a',BRL(saldoTot))}
     </div>
     ${(p.rateio&&catKeys.length)?`<div style="border:1px solid var(--line);border-radius:11px;padding:13px 15px;margin-bottom:14px">
@@ -3511,10 +3579,12 @@ function openFundDetail(pid){
     return `<button class="mono" style="font-size:11.5px;font-weight:700;border-radius:8px;padding:5px 11px;cursor:pointer;${st}" onclick="fundDrawerJump('${m}')">${fmtMes(m+'-01')}${over?' '+Math.round(consM/cap*100)+'%':''}</button>`;
   }).join('');
   const alertHTML=(rawTot>=90&&!allPos.some(po=>po.status==='CONCLUIDA'))?`<div style="display:flex;align-items:center;gap:10px;background:var(--amber-bg);border:1px solid rgba(255,176,32,.3);border-radius:9px;padding:8px 12px;margin-top:12px;font-size:12px;color:var(--amber)"><span style="width:7px;height:7px;border-radius:50%;background:var(--amber);flex-shrink:0"></span>No PO completed yet — check with the agency before approving new ones.</div>`:'';
-  /* Budget-Timeline.dc.html fund drawer — slides in from the right. */
+  /* Fund detail — the mockup drawer's content, shown as a centred window.
+     data-fd marks it so a window opened from here (PO, request, realloc…)
+     comes back to it on close — see fdMarkBack()/closeModal(). */
   const campOf=(DATA.campanhas||[]).find(c=>c.id===p.campanha_id);
   const pill=t=>`<span style="font-size:11.5px;padding:2px 9px;border-radius:20px;border:1px solid rgba(255,255,255,.16);color:var(--txt-2)">${t}</span>`;
-  $('#modalMount').innerHTML=`<div class="overlay right" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal drawer" style="width:min(560px,100vw)">
+  $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" data-fd="${esc(pid)}" style="max-width:780px">
     <div style="padding:20px 22px 14px;border-bottom:1px solid rgba(255,255,255,.1)">
       <div style="display:flex;align-items:flex-start;gap:12px">
         <div style="flex:1;min-width:0"><div class="mono" style="font-size:11.5px;color:var(--txt-3)">${esc(campOf?campOf.nome:'no campaign')}</div><div style="font-size:20px;font-weight:800;margin-top:2px">${esc(p.nome)}</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${pill(esc(p.agencia||'—'))}${pill(esc(actMeta(p.activity).label))}${pill(esc(catKeyLabel(String(p.product_category||'').trim()||'Uncategorized')))}${p.rateio?pill('rateio'):''}${p.aprovacao_status==='PENDENTE'?'<span style="font-size:11.5px;padding:2px 9px;border-radius:20px;background:rgba(255,176,32,.16);color:#ffb020">Awaiting approval</span>':pill('Approved')}</div></div>
@@ -3527,7 +3597,7 @@ function openFundDetail(pid){
       </div>
       ${(()=>{ if(!fundArquivado(p))return '';
         const devolvido=Object.keys(fundMonthlyCuts(p.id)).length?fundCutTotal(p.id):0;
-        return `<div style="display:flex;align-items:flex-start;gap:10px;background:var(--slate-bg);border:1px solid var(--line-2);border-radius:9px;padding:10px 12px;margin-top:12px;font-size:12px;color:#3c4049">
+        return `<div style="display:flex;align-items:flex-start;gap:10px;background:var(--slate-bg);border:1px solid var(--line-2);border-radius:9px;padding:10px 12px;margin-top:12px;font-size:12px;color:var(--txt-2)">
           <span style="display:flex;flex-shrink:0;margin-top:1px">${icn('folder',14)}</span>
           <span><b>Archived</b> — this fund takes no new POs. Its POs and everything they consumed stay on record and stay charged to the budget${devolvido?`. In all, <b class="mono">${BRL(devolvido)}</b> of its budget has been released back`:''}.</span>
         </div>`;})()}
@@ -3559,7 +3629,7 @@ function openFundDetail(pid){
       ${alertHTML}
       ${months.length>1?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">${chips}</div>`:''}
     </div>
-    <div class="modal-b">${summary}<div class="mono" style="font-size:11.5px;color:var(--txt-3);margin:2px 0 10px">month by month</div>${blocks}</div>
+    <div class="modal-b" style="max-height:64vh">${summary}<div class="mono" style="font-size:11.5px;color:var(--txt-3);margin:2px 0 10px">month by month</div>${blocks}</div>
     <div class="modal-f" style="flex-wrap:wrap">${CC_DRILL_BACK?`<button class="btn-ghost" onclick="ccDrillBack()">← Back to breakdown</button>`:'<span></span>'}<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end">${canRestrict()?`<button class="btn-ghost" onclick="openCampRestricao('${esc(p.id)}')">${fundRestr(p)?'Blocked — review…':'Block spending'}</button>`:''}${((['admin','marketing'].includes(PAPEL)||isManager)&&!viewOnly())?`<button class="btn-ghost" onclick="openCampValues('${esc(p.id)}')">Edit monthly values</button><button class="btn-ghost" onclick="openCampEdit('${esc(p.id)}')">Edit fund</button>`:''}${(demoWritable(PO_ACCESS)&&!fundRestr(p)&&!fundArquivado(p))?`<button class="btn-po" onclick="openReqPO('${esc(p.id)}')">Request PO</button>`:''}</div></div>
   </div></div>`;
 }
@@ -3604,6 +3674,7 @@ function fundFutureRegisteredMonths(pid,afterM){ return Object.keys(fundMonthlyT
    the values editor to do the other half of a choice they are already making. */
 let CUTBAL=null;
 function openCutBalance(pid,mes,saldo){
+  fdMarkBack();
   const p=DATA.poProjetos.find(x=>x.id===pid); if(!p)return;
   if(!canRestrict()&&!DEMO_MODE){ toast('Only marketing managers or admin can cut budget.'); return; }
   CUTBAL={pid,mes,max:r2(+saldo||0),valor:r2(+saldo||0),motivo:''};
@@ -3651,6 +3722,7 @@ async function submitCutBalance(){
   }catch(e){ toastErr(e); }
 }
 function openReallocModal(pid,fromMonth,balance){
+  fdMarkBack();
   const p=DATA.poProjetos.find(x=>x.id===pid); if(!p)return;
   const future=fundFutureRegisteredMonths(pid,fromMonth);
   REALLOC={pid,fromMonth,balance:+balance,mode:'next',splitCount:Math.max(future.length,3),rows:[{id:uid(),mes:fundNextCalMonth(fromMonth),valor:r2(balance)}]};
@@ -3814,6 +3886,7 @@ async function submitRealloc(){
    entered per month is the TOTAL, re-split across the rateio categories. */
 let FUNDVAL=null;
 function openCampValues(pid){
+  fdMarkBack();
   const p=DATA.poProjetos.find(x=>x.id===pid); if(!p)return;
   /* The editor is the one place that edits the APPROVED month, so it loads
      gross and keeps the cut as its own field beside it — typing in the value
@@ -4274,6 +4347,7 @@ function recoverQual(pid){
 }
 function fundAnyById(id){ return DATA.poProjetos.find(x=>x.id===id)||(DATA.fundsRejeitados||[]).find(x=>x.id===id); }
 function openCampEdit(pid){
+  fdMarkBack();
   const p=fundAnyById(pid); if(!p)return;
   const feeMode = p.activity==='FEE' ? (p.rateio ? 'split' : 'whole') : 'shared';
   FUNDEDIT={id:pid,nome:p.nome||'',agencia:p.agencia||'',activity:p.activity||'Campaign',cat:guessCat(p.product_category||p.nome),rateio:!!p.rateio,qual:(feeMode==='split'?recoverQual(pid):''),feeMode:feeMode,campanha_id:p.campanha_id||''};
@@ -4605,7 +4679,7 @@ function poStepper(po){
   }).join('')}</div>${po.status==='ATUALIZAR_INFO'?`<div style="padding:8px 12px;border-radius:9px;background:var(--amber-bg);color:var(--amber);font-weight:700;font-size:12px;margin-bottom:14px">${icn('alert',12)} Update requested — agency must repost NF/evidence</div>`:''}`;
 }
 let PODETAIL=null;
-function openPODetail(id){ const po=DATA.pos.find(x=>x.id===id); if(!po)return; PODETAIL={id}; renderPODetailModal(); }
+function openPODetail(id){ const po=DATA.pos.find(x=>x.id===id); if(!po)return; fdMarkBack(); PODETAIL={id}; renderPODetailModal(); }
 function renderPODetailModal(){
   if(!PODETAIL)return; const po=DATA.pos.find(x=>x.id===PODETAIL.id); if(!po){closeModal();return;}
   const proj=DATA.poProjetos.find(x=>x.id===po.fund_id)||{};
@@ -4641,7 +4715,7 @@ function renderPODetailModal(){
   $('#modalMount').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div role="dialog" aria-modal="true" class="modal" style="max-width:560px">
     <div class="modal-h" style="align-items:flex-start"><div style="flex:1"><h3>${esc(label)}</h3><span class="badge ${s.c}" style="margin-top:6px;display:inline-flex"><span class="d"></span>${s.t}</span></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">${poStepper(po)}${sections.join('')}</div>
-    <div class="modal-f">${CC_DRILL_BACK?`<button class="btn-ghost" onclick="ccDrillBack()">← Back to breakdown</button>`:'<span></span>'}<div style="display:flex;gap:8px;flex-wrap:wrap">${poActionsHTML(po)}</div></div>
+    <div class="modal-f">${CC_DRILL_BACK?`<button class="btn-ghost" onclick="ccDrillBack()">← Back to breakdown</button>`:MODAL_BACK?`<button class="btn-ghost" onclick="closeModal()">← Back to fund</button>`:'<span></span>'}<div style="display:flex;gap:8px;flex-wrap:wrap">${poActionsHTML(po)}</div></div>
   </div></div>`;
 }
 /* compact: the list row (POs.dc.html) — only the next-step button + View;
@@ -4858,12 +4932,18 @@ async function rejeitarFatPO(){
    ESTÁGIO 2 — CRIAR/EDITAR PROJETO (salva no painel)
    ============================================================ */
 let EDIT=null;
+/* Windows opened from inside the fund detail return to it when closed. */
+let MODAL_BACK=null;
+function fdMarkBack(){ const el=document.querySelector('#modalMount [data-fd]'); if(el) MODAL_BACK={type:'fund',id:el.dataset.fd}; }
 function closeModal(){
+  // Closing the fund window itself never bounces back into it.
+  const back=document.querySelector('#modalMount [data-fd]')?null:MODAL_BACK; MODAL_BACK=null;
   $('#modalMount').innerHTML=''; EDIT=null; PODETAIL=null; PM_OPEN=false; CC_DRILL_BACK=null; DEP_POP=null; PM_REFOCUS=null;
   // Saving leaves the modal open, so this is where its form state is dropped.
   FUNDVAL=null; FUNDEDIT=null; CAPEDIT=null; POEDIT=null; CAMPEDIT=null; REALLOC=null; FUNDRESTR=null; CUTBAL=null;
   // A refresh that landed while this modal was open held its repaint back.
   if(SYNC_DEFERRED){ SYNC_DEFERRED=false; syncRerender(); }
+  if(back&&back.type==='fund'&&DATA.poProjetos.some(x=>x.id===back.id)) openFundDetail(back.id);
 }
 /* Escape peels one layer at a time: an open dependency picker first, the
    modal only once nothing is layered on top of it. */
@@ -5916,7 +5996,7 @@ function pmPTipo(v){
 }
 let PM_OPEN=false;
 let PM_REFOCUS=null; // {sel} — element to put the caret back on after a re-render
-function openProjModal(proj,isNew){ EDIT=proj; EDIT._new=isNew; EDIT._pendingNotifs={}; PM_OPEN=false; DEP_POP=null; renderProjModal(); }
+function openProjModal(proj,isNew){ pdFlushSave(); EDIT=proj; EDIT._new=isNew; EDIT._pendingNotifs={}; PM_OPEN=false; DEP_POP=null; renderProjHeaderModal(); }
 
 /* ============================================================
    ACTIVITY PLANNER — the project modal's work surface
@@ -5955,13 +6035,13 @@ function pmSubRowHTML(t,s,j,EDA){
   const conf=depConflict(list,s);
   return `<div class="atv-row is-sub">
     <span class="atv-num"><span class="n">${(EDIT.tasks||[]).indexOf(t)+1}.${j+1}</span></span>
-    <button class="atv-check${s.done?' on':''}" onclick="pmSubDone('${esc(t.id)}','${esc(s.id)}')" title="${s.done?'Mark not done':'Mark done'}" aria-pressed="${!!s.done}">${s.done?'✓':''}</button>
+    <button class="atv-check${s.done?' on':''}" ${disA} onclick="pmSubDone('${esc(t.id)}','${esc(s.id)}')" title="${s.done?'Mark not done':'Mark done'}" aria-pressed="${!!s.done}">${s.done?'✓':''}</button>
     <span class="atv-name"><span class="atv-sub-tick">${icn('arrowR',11)}</span><input class="atv-in${s.done?' done':''}" value="${esc(s.n)}" ${disA} onchange="pmSubSet('${esc(t.id)}','${esc(s.id)}','n',this.value)" placeholder="Sub-item name…"></span>
     <span class="atv-c-owner"><select class="atv-in mini" ${disA} onchange="pmSubSet('${esc(t.id)}','${esc(s.id)}','resp',this.value)" title="Assigned to">${subPersonOpts(s.resp)}</select></span>
     <span><input type="date" class="atv-in d8${s.inicio?'':' empty'}" value="${esc(s.inicio||'')}" ${disA} onchange="pmSubSet('${esc(t.id)}','${esc(s.id)}','inicio',this.value)" title="Start date"></span>
     <span><input type="date" class="atv-in d8 ${dcls}" value="${esc(s.fim||'')}" ${disA} onchange="pmSubSet('${esc(t.id)}','${esc(s.id)}','fim',this.value)" title="${conf?'Starts before a linked sub-item finishes':'Due date'}"></span>
     ${pmDepCellHTML(t.id,s.id,s,list,EDA)}
-    <span></span>
+    <span></span><span></span>
     <span class="atv-act">${EDA?`<button class="atv-ico del" onclick="pmDelSub('${esc(t.id)}','${esc(s.id)}')" title="Remove sub-item">${icn('trash',13)}</button>`:''}</span>
   </div>`;
 }
@@ -5974,13 +6054,14 @@ function pmAtvRowsHTML(EDA){
     const subs=t.subs||[];
     let h=`<div class="atv-row" ondragover="atvDragOver(event)" ondragleave="atvDragLeave(event)" ondrop="atvDrop(event,'${esc(t.id)}')">
       <span class="atv-num"><span class="n">${String(i+1).padStart(2,'0')}</span>${(EDA&&tasks.length>1)?`<span class="atv-grip" draggable="true" ondragstart="atvDragStart(event,'${esc(t.id)}')" title="Drag to reorder">${icn('grip',13)}</span>`:''}</span>
-      <button class="atv-check${t.done?' on':''}" onclick="pmAtvDone('${esc(t.id)}')" title="${t.done?'Mark not done':'Mark done'}" aria-pressed="${!!t.done}">${t.done?'✓':''}</button>
+      <button class="atv-check${t.done?' on':''}" ${disA} onclick="pmAtvDone('${esc(t.id)}')" title="${t.done?'Mark not done':'Mark done'}" aria-pressed="${!!t.done}">${t.done?'✓':''}</button>
       <span class="atv-name"><input class="atv-in${t.done?' done':''}" value="${esc(t.n)}" ${disA} onchange="pmAtvSet('${esc(t.id)}','n',this.value)" placeholder="Activity name…"></span>
       <span class="atv-c-owner"><select class="atv-in mini" ${disA} onchange="pmAtvSet('${esc(t.id)}','resp',this.value)" title="Assigned to">${subPersonOpts(t.resp)}</select></span>
       <span><input type="date" class="atv-in d8${t.inicio?'':' empty'}" value="${esc(t.inicio||'')}" ${disA} onchange="pmAtvSet('${esc(t.id)}','inicio',this.value)" title="Start date"></span>
       <span><input type="date" class="atv-in d8 ${dcls}" value="${esc(t.fim||'')}" ${disA} onchange="pmAtvSet('${esc(t.id)}','fim',this.value)" title="${conf?'Starts before a linked activity finishes':'Due date'}"></span>
       ${pmDepCellHTML(t.id,null,t,list,EDA)}
       <span class="atv-prog" title="${esc(hp.name)} · ${pct}%">${EDIT._new?'':`<span class="pbar" style="flex:1;min-width:22px"><span style="width:${pct}%;background:${hp.dot}"></span></span><span class="pct">${pct}%</span>`}</span>
+      <span>${t.done?`<button class="atv-st" style="background:var(--green-bg);color:var(--green)" onclick="pmToggleOpen('${esc(t.id)}')">Done</button>`:`<button class="atv-st" style="background:${hp.bg};color:${hp.fg}" onclick="pmToggleOpen('${esc(t.id)}')" title="Status and note">${hp.name}</button>`}</span>
       <span class="atv-act">
         <button class="atv-ico${t._open?' open':''}" onclick="pmToggleOpen('${esc(t.id)}')" title="${t._open?'Hide details':'Details & sub-items'}" aria-expanded="${!!t._open}">${subs.length?`<span class="mono" style="font-size:10px;font-weight:700">${subs.length}</span>`:`<span class="atv-chev" style="display:inline-flex">${icn('chevR',13)}</span>`}</button>
         ${EDA?`<button class="atv-ico del" onclick="pmDelAtv('${esc(t.id)}')" title="Remove activity">${icn('trash',13)}</button>`:''}
@@ -6068,7 +6149,7 @@ function pmAtvBlockHTML(EDA){
     </div>
     <div class="atv-scroll">
       <div class="atv-hd">
-        <span></span><span></span><span>Activity</span><span class="atv-c-owner">Owner</span><span>Start</span><span>Due</span><span class="atv-c-dep">Starts after</span><span>Progress</span><span></span>
+        <span>#</span><span></span><span>Activity</span><span class="atv-c-owner">Owner</span><span>Start</span><span>End</span><span class="atv-c-dep">Depends on</span><span>Progress</span><span>Status</span><span></span>
       </div>
       ${pmAtvRowsHTML(EDA)}
       ${EDA?`<div class="atv-add">
@@ -6078,75 +6159,54 @@ function pmAtvBlockHTML(EDA){
     </div>
   </div>`;
 }
-function renderProjModal(){
-  if(!EDIT)return; const ED=canEdit(EDIT); const dis=ED?'':'disabled'; const canTag=canTagPeople(EDIT);
-  // Activities have their own, wider gate than the main project fields —
-  // tagged marketing people can work the activity list without being able to
-  // rename/retype/delete the project itself.
-  const EDA=canEditAtividades(EDIT); const disA=EDA?'':'disabled';
-  // Every small edit (toggling a category chip, checking off an activity...)
-  // re-renders this whole modal by replacing #modalMount's innerHTML, which
-  // swaps in a brand-new .modal-b node — that reset its scroll to 0 on every
-  // keystroke-adjacent click, reading as "the screen flashes and jumps back
-  // to the top." Carry the old scroll position over to the new node instead.
-  const prevScroll=$('.modal-b')?$('.modal-b').scrollTop:0;
+/* renderProjModal() is what every pm* editor calls after a change. The
+   project's header lives in a small modal (renderProjHeaderModal); the rest
+   of the project — activities, sub-items, dates, dependencies — is edited in
+   place on the project page. So the call re-renders whichever surface is
+   actually showing EDIT. uiOnly = pure view state (expand a row), no save. */
+function renderProjModal(uiOnly){
+  if(document.querySelector('#modalMount .pm-modal')) return renderProjHeaderModal();
+  if(SCREEN==='projectdetail'&&EDIT&&!EDIT._new) return pdInlineRerender(uiOnly);
+  return renderProjHeaderModal();
+}
+/* Header only — name, type, categories/brand, people, budget. Creating a
+   project asks for nothing else; the activity plan comes from the type's
+   template and is worked on the page. */
+function renderProjHeaderModal(){
+  if(!EDIT)return; const ED=canEdit(EDIT)&&!VIEW_AS; const dis=ED?'':'disabled'; const canTag=canTagPeople(EDIT)&&!VIEW_AS;
   const reopen=PM_OPEN; PM_OPEN=true;
-  const tasks=EDIT.tasks||[];
-  const done=tasks.filter(t=>t.done).length, prog=tasks.length?Math.round(done/tasks.length*100):0;
-  const logs=(EDIT.logs||[]).slice().reverse();
-  const logsHTML=logs.map(l=>`<div class="pm-log"><div class="who"><span class="avatar" style="width:19px;height:19px;font-size:8.5px;background:${avColor(l.autor)}">${initials(l.autor||'?')}</span><b>${esc(l.autor)}</b><span>${fmtDate(l.t)}</span></div><div class="txt">${fmtLogTxt(l.txt)}</div></div>`).join('')
-    ||`<div class="pm-log-empty"><b>No updates yet</b>Post the first one — type <b>@</b> to notify someone already tagged on the project.</div>`;
-  $('#modalMount').innerHTML=`<div class="overlay${reopen?' no-anim':''}" onclick="if(event.target===this)pmOverlayClose()"><div role="dialog" aria-modal="true" class="modal${reopen?' no-anim':''}" style="max-width:1400px">
-    <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--accent);flex-shrink:0;margin-right:2px"></span><div style="flex:1;min-width:0"><h3>${EDIT._new?'New project':'Edit — '+esc(EDIT.nome||'Project')}</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">Main fields belong to the creator and admins — the activity plan is also open to tagged Marketing people and to the assigned agencies</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
-    <div class="modal-b pm-body">
-      <div class="pm-main">
-      ${ED?'':`<div class="banner">${EDA?'This project is shared with you: the activity plan is yours to work — add, rename, reorder, date and link items — but the main project fields stay with the creator and admins.':'You are not the owner or admin: you can update status, tick activities and sub-items off and post to the log, but not edit the main fields or the activity list.'}</div>`}
-      <div class="field"><label>Project name</label><input value="${esc(EDIT.nome||'')}" onchange="pmSet('nome',this.value)" ${dis} placeholder="e.g. Holiday Campaign 2026" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
-      <div class="fgrid" style="margin-top:14px">
-        <div class="field"><label>Project type <span style="font-weight:600;color:var(--txt-3)">(sets activity template &amp; filters)</span></label><select onchange="pmPTipo(this.value)" ${dis}><option value="">Select…</option>${BUSINESS_TYPES.map(b=>`<option value="${b.id}" ${EDIT.ptipo===b.id?'selected':''}>${b.name}</option>`).join('')}</select></div>
-        <div class="field"><label>Due date</label><input type="date" value="${esc(EDIT.prazo||'')}" onchange="pmSet('prazo',this.value)" ${dis}></div>
-      </div>
-      <div class="field full" style="margin-top:14px"><label>Categories <span style="font-weight:600;color:var(--txt-3)">(product categories — multi-select)</span></label><div style="display:flex;flex-wrap:wrap;gap:6px">${CAT_CHIPS.map(c=>{const on=(EDIT.categorias||[]).includes(c);return `<button ${dis} onclick="pmToggleCat('${esc(c)}')" style="padding:6px 13px;border-radius:18px;border:1px solid ${on?'var(--accent)':'var(--line-2)'};background:${on?'var(--accent-soft)':'var(--card)'};color:${on?'var(--accent-deep)':'var(--txt-2)'};font-weight:700;font-size:12px;cursor:pointer">${esc(catKeyLabel(c))}</button>`;}).join('')}</div></div>
-      <div class="field full"><label>Brand</label><div style="display:flex;flex-wrap:wrap;gap:6px">${BRAND_CHIPS.map(b=>{const on=EDIT.marca===b;return `<button ${dis} onclick="pmSet('marca','${esc(b)}');renderProjModal()" style="padding:6px 13px;border-radius:18px;border:1px solid ${on?'var(--accent)':'var(--line-2)'};background:${on?'var(--accent-soft)':'var(--card)'};color:${on?'var(--accent-deep)':'var(--txt-2)'};font-weight:700;font-size:12px;cursor:pointer">${esc(b)}</button>`;}).join('')}</div></div>
-      <div class="field full"><label>Agencies <span style="font-weight:600;color:var(--txt-3)">(who sees this project in Work — multi-select)</span></label>${pmAgenciasHTML(ED)}</div>
-      ${!EDIT._new?`<div style="display:flex;align-items:center;gap:12px;margin:14px 0 14px"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:16px">${prog}%</b><span class="pbar" style="flex:1"><span style="width:${prog}%;background:${healthPill(EDIT.status||autoStatus(EDIT)).dot}"></span></span><span style="font-size:11.5px;color:var(--txt-3);font-weight:600">${done}/${tasks.length} tasks done</span></div>`:''}
-      <div id="pm-sec-activities">${pmAtvBlockHTML(EDA)}</div>
-      <div id="pm-sec-people">
-      <div class="field"><label>Owner <span style="font-weight:600;color:var(--txt-3)">(you — creator)</span></label><div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:var(--paper)"><span class="avatar" style="width:22px;height:22px;background:${avColor(EDIT.owner||EDIT.resp)};font-size:9.5px">${initials(EDIT.owner||EDIT.resp||'?')}</span><b style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(EDIT.owner||EDIT.resp||'—')}</b></div></div>
-      <div class="field full" style="margin-top:14px"><label>People tagged on this project <span style="font-weight:600;color:var(--txt-3)">(anyone can tag — PO-only agency logins excluded)</span></label>
+  const prevScroll=$('.modal-b')?$('.modal-b').scrollTop:0;
+  const hasBudget=((ROLE_NAV[effPapel()]||{}).budget||[]).length>0;
+  const chip=(on,label,onclick,c)=>`<button ${dis} onclick="${onclick}" style="padding:6px 13px;border-radius:18px;border:1px solid ${on?(c||'#4d7dff'):'rgba(255,255,255,.14)'};background:${on?'rgba(255,255,255,.07)':'transparent'};color:${on?'var(--txt)':'var(--txt-2)'};font-weight:700;font-size:12.5px;display:inline-flex;align-items:center;gap:7px">${c?`<span style="width:7px;height:7px;border-radius:50%;background:${c}"></span>`:''}${label}</button>`;
+  const sec=(t,sub,body)=>`<div style="margin-bottom:18px"><div style="font-size:12.5px;font-weight:600;color:var(--txt-2);margin-bottom:8px">${t}${sub?` <span style="font-weight:500;color:var(--txt-3)">${sub}</span>`:''}</div>${body}</div>`;
+  const camps=(DATA.campanhas||[]).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+  $('#modalMount').innerHTML=`<div class="overlay${reopen?' no-anim':''}" onclick="if(event.target===this)pmOverlayClose()"><div role="dialog" aria-modal="true" class="modal pm-modal${reopen?' no-anim':''}" style="max-width:720px">
+    <div class="modal-h" style="align-items:flex-start"><div style="flex:1;min-width:0"><div class="mono" style="font-size:11.5px;color:var(--txt-3)">${EDIT._new?'new project · header only':'project header'}</div><h3>${EDIT._new?'New project':esc(EDIT.nome||'Project')}</h3></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
+    <div class="modal-b">
+      ${ED?'':`<div class="banner">The header belongs to the project owner and admins — you can tag people, but not change the other fields.</div>`}
+      ${sec('Project name','',`<input value="${esc(EDIT.nome||'')}" onchange="pmSet('nome',this.value)" ${dis} placeholder="e.g. Holiday Campaign 2026" class="pm-in" style="font-size:15px;font-weight:600">`)}
+      ${sec('Type',EDIT._new?'sets the starting activity plan':'',`<select onchange="pmPTipo(this.value)" ${dis} class="pm-in"><option value="">Select…</option>${BUSINESS_TYPES.map(b=>`<option value="${b.id}" ${EDIT.ptipo===b.id?'selected':''}>${b.name}</option>`).join('')}</select>${EDIT._new&&(EDIT.tasks||[]).length?`<div style="font-size:12px;color:var(--txt-3);margin-top:6px">${EDIT.tasks.length} activities will be created — dates, owners, sub-items and links are set on the project page.</div>`:''}`)}
+      ${sec('Categories','multi-select',`<div style="display:flex;flex-wrap:wrap;gap:6px">${CAT_CHIPS.map(c=>chip((EDIT.categorias||[]).includes(c),esc(catKeyLabel(c)),`pmToggleCat('${esc(c)}')`,catMeta(c).c)).join('')}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"><span style="font-size:12px;color:var(--txt-3);align-self:center;margin-right:4px">Brand</span>${BRAND_CHIPS.map(b=>chip(EDIT.marca===b,esc(b),`pmSet('marca','${esc(b)}');renderProjModal()`)).join('')}</div>`)}
+      ${sec('People','owner, tagged people and the agencies that see it',`
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px"><span class="avatar" style="width:26px;height:26px;font-size:10px;background:${avColor(respName(EDIT.owner||EDIT.resp))}">${initials(respName(EDIT.owner||EDIT.resp)||'?')}</span><b style="font-size:13px">${esc(respName(EDIT.owner||EDIT.resp)||'—')}</b><span class="mono" style="font-size:10.5px;padding:2px 7px;border-radius:5px;background:rgba(77,125,255,.18);color:#9fb5ff">OWNER</span></div>
         <div id="pmTaggedChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:${canTag?'8px':'0'}">${pmTaggedChipsHTML()}</div>
-        ${canTag?`<div style="position:relative">
-          <input id="pmPeopleQ" oninput="pmPeopleFilter(this.value)" onfocus="pmPeopleFilter(this.value)" onblur="pmPeopleBlur()" placeholder="+ Search a person to tag… (type a name)" autocomplete="off" style="width:100%;padding:9px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13px">
-          <div id="pmPeopleDD" style="position:absolute;left:0;right:0;top:100%;margin-top:4px;background:var(--card);border:1px solid var(--line);border-radius:9px;box-shadow:0 6px 18px rgba(20,22,28,.14);max-height:190px;overflow-y:auto;z-index:20;display:none"></div>
+        ${canTag?`<div style="position:relative;margin-bottom:12px">
+          <input id="pmPeopleQ" oninput="pmPeopleFilter(this.value)" onfocus="pmPeopleFilter(this.value)" onblur="pmPeopleBlur()" placeholder="+ Tag a person (type a name)" autocomplete="off" class="pm-in">
+          <div id="pmPeopleDD" style="position:absolute;left:0;right:0;top:100%;margin-top:4px;background:#0f1628;border:1px solid rgba(255,255,255,.14);border-radius:10px;box-shadow:0 20px 50px -12px rgba(0,0,0,.9);max-height:190px;overflow-y:auto;z-index:20;display:none"></div>
         </div>`:''}
-      </div>
-      </div>
-      <div id="pm-sec-budget">${!EDIT._new?pmBudgetBlockHTML(ED):''}</div>
-      </div>
-      <aside class="pm-side" id="pm-sec-messages" aria-label="Status and updates">
-        <div class="pm-side-h"><b>Status / updates</b>${logs.length?`<span class="n mono">${logs.length}</span>`:''}</div>
-        <div class="pm-side-c">
-          <div style="position:relative">
-            <textarea id="pmLog" rows="3" placeholder="Write an update…&#10;Type @ to mention someone" oninput="pmMentionInput(this)" onblur="pmMentionBlur()"></textarea>
-            <div id="pmMentionDD" style="position:absolute;left:0;right:0;top:100%;margin-top:4px;background:var(--card);border:1px solid var(--line);border-radius:9px;box-shadow:var(--sh-2);max-height:190px;overflow-y:auto;z-index:20;display:none"></div>
-          </div>
-          <div class="pm-side-cf"><span>@ mentions tag the person on the project</span><button class="btn-acc" onclick="pmAddLog()">Post</button></div>
-        </div>
-        <div class="pm-side-f">${logsHTML}</div>
-      </aside>
+        <div style="font-size:12px;color:var(--txt-3);margin-bottom:6px">Agencies</div>${pmAgenciasHTML(ED)}`)}
+      ${hasBudget?sec('Budget','campaign that funds this project',`<select ${dis} onchange="pmSet('campanha_id',this.value||null);renderProjModal()" class="pm-in"><option value="">— No budget —</option>${camps.map(c=>`<option value="${esc(c.id)}" ${EDIT.campanha_id===c.id?'selected':''}>${esc(c.nome)}</option>`).join('')}</select>${(()=>{const c=camps.find(x=>x.id===EDIT.campanha_id);if(!c)return '';const t=campTotals(c.id);return `<div style="font-size:12px;color:var(--txt-2);margin-top:6px">${BRLc(t.teto)} budgeted · ${BRLc(t.cons)} consumed · ${BRLc(t.comp)} committed</div>`;})()}`):''}
     </div>
     <div class="modal-f">
-      <span style="font-size:11px;color:var(--txt-3);flex:1">${(ED&&!EDIT._new)?`<a onclick="delProj('${EDIT.id}')" style="color:var(--red);cursor:pointer;font-weight:600">Delete project</a>`:'Main fields: creator · admin — activity plan also open to tagged Marketing people and the assigned agencies'}</span>
+      <span style="flex:1">${(ED&&!EDIT._new)?`<a onclick="delProj('${EDIT.id}')" style="color:#ff6b6b;cursor:pointer;font-weight:600;font-size:12.5px">Delete project</a>`:''}</span>
       <div style="display:flex;gap:10px"><button class="btn-ghost" onclick="closeModal()">Cancel</button><button class="btn-acc" onclick="saveProj()">${EDIT._new?'Create project':'Save'}</button></div>
     </div>
-  </div></div><div id="pmPop"></div>`;
+  </div></div>`;
   const mb=$('.modal-b'); if(mb) mb.scrollTop=prevScroll;
-  // Quick-add is a typing loop, so the caret goes back where it was rather
-  // than being dropped by the innerHTML swap after every added item.
   if(PM_REFOCUS){ const el=$(PM_REFOCUS.sel); if(el){ try{ el.focus({preventScroll:true}); }catch(e){ el.focus(); } } PM_REFOCUS=null; }
-  if(DEP_POP) pmDepPop(DEP_POP.tid,DEP_POP.sid,null,true);
 }
-function pmToggleOpen(tid){ const t=atv(tid); if(t){ t._open=!t._open; renderProjModal(); } }
+function pmToggleOpen(tid){ const t=atv(tid); if(t){ t._open=!t._open; renderProjModal(true); } }
 /* Clicking outside the modal (the dimmed backdrop) while editing an existing
    project saves instead of discarding — matches every other in-modal edit
    here, which already writes straight into EDIT with no separate "unsaved
@@ -6170,8 +6230,9 @@ async function saveProj(){
   (clean.tasks||[]).forEach(t=>{ delete t._open; });
   clean.etapa=effectiveEtapa(clean); clean.status=autoStatus(clean);
   try{
-    const {error}=await SBPO.from('act_projects').upsert({id:clean.id,data:clean,campanha_id:clean.campanha_id||null});
-    if(error)throw error;
+    // Demo keeps changes in memory only (its fake client refuses writes).
+    if(!DEMO_MODE){ const {error}=await SBPO.from('act_projects').upsert({id:clean.id,data:clean,campanha_id:clean.campanha_id||null});
+    if(error)throw error; }
     const i=DATA.projetos.findIndex(p=>p.id===clean.id);
     if(i>=0)DATA.projetos[i]=clean; else DATA.projetos.push(clean);
     if(fromTask){ const l=loadPTasks(); const t=l.find(x=>x.id===fromTask); if(t&&!t.done){ t.done=true; t.updatedAt=Date.now(); savePTasks(l); } }
@@ -6179,6 +6240,7 @@ async function saveProj(){
     if(EDIT)EDIT._pendingNotifs={};
     toastSaved();
     if(wasNew){ closeModal(); openProj(clean.id); }
+    else { closeModal(); if(SCREEN==='projectdetail') go('projectdetail'); else go(SCREEN); }
   }catch(e){ toastErr(e); }
 }
 async function delProj(id){
@@ -6406,6 +6468,7 @@ function fundRestrBadgeHTML(p){
 }
 let FUNDRESTR=null;
 function openCampRestricao(pid){
+  fdMarkBack();
   const p=DATA.poProjetos.find(x=>x.id===pid); if(!p)return;
   if(!canRestrict()){ toast('Only marketing managers or admin can do this.'); return; }
   FUNDRESTR={id:pid,tipo:'BLOQUEADA',valor:'',motivo:p.restricao_motivo||''};
@@ -6459,6 +6522,7 @@ async function liftCampRestricao(){
   }catch(e){ toastErr(e); }
 }
 function openReqPO(pid){
+  fdMarkBack();
   // A cut or frozen fund takes no new spending — this is where the
   // restriction stops being cosmetic.
   if(pid){
@@ -8107,7 +8171,7 @@ async function ccNFDates(){
 /* Filter strip for the table — same segmented-control language as the
    Overview's Period/Scope bar, so the two screens read alike. */
 function ccFilterBar(){
-  const seg=(onc,on,l,title)=>`<button onclick="${onc}"${title?` title="${esc(title)}"`:''} style="padding:5px 11px;border-radius:7px;border:none;background:${on?'#fff':'transparent'};color:${on?'var(--accent-deep)':'var(--txt-2)'};font-size:11.5px;font-weight:700;cursor:pointer;box-shadow:${on?'var(--sh-1)':'none'}">${l}</button>`;
+  const seg=(onc,on,l,title)=>`<button onclick="${onc}"${title?` title="${esc(title)}"`:''} style="padding:5px 11px;border-radius:7px;border:none;background:${on?'#eef1f8':'transparent'};color:${on?'#05070d':'var(--txt-2)'};font-size:11.5px;font-weight:700;cursor:pointer;box-shadow:${on?'var(--sh-1)':'none'}">${l}</button>`;
   const group=(label,inner)=>`<span style="display:inline-flex;align-items:center;gap:7px"><span style="font-size:9.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3)">${label}</span>${inner}</span>`;
   const scope=`<span style="display:inline-flex;gap:3px;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:3px">
     ${seg("ccSetScope('all')",CC_FILTER.scope==='all','Total','Every category, including Matriz (LABG)')}
@@ -8263,7 +8327,7 @@ function boPeriodBar(){
   const quarters=Array.from(new Set(months.map(m=>m.slice(0,4)+'-Q'+Math.ceil(+m.slice(5,7)/3)))).sort();
   /* Segmented control: one pill container, active tab filled white with a
      soft shadow (classic iOS-style). onc = onclick expr, on = is-active. */
-  const segBtn=(onc,on,l,title)=>`<button onclick="${onc}"${title?` title="${title}"`:''} style="padding:6px 13px;border-radius:7px;border:none;background:${on?'#fff':'transparent'};color:${on?'var(--accent-deep)':'var(--txt-2)'};font-size:var(--fs-sm);font-weight:700;cursor:pointer;box-shadow:${on?'var(--sh-1)':'none'}">${l}</button>`;
+  const segBtn=(onc,on,l,title)=>`<button onclick="${onc}"${title?` title="${title}"`:''} style="padding:6px 13px;border-radius:7px;border:none;background:${on?'#eef1f8':'transparent'};color:${on?'#05070d':'var(--txt-2)'};font-size:var(--fs-sm);font-weight:700;cursor:pointer;box-shadow:${on?'var(--sh-1)':'none'}">${l}</button>`;
   const segGroup=(label,inner)=>`<span style="display:inline-flex;flex-direction:column;gap:5px"><span style="font-size:var(--fs-eyebrow);font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-3)">${label}</span><span style="display:inline-flex;gap:3px;background:var(--paper);border:1px solid var(--line);border-radius:var(--r-sm);padding:3px">${inner}</span></span>`;
   const seg=(id,l)=>segBtn(`boSetMode('${id}')`,BO_PER.mode===id,l);
   const scopeSeg=(id,l,title)=>segBtn(`boSetScope('${id}')`,BO_SCOPE===id,l,title);
@@ -9034,12 +9098,12 @@ function renderBudgetOverview(isBalance){
   const showAccounts=effIsManager()||['admin','financeiro'].includes(effPapel());
   const accountsGroup=showAccounts?boCatAccTable():'';
   return `<div style="display:flex;flex-direction:column;gap:22px">
-      ${hero}
-      ${boPiePanel(HIDE_MONEY,_c)}
       ${alertsHTML}
-      ${accountsGroup}
+      ${hero}
       ${monthChart}
       ${monthBalance}
+      ${boPiePanel(HIDE_MONEY,_c)}
+      ${accountsGroup}
     </div>`;
 }
 let BO_ALERTS_ALL=false;
