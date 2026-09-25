@@ -1813,10 +1813,10 @@ const W_LABELS={dash:'Dashboard',board:'Board',list:'List',timeline:'Timeline',t
 const B_LABELS={saldos:'Balance decisions',bo:'Overview',budgets:'Categories',costcenter:'Cost center',funds:'Funds',campanhas:'Timeline',pos:'POs & Approvals',approvals:'Approvals',podesk:'PO Desk',people:'People & Roles',reqpo:'Request PO',mypos:'My POs',balance:'Balance'};
 const ROLE_NAV={
   admin:      {work:['dash','list','timeline','team','weekly','mytasks'], budget:['bo','costcenter','budgets','campanhas','funds','pos','saldos','people']},
-  /* No 'costcenter' for Marketing: rateios and the cost-center/account table
-     are the accounting layer (Admin/Finance), same line as production. */
-  marketing:  {work:['dash','list','timeline','weekly','mytasks'],        budget:['bo','budgets','campanhas','funds','pos','saldos']},
-  financeiro: {work:[],                                                          budget:['bo','funds','pos']},
+  /* Cost center is Admin, Marketing and Finance only (agencies and TCL Member
+     never get it). Editing rateios stays admin-only inside the screen (canFee). */
+  marketing:  {work:['dash','list','timeline','weekly','mytasks'],        budget:['bo','costcenter','budgets','campanhas','funds','pos','saldos']},
+  financeiro: {work:[],                                                          budget:['bo','costcenter','funds','pos']},
   agencia:    {work:['dash','list','timeline','mytasks'],               budget:['bo','campanhas','funds','pos']},
   /* TCL Member: internal staff with Work-only access, no Budget nav at all —
      Budget's own RLS policies are role allow-lists that never mention this
