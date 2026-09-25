@@ -1186,6 +1186,7 @@ function homeMonthHealthHTML(){
   if(!((ROLE_NAV[effPapel()]||{}).budget||[]).includes('bo')) return '';
   let funds=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO');
   if(effPapel()==='agencia'&&effAgencia()) funds=funds.filter(p=>p.agencia===effAgencia());
+  funds=funds.filter(p=>boScopeKeep(String(p.product_category||'').trim()));
   const fundIds=new Set(funds.map(p=>p.id));
   const catOf={}; funds.forEach(p=>{catOf[p.id]=String(p.product_category||'').trim()||'Uncategorized';});
   const mNow=new Date().toISOString().slice(0,7);
@@ -1367,7 +1368,8 @@ function seedDemoData(){
   const orcamentos=[
     {id:'demo-orc-ac',nome:'Air Conditioning',product_category:'AC',valor_total:1800000,periodo_inicio:D(2026,1,1),periodo_fim:D(2026,12,31)},
     {id:'demo-orc-gaming',nome:'Gaming',product_category:'Gaming',valor_total:3200000,periodo_inicio:D(2026,1,1),periodo_fim:D(2026,12,31)},
-    {id:'demo-orc-social',nome:'Social Always-On',product_category:'Social',valor_total:900000,periodo_inicio:D(2026,1,1),periodo_fim:D(2026,12,31)}
+    {id:'demo-orc-social',nome:'Social Always-On',product_category:'Social',valor_total:900000,periodo_inicio:D(2026,1,1),periodo_fim:D(2026,12,31)},
+    {id:'demo-orc-labg',nome:'Matriz (LABG)',product_category:'LABG',valor_total:600000,periodo_inicio:D(2026,1,1),periodo_fim:D(2026,12,31)}
   ];
 
   /* campanha_id is seeded on purpose across agencies: campaign 1 mixes
@@ -1381,7 +1383,8 @@ function seedDemoData(){
     {id:'demo-p4',nome:'Gamescom Sponsorship',agencia:'Mindshare',product_category:'Gaming',activity:'KOL',orcamento_id:'demo-orc-gaming',aprovacao_status:'APROVADO',campanha_id:'demo-camp-2'},
     {id:'demo-p5',nome:'Squad Influencer Program',agencia:'Mindshare',product_category:'Gaming',activity:'KOL',orcamento_id:'demo-orc-gaming',aprovacao_status:'APROVADO',campanha_id:'demo-camp-2'},
     {id:'demo-p6',nome:'Always On Social',agencia:'Vizeu',product_category:'Social',activity:'AON',orcamento_id:'demo-orc-social',aprovacao_status:'APROVADO',campanha_id:null},
-    {id:'demo-p7',nome:'New Product Launch',agencia:'Wavemaker',product_category:'Social',activity:'Campaign',orcamento_id:'demo-orc-social',aprovacao_status:'PENDENTE',campanha_id:'demo-camp-3'}
+    {id:'demo-p7',nome:'New Product Launch',agencia:'Wavemaker',product_category:'Social',activity:'Campaign',orcamento_id:'demo-orc-social',aprovacao_status:'PENDENTE',campanha_id:'demo-camp-3'},
+    {id:'demo-p8',nome:'Matriz · brand & GEO',agencia:'Vizeu',product_category:'LABG',activity:'AON',orcamento_id:'demo-orc-labg',aprovacao_status:'APROVADO',campanha_id:null}
   ];
   const campanhas=[
     {id:'demo-camp-1',nome:'[DEMO] Summer AC Launch',responsavel:'Bruno Silva',status:'ativa'},
@@ -1391,7 +1394,7 @@ function seedDemoData(){
   /* Cost centre / account / line, the same shape classificar() produces —
      without them every demo fund is invisible to the Extrato and to the
      Overview-by-account blocks, which then demo as permanently empty. */
-  const DEMO_CC={AC:'1406122014',Gaming:'1109123014',Social:'1607122049'};
+  const DEMO_CC={AC:'1406122014',Gaming:'1109123014',Social:'1607122049',LABG:'1109123033'};
   const demoLinha=p=>String(p.activity).toLowerCase()==='fee'?'Agency Fee - '+p.agencia+' ('+p.product_category+')'
     :String(p.activity).toLowerCase()==='kol'?'KOL - Influencers ('+p.product_category+')'
     :String(p.activity).toLowerCase()==='aon'?'Always on (media and production) ('+p.product_category+')'
@@ -1418,6 +1421,7 @@ function seedDemoData(){
   addTeto('demo-p3',[[9,180000]]);
   addTeto('demo-p4',[[9,240000]]);
   addTeto('demo-p6',[[9,90000]]);
+  addTeto('demo-p8',[[6,80000],[7,80000],[8,80000],[9,80000]]);
 
   const pos=[]; let poN=1;
   const addPO=(pid,mes,valor,status,extra)=>{ pos.push(Object.assign({id:'demo-po-'+(poN++),fund_id:pid,competencia:D(2026,mes,1),valor,status,descricao:'Demo PO',numero_po:status==='SOLICITADA'||status==='EM_APROVACAO'?'':'PO-'+(1000+poN),agencia:(poProjetos.find(p=>p.id===pid)||{}).agencia,solicitado_em:D(2026,mes,3)},extra||{})); };
@@ -1428,6 +1432,9 @@ function seedDemoData(){
   addPO('demo-p4',7,45000,'EM_APROVACAO');
   addPO('demo-p5',6,313895,'PO_GERADA');
   addPO('demo-p6',6,98000,'VALIDADA');
+  addPO('demo-p8',6,76000,'CONCLUIDA');
+  addPO('demo-p8',7,70000,'VALIDADA');
+  addPO('demo-p8',9,45000,'PO_GERADA');
   addPO('demo-p6',7,52000,'SOLICITADA');
   addPO('demo-p1',9,108000,'FATURADA');
   addPO('demo-p3',9,171000,'CONCLUIDA');
@@ -2015,6 +2022,7 @@ function go(screen){
   } else if(screen==='mytasks'){
     $('#ctaBox').innerHTML='<button class="btn-acc" onclick="ptNewNote()">New note</button>';
   } else { $('#ctaBox').innerHTML=''; }
+  if(['bo','budgets','costcenter','campanhas','funds'].includes(screen)) $('#ctaBox').insertAdjacentHTML('afterbegin',labgScopeHTML());
   const v=$('#view');
   destroyCharts();
   if(screen==='dash'){ v.innerHTML=renderDash(); buildDashCharts(); }
@@ -2171,6 +2179,7 @@ function homeAnnualBudgetHTML(){
   if(!((ROLE_NAV[effPapel()]||{}).budget||[]).includes('bo')) return '';
   let funds=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO');
   if(effPapel()==='agencia'&&effAgencia()) funds=funds.filter(p=>p.agencia===effAgencia());
+  funds=funds.filter(p=>boScopeKeep(String(p.product_category||'').trim()));
   const fundIds=new Set(funds.map(p=>p.id));
   const yr=String(new Date().getFullYear());
   let teto=0,aprov=0;
@@ -2183,16 +2192,17 @@ function homeAnnualBudgetHTML(){
   const showCut=canSeeCorte();
   const tot=(showCut?aprov:teto)||1;
   const stats=[['Consumed',cons,`${(cons/teto*100).toFixed(1)}% of budgeted`,'#4d7dff'],['Committed',comp,`${(comp/teto*100).toFixed(1)}% · POs approved or issued`,'#a685ff'],['Available',avail,`${(avail/teto*100).toFixed(1)}% · free`,'rgba(255,255,255,.16)'],...(showCut?[['Cut',cut,`${aprov?(cut/aprov*100).toFixed(1):0}% of approved`,V2_HATCH_S]]:[])];
-  return v2Card('accrual · all categories',`Budget ${yr}`,`
+  return v2Card(`accrual · ${BO_SCOPE==='nolabg'?'excluding LABG':'all categories'}`,`Budget ${yr}`,`
     <div style="display:flex;align-items:baseline;gap:12px;margin:14px 0 12px;flex-wrap:wrap"><span class="mono" style="font-size:28px;font-weight:700;letter-spacing:-.03em">${BRLc(teto)}</span><span style="font-size:13px;color:var(--txt-2)">budgeted${showCut?` of ${BRLc(aprov)} approved`:''}</span></div>
     ${v2Bar([{w:cons/tot*100,bg:'#4d7dff',t:'Consumed'},{w:comp/tot*100,bg:'#a685ff',t:'Committed'},{w:avail/tot*100,bg:'rgba(255,255,255,.16)',t:'Available'},...(showCut?[{w:cut/tot*100,bg:V2_HATCH_S,t:'Cut'}]:[])],14)}
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:14px;margin-top:16px">${stats.map(([l,v,sub,bg])=>`<div><div style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--txt-2)"><span style="width:10px;height:10px;border-radius:3px;background:${bg}"></span>${l}</div><div class="mono" style="font-size:17px;font-weight:700;margin-top:3px">${BRLc(v)}</div><div style="font-size:12px;color:var(--txt-3)">${sub}</div></div>`).join('')}</div>
-    ${pend>0.005?`<div style="font-size:12px;color:var(--txt-3);margin-top:12px">Awaiting approval (not in the bar): <span class="mono" style="color:#ffb020">${BRLc(pend)}</span></div>`:''}`,{right:`<a onclick="go('bo')" style="font-weight:600;font-size:13.5px;cursor:pointer">Budget →</a>`,style:'flex:1;min-width:0'});
+    ${pend>0.005?`<div style="font-size:12px;color:var(--txt-3);margin-top:12px">Awaiting approval (not in the bar): <span class="mono" style="color:#ffb020">${BRLc(pend)}</span></div>`:''}`,{right:`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">${labgScopeHTML()}<a onclick="go('bo')" style="font-weight:600;font-size:13.5px;cursor:pointer">Budget →</a></div>`,style:'flex:1;min-width:0'});
 }
 function homeMonthLine(){
   if(!((ROLE_NAV[effPapel()]||{}).budget||[]).includes('bo')) return '';
   let funds=DATA.poProjetos.filter(p=>p.aprovacao_status==='APROVADO');
   if(effPapel()==='agencia'&&effAgencia()) funds=funds.filter(p=>p.agencia===effAgencia());
+  funds=funds.filter(p=>boScopeKeep(String(p.product_category||'').trim()));
   const ids=new Set(funds.map(p=>p.id)); const mNow=new Date().toISOString().slice(0,7);
   let cap=0,used=0;
   DATA.tetos.forEach(t=>{if(ids.has(t.fund_id)&&String(t.competencia).slice(0,7)===mNow)cap+=(+t.teto||0);});
@@ -3179,6 +3189,7 @@ function fundClearAll(){ FUND_Q=''; FUND_FILTER_ACT=[]; FUND_FILTER_CAT=[]; FUND
 function renderFunds(){
   let list=DATA.poProjetos.slice();
   if(effPapel()==='agencia'&&effAgencia()) list=list.filter(p=>p.agencia===effAgencia());
+  list=list.filter(p=>boScopeKeep(String(p.product_category||'').trim()));
   const tetoBy={}, consBy={}, compBy={}, pendBy={};
   DATA.tetos.forEach(t=>{tetoBy[t.fund_id]=(tetoBy[t.fund_id]||0)+(+t.teto||0);});
   DATA.rateio.forEach(r=>{tetoBy[r.fund_id]=(tetoBy[r.fund_id]||0)+(+r.valor||0);});
@@ -7152,7 +7163,7 @@ function campTlExpandAll(){
   CAMP_TL_OPEN={}; if(!all) ids.forEach(id=>CAMP_TL_OPEN[id]=true); go('campanhas');
 }
 function campTlGroups(){
-  const catOk=f=>!CAMP_TL_CAT||String(f.product_category||'').trim()===CAMP_TL_CAT;
+  const catOk=f=>boScopeKeep(String(f.product_category||'').trim())&&(!CAMP_TL_CAT||String(f.product_category||'').trim()===CAMP_TL_CAT);
   const groups=visCampanhas().map(c=>({id:c.id,camp:c,name:c.nome,funds:campFunds(c.id).filter(catOk)})).filter(g=>g.funds.length||!CAMP_TL_CAT);
   const loose=campScoped((DATA.poProjetos||[]).filter(p=>!p.campanha_id&&p.aprovacao_status==='APROVADO'&&!fundArquivado(p))).filter(catOk);
   if(loose.length) groups.push({id:'__none',camp:null,name:'Funds with no campaign',funds:loose});
@@ -7165,7 +7176,7 @@ function campanhaGanttHTML(){
   const todayPct=String(now.getFullYear())===yr?((now.getMonth()+(now.getDate()-1)/new Date(now.getFullYear(),now.getMonth()+1,0).getDate())/12*100):null;
   const usedOf=(ids,m)=>{let c=0,u=0;DATA.pos.forEach(po=>{if(!ids.has(po.fund_id)||String(po.competencia).slice(0,7)!==m)return;const v=+po.valor||0;if(CONS.includes(po.status))c+=v;else if(COMP.includes(po.status))u+=v;});return {cons:c,comp:u};};
   const groups=campTlGroups();
-  const allCats=[...new Set([...(DATA.campanhas||[]).flatMap(c=>campCategorias(c.id)),...campScoped((DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO')).map(p=>String(p.product_category||'').trim()).filter(Boolean)])].sort((a,b)=>{let ia=PRODUCT_CATS.indexOf(a),ib=PRODUCT_CATS.indexOf(b);if(ia<0)ia=99;if(ib<0)ib=99;return ia-ib||a.localeCompare(b);});
+  const allCats=[...new Set([...(DATA.campanhas||[]).flatMap(c=>campCategorias(c.id)),...campScoped((DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO')).map(p=>String(p.product_category||'').trim()).filter(Boolean)])].filter(k=>boScopeKeep(k)).sort((a,b)=>{let ia=PRODUCT_CATS.indexOf(a),ib=PRODUCT_CATS.indexOf(b);if(ia<0)ia=99;if(ib<0)ib=99;return ia-ib||a.localeCompare(b);});
   const chips=`<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center">
     <div style="display:flex;gap:8px;flex-wrap:wrap">${['',...allCats].map(k=>{const on=CAMP_TL_CAT===k;const c=k?catMeta(k).c:(on?'#05070d':'#a7aec2');
       return `<button onclick="CAMP_TL_CAT='${esc(k)}';go('campanhas')" style="padding:7px 14px;border-radius:20px;font-weight:600;font-size:13px;border:1px solid ${on?'#eef1f8':'rgba(255,255,255,.16)'};background:${on?'#eef1f8':'rgba(13,18,32,.6)'};color:${on?'#05070d':'var(--txt-soft)'};display:flex;align-items:center;gap:7px"><span style="width:7px;height:7px;border-radius:50%;background:${c}"></span>${k?esc(catKeyLabel(k)):'All'}</button>`;}).join('')}</div>
@@ -7899,14 +7910,12 @@ const ccTailRank=a=>(a&&a.isLabg)?1:0;
    aggregation, so every number downstream — monthly figures, row totals, the
    grand total row, the drill-down and both Excel sheets — is recomputed from
    only the contributions that survive the filter. */
-let CC_FILTER={scope:'all',cat:''};
+let CC_FILTER={scope:(function(){try{return localStorage.getItem('labg_scope')==='nolabg'?'nolabg':'all';}catch(e){return 'all';}})(),cat:''};
 function ccFilterOn(){ return CC_FILTER.scope!=='all'||!!CC_FILTER.cat; }
 function ccSetScope(s){
-  CC_FILTER.scope=s;
-  // "Excl. LABG" and "Category: LABG" would cancel each other out into an
-  // empty table; dropping the category is the readable resolution.
-  if(s==='nolabg'&&CC_FILTER.cat===CC_LABG) CC_FILTER.cat='';
-  go(SCREEN);
+  // Same state as every other Budget screen's LABG view (setLabgScope also
+  // drops a "Category: LABG" filter that would empty the table).
+  setLabgScope(s);
 }
 function ccSetCat(c){ CC_FILTER.cat=c; go(SCREEN); }
 function ccFilterLabel(){
@@ -8486,8 +8495,18 @@ let ACC_OV_OPEN={};
 function toggleAccOv(k){ ACC_OV_OPEN[k]=!ACC_OV_OPEN[k]; go(SCREEN); }
 /* Overview scope: everything, or everything except LABG (Matriz/Corporate) —
    applies to the hero, the monthly chart and the account blocks alike. */
-let BO_SCOPE='all';
-function boSetScope(s){ BO_SCOPE=s; go(SCREEN); }
+/* One "Excl. LABG" view for every Budget screen and Home's budget cards,
+   remembered per browser. The cost-center table's own Scope toggle is the
+   same state (CC_FILTER.scope follows it). */
+let BO_SCOPE=(function(){try{return localStorage.getItem('labg_scope')==='nolabg'?'nolabg':'all';}catch(e){return 'all';}})();
+function setLabgScope(v){
+  BO_SCOPE=v==='nolabg'?'nolabg':'all'; CC_FILTER.scope=BO_SCOPE;
+  if(BO_SCOPE==='nolabg'&&CC_FILTER.cat===CC_LABG) CC_FILTER.cat='';
+  try{ localStorage.setItem('labg_scope',BO_SCOPE); }catch(e){}
+  go(SCREEN);
+}
+function boSetScope(s){ setLabgScope(s); }
+function labgScopeHTML(){ return `<div title="Matriz (LABG) in or out of every budget figure">${v2Seg([['all','All categories'],['nolabg','Excl. LABG']],BO_SCOPE,v=>`setLabgScope('${v}')`)}</div>`; }
 function boScopeKeep(cat){ return BO_SCOPE!=='nolabg'||String(cat||'')!=='LABG'; }
 /* One entry per account × product category: budget (caps), consumed,
    committed and awaiting approval. Same sources as the Budgets & Fees
@@ -9135,7 +9154,6 @@ function boHeaderControls(){
   const lbl=v=>BO_PER.mode==='month'?fmtMes(v+'-01'):BO_PER.mode==='quarter'?v.replace('-Q',' · Q'):v;
   return `<select class="chip-sel" title="Period" onchange="boSetMode(this.value)">${[['all','All periods'],['year','Year'],['quarter','Quarter'],['month','Month']].map(([v,l])=>`<option value="${v}" ${BO_PER.mode===v?'selected':''}>${l}</option>`).join('')}</select>
     ${opts.length?`<select class="chip-sel" onchange="boSetVal(this.value)">${opts.map(o=>`<option value="${o}" ${BO_PER.val===o?'selected':''}>${lbl(o)}</option>`).join('')}</select>`:''}
-    <select class="chip-sel" title="Scope" onchange="boSetScope(this.value)"><option value="all" ${BO_SCOPE==='all'?'selected':''}>All categories</option><option value="nolabg" ${BO_SCOPE==='nolabg'?'selected':''}>Excl. LABG</option></select>
     ${((ROLE_NAV[effPapel()]||{}).budget||[]).includes('budgets')?'<button class="btn-ghost" onclick="exportBudgetXLSX()">Export</button>':''}`;
 }
 /* Two part-to-whole charts closing the Overview: allocation by product
@@ -9385,6 +9403,7 @@ function renderBudgets(){
   const canSensitive=effIsManager()||['admin','financeiro'].includes(effPapel());
   let funds=(DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO');
   if(effPapel()==='agencia'&&effAgencia()) funds=funds.filter(p=>p.agencia===effAgencia());
+  funds=funds.filter(p=>boScopeKeep(String(p.product_category||'').trim()));
   const tetoBy={},consBy={},compBy={},pendBy={};
   DATA.tetos.forEach(t=>{tetoBy[t.fund_id]=(tetoBy[t.fund_id]||0)+(+t.teto||0);});
   DATA.rateio.forEach(r=>{tetoBy[r.fund_id]=(tetoBy[r.fund_id]||0)+(+r.valor||0);});
@@ -9392,7 +9411,7 @@ function renderBudgets(){
   // Group approved funds by product category and tie each to its budget (orc).
   const byCat={}; funds.forEach(p=>{ const k=(String(p.product_category||'').trim()||'Uncategorized'); (byCat[k]=byCat[k]||[]).push(p); });
   const orcByCat={}; orcs.forEach(o=>{ if(o.product_category) orcByCat[o.product_category]=o; });
-  const catSet=new Set([...Object.keys(byCat),...orcs.map(o=>o.product_category).filter(Boolean)]);
+  const catSet=new Set([...Object.keys(byCat),...orcs.map(o=>o.product_category).filter(Boolean)].filter(k=>boScopeKeep(k)));
   const catKeys=Array.from(catSet).sort((a,b)=>{let ia=PRODUCT_CATS.indexOf(a),ib=PRODUCT_CATS.indexOf(b);if(ia<0)ia=99;if(ib<0)ib=99;return ia-ib||a.localeCompare(b);});
   /* Budget-Category.dc.html: category chips (share of the year's budget) →
      glowing category hero (KPI row + bar scaled to approved) → Month by
