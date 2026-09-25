@@ -1855,10 +1855,10 @@ function navBadge(id){
    screen set this app actually has instead of the prototype's 4. */
 const NAV_HUBS=[
   {id:'dash',label:'Home',screens:['dash']},
-  {id:'list',label:'Projects',screens:['list','timeline']},
-  /* Its own nav item; ROLE_NAV gives the 'weekly' screen to Admin and
-     Marketing only, so nobody else sees the item or can open the screen. */
-  {id:'weekly',label:'Weekly status',screens:['weekly']},
+  /* Weekly status is a sub-tab of Projects (hubTabsHTML); ROLE_NAV gives
+     the 'weekly' screen to Admin and Marketing only, so the tab row only
+     appears for them and nobody else can open the screen. */
+  {id:'list',label:'Projects',screens:['list','timeline','weekly']},
   {id:'bo',label:'Budget',screens:['bo','budgets','costcenter','campanhas','funds','saldos']},
   {id:'pos',label:'POs',screens:['pos','mypos','reqpo']},
   {id:'mytasks',label:'Notes',screens:['mytasks']},
@@ -1926,7 +1926,14 @@ function hubTabsHTML(){
   const nav=currentNav();
   const valid=new Set([...nav.work,...(PO_ACCESS?nav.budget:[])]);
   const hub=navHubFor(SCREEN);
-  if(!hub||hub.screens.length<2||hub.id==='list') return '';
+  if(!hub||hub.screens.length<2) return '';
+  /* Projects: two tabs only — the project views (List/Board/By category/
+     Timeline live in the page's own switch) and Weekly status. */
+  if(hub.id==='list'){
+    if(!valid.has('weekly')) return '';
+    const tab=(id,l,on)=>`<button onclick="navGo('${id}')" style="padding:10px 16px;font-weight:${on?700:600};font-size:14px;background:none;border:none;border-bottom:2px solid ${on?'#4d7dff':'transparent'};color:${on?'var(--txt)':'var(--txt-2)'};margin-bottom:-1px;cursor:pointer;white-space:nowrap">${l}</button>`;
+    return `<nav style="display:flex;gap:4px;border-bottom:1px solid rgba(255,255,255,.1);margin:22px 0 0">${tab('list','Projects',SCREEN!=='weekly')}${tab('weekly','Weekly status',SCREEN==='weekly')}</nav>`;
+  }
   const avail=hub.screens.filter(s=>valid.has(s));
   if(avail.length<2) return '';
   const label=id=>(W_LABELS[id]||B_LABELS[id]||id);
@@ -1947,7 +1954,7 @@ const SCREEN_META={
   list:{t:'Projects',s:'Work · All projects',mod:'work'},
   timeline:{t:'Projects',s:'Work · Gantt view',mod:'work'},
   team:{t:'Team',s:'Work · Capacity',mod:'work'},
-  weekly:{t:'Weekly status',s:'Work · Weekly summary',mod:'work'},
+  weekly:{t:'Projects',s:'Work · Weekly summary',mod:'work'},
   mytasks:{t:'Notes & tasks',s:'Work · Personal to-dos',mod:'work'},
   agencywork:{t:'Assigned Work',s:'Work · Shared with your agency',mod:'work'},
   notif:{t:'Notifications',s:'All updates — Work and Budget',mod:'work'},
