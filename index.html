@@ -501,7 +501,28 @@
      scroll) that offset doesn't pin anything — it just shoves the whole header
      ~80px down over the first data rows. Only the frozen s1/s2/s3 columns want
      sticky here, and horizontally only, so top stays auto for them. */
-  .cc-tbl th{font-family:var(--mono);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;background:#161f36;border-bottom:1px solid var(--line);padding:8px 10px;position:static;top:auto}
+  .cc-tbl th{font-family:var(--mono);font-size:10.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;background:#161f36;border-bottom:1px solid var(--line);padding:8px 10px}
+  /* Frozen header + total row. .cc-wrap is its own scroll box (both axes,
+     capped to the viewport), so sticky top/bottom work against it and both
+     scrollbars stay on screen however long the table is. Header/footer
+     cells get opaque fills so figures never show through while scrolling. */
+  .cc-wrap{max-height:calc(100vh - var(--nav-h,62px) - 48px);overflow:auto}
+  .cc-tbl thead th{position:sticky;top:0;z-index:4}
+  .cc-tbl thead tr:nth-child(2) th{top:var(--cc-h1,33px)}
+  .cc-tbl thead .mband{background:#1b2440}
+  .cc-tbl thead th.cc-now{background:#223462}
+  .cc-tbl thead th.cc-tot{background:#262e45}
+  .cc-tbl tfoot td{position:sticky;bottom:0;z-index:3}
+  .cc-tbl tfoot td.mband{background:#1d2745}
+  .cc-tbl tfoot td.cc-now{background:#223462}
+  /* Row highlight — a tint laid over each cell's own fill (keeps banding,
+     the current-month column and the frozen cells opaque underneath). */
+  .cc-tbl tbody tr{cursor:pointer}
+  .cc-tbl tbody tr:hover td{background-image:linear-gradient(rgba(255,255,255,.035),rgba(255,255,255,.035))}
+  .cc-tbl tbody tr.cc-sel td{background-image:linear-gradient(rgba(77,125,255,.24),rgba(77,125,255,.24))!important;color:var(--txt)}
+  .cc-tbl tbody tr.cc-sel td:not(.s0){box-shadow:inset 0 1px 0 rgba(125,157,255,.7),inset 0 -1px 0 rgba(125,157,255,.7)}
+  .cc-nav{width:30px;height:30px;border-radius:8px;border:1px solid rgba(255,255,255,.16);color:var(--txt);display:inline-grid;place-items:center;font-size:15px;line-height:1}
+  .cc-nav:hover{background:rgba(255,255,255,.06)}
   .cc-tbl td{padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap;font-size:11.5px}
   .cc-tbl .num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
   .cc-tbl .mband{background:rgba(255,255,255,.02)}
@@ -524,9 +545,9 @@
      scroll position that never happens. Solving both at once needs a
      JS-synced dual-scrollbar split (separate header/body scroll areas),
      which is out of scope here — left as horizontal-only sticky. */
-  .cc-tbl thead .s0,.cc-tbl thead .s1,.cc-tbl thead .s2,.cc-tbl thead .s3{background:#161f36;z-index:5}
+  .cc-tbl thead .s0,.cc-tbl thead .s1,.cc-tbl thead .s2,.cc-tbl thead .s3{background:#161f36;z-index:6;top:0}
   .cc-tbl tfoot td{background:#1a2340;border-top:1px solid rgba(255,255,255,.12);border-bottom:none;font-weight:700}
-  .cc-tbl tfoot .s0,.cc-tbl tfoot .s1,.cc-tbl tfoot .s2,.cc-tbl tfoot .s3{background:#1a2340}
+  .cc-tbl tfoot .s0,.cc-tbl tfoot .s1,.cc-tbl tfoot .s2,.cc-tbl tfoot .s3{background:#1a2340;z-index:5}
   /* current-month highlight — background tint, not a side-stripe accent */
   .cc-tbl .cc-now{background:var(--accent-soft)}
   .cc-tbl thead .cc-now{background:rgba(77,125,255,.22)}
@@ -7828,8 +7849,39 @@ function ccScrollTo(behavior){
   wrap.scrollTo({left:Math.max(0,cell.offsetLeft-CC_STICKY_W-14),behavior:behavior||'auto'});
 }
 function ccAutoScroll(){
+  ccMeasureHead();
   ccScrollTo('auto');
 }
+/* Second header row sticks right under the first — its offset is the
+   first row's real height, measured after each render. */
+function ccMeasureHead(){
+  const wrap=document.querySelector('.cc-wrap'); if(!wrap)return;
+  const r=wrap.querySelector('thead tr'); if(r) wrap.style.setProperty('--cc-h1',r.getBoundingClientRect().height+'px');
+}
+/* ‹ › — one month (three columns) at a time. */
+function ccNudge(dir){
+  const wrap=document.querySelector('.cc-wrap'); if(!wrap)return;
+  const th=wrap.querySelector('thead th[id^="cc-m-"]');
+  wrap.scrollBy({left:dir*(th?th.getBoundingClientRect().width:300),behavior:'smooth'});
+}
+/* Highlighted rows, by account key — survive sorting, filtering and the
+   refresh repaint. A click on a drill figure opens it instead. Toggling
+   patches the DOM only, so the table keeps its scroll position. */
+const CC_SEL=new Set();
+function ccToggleRow(ev,tr){
+  if(ev.target.closest('.cc-drill')) return;
+  const k=tr.dataset.k; if(!k) return;
+  if(CC_SEL.has(k)) CC_SEL.delete(k); else CC_SEL.add(k);
+  document.querySelectorAll('.cc-tbl tbody tr').forEach(r=>{ if(r.dataset.k===k) r.classList.toggle('cc-sel',CC_SEL.has(k)); });
+  ccSelBtn();
+}
+function ccSelBtn(){
+  let b=document.getElementById('ccClearSelBtn');
+  if(!CC_SEL.size){ if(b) b.remove(); return; }
+  if(!b){ const nav=document.querySelector('.cc-nav'); if(!nav) return; b=document.createElement('button'); b.id='ccClearSelBtn'; b.className='chip-btn'; b.style.flexShrink='0'; b.onclick=ccClearSel; nav.parentElement.after(b); }
+  b.textContent=`Clear highlight (${CC_SEL.size})`;
+}
+function ccClearSel(){ CC_SEL.clear(); document.querySelectorAll('.cc-tbl tr.cc-sel').forEach(tr=>tr.classList.remove('cc-sel')); ccSelBtn(); }
 function ccJumpNow(){ ccScrollTo('smooth'); }
 /* ============================================================
    COST CENTER / ACCOUNT — single aggregation, three consumers
@@ -8300,8 +8352,8 @@ function feeSplitBlock(only){
   const hasNow=monthList.includes(mNow);
   const accountsBlock=`<div style="background:var(--card);border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 1px 2px rgba(20,22,28,.05);margin-top:16px">
     <div style="padding:14px 17px 12px;border-bottom:1px solid var(--line)">
-      <div style="display:flex;align-items:center;gap:10px"><b style="flex:1;min-width:0;font-family:'Hanken Grotesk',sans-serif;font-size:14px">Cost center / account — monthly budget, consumption &amp; balance</b>${hasNow?`<button class="chip-btn" onclick="ccJumpNow()" style="display:inline-flex;align-items:center;gap:5px;flex-shrink:0">${icn('calendar',12)} Current month</button>`:''}<button class="chip-btn" onclick="exportCostCenterXLSX()" style="display:inline-flex;align-items:center;gap:5px;flex-shrink:0">${icn('download',12)} Export Excel</button></div>
-      <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">click a header to sort · click a <b style="font-weight:700;color:var(--txt-2)">Budget</b> figure for the funds behind it, a <b style="font-weight:700;color:var(--txt-2)">Cons.</b> figure for the POs · scroll sideways — Cat./Cost center/Account/Description stay fixed${ccFilterOn()?` · <b style="font-weight:700;color:var(--accent-deep)">${ccFilterLabel()}</b> — totals and the export follow the filter`:''}</div>
+      <div style="display:flex;align-items:center;gap:10px"><b style="flex:1;min-width:0;font-family:'Hanken Grotesk',sans-serif;font-size:14px">Cost center / account — monthly budget, consumption &amp; balance</b>${accRows.length?`<span style="display:inline-flex;gap:4px;flex-shrink:0"><button class="cc-nav" onclick="ccNudge(-1)" title="Previous month" aria-label="Scroll to previous month">‹</button><button class="cc-nav" onclick="ccNudge(1)" title="Next month" aria-label="Scroll to next month">›</button></span>`:''}${CC_SEL.size?`<button class="chip-btn" id="ccClearSelBtn" onclick="ccClearSel()" style="flex-shrink:0">Clear highlight (${CC_SEL.size})</button>`:''}${hasNow?`<button class="chip-btn" onclick="ccJumpNow()" style="display:inline-flex;align-items:center;gap:5px;flex-shrink:0">${icn('calendar',12)} Current month</button>`:''}<button class="chip-btn" onclick="exportCostCenterXLSX()" style="display:inline-flex;align-items:center;gap:5px;flex-shrink:0">${icn('download',12)} Export Excel</button></div>
+      <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">click a header to sort · click a <b style="font-weight:700;color:var(--txt-2)">Budget</b> figure for the funds behind it, a <b style="font-weight:700;color:var(--txt-2)">Cons.</b> figure for the POs · click elsewhere on a row to highlight it · ‹ › or scroll sideways — Cat./Cost center/Account/Description, the header and the total row stay fixed${ccFilterOn()?` · <b style="font-weight:700;color:var(--accent-deep)">${ccFilterLabel()}</b> — totals and the export follow the filter`:''}</div>
       ${ccFilterBar()}
     </div>
     ${accRows.length?`<div class="cc-wrap"><table class="cc-tbl">
@@ -8312,11 +8364,11 @@ function feeSplitBlock(only){
           <th rowspan="2" class="s2 sortable${CC_SORT.col==='acc'?' sort-active':''}" style="text-align:left" onclick="ccSortClick('acc')">${sortLbl(CC_SORT,'acc','Account')}</th>
           <th rowspan="2" class="s3 sortable${CC_SORT.col==='desc'?' sort-active':''}" style="text-align:left" onclick="ccSortClick('desc')">${sortLbl(CC_SORT,'desc','Description')}</th>
           ${monthList.map((m,i)=>`<th colspan="3" id="cc-m-${esc(m)}" class="msep${band(i)}${nowCls(m)}" style="text-align:center;color:var(--txt-2)">${esc(fmtMes(m+'-01'))}${m===mNow?'<span class="cc-now-lbl">NOW</span>':''}</th>`).join('')}
-          <th colspan="3" class="msep" style="text-align:center;background:var(--line-2);color:var(--txt-2)">Total</th>
+          <th colspan="3" class="msep cc-tot" style="text-align:center;color:var(--txt-2)">Total</th>
         </tr>
         <tr>
           ${monthList.map((m,i)=>`<th class="msep${band(i)}${nowCls(m)}" style="text-align:right;font-weight:600">Budget</th><th class="${band(i).trim()}${nowCls(m)}" style="text-align:right;font-weight:600">Cons.</th><th class="${band(i).trim()}${nowCls(m)}" style="text-align:right;font-weight:600">Balance</th>`).join('')}
-          <th class="msep sortable${CC_SORT.col==='totB'?' sort-active':''}" style="text-align:right;background:var(--line-2)" onclick="ccSortClick('totB')">${sortLbl(CC_SORT,'totB','Budget')}</th><th class="sortable${CC_SORT.col==='totC'?' sort-active':''}" style="text-align:right;background:var(--line-2)" onclick="ccSortClick('totC')">${sortLbl(CC_SORT,'totC','Cons.')}</th><th class="sortable${CC_SORT.col==='totS'?' sort-active':''}" style="text-align:right;background:var(--line-2)" onclick="ccSortClick('totS')">${sortLbl(CC_SORT,'totS','Balance')}</th>
+          <th class="msep cc-tot sortable${CC_SORT.col==='totB'?' sort-active':''}" style="text-align:right" onclick="ccSortClick('totB')">${sortLbl(CC_SORT,'totB','Budget')}</th><th class="cc-tot sortable${CC_SORT.col==='totC'?' sort-active':''}" style="text-align:right" onclick="ccSortClick('totC')">${sortLbl(CC_SORT,'totC','Cons.')}</th><th class="cc-tot sortable${CC_SORT.col==='totS'?' sort-active':''}" style="text-align:right" onclick="ccSortClick('totS')">${sortLbl(CC_SORT,'totS','Balance')}</th>
         </tr>
       </thead>
       <tbody>
@@ -8332,7 +8384,7 @@ function feeSplitBlock(only){
            LABG lines plus one WG one, as of 2026-08). Say so instead of
            printing a bare dash that reads like a bug. */
         const noCC=!String(a.cc||'').trim();
-        return `<tr>
+        return `<tr class="${CC_SEL.has(a.key)?'cc-sel':''}" data-k="${esc(a.key)}" onclick="ccToggleRow(event,this)">
         <td class="s0" style="font-weight:700;font-size:11px;background:linear-gradient(${cm.bg},${cm.bg}),#131b31;color:${cm.c};box-shadow:inset 3px 0 0 ${cm.c}" title="${esc(catKeyLabel(a.cat)||'')}">${esc(catKeyLabel(a.cat)||'—')}</td>
         <td class="mono s1" title="${noCC?'No cost center on the fund behind this line — classificar() returned an account and description only':esc(a.cc||'')}">${noCC?'<span style="font-family:var(--sans);font-size:10px;font-weight:700;color:var(--amber);background:var(--amber-bg);border:1px solid rgba(255,176,32,.3);border-radius:20px;padding:1px 7px;white-space:nowrap">no CC</span>':esc(a.cc)}</td>
         <td class="mono s2" title="${esc(a.acc||'')}">${esc(a.acc||'—')}</td>
