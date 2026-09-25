@@ -1006,7 +1006,7 @@ function isTagged(p){
    tagged on the project can add, rename, reorder and delete its activities.
    The main project fields (name, type, due date, categories, brand) and
    "Delete project" stay gated behind canEdit(). */
-function canEditAtividades(p){ return canEdit(p)||(effPapel()==='marketing'&&isTagged(p))||(effPapel()==='agencia'&&projHasAgencia(p,effAgencia()))||(effPapel()==='tcl_member'&&isTagged(p)); }
+function canEditAtividades(p){ return canEdit(p)||(effPapel()==='marketing'&&isTagged(p))||(effPapel()==='agencia'&&projHasEmpresa(p,effAgencia()))||(effPapel()==='tcl_member'&&isTagged(p)); }
 /* The agency roster the Work module offers when assigning a project to one or
    more agencies. Drawn from the same two sources the Budget module already
    trusts — the people roster (perfis) and the funds' own agencia column —
@@ -1031,23 +1031,41 @@ function projAgencias(p){
   return out;
 }
 function projHasAgencia(p,ag){ return !!(ag&&projAgencias(p).includes(ag)); }
-/* An agency login sees a project when it is assigned to that agency, or when
-   the person themself is tagged on it — "conforme a agência e o usuário".
-   Everyone else sees everything; RLS on act_projects is deliberately open to
-   any authenticated user, so this is a scoping rule, not a security boundary. */
+/* Company of a person on the roster: their agency for agency logins, ''
+   (TCL itself) for everyone else or anyone not on the roster. */
+function pessoaEmpresa(email){
+  const e=String(email||'').trim().toLowerCase(); if(!e) return '';
+  const pe=(DATA.pessoas||[]).find(x=>(x.email||'').toLowerCase()===e);
+  return pe&&pe.papel==='agencia'?(pe.agencia||''):'';
+}
+/* The companies a project belongs to: the agencies configured on it, plus
+   the company of its owner and of every person tagged on it. An agency sees
+   (and works on) a project only when it is one of these — same rule as the
+   pode_ver_projeto() RLS function. */
+function projEmpresas(p){
+  const out=new Set(projAgencias(p));
+  [p&&p.owner,...((p&&p.envolvidos)||[]).map(x=>x&&x.email)].forEach(e=>{ const a=pessoaEmpresa(e); if(a) out.add(a); });
+  return [...out];
+}
+function projHasEmpresa(p,ag){ return !!(ag&&projEmpresas(p).includes(ag)); }
+/* Who is "me" for tag-based scoping. While an admin uses "View as" there is
+   no real person behind the simulated role, so the admin's own tags must not
+   leak projects into it: null here, and the callers fall back to the role /
+   company rule alone. */
+function scopeEmail(){ return VIEW_AS?null:((currentUser&&currentUser.email)||'').toLowerCase(); }
+/* Scoping rule mirrored by RLS (pode_ver_projeto). Admin, Marketing and
+   Finance see everything. */
 function visProjs(){
-  const ag=effAgencia();
+  const ag=effAgencia(), me=scopeEmail();
   if(effPapel()==='agencia'&&ag){
-    const meEmail=((currentUser&&currentUser.email)||'').toLowerCase();
-    return DATA.projetos.filter(p=>projHasAgencia(p,ag)||(p.envolvidos||[]).some(x=>(x.email||'').toLowerCase()===meEmail));
+    return DATA.projetos.filter(p=>projHasEmpresa(p,ag)||(!!me&&(p.envolvidos||[]).some(x=>(x.email||'').toLowerCase()===me)));
   }
   /* TCL Member: no agency, no blanket access either — only the projects
-     marketing (or admin) tagged them on via envolvidos. Unlike the agencia
-     branch above there's no "assigned to my agency" fallback, since this
-     role isn't attached to one. */
+     they were tagged on (envolvidos). Viewing as the role, that is the
+     projects any TCL Member is tagged on. */
   if(effPapel()==='tcl_member'){
-    const meEmail=((currentUser&&currentUser.email)||'').toLowerCase();
-    return DATA.projetos.filter(p=>(p.envolvidos||[]).some(x=>(x.email||'').toLowerCase()===meEmail));
+    const tagged=me?(e=>e===me):(e=>{ const pe=(DATA.pessoas||[]).find(x=>(x.email||'').toLowerCase()===e); return !!(pe&&pe.papel==='tcl_member'); });
+    return DATA.projetos.filter(p=>(p.envolvidos||[]).some(x=>tagged((x.email||'').toLowerCase())));
   }
   return DATA.projetos;
 }
@@ -1218,7 +1236,7 @@ async function generateAISummary(){
 let RECS_OPEN=false;
 function toggleRecs(){ RECS_OPEN=!RECS_OPEN; go(SCREEN); }
 function renderRecommendations(){
-  if(!(PAPEL==='admin'||isManager))return '';
+  if(VIEW_AS||!(PAPEL==='admin'||isManager))return '';
   const recs=computeRecommendations();
   const sevMeta={high:{c:'var(--red)',bg:'var(--red-bg)',fg:'var(--red)',t:'High'},medium:{c:'var(--amber)',bg:'var(--amber-bg)',fg:'var(--amber)',t:'Medium'},low:{c:'var(--txt-3)',bg:'var(--slate-bg)',fg:'var(--slate)',t:'Low'}};
   const hasAI=!!(window.claude&&window.claude.complete);
