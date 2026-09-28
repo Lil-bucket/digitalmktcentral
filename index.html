@@ -4,10 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#05070d">
-<title>MKT Central</title>
+<title>OnTrack</title>
+<link rel="icon" href="assets/brand/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/brand/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js" integrity="sha384-WgXwGL6fUsYJWNaKJgVbrJKGRQwc1vieh2oy4kw9nXqpNDz3tdSsqEYUgeHD/NuF" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" integrity="sha384-JUh163oCRItcbPme8pYnROHQMC6fNKTBWtRG3I3I0erJkzNgL7uxKlNwcrcFKeqF" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
@@ -97,7 +100,11 @@
   .gate.show{display:flex}
   .gate-card{background:var(--surf);border:1px solid var(--line-card);border-radius:20px;padding:40px 34px 34px;max-width:400px;width:100%;text-align:center;box-shadow:var(--sh-3);animation:gateIn .35s var(--ease) both}
   @keyframes gateIn{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
-  .gate-logo{width:56px;height:56px;border-radius:15px;background:linear-gradient(135deg,var(--accent) 50%,var(--po) 50%);color:#fff;font-weight:800;font-size:26px;display:grid;place-items:center;margin:0 auto 18px;box-shadow:0 8px 20px -6px rgba(16,19,26,.4)}
+  /* OnTrack — lockup do login: wordmark + descritor (assets/brand/) */
+  .gate-logo{display:flex;flex-direction:column;align-items:center;gap:12px;margin:4px auto 22px}
+  .gate-logo img{display:block;width:236px;height:auto}
+  .gate-desc{display:flex;align-items:center;gap:9px;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;font-weight:500;letter-spacing:.24em;text-transform:uppercase;color:var(--txt-2)}
+  .gate-desc::before{content:"";width:18px;height:2px;background:#E4002B}
   .gate-card h2{font-size:21px;letter-spacing:-.025em;margin-bottom:6px}
   .gate-card p{font-size:13px;color:var(--txt-2);line-height:1.55;margin-bottom:22px}
   .gate-inp{width:100%;background:var(--paper);border:1px solid var(--line);color:var(--txt);border-radius:11px;padding:12px 14px;font:inherit;font-size:14px;margin-bottom:10px;outline:none;transition:border-color var(--fast),box-shadow var(--fast),background var(--fast)}
@@ -127,8 +134,8 @@
   .side-in{max-width:1280px;margin:0 auto;padding:0 28px;min-height:62px;display:flex;align-items:center;justify-content:space-between;gap:20px}
   .brand{display:flex;align-items:center;gap:11px;color:var(--txt);flex-shrink:0}
   .brand:hover{color:var(--txt)}
-  .brand .dot{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#4d7dff 50%,#ff3b4e 50%);box-shadow:0 0 22px -4px rgba(77,125,255,.6);flex-shrink:0}
-  .brand b{font-weight:800;font-size:15.5px;letter-spacing:-.01em}
+  /* OnTrack — wordmark no header (corte "header": traços mais grossos p/ 24px) */
+  .brand-logo{display:block;height:24px;width:auto}
   .nav-mid{display:flex;align-items:center;overflow-x:auto;scrollbar-width:none}
   #navGlobal,#navWork,#navBudget{display:flex;align-items:center;gap:2px}
   .nav-sec{display:none}
@@ -669,8 +676,10 @@
 <!-- ===== AUTH GATE ===== -->
 <div class="gate" id="gate">
   <div class="gate-card">
-    <div class="gate-logo"></div>
-    <h2>MKT Central</h2>
+    <div class="gate-logo">
+      <h2 style="margin:0"><img src="assets/brand/ontrack-wordmark-dark.svg" width="236" height="43" alt="OnTrack"></h2>
+      <span class="gate-desc">Projetos · Budget</span>
+    </div>
     <p id="gateMsg">Sign in with your corporate email.</p>
     <div id="gateLogin">
       <input id="liEmail" class="gate-inp" type="email" aria-label="Corporate email" placeholder="seu.email@tclsemp.com.br" autocomplete="username">
@@ -695,7 +704,7 @@
 <div class="app" id="app" style="display:none">
   <aside class="side">
    <div class="side-in">
-    <a class="brand" href="javascript:void(0)" onclick="navGo('dash')"><span class="dot"></span><b>MKT Central</b></a>
+    <a class="brand" href="javascript:void(0)" onclick="navGo('dash')" aria-label="OnTrack — início"><img class="brand-logo" src="assets/brand/ontrack-header-dark.svg" width="131" height="24" alt="OnTrack"></a>
     <div class="nav-mid">
       <nav id="navGlobal" aria-label="Global"></nav>
       <nav id="navWork" aria-label="Main"></nav>
