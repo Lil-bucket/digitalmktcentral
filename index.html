@@ -2506,7 +2506,7 @@ function renderProjetos(){
       const rows=list.filter(p=>(p.categorias&&p.categorias.length)?p.categorias.includes(cat):cat==='—');
       if(!rows.length) return '';
       const cm=cat==='—'?{c:'#9aa3b8'}:catMeta(cat);
-      const tb=canSeeBudget()?rows.reduce((s,p)=>{const c=(DATA.campanhas||[]).find(x=>x.id===p.campanha_id);return s+(c?campTotals(c.id).teto:0);},0):0;
+      const tb=canSeeBudget()?rows.reduce((s,p)=>s+projTotals(p).teto,0):0;
       return card(`<div style="display:flex;align-items:center;gap:10px;padding:16px 22px 4px"><span style="width:10px;height:10px;border-radius:50%;background:${cm.c}"></span><span style="font-size:17px;font-weight:800">${esc(cat==='—'?'Uncategorized':catKeyLabel(cat))}</span><span style="font-size:13px;color:var(--txt-3)">${rows.length} project(s)${tb?' · '+BRLc(tb)+' budget':''}</span></div>${head}${rows.map(projRowHTML).join('')}`);
     }).join('')}</div>`;
   }
@@ -2528,9 +2528,8 @@ function renderProjetos(){
    the budgeted total when the project is linked to a campaign, "No budget"
    otherwise. Reuses campTotals(), already isAg-scoped. */
 function projBudgetCellHTML(p){
-  const camp=(DATA.campanhas||[]).find(c=>c.id===p.campanha_id);
-  if(!camp) return `<span style="font-size:12.5px;color:#5d6479">No budget</span>`;
-  const t=campTotals(camp.id), tot=t.teto||1;
+  if(!projFunds(p).length) return `<span style="font-size:12.5px;color:#5d6479">No budget</span>`;
+  const t=projTotals(p), tot=t.teto||1;
   return `<div style="display:flex;align-items:center;gap:8px"><div style="flex:1;display:flex;height:6px;border-radius:3px;overflow:hidden;background:rgba(255,255,255,.1)"><div style="width:${Math.min(100,t.cons/tot*100).toFixed(2)}%;background:#4d7dff"></div><div style="width:${Math.min(100,t.comp/tot*100).toFixed(2)}%;background:#a685ff"></div></div><span class="mono" style="font-size:11.5px;color:var(--txt-2);width:56px;text-align:right;white-space:nowrap">${BRLc(t.teto)}</span></div>`;
 }
 /* Opens the detail against a freshly-read row, not the cached one — clicking
@@ -2690,14 +2689,16 @@ async function pdPostMessage(pid){
   men.forEach(m=>{ if(m.email) notifyMarcacao(m.email,p.nome,txt); });
   go('projectdetail');
 }
-async function pdLinkCampanha(pid,campId){
-  const p=DATA.projetos.find(x=>x.id===pid); if(!p||!campId)return;
-  p.campanha_id=campId; await pdPersist(p); go('projectdetail');
+async function pdLinkFund(pid,fid){
+  const p=DATA.projetos.find(x=>x.id===pid); if(!p||!fid)return;
+  p.fundos=[...new Set([...projFundIds(p),fid])]; p.campanha_id=''; await pdPersist(p); go('projectdetail');
 }
-async function pdUnlinkCampanha(pid){
+async function pdUnlinkFund(pid,fid){
   const p=DATA.projetos.find(x=>x.id===pid); if(!p)return;
-  p.campanha_id=''; await pdPersist(p); go('projectdetail');
+  p.fundos=projFundIds(p).filter(x=>x!==fid); p.campanha_id=''; await pdPersist(p); go('projectdetail');
 }
+function pmLinkFund(){ const sel=$('#pmFundPick'); if(!EDIT||!sel||!sel.value)return; EDIT.fundos=[...new Set([...projFundIds(EDIT),sel.value])]; EDIT.campanha_id=''; renderProjModal(); }
+function pmUnlinkFund(fid){ if(!EDIT)return; EDIT.fundos=projFundIds(EDIT).filter(x=>x!==fid); EDIT.campanha_id=''; renderProjModal(); }
 function pdHeroHTML(p){
   const bt=businessTypeOf(p.ptipo);
   const canEditProj=canEdit(p);
@@ -2735,20 +2736,19 @@ function pdStatsHTML(p){
   const risky=(p.tasks||[]).filter(t=>!t.done&&t.status&&['atrasado','bloqueado','atencao'].includes(t.status));
   const people=[p.owner||p.resp,...(p.envolvidos||[]).map(e=>e.nome||e.email)].filter(Boolean);
   const ags=projAgencias(p);
-  const camp=(DATA.campanhas||[]).find(c=>c.id===p.campanha_id);
-  const bud=camp?campTotals(camp.id):null;
+  const bud=projFunds(p).length?projTotals(p):null;
   const card=(inner,bd,glow,click)=>`<div ${click?`onclick="${click}" `:''}style="background:var(--surf);border:1px solid ${bd||'var(--line-card)'};border-radius:14px;padding:16px 18px;${glow?`box-shadow:0 0 30px -16px ${glow};`:''}${click?'cursor:pointer':''}">${inner}</div>`;
   const eb=t=>`<div class="mono" style="font-size:11.5px;color:var(--txt-3)">${t}</div>`;
   let budCard;
   if(!canSeeBudget()) budCard=card(`${eb('activities done')}<div class="mono" style="font-size:26px;font-weight:700;margin-top:4px">${(p.tasks||[]).filter(t=>t.done).length}<span style="font-size:15px;color:var(--txt-3)"> / ${(p.tasks||[]).length}</span></div><div style="font-size:12.5px;color:var(--txt-2)">${prog}% of the plan</div>`,null,null,"pdScrollTo('pd-sec-activities')");
   else if(bud){
-    let cut=0; if(canSeeCorte()) campFunds(camp.id).forEach(f=>{const cm=fundMonthlyCuts(f.id);Object.keys(cm).forEach(k=>cut+=cm[k]);});
+    let cut=0; if(canSeeCorte()) projFunds(p).forEach(f=>{const cm=fundMonthlyCuts(f.id);Object.keys(cm).forEach(k=>cut+=cm[k]);});
     const pct=bud.teto?Math.round(bud.cons/bud.teto*100):0;
     budCard=card(`${eb('budget total · consumed')}
       <div style="display:flex;align-items:baseline;gap:10px;margin-top:4px"><span class="mono" style="font-size:22px;font-weight:700">${BRLc(bud.teto)}</span><span class="mono" style="font-size:18px;font-weight:700;color:#7d9dff">${pct}%</span></div>
       <div style="display:flex;height:5px;border-radius:3px;overflow:hidden;background:rgba(255,255,255,.1);margin-top:10px"><div style="width:${bud.teto?Math.min(100,bud.cons/bud.teto*100):0}%;background:#4d7dff"></div><div style="width:${bud.teto?Math.min(100,bud.comp/bud.teto*100):0}%;background:#a685ff"></div></div>
       <div style="font-size:12px;color:var(--txt-3);margin-top:6px;display:flex;flex-wrap:wrap;gap:0 6px">${canSeeCorte()?`<span style="white-space:nowrap">approved ${BRLc(bud.teto+cut)}</span><span style="white-space:nowrap">· cut ${BRLc(cut)}</span>`:`<span>committed ${BRLc(bud.comp)}</span>`}</div>`,null,null,"pdScrollTo('pd-sec-budget')");
-  } else budCard=card(`${eb('budget')}<div style="font-size:20px;font-weight:800;margin-top:6px;color:var(--txt-3)">No budget</div><div style="font-size:12.5px;color:var(--txt-2)">no campaign linked</div>`,null,null,"pdScrollTo('pd-sec-budget')");
+  } else budCard=card(`${eb('budget')}<div style="font-size:20px;font-weight:800;margin-top:6px;color:var(--txt-3)">No budget</div><div style="font-size:12.5px;color:var(--txt-2)">no funds linked</div>`,null,null,"pdScrollTo('pd-sec-budget')");
   return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
     ${card(`${eb('current status')}<div style="display:flex;align-items:center;gap:8px;margin-top:6px"><span style="width:10px;height:10px;border-radius:50%;background:${hp.dot};box-shadow:0 0 10px ${hp.dot}"></span><span style="font-size:20px;font-weight:800">${st.name}</span></div><div style="font-size:12.5px;color:var(--txt-2);margin-top:2px">Stage: ${esc(stageOf(p.etapa).name)} · ${prog}% done</div><div style="height:5px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:10px"><div style="height:100%;width:${prog}%;background:${hp.dot}"></div></div>`,`rgba(${HC},.4)`,`rgba(${HC},.6)`)}
     ${card(`${eb('activities at risk')}<div class="mono" style="font-size:26px;font-weight:700;color:${risky.length?'#ffb020':'var(--txt)'};margin-top:4px">${risky.length}</div><div style="font-size:12.5px;color:var(--txt-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${risky.length?risky.slice(0,3).map(t=>esc(t.n)).join(' · '):'none'}</div>`,risky.length?'rgba(255,176,32,.4)':null,null,"pdScrollTo('pd-sec-activities')")}
@@ -2851,21 +2851,14 @@ function pdMessagesHTML(p){
 }
 let PD_FV='totals';
 function pdBudgetHTML(p){
-  const camp=(DATA.campanhas||[]).find(c=>c.id===p.campanha_id);
   const canEditProj=canEdit(p);
-  if(!camp){
+  if(!projFunds(p).length){
     return v2Card('budget · shown when the project has one','No budget linked',`
-      <p style="font-size:13px;color:var(--txt-2);margin-top:6px">This project has no campaign attached — no budget, funds or POs to show here yet.</p>
-      ${canEditProj?`<div style="margin-top:14px;display:flex;gap:8px;align-items:center;max-width:460px">
-        <select id="pdCampPick" class="chip-sel" style="flex:1;min-width:0">
-          <option value="">Select a campaign…</option>
-          ${(DATA.campanhas||[]).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||'')).map(c=>`<option value="${esc(c.id)}">${esc(c.nome)}</option>`).join('')}
-        </select>
-        <button class="btn-ghost" onclick="pdLinkCampanha('${escJs(p.id)}',document.getElementById('pdCampPick').value)">Link</button>
-      </div>`:''}`,{id:'pd-sec-budget',style:'scroll-margin-top:130px'});
+      <p style="font-size:13px;color:var(--txt-2);margin-top:6px">${projFundIds(p).length?'None of the funds linked to this project are yours — nothing to show here.':'No funds are linked to this project — no budget or POs to show here yet.'}</p>
+      ${canEditProj?`<div style="margin-top:14px">${projFundPickerHTML(p,'pdFundPick',`pdLinkFund('${escJs(p.id)}',document.getElementById('pdFundPick').value)`,'chip-sel')}</div>`:''}`,{id:'pd-sec-budget',style:'scroll-margin-top:130px'});
   }
   const seeCut=canSeeCorte();
-  const funds=campFunds(camp.id).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+  const funds=projFunds(p).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
   const rows=funds.map(f=>{
     const mt=fundMonthlyTotals(f.id); const b=Object.values(mt).reduce((s2,v)=>s2+v,0);
     let c=0,m=0; (DATA.pos||[]).forEach(po=>{if(po.fund_id!==f.id)return;const v=+po.valor||0;if(CONS.includes(po.status))c+=v;else if(COMP.includes(po.status))m+=v;});
@@ -2901,16 +2894,15 @@ function pdBudgetHTML(p){
       ${rows.map(r=>tr(r)).join('')}${rows.length>1?tr({name:'Total',...T},true):''}
     </div>`;
   }
-  return v2Card(`accrual · ${esc(camp.nome)}`,'Budget and funds',`
+  return v2Card(`accrual · ${funds.length} fund${funds.length===1?'':'s'}`,'Budget and funds',`
     <div style="margin-top:16px">${v2Bar([{w:T.c/base*100,bg:'#4d7dff',t:'Consumed'},{w:T.m/base*100,bg:'#a685ff',t:'Committed'},{w:Math.max(0,av)/base*100,bg:'rgba(255,255,255,.16)',t:'Available'},...(seeCut?[{w:T.cut/base*100,bg:V2_HATCH_S,t:'Cut'}]:[])],14)}</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:14px;margin-top:14px">${kpis.map(v2Kpi).join('')}</div>
-    ${funds.length?`<div style="overflow-x:auto;margin-top:18px">${table}</div>`:'<div class="empty">No funds linked to this campaign yet.</div>'}
-    <div style="display:flex;justify-content:space-between;gap:10px;margin-top:12px;font-size:12px"><a onclick="openCampanhaDetail('${escJs(camp.id)}')" style="cursor:pointer;font-weight:600">Open campaign →</a>${canEditProj?`<a onclick="pdUnlinkCampanha('${escJs(p.id)}')" style="color:var(--txt-3);cursor:pointer">Unlink campaign</a>`:''}</div>`,
+    ${funds.length?`<div style="overflow-x:auto;margin-top:18px">${table}</div>`:'<div class="empty">No funds linked yet.</div>'}
+    ${canEditProj?`<div style="margin-top:14px;display:flex;flex-direction:column;gap:10px"><div style="display:flex;flex-wrap:wrap;gap:6px">${funds.map(f=>`<span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 9px;border-radius:14px;border:1px solid var(--line-2);color:var(--txt-2)">${esc(f.nome)}<a onclick="pdUnlinkFund('${escJs(p.id)}','${escJs(f.id)}')" title="Unlink" style="cursor:pointer;color:var(--txt-3)">×</a></span>`).join('')}</div>${projFundPickerHTML(p,'pdFundPick',`pdLinkFund('${escJs(p.id)}',document.getElementById('pdFundPick').value)`,'chip-sel')}</div>`:''}`,
     {id:'pd-sec-budget',style:'scroll-margin-top:130px',right:v2Seg([['totals','Totals'],['monthly','By month']],PD_FV,v=>`PD_FV='${v}';go('projectdetail')`)});
 }
 function pdPOsHTML(p){
-  const camp=(DATA.campanhas||[]).find(c=>c.id===p.campanha_id);
-  const fundIds=camp?new Set(campFunds(camp.id).map(f=>f.id)):new Set();
+  const fundIds=new Set(projFunds(p).map(f=>f.id));
   const nomeBy={}; DATA.poProjetos.forEach(f=>nomeBy[f.id]=f.nome);
   const pos=poDisplayList((DATA.pos||[]).filter(po=>fundIds.has(po.fund_id))).sort((a,b)=>String(b.solicitado_em||'').localeCompare(String(a.solicitado_em||'')));
   const tot=pos.reduce((s2,po)=>s2+(+po.valor||0),0);
@@ -6335,8 +6327,7 @@ function pmHeroHTML(){
   const done=tasks.filter(t=>t.done).length, prog=tasks.length?Math.round(done/tasks.length*100):0;
   const st=statusOf(EDIT.status||autoStatus(EDIT));
   const risky=(tasks||[]).filter(t=>!t.done&&t.status&&['atrasado','bloqueado'].includes(t.status));
-  const camp=(DATA.campanhas||[]).find(c=>c.id===EDIT.campanha_id);
-  const bud=camp?campTotals(camp.id):null;
+  const bud=projFunds(EDIT).length?projTotals(EDIT):null;
   const budPct=bud&&bud.teto?Math.round((bud.cons+bud.comp)/bud.teto*100):null;
   const peopleN=(EDIT.envolvidos||[]).length+(EDIT.owner?1:0);
   const cell=(eyebrow,val,sub,col)=>`<div class="v2-card" style="padding:14px 16px"><div class="v2-card-eyebrow">${eyebrow}</div><div style="font-size:17px;font-weight:800;margin-top:4px${col?';color:'+col:''}">${val}</div><div style="font-size:11.5px;color:var(--txt-3);margin-top:2px">${sub}</div></div>`;
@@ -6344,7 +6335,7 @@ function pmHeroHTML(){
     ${cell('Status',`<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:${st.cls==='ok'?'var(--green)':st.cls==='late'?'var(--red)':st.cls==='soon'?'var(--amber)':'var(--slate)'}"></span>${st.name}</span>`,`${prog}% done · ${done}/${tasks.length} tasks`)}
     ${cell('Activities at risk',risky.length,risky.length?risky.slice(0,2).map(t=>t.n).join(', '):'none',risky.length?'var(--red)':null)}
     ${cell('People involved',peopleN,'owner + tagged people')}
-    ${bud?cell('Budget',budPct+'%',BRL(bud.cons+bud.comp)+' of '+BRL(bud.teto)):cell('Budget','—','no campaign linked')}
+    ${bud?cell('Budget',budPct+'%',BRL(bud.cons+bud.comp)+' of '+BRL(bud.teto)):cell('Budget','—','no funds linked')}
   </div>`;
 }
 function pmSubnavHTML(){
@@ -6409,7 +6400,6 @@ function renderProjHeaderModal(){
   const hasBudget=canSeeBudget();
   const chip=(on,label,onclick,c)=>`<button ${dis} onclick="${onclick}" style="padding:6px 13px;border-radius:18px;border:1px solid ${on?(c||'#4d7dff'):'rgba(255,255,255,.14)'};background:${on?'rgba(255,255,255,.07)':'transparent'};color:${on?'var(--txt)':'var(--txt-2)'};font-weight:700;font-size:12.5px;display:inline-flex;align-items:center;gap:7px">${c?`<span style="width:7px;height:7px;border-radius:50%;background:${c}"></span>`:''}${label}</button>`;
   const sec=(t,sub,body)=>`<div style="margin-bottom:18px"><div style="font-size:12.5px;font-weight:600;color:var(--txt-2);margin-bottom:8px">${t}${sub?` <span style="font-weight:500;color:var(--txt-3)">${sub}</span>`:''}</div>${body}</div>`;
-  const camps=(DATA.campanhas||[]).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
   $('#modalMount').innerHTML=`<div class="overlay${reopen?' no-anim':''}" onclick="if(event.target===this)pmOverlayClose()"><div role="dialog" aria-modal="true" class="modal pm-modal${reopen?' no-anim':''}" style="max-width:720px">
     <div class="modal-h" style="align-items:flex-start"><div style="flex:1;min-width:0"><div class="mono" style="font-size:11.5px;color:var(--txt-3)">${EDIT._new?'new project · header only':'project header'}</div><h3>${EDIT._new?'New project':esc(EDIT.nome||'Project')}</h3></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">
@@ -6426,7 +6416,7 @@ function renderProjHeaderModal(){
           <div id="pmPeopleDD" style="position:absolute;left:0;right:0;top:100%;margin-top:4px;background:#0f1628;border:1px solid rgba(255,255,255,.14);border-radius:10px;box-shadow:0 20px 50px -12px rgba(0,0,0,.9);max-height:190px;overflow-y:auto;z-index:20;display:none"></div>
         </div>`:''}
         <div style="font-size:12px;color:var(--txt-3);margin-bottom:6px">Agencies</div>${pmAgenciasHTML(ED)}`)}
-      ${hasBudget?sec('Budget','campaign that funds this project',`<select ${dis} onchange="pmSet('campanha_id',this.value||null);renderProjModal()" class="pm-in"><option value="">— No budget —</option>${camps.map(c=>`<option value="${esc(c.id)}" ${EDIT.campanha_id===c.id?'selected':''}>${esc(c.nome)}</option>`).join('')}</select>${(()=>{const c=camps.find(x=>x.id===EDIT.campanha_id);if(!c)return '';const t=campTotals(c.id);return `<div style="font-size:12px;color:var(--txt-2);margin-top:6px">${BRLc(t.teto)} budgeted · ${BRLc(t.cons)} consumed · ${BRLc(t.comp)} committed</div>`;})()}`):''}
+      ${hasBudget?sec('Budget','funds linked to this project',`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:${ED?'10px':'0'}">${projFunds(EDIT).map(f=>`<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:4px 10px;border-radius:14px;border:1px solid rgba(255,255,255,.14)">${esc(f.nome)}${f.agencia?' · '+esc(f.agencia):''}${ED?`<a onclick="pmUnlinkFund('${escJs(f.id)}')" title="Unlink" style="cursor:pointer;color:var(--txt-3)">×</a>`:''}</span>`).join('')||'<span style="font-size:12px;color:var(--txt-3)">No funds linked</span>'}</div>${ED?projFundPickerHTML(EDIT,'pmFundPick','pmLinkFund()','pm-in'):''}${(()=>{if(!projFunds(EDIT).length)return '';const t=projTotals(EDIT);return `<div style="font-size:12px;color:var(--txt-2);margin-top:6px">${BRLc(t.teto)} budgeted · ${BRLc(t.cons)} consumed · ${BRLc(t.comp)} committed</div>`;})()}`):''}
     </div>
     <div class="modal-f">
       <span style="flex:1">${(ED&&!EDIT._new)?`<a onclick="delProj('${EDIT.id}')" style="color:#ff6b6b;cursor:pointer;font-weight:600;font-size:12.5px">Delete project</a>`:''}</span>
@@ -7083,14 +7073,45 @@ function visCampanhas(){
 /* Same cap/consumed/committed aggregation renderFunds() does per-fund
    (tetos + rateio_alocacao for the cap, pos by status for spend), just
    summed across every fund that belongs to this campanha instead of one. */
-function campTotals(campId){
-  const ids=new Set(campFunds(campId).map(p=>p.id));
+function campTotals(campId){ return fundsTotals(campFunds(campId)); }
+function fundsTotals(funds){
+  const ids=new Set(funds.map(p=>p.id));
   let teto=0,cons=0,comp=0,pend=0;
   DATA.tetos.forEach(t=>{ if(ids.has(t.fund_id)) teto+=(+t.teto||0); });
   DATA.rateio.forEach(r=>{ if(ids.has(r.fund_id)) teto+=(+r.valor||0); });
   DATA.pos.forEach(po=>{ if(!ids.has(po.fund_id))return; const v=+po.valor||0;
     if(CONS.includes(po.status))cons+=v; else if(COMP.includes(po.status))comp+=v; else if(PEND.includes(po.status))pend+=v; });
   return {teto,cons,comp,pend};
+}
+/* Project ↔ budget link is by FUND (project.fundos = fund ids), not by
+   campaign. Projects saved before that still carry campanha_id and no
+   `fundos`, so they read as "every fund of that campaign" until first edited.
+   projFundIds is the full, unscoped list (what gets saved); projFunds is what
+   the viewer may see — an agency only gets its own funds (campScoped, and
+   RLS behind it), so one project shows an agency its own slice of the budget
+   while admin/marketing see the sum of everything linked. */
+function projFundIds(p){
+  if(p&&Array.isArray(p.fundos)) return p.fundos;
+  return (p&&p.campanha_id)?(DATA.poProjetos||[]).filter(f=>f.campanha_id===p.campanha_id).map(f=>f.id):[];
+}
+function projFunds(p){
+  const ids=new Set(projFundIds(p));
+  return campScoped((DATA.poProjetos||[]).filter(f=>ids.has(f.id)));
+}
+function projTotals(p){ return fundsTotals(projFunds(p)); }
+/* Funds that can still be linked: approved, not archived, not already on the
+   project and with money left (cap − consumed − committed − pending). */
+function projAvailableFunds(p){
+  const linked=new Set(projFundIds(p));
+  const list=campScoped((DATA.poProjetos||[]).filter(f=>f.aprovacao_status==='APROVADO'&&!fundArquivado(f)&&!linked.has(f.id)));
+  const st=campFundStats(list);
+  return list.map(f=>({f,free:(st.cap[f.id]||0)-(st.cons[f.id]||0)-(st.comp[f.id]||0)-(st.pend[f.id]||0)}))
+    .filter(x=>x.free>0.005).sort((a,b)=>(a.f.nome||'').localeCompare(b.f.nome||''));
+}
+function projFundPickerHTML(p,selId,linkJs,cls,style){
+  const av=projAvailableFunds(p);
+  if(!av.length) return `<div style="font-size:12px;color:var(--txt-3)">No available funds to link.</div>`;
+  return `<div style="display:flex;gap:8px;align-items:center;max-width:520px"><select id="${selId}" class="${cls}" style="flex:1;min-width:0;${style||''}"><option value="">Select an available fund…</option>${av.map(x=>`<option value="${esc(x.f.id)}">${esc(x.f.nome)}${x.f.agencia?' · '+esc(x.f.agencia):''} — ${BRLc(x.free)} available</option>`).join('')}</select><button class="btn-ghost" onclick="${linkJs}">Link fund</button></div>`;
 }
 /* Same three buckets as campTotals, kept per fund so the detail view can
    show each fund's own figures without recomputing the split twice. */
