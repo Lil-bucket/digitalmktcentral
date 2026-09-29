@@ -2712,13 +2712,13 @@ function pdMentionPick(nome){
   ta.value=nb+after; ta.focus(); ta.setSelectionRange(nb.length,nb.length);
   pdMentionBlur();
 }
-/* Editing a message: only its author (or an admin) can, and the people the
+/* Editing or deleting a message: only its author can (not even admins), and the people the
    new text mentions that the old one didn't get the e-mail now — nobody is
    pinged twice for the same comment. */
 let PD_EDIT_LOG=null;
 function pdCanEditLog(l){
   const me=((currentUser&&currentUser.email)||'').toLowerCase();
-  return !VIEW_AS&&!!l&&!!l.id&&((l.autor||'').toLowerCase()===me||PAPEL==='admin');
+  return !VIEW_AS&&!!me&&!!l&&!!l.id&&(l.autor||'').toLowerCase()===me;
 }
 function pdEditLog(lid){ PD_EDIT_LOG=lid; go('projectdetail'); }
 async function pdSaveLog(pid,lid){
@@ -2733,6 +2733,13 @@ async function pdSaveLog(pid,lid){
     men.forEach(m=>{ if(m.email&&!before.has(m.email.toLowerCase())) notifyMarcacao(m.email,p.nome,txt); });
   }
   PD_EDIT_LOG=null; go('projectdetail');
+}
+async function pdDeleteLog(pid,lid){
+  const p=DATA.projetos.find(x=>x.id===pid); const l=p&&(p.logs||[]).find(x=>x.id===lid);
+  if(!l||!pdCanEditLog(l))return;
+  if(!confirm('Delete this message?'))return;
+  p.logs=p.logs.filter(x=>x.id!==lid); PD_EDIT_LOG=null;
+  await pdPersist(p); go('projectdetail');
 }
 function pdCancelEditLog(){ PD_EDIT_LOG=null; go('projectdetail'); }
 async function pdLinkFund(pid,fid){
@@ -2886,7 +2893,7 @@ function pdMessagesHTML(p){
     <div style="display:flex;flex-direction:column;gap:14px;max-height:420px;overflow-y:auto">
       ${logs.length?logs.map(l=>`<div style="display:grid;grid-template-columns:28px minmax(0,1fr);gap:10px">
         <span class="avatar" style="width:28px;height:28px;font-size:10px;background:${avColor(respName(l.autor)||l.autor)}">${initials(respName(l.autor)||l.autor||'?')}</span>
-        <div style="min-width:0"><div style="font-size:12.5px"><b>${esc(respName(l.autor)||l.autor)}</b> <span style="color:var(--txt-3)">· ${fmtDate(l.t)}${l.editado?' · edited':''}</span>${pdCanEditLog(l)&&PD_EDIT_LOG!==l.id?` <a onclick="pdEditLog('${escJs(l.id)}')" style="color:var(--txt-3);cursor:pointer;margin-left:6px">Edit</a>`:''}</div>${PD_EDIT_LOG===l.id?`<div style="position:relative;margin-top:4px"><textarea id="pdEditMsg" rows="3" oninput="pdMentionInput(this,'${escJs(p.id)}')" onblur="pdMentionBlur()" style="width:100%;box-sizing:border-box;background:#0c1222;border:1px solid rgba(255,255,255,.2);border-radius:8px;outline:none;color:var(--txt);font:inherit;font-size:13.5px;padding:8px 10px;resize:vertical">${esc(l.txt)}</textarea><div style="display:flex;gap:8px;margin-top:6px"><button class="btn-acc" style="padding:5px 12px;font-size:12.5px;box-shadow:none" onclick="pdSaveLog('${escJs(p.id)}','${escJs(l.id)}')">Save</button><button class="btn-ghost" style="padding:5px 12px;font-size:12.5px" onclick="pdCancelEditLog()">Cancel</button></div></div>`:`<div style="font-size:13.5px;color:var(--txt-soft);margin-top:1px">${fmtLogTxt(l.txt)}</div>`}</div>
+        <div style="min-width:0"><div style="font-size:12.5px"><b>${esc(respName(l.autor)||l.autor)}</b> <span style="color:var(--txt-3)">· ${fmtDate(l.t)}${l.editado?' · edited':''}</span>${pdCanEditLog(l)&&PD_EDIT_LOG!==l.id?` <a onclick="pdEditLog('${escJs(l.id)}')" style="color:var(--txt-3);cursor:pointer;margin-left:6px">Edit</a> <a onclick="pdDeleteLog('${escJs(p.id)}','${escJs(l.id)}')" style="color:var(--txt-3);cursor:pointer;margin-left:4px">Delete</a>`:''}</div>${PD_EDIT_LOG===l.id?`<div style="position:relative;margin-top:4px"><textarea id="pdEditMsg" rows="3" oninput="pdMentionInput(this,'${escJs(p.id)}')" onblur="pdMentionBlur()" style="width:100%;box-sizing:border-box;background:#0c1222;border:1px solid rgba(255,255,255,.2);border-radius:8px;outline:none;color:var(--txt);font:inherit;font-size:13.5px;padding:8px 10px;resize:vertical">${esc(l.txt)}</textarea><div style="display:flex;gap:8px;margin-top:6px"><button class="btn-acc" style="padding:5px 12px;font-size:12.5px;box-shadow:none" onclick="pdSaveLog('${escJs(p.id)}','${escJs(l.id)}')">Save</button><button class="btn-ghost" style="padding:5px 12px;font-size:12.5px" onclick="pdCancelEditLog()">Cancel</button></div></div>`:`<div style="font-size:13.5px;color:var(--txt-soft);margin-top:1px">${fmtLogTxt(l.txt)}</div>`}</div>
       </div>`).join(''):'<div class="empty">No updates yet.</div>'}
     </div>
     <div style="position:relative;display:flex;gap:8px;margin-top:auto;padding:8px;border-radius:12px;background:#0c1222;border:1px solid rgba(255,255,255,.12)">
