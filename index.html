@@ -2682,13 +2682,59 @@ async function pdToggleTask(pid,tid,sid){
 async function pdPostMessage(pid){
   const p=DATA.projetos.find(x=>x.id===pid); if(!p)return;
   const ta=$('#pdMsg'); if(!ta)return; const txt=(ta.value||'').trim(); if(!txt)return;
-  const men=pmMentionScan(txt);
+  const men=pmMentionScan(txt,p);
   p.logs=p.logs||[];
   p.logs.push({id:uid(),txt,autor:(currentUser&&currentUser.email)||'you',t:new Date().toISOString().slice(0,10),ts:new Date().toISOString(),mencoes:men.map(m=>({nome:m.nome,email:m.email||''}))});
   await pdPersist(p);
   men.forEach(m=>{ if(m.email) notifyMarcacao(m.email,p.nome,txt); });
   go('projectdetail');
 }
+/* "@" autocomplete for the project page's message box — same idea as the
+   modal's (pmMentionInput) but fed from the project being viewed, since
+   there is no EDIT here. Only people already involved can be mentioned. */
+function pdMentionInput(ta,pid){
+  const dd=document.getElementById('pdMentionDD'); if(!dd)return;
+  const p=DATA.projetos.find(x=>x.id===pid); const q=pmMentionQuery(ta);
+  if(!p||q===null){ dd.style.display='none'; dd.innerHTML=''; return; }
+  const ql=q.toLowerCase();
+  const matches=mentionablePessoas(p).filter(pe=>(pe.nome||'').toLowerCase().includes(ql)).slice(0,8);
+  if(!matches.length){ dd.style.display='none'; dd.innerHTML=''; return; }
+  dd.innerHTML=matches.map(pe=>{const nome=pe.nome||pe.email;
+    return `<div onmousedown="event.preventDefault();pdMentionPick('${escJs(nome)}')" style="padding:8px 12px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--paper-2)'" onmouseout="this.style.background=''"><span class="avatar" style="width:20px;height:20px;font-size:9px;background:${avColor(nome)}">${initials(nome)}</span><span>${esc(nome)}</span>${pe.agencia?`<span style="color:var(--txt-3);font-size:11.5px">${esc(pe.agencia)}</span>`:''}</div>`;
+  }).join('');
+  dd.style.display='block';
+}
+function pdMentionBlur(){ const dd=document.getElementById('pdMentionDD'); if(dd)dd.style.display='none'; }
+function pdMentionPick(nome){
+  const ta=document.getElementById(PD_EDIT_LOG?'pdEditMsg':'pdMsg'); if(!ta)return;
+  const pos=ta.selectionStart, before=ta.value.slice(0,pos), after=ta.value.slice(pos);
+  const nb=before.replace(/@([^\s@]*)$/,'@'+nome+' ');
+  ta.value=nb+after; ta.focus(); ta.setSelectionRange(nb.length,nb.length);
+  pdMentionBlur();
+}
+/* Editing a message: only its author (or an admin) can, and the people the
+   new text mentions that the old one didn't get the e-mail now — nobody is
+   pinged twice for the same comment. */
+let PD_EDIT_LOG=null;
+function pdCanEditLog(l){
+  const me=((currentUser&&currentUser.email)||'').toLowerCase();
+  return !VIEW_AS&&!!l&&!!l.id&&((l.autor||'').toLowerCase()===me||PAPEL==='admin');
+}
+function pdEditLog(lid){ PD_EDIT_LOG=lid; go('projectdetail'); }
+async function pdSaveLog(pid,lid){
+  const p=DATA.projetos.find(x=>x.id===pid); const l=p&&(p.logs||[]).find(x=>x.id===lid);
+  const ta=document.getElementById('pdEditMsg'); if(!l||!ta||!pdCanEditLog(l))return;
+  const txt=(ta.value||'').trim(); if(!txt){ toast('A message can\'t be empty.'); return; }
+  if(txt!==l.txt){
+    const before=new Set((l.mencoes||[]).map(m=>(m.email||'').toLowerCase()));
+    const men=pmMentionScan(txt,p);
+    l.txt=txt; l.mencoes=men.map(m=>({nome:m.nome,email:m.email||''})); l.editado=new Date().toISOString();
+    await pdPersist(p);
+    men.forEach(m=>{ if(m.email&&!before.has(m.email.toLowerCase())) notifyMarcacao(m.email,p.nome,txt); });
+  }
+  PD_EDIT_LOG=null; go('projectdetail');
+}
+function pdCancelEditLog(){ PD_EDIT_LOG=null; go('projectdetail'); }
 async function pdLinkFund(pid,fid){
   const p=DATA.projetos.find(x=>x.id===pid); if(!p||!fid)return;
   p.fundos=[...new Set([...projFundIds(p),fid])]; p.campanha_id=''; await pdPersist(p); go('projectdetail');
@@ -2840,11 +2886,12 @@ function pdMessagesHTML(p){
     <div style="display:flex;flex-direction:column;gap:14px;max-height:420px;overflow-y:auto">
       ${logs.length?logs.map(l=>`<div style="display:grid;grid-template-columns:28px minmax(0,1fr);gap:10px">
         <span class="avatar" style="width:28px;height:28px;font-size:10px;background:${avColor(respName(l.autor)||l.autor)}">${initials(respName(l.autor)||l.autor||'?')}</span>
-        <div style="min-width:0"><div style="font-size:12.5px"><b>${esc(respName(l.autor)||l.autor)}</b> <span style="color:var(--txt-3)">· ${fmtDate(l.t)}</span></div><div style="font-size:13.5px;color:var(--txt-soft);margin-top:1px">${fmtLogTxt(l.txt)}</div></div>
+        <div style="min-width:0"><div style="font-size:12.5px"><b>${esc(respName(l.autor)||l.autor)}</b> <span style="color:var(--txt-3)">· ${fmtDate(l.t)}${l.editado?' · edited':''}</span>${pdCanEditLog(l)&&PD_EDIT_LOG!==l.id?` <a onclick="pdEditLog('${escJs(l.id)}')" style="color:var(--txt-3);cursor:pointer;margin-left:6px">Edit</a>`:''}</div>${PD_EDIT_LOG===l.id?`<div style="position:relative;margin-top:4px"><textarea id="pdEditMsg" rows="3" oninput="pdMentionInput(this,'${escJs(p.id)}')" onblur="pdMentionBlur()" style="width:100%;box-sizing:border-box;background:#0c1222;border:1px solid rgba(255,255,255,.2);border-radius:8px;outline:none;color:var(--txt);font:inherit;font-size:13.5px;padding:8px 10px;resize:vertical">${esc(l.txt)}</textarea><div style="display:flex;gap:8px;margin-top:6px"><button class="btn-acc" style="padding:5px 12px;font-size:12.5px;box-shadow:none" onclick="pdSaveLog('${escJs(p.id)}','${escJs(l.id)}')">Save</button><button class="btn-ghost" style="padding:5px 12px;font-size:12.5px" onclick="pdCancelEditLog()">Cancel</button></div></div>`:`<div style="font-size:13.5px;color:var(--txt-soft);margin-top:1px">${fmtLogTxt(l.txt)}</div>`}</div>
       </div>`).join(''):'<div class="empty">No updates yet.</div>'}
     </div>
-    <div style="display:flex;gap:8px;margin-top:auto;padding:8px;border-radius:12px;background:#0c1222;border:1px solid rgba(255,255,255,.12)">
-      <textarea id="pdMsg" rows="1" placeholder="Write a message, @ to mention" style="flex:1;background:transparent;border:none;outline:none;color:var(--txt);font:inherit;font-size:13.5px;resize:none;padding:6px 8px"></textarea>
+    <div style="position:relative;display:flex;gap:8px;margin-top:auto;padding:8px;border-radius:12px;background:#0c1222;border:1px solid rgba(255,255,255,.12)">
+      <div id="pdMentionDD" style="display:none;position:absolute;left:0;right:0;bottom:100%;margin-bottom:4px;background:#0f1628;border:1px solid rgba(255,255,255,.14);border-radius:10px;box-shadow:0 20px 50px -12px rgba(0,0,0,.9);max-height:190px;overflow-y:auto;z-index:20"></div>
+      <textarea id="pdMsg" rows="1" oninput="pdMentionInput(this,'${escJs(p.id)}')" onblur="pdMentionBlur()" placeholder="Write a message, @ to mention" style="flex:1;background:transparent;border:none;outline:none;color:var(--txt);font:inherit;font-size:13.5px;resize:none;padding:6px 8px"></textarea>
       <button class="btn-acc" style="padding:7px 14px;font-size:13px;box-shadow:none;align-self:center" onclick="pdPostMessage('${escJs(p.id)}')">Send</button>
     </div>
   </div>`;
@@ -6049,9 +6096,9 @@ function pmDelSub(tid,sid){
    the full name) and blanks out whatever it claims; pass 2 falls back to
    bare "@First" against whatever's left, so an already-claimed "@Ana Ramos"
    can't also accidentally match a separate "Ana Costa". */
-function pmMentionScan(txt){
+function pmMentionScan(txt,proj){
   const esc2=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-  const people=mentionablePessoas();
+  const people=mentionablePessoas(proj);
   const out=[], seen=new Set(); let work=txt;
   people.forEach(pe=>{
     const nome=(pe.nome||'').trim();
@@ -6151,9 +6198,13 @@ function pmPickPerson(email,nome){
    (EDIT.envolvidos), not the whole org roster. Adding someone new to the
    project still goes through "+ tag someone" (taggablePessoas(), unchanged);
    @mention in a comment now only reaches people already on that list. */
-function mentionablePessoas(){
-  if(!EDIT)return[];
-  return (EDIT.envolvidos||[]).map(e=>{
+function mentionablePessoas(proj){
+  const src=proj||EDIT;
+  if(!src)return[];
+  const list=(src.envolvidos||[]).slice();
+  const ow=String(src.owner||'').trim();
+  if(ow.includes('@')&&!list.some(e=>(e.email||'').toLowerCase()===ow.toLowerCase())) list.unshift({email:ow});
+  return list.map(e=>{
     const pe=pessoaByEmail(e.email)||{};
     return {email:e.email,nome:e.nome||[pe.nome,pe.sobrenome].filter(Boolean).join(' ')||e.email,agencia:pe.agencia};
   });
