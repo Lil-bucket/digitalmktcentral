@@ -8256,15 +8256,18 @@ function ccAggregate(opt){
       if(!p.cc&&!p.account&&!p.account_desc)return;
       if(!keepCat(p.product_category))return;
       const desc=ccEffDesc(p);
-      const key=accKey(p.cc,p.account,desc);
+      /* Matriz (LABG) funds that never had a cost center filled in belong to
+         1109123033 — the stored value still wins when there is one. */
+      const pcc=p.cc||(p.product_category===CC_LABG?CC_LABG_CC:'');
+      const key=accKey(pcc,p.account,desc);
       (DATA.tetos||[]).filter(t=>t.fund_id===p.id).forEach(t=>{
         const m=String(t.competencia).slice(0,7);
-        const a=slot(key,p.cc,p.account,desc,p.product_category);
+        const a=slot(key,pcc,p.account,desc,p.product_category);
         a.months[m]=(a.months[m]||0)+(+t.teto||0);
         addDetB(a,m,p,p.product_category||'',+t.teto||0);
       });
       Object.keys(consByMonth).forEach(m=>{
-        const a=slot(key,p.cc,p.account,desc,p.product_category);
+        const a=slot(key,pcc,p.account,desc,p.product_category);
         a.cons[m]=(a.cons[m]||0)+consByMonth[m];
         (posByMonth[m]||[]).forEach(po=>addDet(a,m,{po,proj:p,categoria:p.product_category||'',ratio:1,share:(+po.valor||0)}));
       });
