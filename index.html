@@ -1846,12 +1846,12 @@ document.addEventListener('visibilitychange',()=>{ if(!document.hidden) refreshA
 const W_LABELS={dash:'Dashboard',board:'Board',list:'List',timeline:'Timeline',team:'Team',weekly:'Weekly Status',mytasks:'Tasks',agencywork:'Assigned Work',notif:'Notifications'};
 const B_LABELS={saldos:'Balance decisions',bo:'Overview',budgets:'Categories',costcenter:'Cost center',funds:'Funds',campanhas:'Timeline',pos:'POs & Approvals',approvals:'Approvals',podesk:'PO Desk',people:'People & Roles',reqpo:'Request PO',mypos:'My POs',balance:'Balance'};
 const ROLE_NAV={
-  admin:      {work:['dash','list','timeline','team','weekly','mytasks'], budget:['bo','costcenter','budgets','campanhas','funds','pos','saldos','people']},
+  admin:      {work:['dash','list','timeline','team','weekly','mytasks'], budget:['bo','costcenter','budgets','funds','pos','saldos','people']},
   /* Cost center is Admin, Marketing and Finance only (agencies and TCL Member
      never get it). Editing rateios stays admin-only inside the screen (canFee). */
-  marketing:  {work:['dash','list','timeline','weekly','mytasks'],        budget:['bo','costcenter','budgets','campanhas','funds','pos','saldos']},
+  marketing:  {work:['dash','list','timeline','weekly','mytasks'],        budget:['bo','costcenter','budgets','funds','pos','saldos']},
   financeiro: {work:[],                                                          budget:['bo','costcenter','funds','pos']},
-  agencia:    {work:['dash','list','timeline','mytasks'],               budget:['bo','campanhas','funds','pos']},
+  agencia:    {work:['dash','list','timeline','mytasks'],               budget:['bo','funds','pos']},
   /* TCL Member: internal staff with Work-only access, no Budget nav at all —
      Budget's own RLS policies are role allow-lists that never mention this
      role, so it has zero Budget access even if someone typed the screen id
@@ -1899,7 +1899,7 @@ const NAV_HUBS=[
      the 'weekly' screen to Admin and Marketing only, so the tab row only
      appears for them and nobody else can open the screen. */
   {id:'list',label:'Projects',screens:['list','timeline','weekly']},
-  {id:'bo',label:'Budget',screens:['bo','budgets','costcenter','campanhas','funds','saldos']},
+  {id:'bo',label:'Budget',screens:['bo','budgets','costcenter','funds','saldos']},
   {id:'pos',label:'POs',screens:['pos','mypos','reqpo']},
   {id:'mytasks',label:'Notes',screens:['mytasks']},
   {id:'team',label:'Team',screens:['team'],tag:'ADMIN'},
@@ -3182,7 +3182,7 @@ const actMeta=a=>ACT_META[a]||{icon:'tag',label:a||'—'};
    funds. Searching or filtering opens whatever matches, so a query never
    hides its own results. */
 let FUND_Q='', FUND_OPEN={};
-let FUND_VIEW=(function(){try{const v=localStorage.getItem('fund_view')||'cat';return v==='list'?'cat':v;}catch(e){return 'cat';}})();
+let FUND_VIEW=(function(){try{const v=localStorage.getItem('fund_view')||'cat';return (v==='list'||v==='camp')?'cat':v;}catch(e){return 'cat';}})();
 /* Both filters hold a LIST. Picking one activity used to replace the one
    before it, so "KOL and AON" or "TV and AC" — the way anyone actually reads
    a budget — meant looking twice and adding the totals by hand. Empty list
@@ -3339,7 +3339,7 @@ function renderFunds(){
   FUND_CTX={list,tetoBy,consBy,compBy,pendBy};
   return fundRejeitadosHTML()+fundKpisHTML()+`
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
-      <div style="display:flex;gap:6px">${[['cat','Categories'],['camp','Campaigns'],['tl','Timeline']].map(v=>`<button onclick="fundSetView('${v[0]}')" style="padding:8px 13px;border-radius:8px;border:1px solid ${FUND_VIEW===v[0]?'var(--po)':'var(--line-2)'};background:${FUND_VIEW===v[0]?'var(--po-soft)':'var(--card)'};color:${FUND_VIEW===v[0]?'var(--red)':'var(--txt-2)'};font-size:12px;font-weight:700;cursor:pointer">${v[1]}</button>`).join('')}</div>
+      <div style="display:flex;gap:6px">${[['cat','Categories'],['tl','Timeline']].map(v=>`<button onclick="fundSetView('${v[0]}')" style="padding:8px 13px;border-radius:8px;border:1px solid ${FUND_VIEW===v[0]?'var(--po)':'var(--line-2)'};background:${FUND_VIEW===v[0]?'var(--po-soft)':'var(--card)'};color:${FUND_VIEW===v[0]?'var(--red)':'var(--txt-2)'};font-size:12px;font-weight:700;cursor:pointer">${v[1]}</button>`).join('')}</div>
       <div style="position:relative;flex:1;max-width:340px;min-width:200px">
         <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--txt-3);display:flex">${icn('search',14)}</span>
         <input id="fundQ" value="${esc(FUND_Q)}" oninput="fundSearch(this.value)" placeholder="Search fund, agency…" style="width:100%;padding:9px 12px 9px 34px;border-radius:10px;border:1px solid var(--line-2);background:var(--card);font-size:13px;font-family:inherit;outline:none">
@@ -3370,7 +3370,6 @@ function renderCampBody(){
   const q=FUND_Q;
   const fl=fundVisible();
   if(FUND_VIEW==='tl') return fundTimelineHTML(fl,q);
-  if(FUND_VIEW==='camp') return fundCampBodyHTML(fl);
   const catOf=p=>(String(p.product_category||'').trim())||'Uncategorized';
   const byCat={};
   fl.forEach(p=>{ (byCat[catOf(p)]=byCat[catOf(p)]||[]).push(p); });
@@ -9724,7 +9723,6 @@ function renderBudgets(){
     ${chips}
     ${hero}
     <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:stretch">${monthCard}${actCard}</div>
-    ${budgetCategoryCampaignsHTML(list)}
   </div>`;
 }
 /* Export (read-only) — mirrors renderBudgets' own aggregation exactly, transcribes
