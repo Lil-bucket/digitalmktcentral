@@ -4537,7 +4537,6 @@ function renderCampEditForm(){
         <div class="field"><label>Activity</label><select onchange="fundEditActivity(this.value)">${ACT_OPTS.map(a=>`<option value="${esc(a)}" ${ce.activity===a?'selected':''}>${esc(actColLabel(a))}</option>`).join('')}</select></div>
         <div class="field"><label>Agency</label><select onchange="fundEditSet('agencia',this.value)">${ags.map(a=>`<option ${ce.agencia===a?'selected':''}>${esc(a)}</option>`).join('')}${ags.length?'':'<option value="">—</option>'}</select></div>
       </div>
-      <div class="field full" style="margin-top:14px"><label>Campaign <span style="font-weight:600;color:var(--txt-3)">(optional grouping)</span></label><select onchange="fundEditSet('campanha_id',this.value)"><option value="" ${!ce.campanha_id?'selected':''}>— none —</option>${(DATA.campanhas||[]).map(c=>`<option value="${c.id}" ${ce.campanha_id===c.id?'selected':''}>${esc(c.nome)}</option>`).join('')}</select></div>
       ${classField}
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">Was: <b>${esc((DATA.poProjetos.find(x=>x.id===ce.id)||{}).product_category||'—')}</b>. Months and total value stay the same.</div>
     </div>
@@ -9365,7 +9364,7 @@ function renderBudgetOverview(isBalance){
   kpis.push({label:'Consumed',value:BRLc(consumido),sub:`${pctOf(consumido,orcado)} · invoiced`,sw:'#4d7dff',onclick:"openBucketDetail('cons')",title:'POs invoiced, validated or completed. Click for the POs behind it.'});
   kpis.push({label:'Committed',value:BRLc(compTot),sub:`${pctOf(compTot,orcado)} · POs approved`,sw:'#a685ff',onclick:"openBucketDetail('comp')",title:'POs approved or issued, not yet invoiced. Click for the POs behind it.'});
   kpis.push({label:'Available',value:BRLc(disp),sub:BO_PER.mode!=='all'?'whole-period figure':(disp<0?'over-allocated':'free to allocate'),sw:'rgba(255,255,255,.2)',c:disp<0?'#ff5c6c':'',onclick:'openAvailableByCat()',title:'Budget not placed anywhere yet: approved on funds but not laid out across months, plus budget never given to a fund. Click for the categories holding it.'});
-  kpis.push({label:'Provisioned',value:BRLc(alocado),sub:'unspent, on campaign funds',sw:'rgba(47,216,138,.55)',onclick:'openProvisionedDetail()',size:18,title:'Unspent budget on funds already linked to a campaign. Click for the campaigns holding it.'});
+  kpis.push({label:'Provisioned',value:BRLc(alocado),sub:'unspent, on provisioned funds',sw:'rgba(47,216,138,.55)',onclick:'openProvisionedDetail()',size:18,title:'Unspent budget on funds already grouped for provisioning. Click for the detail.'});
   if(teto) kpis.push({label:'Budget ceiling',value:BRLc(teto),sub:'registered budgets · whole period',sw:'transparent',bd:'1px dashed rgba(255,255,255,.4)',size:18,title:'Total registered on the budgets themselves. The period filter does not apply to it.'});
   kpis.push({label:'Awaiting approval',value:BRLc(pend),sub:'pending POs · not in the bar',sw:'#ffb020',size:18,title:'POs requested and waiting for a decision — shown apart, never added to Committed.'});
   const base=(seeCut?aprov:orcado)||1;
@@ -9690,7 +9689,6 @@ function renderBudgets(){
   let cut=0; if(seeCut) list.forEach(p=>{ const cm=fundMonthlyCuts(p.id); Object.keys(cm).forEach(k=>cut+=cm[k]); });
   const aprov=t.tot+cut, av=t.tot-t.cons-t.comp;
   const pctOf=(v,bs)=>bs?(v/bs*100).toFixed(1)+'%':'—';
-  const campN=new Set(list.map(p=>p.campanha_id).filter(Boolean)).size;
   const kpis=[];
   if(seeCut){ kpis.push({label:'Approved',value:BRLc(aprov),sub:'gross',sw:'transparent',bd:'2px solid #eef1f8',size:21}); kpis.push({label:'Cut',value:BRLc(cut),sub:`${pctOf(cut,aprov)} of approved`,sw:'#ff3b4e',size:21}); }
   kpis.push({label:'Budgeted',value:BRLc(t.tot),sub:orcTot?`net · ceiling ${BRLc(orcTot)}`:'net',sw:'#eef1f8',size:21});
@@ -9702,7 +9700,7 @@ function renderBudgets(){
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span style="width:12px;height:12px;border-radius:50%;background:${m.c};box-shadow:0 0 12px ${m.c}"></span>
       <span style="font-size:24px;font-weight:800;letter-spacing:-.02em">${esc(orc?catKeyLabel(orc.nome||m.label):catKeyLabel(m.label))}</span>
-      <span style="font-size:13px;color:var(--txt-2)">${campN?`${campN} campaign${campN===1?'':'s'} · `:''}${list.length} fund${list.length===1?'':'s'} · ${(t.tot/grand*100).toFixed(1)}% of the budget</span>
+      <span style="font-size:13px;color:var(--txt-2)">${list.length} fund${list.length===1?'':'s'} · ${(t.tot/grand*100).toFixed(1)}% of the budget</span>
       <span style="flex:1"></span>
       ${canBudget&&orc?`<button class="chip-sel" onclick="openOrcEdit('${escJs(orc.id)}')">Edit budget</button>`:''}
       <button class="chip-sel" style="color:var(--txt)" onclick="jumpToFunds('${escJs(BUDGET_CAT)}','')">View funds →</button>
@@ -10088,7 +10086,6 @@ function renderCampForm(){
         <div class="field"><label>Activity</label><select onchange="fundSet('activity',this.value)">${ACT_OPTS.map(a=>`<option value="${esc(a)}" ${FUND.activity===a?'selected':''}>${esc(actColLabel(a))}</option>`).join('')}</select></div>
         <div class="field"><label>Agency</label><select onchange="FUND.agencia=this.value">${ags.map(a=>`<option ${FUND.agencia===a?'selected':''}>${esc(a)}</option>`).join('')}${ags.length?'':'<option value="">—</option>'}</select></div>
       </div>
-      <div class="field full" style="margin-top:14px"><label>Campaign <span style="font-weight:600;color:var(--txt-3)">(optional grouping)</span></label><select onchange="FUND.campanha_id=this.value"><option value="" ${!FUND.campanha_id?'selected':''}>— none —</option>${(DATA.campanhas||[]).map(c=>`<option value="${c.id}" ${FUND.campanha_id===c.id?'selected':''}>${esc(c.nome)}</option>`).join('')}</select></div>
       <div class="field full"><label>Category <span style="font-weight:600;color:var(--txt-3)">(defines which budget funds it)</span></label><select onchange="fundSet('orcamento_id',this.value)">${orcs.map(o=>`<option value="${o.id}" ${FUND.orcamento_id===o.id?'selected':''}>${esc(o.nome||o.product_category)}</option>`).join('')||'<option value="">— no budget —</option>'}</select>${/fee/i.test(FUND.activity||'')?'<div style="font-size:11.5px;color:var(--txt-3);margin-top:8px">Splitting a fee across categories (TV/AC/LABG…) is now done automatically when requesting the PO — create one fund per category instead of a shared rateio.</div>':''}</div>
       <div style="border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:6px">
         <div style="padding:10px 14px;background:var(--paper-2);border-bottom:1px solid var(--line);font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">Budget distribution by month — manual</div>
