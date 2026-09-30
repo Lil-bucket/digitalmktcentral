@@ -9254,6 +9254,41 @@ function v2KpiGrid(kpis){
 function v2Bar(segs,h){
   return `<div style="display:flex;height:${h||16}px;border-radius:6px;overflow:hidden;background:rgba(255,255,255,.1)">${segs.filter(x=>x.w>0).map(x=>`<div title="${esc(x.t||'')}" style="width:${Math.max(0,Math.min(100,x.w)).toFixed(2)}%;background:${x.bg};box-shadow:inset -3px 0 0 #10172a"></div>`).join('')}</div>`;
 }
+/* Budget waterfall — the one way both Budget screens read the money, top to
+   bottom: Budget total → Cuts → Budget balance → Allocated to projects
+   (Consumed · Approved POs · Provisioned) → Available. Every bar is scaled to
+   the total and offset where the previous step left off, so the eye follows
+   the money down. Available is the balance minus what is allocated, so the
+   column always adds up on screen. Pending POs stay a footnote (D2). */
+function v2BudgetFlow(o){
+  const total=o.total||0, cut=o.cut||0, cons=o.cons||0, comp=o.comp||0, prov=o.prov||0;
+  const saldo=total-cut, alloc=cons+comp+prov, avail=saldo-alloc;
+  const base=total>0?total:1, pc=v=>Math.max(0,Math.min(100,v/base*100));
+  const seeCut=!!o.seeCut, over=avail<-0.005;
+  const CONS='#4d7dff', COMP='#a685ff', PROV='rgba(47,216,138,.6)', AVL=over?'#ff5c6c':'rgba(255,255,255,.38)';
+  const seg=(l,w,bg)=>w>0.05?`<div style="position:absolute;top:0;bottom:0;left:${l.toFixed(2)}%;width:${w.toFixed(2)}%;background:${bg};box-shadow:inset -2px 0 0 #10172a"></div>`:'';
+  const row=r=>`<div ${r.onclick?`onclick="${r.onclick}" `:''}${r.title?`title="${esc(r.title)}" `:''}style="display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1.5fr) 112px 54px;gap:14px;align-items:center;padding:${r.big?'14px 0 4px':r.child?'6px 0':'10px 0'};${r.line?'border-top:1px solid rgba(255,255,255,.12);margin-top:6px;':''}${r.onclick?'cursor:pointer;':''}">
+    <div style="min-width:0;padding-left:${r.child?26:0}px;display:flex;align-items:center;gap:9px">
+      ${r.child?'<span style="color:var(--txt-3);font-size:12px;margin-left:-16px;width:12px">└</span>':''}
+      <span style="width:${r.child?9:11}px;height:${r.child?9:11}px;border-radius:3px;flex-shrink:0;background:${r.sw};border:${r.bd||'none'}"></span>
+      <span style="min-width:0"><span style="display:block;font-size:${r.big?15:r.child?12.5:13.5}px;font-weight:${r.child?500:700};color:${r.child?'var(--txt-2)':'var(--txt)'}">${esc(r.label)}${r.onclick?' <span style="color:var(--txt-3);font-size:11px">→</span>':''}</span>${r.sub?`<span style="display:block;font-size:11px;color:var(--txt-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.sub)}</span>`:''}</span>
+    </div>
+    <div style="position:relative;height:${r.child?8:r.big?16:11}px;border-radius:5px;background:rgba(255,255,255,.06);overflow:hidden">${r.segs}</div>
+    <div class="mono" title="${esc(BRL(r.v))}" style="text-align:right;white-space:nowrap;font-size:${r.big?22:r.child?13:15}px;font-weight:${r.child?600:700};letter-spacing:-.02em;color:${r.c||(r.child?'var(--txt-2)':'var(--txt)')}">${(r.neg||r.v<-0.005)?'− ':''}${BRLc(Math.abs(r.v))}</div>
+    <div class="mono" style="text-align:right;font-size:11.5px;color:var(--txt-3)">${total>0?(r.v/base*100).toFixed(1)+'%':'—'}</div>
+  </div>`;
+  const rows=[];
+  rows.push(row({label:'Budget total',sub:o.totalSub||'',v:total,sw:'transparent',bd:'2px solid #eef1f8',segs:seg(0,100,'rgba(238,241,248,.85)')}));
+  if(seeCut&&cut>0.005) rows.push(row({label:'Cuts',sub:'taken back from months',v:cut,neg:true,c:'#ff8a96',sw:'#ff3b4e',segs:seg(pc(saldo),pc(cut),V2_HATCH),onclick:o.cutClick,title:'Budget taken back from specific months. Click for what was cut and why.'}));
+  if(seeCut) rows.push(row({label:'Budget balance',sub:'total − cuts',v:saldo,sw:'#eef1f8',segs:seg(0,pc(saldo),'rgba(238,241,248,.55)')}));
+  rows.push(row({label:'Allocated to projects',sub:'consumed + approved POs + provisioned',v:alloc,sw:'linear-gradient(90deg,#4d7dff 50%,#a685ff 50%)',segs:seg(0,pc(cons),CONS)+seg(pc(cons),pc(comp),COMP)+seg(pc(cons+comp),pc(prov),PROV)}));
+  rows.push(row({child:1,label:'Consumed',sub:'invoiced, validated or completed',v:cons,sw:CONS,segs:seg(0,pc(cons),CONS),onclick:o.consClick,title:'POs invoiced, validated or completed. Click for the POs behind it.'}));
+  rows.push(row({child:1,label:'Approved POs',sub:'approved or issued, not yet invoiced',v:comp,sw:COMP,segs:seg(pc(cons),pc(comp),COMP),onclick:o.compClick,title:'POs approved or issued, not yet invoiced. Click for the POs behind it.'}));
+  rows.push(row({child:1,label:'Provisioned',sub:'unspent, on funds claimed by a project',v:prov,sw:PROV,c:prov<-0.005?'#ff8a96':'',segs:seg(pc(cons+comp),pc(prov),PROV),onclick:o.provClick,title:'Unspent budget on funds already grouped under a project. Click for the detail.'}));
+  rows.push(row({big:1,line:1,label:'Available',sub:over?'over-allocated — more than the balance':'balance − allocated · free to place',v:avail,c:over?'#ff5c6c':'#2fd88a',sw:over?'#ff5c6c':'rgba(255,255,255,.38)',segs:over?seg(Math.max(0,100-pc(-avail)),pc(-avail),'#ff5c6c'):seg(pc(alloc),pc(avail),AVL),title:'Budget balance minus everything allocated to projects.'}));
+  return `<div>${rows.join('')}</div>
+    ${o.pend>0.005?`<div style="margin-top:12px;font-size:12px;color:var(--txt-3);display:flex;align-items:center;gap:8px"><span style="width:9px;height:9px;border-radius:3px;background:#ffb020;flex-shrink:0"></span>Awaiting approval <b class="mono" style="color:var(--txt-2)">${BRLc(o.pend)}</b> — pending POs, not counted above</div>`:''}`;
+}
 /* The glowing hero block every Budget screen opens with. */
 function v2Hero(inner,opt){
   opt=opt||{};
@@ -9413,28 +9448,19 @@ function renderBudgetOverview(isBalance){
   const seeCut=canSeeCorte();
   let cutTot=0; if(seeCut) funds.forEach(p=>{ const cm=fundMonthlyCuts(p.id); Object.keys(cm).forEach(m=>{ if(boInPeriod(m+'-01')) cutTot+=cm[m]; }); });
   const aprov=orcado+cutTot;
-  const disp=livre+naoAlocTot;
   const teto=isAg?0:(DATA.orcamentos||[]).filter(o=>boScopeKeep((String(o.product_category||o.nome||'').trim())||'Uncategorized')).reduce((s2,o)=>s2+(+o.valor_total||0),0);
-  const pctOf=(v,base)=>base?(v/base*100).toFixed(1)+'%':'—';
-  const kpis=[];
-  if(seeCut){
-    kpis.push({label:'Approved',value:BRLc(aprov),sub:'gross',sw:'transparent',bd:'2px solid #eef1f8',title:'Budgeted plus everything cut from it — what the funds were approved for'});
-    kpis.push({label:'Cut',value:BRLc(cutTot),sub:`${pctOf(cutTot,aprov)} of approved`,sw:'#ff3b4e',onclick:cutTot?'openCutDetail()':'',title:'Budget taken back from specific months. Click for what was cut and why.'});
-  }
-  kpis.push({label:isBalance?'Allocated':'Budgeted',value:BRLc(orcado),sub:'net total',sw:'#eef1f8',title:'Budget laid out on the months of approved funds, already net of anything cut'});
-  kpis.push({label:'Consumed',value:BRLc(consumido),sub:`${pctOf(consumido,orcado)} · invoiced`,sw:'#4d7dff',onclick:"openBucketDetail('cons')",title:'POs invoiced, validated or completed. Click for the POs behind it.'});
-  kpis.push({label:'Committed',value:BRLc(compTot),sub:`${pctOf(compTot,orcado)} · POs approved`,sw:'#a685ff',onclick:"openBucketDetail('comp')",title:'POs approved or issued, not yet invoiced. Click for the POs behind it.'});
-  kpis.push({label:'Available',value:BRLc(disp),sub:BO_PER.mode!=='all'?'whole-period figure':(disp<0?'over-allocated':'free to allocate'),sw:'rgba(255,255,255,.2)',c:disp<0?'#ff5c6c':'',onclick:'openAvailableByCat()',title:'Budget not placed anywhere yet: approved on funds but not laid out across months, plus budget never given to a fund. Click for the categories holding it.'});
-  kpis.push({label:'Provisioned',value:BRLc(alocado),sub:'unspent, on provisioned funds',sw:'rgba(47,216,138,.55)',onclick:'openProvisionedDetail()',size:18,title:'Unspent budget on funds already grouped for provisioning. Click for the detail.'});
-  if(teto) kpis.push({label:'Budget ceiling',value:BRLc(teto),sub:'registered budgets · whole period',sw:'transparent',bd:'1px dashed rgba(255,255,255,.4)',size:18,title:'Total registered on the budgets themselves. The period filter does not apply to it.'});
-  kpis.push({label:'Awaiting approval',value:BRLc(pend),sub:'pending POs · not in the bar',sw:'#ffb020',size:18,title:'POs requested and waiting for a decision — shown apart, never added to Committed.'});
-  const base=(seeCut?aprov:orcado)||1;
-  const unspent=Math.max(0,orcado-consumido-compTot);
-  const bar=v2Bar([{w:consumido/base*100,bg:'#4d7dff',t:'Consumed'},{w:compTot/base*100,bg:'#a685ff',t:'Committed'},{w:unspent/base*100,bg:'rgba(255,255,255,.16)',t:'Unspent'},...(seeCut?[{w:cutTot/base*100,bg:V2_HATCH,t:'Cut'}]:[])]);
+  /* Total is the registered ceiling when the whole period is on screen; a
+     period filter can't slice that ceiling, so it falls back to what the funds
+     were approved for in the window. Without cut visibility the total is shown
+     already net, so the column still adds up. */
+  const useCeil=teto>0&&BO_PER.mode==='all';
+  const flowTotal=(useCeil?teto:aprov)-(seeCut?0:cutTot);
+  const flow=v2BudgetFlow({total:flowTotal,cut:seeCut?cutTot:0,cons:consumido,comp:compTot,prov:alocado,pend:pend,seeCut,
+    totalSub:useCeil?'registered on the budgets':(BO_PER.mode==='all'?'approved on funds':'approved on funds · '+boPerLabel()),
+    cutClick:cutTot?'openCutDetail()':'',consClick:"openBucketDetail('cons')",compClick:"openBucketDetail('comp')",provClick:'openProvisionedDetail()'});
   const excedente=(()=>{ if(isAg||BO_PER.mode!=='all')return 0; const totOrc=(DATA.orcamentos||[]).reduce((s2,o)=>s2+(+o.valor_total||0),0); const e=aprov-totOrc; return totOrc&&e>=1?e:0; })();
-  const hero=v2Hero(`${v2KpiGrid(kpis)}
-    <div style="margin-top:20px">${bar}</div>
-    <div class="mono" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--txt-3);margin-top:6px"><span>0</span><span>budgeted ${BRLc(orcado)}${seeCut?` ┤ cut ${BRLc(cutTot)} ┤ approved ${BRLc(aprov)}`:''}</span></div>
+  const hero=v2Hero(`<div class="v2-card-eyebrow">budget flow · from total to available</div>
+    <div style="margin-top:10px">${flow}</div>
     ${excedente?`<div style="margin-top:10px;font-size:12px;color:#ff8a96;font-weight:600">Funds hold <b class="mono">${BRL(excedente)}</b> more than the registered budgets total.</div>`:''}`);
   /* Alerts (over cap / near cap / unused past months) — kept, as one quiet
      list card under the hero instead of a stack of coloured banners. */
@@ -9748,15 +9774,11 @@ function renderBudgets(){
   const orcTot=orc?(+orc.valor_total||0):0;
   const seeCut=canSeeCorte();
   let cut=0; if(seeCut) list.forEach(p=>{ const cm=fundMonthlyCuts(p.id); Object.keys(cm).forEach(k=>cut+=cm[k]); });
-  const aprov=t.tot+cut, av=t.tot-t.cons-t.comp;
-  const pctOf=(v,bs)=>bs?(v/bs*100).toFixed(1)+'%':'—';
-  const kpis=[];
-  if(seeCut){ kpis.push({label:'Approved',value:BRLc(aprov),sub:'gross',sw:'transparent',bd:'2px solid #eef1f8',size:21}); kpis.push({label:'Cut',value:BRLc(cut),sub:`${pctOf(cut,aprov)} of approved`,sw:'#ff3b4e',size:21}); }
-  kpis.push({label:'Budgeted',value:BRLc(t.tot),sub:orcTot?`net · ceiling ${BRLc(orcTot)}`:'net',sw:'#eef1f8',size:21});
-  kpis.push({label:'Consumed',value:BRLc(t.cons),sub:pctOf(t.cons,t.tot),sw:'#4d7dff',size:21});
-  kpis.push({label:'Committed',value:BRLc(t.comp),sub:pctOf(t.comp,t.tot)+(t.pnd>0.005?` · ${BRLc(t.pnd)} pending`:''),sw:'#a685ff',size:21});
-  kpis.push({label:'Available',value:BRLc(av),sub:`${pctOf(av,t.tot)} · free`,sw:'rgba(255,255,255,.2)',c:av<0?'#ff5c6c':'',size:21});
-  const base=(seeCut?aprov:t.tot)||1;
+  const aprov=t.tot+cut;
+  let prov=0; list.forEach(p=>{ if(p.campanha_id) prov+=(tetoBy[p.id]||0)-(consBy[p.id]||0)-(compBy[p.id]||0)-(pendBy[p.id]||0); });
+  const flow=v2BudgetFlow({total:(orcTot>0?orcTot:aprov)-(seeCut?0:cut),cut:seeCut?cut:0,cons:t.cons,comp:t.comp,prov,pend:t.pnd,seeCut,
+    totalSub:orcTot>0?'registered on this budget':'approved on funds',
+    cutClick:'',consClick:'',compClick:'',provClick:''});
   const hero=`<div style="border-radius:18px;padding:22px 26px;border:1px solid ${m.c}66;background:radial-gradient(36rem 14rem at 100% 0%,${m.c}2e,transparent 60%),#10172a">
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span style="width:12px;height:12px;border-radius:50%;background:${m.c};box-shadow:0 0 12px ${m.c}"></span>
@@ -9766,8 +9788,7 @@ function renderBudgets(){
       ${canBudget&&orc?`<button class="chip-sel" onclick="openOrcEdit('${escJs(orc.id)}')">Edit budget</button>`:''}
       <button class="chip-sel" style="color:var(--txt)" onclick="jumpToFunds('${escJs(BUDGET_CAT)}','')">View funds →</button>
     </div>
-    <div style="margin-top:18px">${v2KpiGrid(kpis)}</div>
-    <div style="margin-top:18px">${v2Bar([{w:t.cons/base*100,bg:'#4d7dff',t:'Consumed'},{w:t.comp/base*100,bg:'#a685ff',t:'Committed'},{w:Math.max(0,av)/base*100,bg:'rgba(255,255,255,.16)',t:'Available'},...(seeCut?[{w:cut/base*100,bg:V2_HATCH,t:'Cut'}]:[])],14)}</div>
+    <div style="margin-top:14px">${flow}</div>
   </div>`;
   const byAct={}; list.forEach(p=>{const k=actKey(p);(byAct[k]=byAct[k]||[]).push(p);});
   const actOrder=Object.keys(byAct).sort((a,b)=>sums(byAct[b]).tot-sums(byAct[a]).tot);
