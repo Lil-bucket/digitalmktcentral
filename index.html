@@ -9263,31 +9263,35 @@ function v2Bar(segs,h){
 function v2BudgetFlow(o){
   const total=o.total||0, cut=o.cut||0, cons=o.cons||0, comp=o.comp||0, prov=o.prov||0;
   const saldo=total-cut, alloc=cons+comp+prov, avail=saldo-alloc;
-  const base=total>0?total:1, pc=v=>Math.max(0,Math.min(100,v/base*100));
   const seeCut=!!o.seeCut, over=avail<-0.005;
-  const CONS='#4d7dff', COMP='#a685ff', PROV='rgba(47,216,138,.6)', AVL=over?'#ff5c6c':'rgba(255,255,255,.38)';
-  const seg=(l,w,bg)=>w>0.05?`<div style="position:absolute;top:0;bottom:0;left:${l.toFixed(2)}%;width:${w.toFixed(2)}%;background:${bg};box-shadow:inset -2px 0 0 #10172a"></div>`:'';
-  const row=r=>`<div ${r.onclick?`onclick="${r.onclick}" `:''}${r.title?`title="${esc(r.title)}" `:''}style="display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1.5fr) 112px 54px;gap:14px;align-items:center;padding:${r.big?'14px 0 4px':r.child?'6px 0':'10px 0'};${r.line?'border-top:1px solid rgba(255,255,255,.12);margin-top:6px;':''}${r.onclick?'cursor:pointer;':''}">
-    <div style="min-width:0;padding-left:${r.child?26:0}px;display:flex;align-items:center;gap:9px">
-      ${r.child?'<span style="color:var(--txt-3);font-size:12px;margin-left:-16px;width:12px">└</span>':''}
-      <span style="width:${r.child?9:11}px;height:${r.child?9:11}px;border-radius:3px;flex-shrink:0;background:${r.sw};border:${r.bd||'none'}"></span>
-      <span style="min-width:0"><span style="display:block;font-size:${r.big?15:r.child?12.5:13.5}px;font-weight:${r.child?500:700};color:${r.child?'var(--txt-2)':'var(--txt)'}">${esc(r.label)}${r.onclick?' <span style="color:var(--txt-3);font-size:11px">→</span>':''}</span>${r.sub?`<span style="display:block;font-size:11px;color:var(--txt-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.sub)}</span>`:''}</span>
+  const base=total>0?total:1, pct=v=>total>0?(v/base*100).toFixed(1)+'%':'—';
+  const CONS='#4d7dff', COMP='#a685ff', PROV='rgba(47,216,138,.6)';
+  const big=(k)=>v2Kpi(Object.assign({size:28},k));
+  const op=t=>`<span class="mono" style="align-self:center;font-size:22px;color:var(--txt-3);padding-top:22px">${t}</span>`;
+  const cells=[];
+  cells.push(big({label:'Budget total',value:BRLc(total),sub:o.totalSub||'',sw:'transparent',bd:'2px solid #eef1f8',title:BRL(total)}));
+  if(seeCut){
+    cells.push(big({label:'Cuts',value:'− '+BRLc(cut),sub:pct(cut)+' of total',sw:'#ff3b4e',c:cut>0.005?'#ff8a96':'',onclick:cut>0.005?o.cutClick:'',title:'Budget taken back from specific months. Click for what was cut and why.'}));
+    cells.push(big({label:'Budget balance',value:BRLc(saldo),sub:'total − cuts',sw:'#eef1f8',title:BRL(saldo)}));
+  }
+  cells.push(big({label:'Allocated to projects',value:BRLc(alloc),sub:pct(alloc)+' of total',sw:`linear-gradient(90deg,${CONS} 50%,${COMP} 50%)`,title:BRL(alloc)}));
+  cells.push(big({label:'Available',value:(over?'− ':'')+BRLc(Math.abs(avail)),sub:over?'over-allocated':'balance − allocated · free to place',sw:'rgba(255,255,255,.38)',c:over?'#ff5c6c':'#2fd88a',title:BRL(avail)}));
+  const sub=[
+    {label:'Consumed',value:BRLc(cons),sub:pct(cons)+' · invoiced',sw:CONS,size:20,onclick:o.consClick,title:'POs invoiced, validated or completed. Click for the POs behind it.'},
+    {label:'Approved POs',value:BRLc(comp),sub:pct(comp)+' · not yet invoiced',sw:COMP,size:20,onclick:o.compClick,title:'POs approved or issued, not yet invoiced. Click for the POs behind it.'},
+    {label:'Provisioned',value:BRLc(prov),sub:pct(prov)+' · unspent, claimed by a project',sw:PROV,size:20,c:prov<-0.005?'#ff8a96':'',onclick:o.provClick,title:'Unspent budget on funds already grouped under a project. Click for the detail.'}
+  ];
+  const n=cells.length;
+  const seg=(w,bg,t)=>({w:Math.max(0,w)/base*100,bg,t});
+  const bar=v2Bar([seg(cons,CONS,'Consumed'),seg(comp,COMP,'Approved POs'),seg(prov,PROV,'Provisioned'),seg(avail,'rgba(255,255,255,.16)','Available'),...(seeCut?[seg(cut,V2_HATCH,'Cuts')]:[])],16);
+  return `<div style="display:grid;grid-template-columns:repeat(${n},minmax(0,1fr));gap:18px">${cells.join('')}</div>
+    <div style="margin:20px 0 0;padding:14px 18px;border-radius:12px;background:rgba(255,255,255,.04);border-left:3px solid ${COMP}">
+      <div class="v2-card-eyebrow" style="margin-bottom:10px">allocated to projects · breakdown</div>
+      ${v2KpiGrid(sub).replace('minmax(max(130px,calc(16.66% - 15px)),1fr)','minmax(150px,1fr)')}
     </div>
-    <div style="position:relative;height:${r.child?8:r.big?16:11}px;border-radius:5px;background:rgba(255,255,255,.06);overflow:hidden">${r.segs}</div>
-    <div class="mono" title="${esc(BRL(r.v))}" style="text-align:right;white-space:nowrap;font-size:${r.big?22:r.child?13:15}px;font-weight:${r.child?600:700};letter-spacing:-.02em;color:${r.c||(r.child?'var(--txt-2)':'var(--txt)')}">${(r.neg||r.v<-0.005)?'− ':''}${BRLc(Math.abs(r.v))}</div>
-    <div class="mono" style="text-align:right;font-size:11.5px;color:var(--txt-3)">${total>0?(r.v/base*100).toFixed(1)+'%':'—'}</div>
-  </div>`;
-  const rows=[];
-  rows.push(row({label:'Budget total',sub:o.totalSub||'',v:total,sw:'transparent',bd:'2px solid #eef1f8',segs:seg(0,100,'rgba(238,241,248,.85)')}));
-  if(seeCut&&cut>0.005) rows.push(row({label:'Cuts',sub:'taken back from months',v:cut,neg:true,c:'#ff8a96',sw:'#ff3b4e',segs:seg(pc(saldo),pc(cut),V2_HATCH),onclick:o.cutClick,title:'Budget taken back from specific months. Click for what was cut and why.'}));
-  if(seeCut) rows.push(row({label:'Budget balance',sub:'total − cuts',v:saldo,sw:'#eef1f8',segs:seg(0,pc(saldo),'rgba(238,241,248,.55)')}));
-  rows.push(row({label:'Allocated to projects',sub:'consumed + approved POs + provisioned',v:alloc,sw:'linear-gradient(90deg,#4d7dff 50%,#a685ff 50%)',segs:seg(0,pc(cons),CONS)+seg(pc(cons),pc(comp),COMP)+seg(pc(cons+comp),pc(prov),PROV)}));
-  rows.push(row({child:1,label:'Consumed',sub:'invoiced, validated or completed',v:cons,sw:CONS,segs:seg(0,pc(cons),CONS),onclick:o.consClick,title:'POs invoiced, validated or completed. Click for the POs behind it.'}));
-  rows.push(row({child:1,label:'Approved POs',sub:'approved or issued, not yet invoiced',v:comp,sw:COMP,segs:seg(pc(cons),pc(comp),COMP),onclick:o.compClick,title:'POs approved or issued, not yet invoiced. Click for the POs behind it.'}));
-  rows.push(row({child:1,label:'Provisioned',sub:'unspent, on funds claimed by a project',v:prov,sw:PROV,c:prov<-0.005?'#ff8a96':'',segs:seg(pc(cons+comp),pc(prov),PROV),onclick:o.provClick,title:'Unspent budget on funds already grouped under a project. Click for the detail.'}));
-  rows.push(row({big:1,line:1,label:'Available',sub:over?'over-allocated — more than the balance':'balance − allocated · free to place',v:avail,c:over?'#ff5c6c':'#2fd88a',sw:over?'#ff5c6c':'rgba(255,255,255,.38)',segs:over?seg(Math.max(0,100-pc(-avail)),pc(-avail),'#ff5c6c'):seg(pc(alloc),pc(avail),AVL),title:'Budget balance minus everything allocated to projects.'}));
-  return `<div>${rows.join('')}</div>
-    ${o.pend>0.005?`<div style="margin-top:12px;font-size:12px;color:var(--txt-3);display:flex;align-items:center;gap:8px"><span style="width:9px;height:9px;border-radius:3px;background:#ffb020;flex-shrink:0"></span>Awaiting approval <b class="mono" style="color:var(--txt-2)">${BRLc(o.pend)}</b> — pending POs, not counted above</div>`:''}`;
+    <div style="margin-top:20px">${bar}</div>
+    <div class="mono" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--txt-3);margin-top:6px"><span>0</span><span>bar scaled to budget total ${BRLc(total)}${seeCut?' · cuts hatched':''}</span></div>
+    ${o.pend>0.005?`<div style="margin-top:10px;font-size:12px;color:var(--txt-3);display:flex;align-items:center;gap:8px"><span style="width:9px;height:9px;border-radius:3px;background:#ffb020;flex-shrink:0"></span>Awaiting approval <b class="mono" style="color:var(--txt-2)">${BRLc(o.pend)}</b> — pending POs, not counted above</div>`:''}`;
 }
 /* The glowing hero block every Budget screen opens with. */
 function v2Hero(inner,opt){
