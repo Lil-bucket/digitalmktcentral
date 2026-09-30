@@ -838,7 +838,7 @@ const STAGE_DESCS_DEFAULT={
   concluido:'Project is finished — all activities are complete.'
 };
 let STAGE_DESCS=Object.assign({},STAGE_DESCS_DEFAULT);
-const STATUS=[{id:'no_prazo',name:'On track',cls:'s-green'},{id:'atencao',name:'At risk',cls:'s-amber'},{id:'atrasado',name:'Late',cls:'s-red'},{id:'bloqueado',name:'Blocked',cls:'s-violet'},{id:'concluido',name:'Completed',cls:'s-blue'}];
+const STATUS=[{id:'no_prazo',name:'On track',cls:'s-green'},{id:'atencao',name:'Attention',cls:'s-amber'},{id:'atrasado',name:'Late',cls:'s-red'},{id:'bloqueado',name:'Blocked',cls:'s-violet'},{id:'concluido',name:'Completed',cls:'s-blue'}];
 const PO_STATUS={
   SOLICITADA:{t:'Requested',c:'s-slate',icon:'🕓'}, EM_APROVACAO:{t:'In approval',c:'s-amber',icon:'🕓'},
   APROVADA:{t:'Approved',c:'s-blue',icon:'✓'}, REJEITADA:{t:'Rejected',c:'s-red',icon:'✕'},
@@ -1733,6 +1733,7 @@ function normProjeto(p){
      version doesn't need a migration to open. */
   const normSub=s=>({...s, n:s.n||s.nome||'', done:!!s.done, inicio:s.inicio||'', fim:s.fim||s.due||'', dep:Array.isArray(s.dep)?s.dep:(s.dep?[s.dep]:[]), resp:s.resp||'', obs:s.obs||''});
   p.tasks=(p.tasks||p.atividades||p.activities||p.checklist||[]).map(t=>({...t, n:t.n||t.nome||t.titulo||t.title||'', done:!!t.done, inicio:t.inicio||'', fim:t.fim||t.due||'', dep:Array.isArray(t.dep)?t.dep:(t.dep?[t.dep]:[]), status:t.status||(t.done?'concluido':'no_prazo'), pct:t.done?100:(t.pct!=null?t.pct:0), obs:t.obs||t.nota||'', subs:(t.subs||t.subitens||[]).map(normSub)}));
+  p.tasks.forEach(t=>{ t.status=autoAtvStatus(t); });
   p.agencies=Array.isArray(p.agencies)?p.agencies:[];
   p.logs=(p.logs||p.updates||[]).map(l=>({...l, txt:l.txt||l.texto||l.mensagem||l.msg||'', autor:l.autor||l.author||l.by||'', t:l.t||l.data||l.date||''}));
   p.etapa=effectiveEtapa(p); p.status=autoStatus(p);
@@ -2215,7 +2216,7 @@ function destroyCharts(){_charts.forEach(c=>{try{c.destroy();}catch(e){}});_char
 function buildDashCharts(){
   const el=document.getElementById('chartStatus'); if(!el||!window.Chart)return;
   const list=projList(); // same scoped list the KPIs above the chart count
-  const defs=[['On track','no_prazo','#2fd88a'],['At risk','atencao','#ffb020'],['Late','atrasado','#ff5c5c'],['Blocked','bloqueado','#a685ff'],['Completed','concluido','#9aa3b8']];
+  const defs=[['On track','no_prazo','#2fd88a'],['Attention','atencao','#ffb020'],['Late','atrasado','#ff5c5c'],['Blocked','bloqueado','#a685ff'],['Completed','concluido','#9aa3b8']];
   const vals=defs.map(d=>list.filter(p=>p.status===d[1]).length);
   _charts.push(new Chart(el,{type:'doughnut',data:{labels:defs.map(d=>d[0]),datasets:[{data:vals,backgroundColor:defs.map(d=>d[2]),borderWidth:2,borderColor:'#0d1220'}]},options:{cutout:'62%',plugins:{legend:{position:'right',labels:{font:{family:'Hanken Grotesk',size:12},boxWidth:12,padding:10,color:'#a7aec2'}}}}}));
 }
@@ -2356,7 +2357,7 @@ function renderDash(){
   const cnt=id=>list.filter(p=>p.status===id).length;
   const need=list.filter(p=>['atrasado','bloqueado','atencao'].includes(p.status)).sort((a,b)=>(daysTo(a.prazo)??99)-(daysTo(b.prazo)??99));
   const up=list.filter(p=>p.status!=='concluido'&&p.prazo).sort((a,b)=>(daysTo(a.prazo)??999)-(daysTo(b.prazo)??999)).slice(0,6);
-  const health=[['On track','no_prazo','#2fd88a'],['At risk','atencao','#ffb020'],['Late','atrasado','#ff5c5c'],['Blocked','bloqueado','#a685ff']].map(([name,id,col])=>({name,id,col,n:cnt(id)}));
+  const health=[['On track','no_prazo','#2fd88a'],['Attention','atencao','#ffb020'],['Late','atrasado','#ff5c5c'],['Blocked','bloqueado','#a685ff']].map(([name,id,col])=>({name,id,col,n:cnt(id)}));
   const approvals=homeApprovalsHTML();
   const canNewProj=!['agencia','tcl_member'].includes(effPapel())&&!VIEW_AS;
   const canReqPO=demoWritable(PO_ACCESS)&&((ROLE_NAV[effPapel()]||{}).budget||[]).length;
@@ -2484,7 +2485,7 @@ function renderProjetos(){
     if(!c) c=(a.nome||'').localeCompare(b.nome||'');
     return c*PROJ_SORT.dir;
   });
-  const summary=[[null,'All active','#eef1f8'],['no_prazo','On track','#2fd88a'],['atencao','At risk','#ffb020'],['atrasado','Late','#ff5c5c'],['bloqueado','Blocked','#a685ff']]
+  const summary=[[null,'All active','#eef1f8'],['no_prazo','On track','#2fd88a'],['atencao','Attention','#ffb020'],['atrasado','Late','#ff5c5c'],['bloqueado','Blocked','#a685ff']]
     .map(([id,name,col])=>{const n=id?base.filter(p=>p.status===id).length:base.filter(p=>p.status!=='concluido').length;const on=STATUS_FILTER===(id||'');
       return `<button onclick="setStatusFilter('${id||''}')" style="text-align:left;cursor:pointer;background:var(--surf);border:1px solid ${on?col:'var(--line-card)'};border-radius:14px;padding:14px 16px;color:var(--txt)">
         <div style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--txt-2)"><span style="width:8px;height:8px;border-radius:50%;background:${col}"></span>${name}</div>
@@ -2804,7 +2805,7 @@ function pdStatsHTML(p){
   } else budCard=card(`${eb('budget')}<div style="font-size:20px;font-weight:800;margin-top:6px;color:var(--txt-3)">No budget</div><div style="font-size:12.5px;color:var(--txt-2)">no funds linked</div>`,null,null,"pdScrollTo('pd-sec-budget')");
   return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
     ${card(`${eb('current status')}<div style="display:flex;align-items:center;gap:8px;margin-top:6px"><span style="width:10px;height:10px;border-radius:50%;background:${hp.dot};box-shadow:0 0 10px ${hp.dot}"></span><span style="font-size:20px;font-weight:800">${st.name}</span></div><div style="font-size:12.5px;color:var(--txt-2);margin-top:2px">Stage: ${esc(stageOf(p.etapa).name)} · ${prog}% done</div><div style="height:5px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:10px"><div style="height:100%;width:${prog}%;background:${hp.dot}"></div></div>`,`rgba(${HC},.4)`,`rgba(${HC},.6)`)}
-    ${card(`${eb('activities at risk')}<div class="mono" style="font-size:26px;font-weight:700;color:${risky.length?'#ffb020':'var(--txt)'};margin-top:4px">${risky.length}</div><div style="font-size:12.5px;color:var(--txt-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${risky.length?risky.slice(0,3).map(t=>esc(t.n)).join(' · '):'none'}</div>`,risky.length?'rgba(255,176,32,.4)':null,null,"pdScrollTo('pd-sec-activities')")}
+    ${card(`${eb('activities needing attention')}<div class="mono" style="font-size:26px;font-weight:700;color:${risky.length?'#ffb020':'var(--txt)'};margin-top:4px">${risky.length}</div><div style="font-size:12.5px;color:var(--txt-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${risky.length?risky.slice(0,3).map(t=>esc(t.n)).join(' · '):'none'}</div>`,risky.length?'rgba(255,176,32,.4)':null,null,"pdScrollTo('pd-sec-activities')")}
     ${card(`${eb('people involved')}<div style="display:flex;align-items:center;gap:12px;margin-top:6px"><span class="mono" style="font-size:26px;font-weight:700">${people.length+ags.length}</span><div style="display:flex;padding-left:6px">${[...people,...ags].slice(0,5).map(n=>`<span class="avatar" style="width:28px;height:28px;font-size:9.5px;margin-left:-6px;border:2px solid #121a32;background:${avColor(respName(n)||n)}">${initials(respName(n)||n)}</span>`).join('')}</div></div><div style="font-size:12.5px;color:var(--txt-2)">${people.length} internal · ${ags.length} agenc${ags.length===1?'y':'ies'}</div>`,null,null,"pdScrollTo('pd-sec-people')")}
     ${budCard}
   </div>`;
@@ -3095,7 +3096,7 @@ function exportWorkXLSX(){
 }
 
 /* Quadro (kanban) por etapa */
-function healthPill(sid){const M={no_prazo:{name:'On track',bg:'var(--green-bg)',fg:'var(--green)',dot:'var(--green)'},atencao:{name:'At risk',bg:'var(--amber-bg)',fg:'var(--amber)',dot:'var(--amber)'},atrasado:{name:'Late',bg:'var(--red-bg)',fg:'var(--red)',dot:'var(--red)'},bloqueado:{name:'Blocked',bg:'var(--violet-bg)',fg:'var(--violet)',dot:'var(--violet)'},concluido:{name:'Completed',bg:'var(--blue-bg)',fg:'var(--blue)',dot:'var(--blue)'}};return M[sid]||M.no_prazo;}
+function healthPill(sid){const M={no_prazo:{name:'On track',bg:'var(--green-bg)',fg:'var(--green)',dot:'var(--green)'},atencao:{name:'Attention',bg:'var(--amber-bg)',fg:'var(--amber)',dot:'var(--amber)'},atrasado:{name:'Late',bg:'var(--red-bg)',fg:'var(--red)',dot:'var(--red)'},bloqueado:{name:'Blocked',bg:'var(--violet-bg)',fg:'var(--violet)',dot:'var(--violet)'},concluido:{name:'Completed',bg:'var(--blue-bg)',fg:'var(--blue)',dot:'var(--blue)'}};return M[sid]||M.no_prazo;}
 async function editStageDesc(stageId){
   if(PAPEL!=='admin'&&!isManager){ toast('Only admin can edit column descriptions.'); return; }
   const stg=STAGES.find(s=>s.id===stageId); if(!stg)return;
@@ -5492,13 +5493,17 @@ function autoAtvStatus(t){
   if(t.status==='bloqueado') return 'bloqueado';
   const dd=t.fim?daysTo(t.fim):null;
   if(dd!==null&&dd<0) return 'atrasado';
+  /* Same ladder as autoStatus(project): own due date passed = Late; a
+     not-yet-done sub-item past its own due date = Attention. */
+  if((t.subs||[]).some(x=>!x.done&&x.fim&&daysTo(x.fim)<0)) return 'atencao';
   return 'no_prazo';
 }
 function pmAtvSet(tid,k,v){
   const t=atv(tid); if(!t)return;
+  if(k==='status'){ t.status=(v==='bloqueado')?'bloqueado':'no_prazo'; t.status=autoAtvStatus(t); renderProjModal(); return; }
   t[k]=(k==='pct')?Math.max(0,Math.min(100,+v||0)):v;
   if(k==='pct') t.done=t.pct>=100;
-  if(k!=='status') t.status=autoAtvStatus(t);
+  t.status=autoAtvStatus(t);
   // A date or a status can turn a row late, or a link into a conflict — both
   // are drawn from derived state, so the panel has to repaint. Text fields
   // (name, note) commit on blur and deliberately don't, to avoid churn.
@@ -6350,7 +6355,7 @@ function pmAtvRowsHTML(EDA){
       h+=`<div class="atv-panel">
         <div class="atv-panel-row">
           <label for="atvSt-${esc(t.id)}">Status</label>
-          <select id="atvSt-${esc(t.id)}" ${disA} onchange="pmAtvSet('${escJs(t.id)}','status',this.value)">${STATUS.map(s=>`<option value="${s.id}" ${t.status===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select>
+          <select id="atvSt-${esc(t.id)}" ${disA} onchange="pmAtvSet('${escJs(t.id)}','status',this.value)"><option value="auto" ${t.status!=='bloqueado'?'selected':''}>Automatic · ${esc(statusOf(t.status==='bloqueado'?autoAtvStatus({...t,status:'no_prazo'}):t.status).name)}</option><option value="bloqueado" ${t.status==='bloqueado'?'selected':''}>Blocked (manual)</option></select><span style="font-size:var(--fs-xs);color:var(--txt-3)">follows the due dates</span>
           <label>Progress</label>
           ${subs.length?`<span class="mono" style="font-size:var(--fs-sm);font-weight:700">${pct}%</span><span style="font-size:var(--fs-xs);color:var(--txt-3)">auto from ${subs.length} sub-item${subs.length===1?'':'s'}</span>`
             :`<input type="number" min="0" max="100" step="5" ${disA} value="${pct}" onchange="pmAtvSet('${escJs(t.id)}','pct',this.value)" style="width:64px">`}
@@ -7963,13 +7968,13 @@ function renderWeekly(){
   return `<div style="display:flex;flex-direction:column;gap:22px">
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px">
       ${kpi('delivered',done.length,`${delivered.length} to report · ${concluded.length} archived`,'#2fd88a')}
-      ${kpi('in progress',progress.length,'on track or at risk')}
+      ${kpi('in progress',progress.length,'on track or attention')}
       ${kpi('at risk',risk.length,'late or blocked',risk.length?'#ff6b6b':'')}
       ${kpi('tasks completed',tasksDone,'across these projects')}
     </div>
     ${sec('finished · report, then mark concluded','Delivered','#2fd88a',delivered,true,'Nothing delivered to report.')}
     ${sec('late or blocked','At risk','#ffb020',risk,false,'Nothing at risk.')}
-    ${sec('on track or at risk','In progress','#4d7dff',progress,false,'Nothing in progress.')}
+    ${sec('on track or attention','In progress','#4d7dff',progress,false,'Nothing in progress.')}
     ${sec('already reported','Concluded','#9aa3b8',concluded,false,'Nothing archived yet.')}
   </div>`;
 }
