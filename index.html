@@ -9275,7 +9275,7 @@ function v2BudgetFlow(o){
     cells.push(big({label:'Budget balance',value:BRLc(saldo),sub:'annual budget − cuts',sw:'#eef1f8',title:BRL(saldo)}));
   }
   const allocIdx=cells.length;
-  cells.push(`<div style="min-width:0;padding:12px 14px;margin:-12px -14px;border-radius:12px;background:rgba(166,133,255,.1);box-shadow:0 0 0 1px rgba(166,133,255,.4)">${big({label:'Allocated to projects',value:BRLc(alloc),sub:pct(alloc)+' of annual budget',sw:`linear-gradient(90deg,${CONS} 50%,${COMP} 50%)`,title:BRL(alloc)})}</div>`);
+  cells.push(`<div style="min-width:0;align-self:stretch;padding-bottom:12px;border-bottom:2px solid #a685ff">${big({label:'Allocated to projects',value:BRLc(alloc),sub:pct(alloc)+' of annual budget',sw:`linear-gradient(90deg,${CONS} 50%,${COMP} 50%)`,title:BRL(alloc)})}</div>`);
   cells.push(big({label:'Available',value:(over?'− ':'')+BRLc(Math.abs(avail)),sub:over?'over-allocated':'balance − allocated · free to place',sw:'rgba(255,255,255,.38)',c:over?'#ff5c6c':'#2fd88a',title:BRL(avail)}));
   const sub=[
     {label:'Consumed',value:BRLc(cons),sub:pct(cons)+' · invoiced',sw:CONS,size:20,onclick:o.consClick,title:'POs invoiced, validated or completed. Click for the POs behind it.'},
@@ -9286,9 +9286,8 @@ function v2BudgetFlow(o){
   const seg=(w,bg,t)=>({w:Math.max(0,w)/base*100,bg,t});
   const bar=v2Bar([seg(cons,CONS,'Consumed'),seg(comp,COMP,'Approved POs'),seg(prov,PROV,'Provisioned'),seg(avail,'rgba(255,255,255,.16)','Available'),...(seeCut?[seg(cut,V2_HATCH,'Cuts')]:[])],16);
   return `<div style="display:grid;grid-template-columns:repeat(${n},minmax(0,1fr));gap:18px">${cells.join('')}</div>
-    <div style="position:relative;margin:28px 0 0;padding:14px 18px;border-radius:12px;background:rgba(166,133,255,.05);border:1px solid rgba(166,133,255,.4)">
-      <span style="position:absolute;left:${((allocIdx+0.5)/n*100).toFixed(2)}%;top:-29px;height:28px;width:2px;margin-left:-1px;background:${COMP}"></span>
-      <span style="position:absolute;left:${((allocIdx+0.5)/n*100).toFixed(2)}%;top:-6px;width:10px;height:10px;margin-left:-5px;background:#141b31;border-left:1px solid rgba(166,133,255,.4);border-top:1px solid rgba(166,133,255,.4);transform:rotate(45deg)"></span>
+    <div style="position:relative;margin:24px 0 0;padding:14px 18px;border-radius:12px;background:rgba(255,255,255,.04)">
+      <span style="position:absolute;left:${((allocIdx+0.5)/n*100).toFixed(2)}%;top:-24px;height:24px;width:2px;margin-left:-1px;background:${COMP}"></span>
       <div class="v2-card-eyebrow" style="margin-bottom:10px">what is inside allocated to projects</div>
       ${v2KpiGrid(sub).replace('minmax(max(130px,calc(16.66% - 15px)),1fr)','minmax(150px,1fr)')}
     </div>
