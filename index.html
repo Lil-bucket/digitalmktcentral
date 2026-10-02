@@ -9492,7 +9492,7 @@ function renderBudgetOverview(isBalance){
       ${hero}
       ${monthChart}
       ${monthBalance}
-      ${boPiePanel(HIDE_MONEY,_c)}
+      ${boPiePanel(HIDE_MONEY,_c,useCeil?flowTotal-(seeCut?cutTot:0):null)}
       ${accountsGroup}
     </div>`;
 }
@@ -9570,19 +9570,29 @@ function boPieLegend(d,hideMoney){
       <span class="mono" style="color:var(--txt-3);width:44px;text-align:right;flex-shrink:0">${pct.toFixed(1)}%</span>
     </div>`;}).join('')}</div>`;
 }
-function boPiePanel(hideMoney,_c){
+/* One line that closes the gap between "budget on funds" (what the charts
+   add up) and the balance in the hero: budget registered on the budgets and
+   never given to any fund, or — when negative — funds holding more than the
+   budgets total. Only drawn when the hero's total is the registered ceiling. */
+function v2ReconNote(onFunds,balance){
+  if(balance==null) return '';
+  const gap=balance-onFunds;
+  if(Math.abs(gap)<0.5) return '';
+  return `<div class="mono" style="font-size:11.5px;color:var(--txt-3);margin-top:14px;padding-top:10px;border-top:1px solid rgba(255,255,255,.08);line-height:1.6">on funds <b style="color:var(--txt-2)">${BRL(onFunds)}</b> ${gap>0?'+ not assigned to any fund':'− funds above the registered budget'} <b style="color:${gap>0?'var(--txt-2)':'#ff8a96'}">${BRL(Math.abs(gap))}</b> = balance <b style="color:var(--txt-2)">${BRL(balance)}</b></div>`;
+}
+function boPiePanel(hideMoney,_c,reconBalance){
   const d=boPieData();
   _c=_c||boCtx();
   /* By category — Budget.dc.html's SVG ring + legend (share · value). */
   const cats=d.cats;
-  const catCard=v2Card('share of budgeted','By category',cats.items.length?`<div style="display:grid;grid-template-columns:170px minmax(0,1fr);gap:20px;align-items:center;margin-top:14px">
+  const catCard=v2Card('share of budget on funds','By category',cats.items.length?`<div style="display:grid;grid-template-columns:170px minmax(0,1fr);gap:20px;align-items:center;margin-top:14px">
       ${v2Donut(cats.items,cats.total,hideMoney?'100%':BRLc(cats.total),'budgeted')}
       <div style="display:flex;flex-direction:column;gap:9px">${cats.items.map(it=>`<a ${it.k==='__other'?'':`onclick="budgetSetCat('${escJs(it.k)}')" `}style="display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:10px;align-items:center;color:var(--txt);cursor:${it.k==='__other'?'default':'pointer'}">
         <span style="width:10px;height:10px;border-radius:3px;background:${it.color}"></span>
         <span style="font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(catKeyLabel(it.label))}</span>
         <span style="text-align:right;white-space:nowrap"><b class="mono" style="font-size:13px">${cats.total?(it.v/cats.total*100).toFixed(1):0}%</b>${hideMoney?'':` <span class="mono" style="font-size:11.5px;color:var(--txt-3)">${BRLc(it.v)}</span>`}</span>
       </a>`).join('')}</div>
-    </div>`:'<div class="empty">Nothing allocated in this period.</div>',{style:'flex:1 1 340px;min-width:0'});
+    </div>${v2ReconNote(cats.total,reconBalance)}`:'<div class="empty">Nothing allocated in this period.</div>',{style:'flex:1 1 340px;min-width:0'});
   /* By activity — one stacked strip, then a row per activity: budgeted as
      the translucent bar, consumed drawn solid over it. */
   const byAct={},consAct={};
@@ -9590,14 +9600,14 @@ function boPiePanel(hideMoney,_c){
   const acts=Object.keys(byAct).filter(k=>byAct[k]>0.005).sort((a,b)=>byAct[b]-byAct[a]);
   const actTot=acts.reduce((s2,k)=>s2+byAct[k],0), actMax=Math.max(1,...acts.map(k=>byAct[k]));
   const aCol=k=>BO_ACT_COLOR[k]||BO_PIE_TAIL;
-  const actCard=v2Card('budgeted by fund activity · consumed shown solid','By activity',acts.length?`
+  const actCard=v2Card('budget on funds by activity · consumed shown solid','By activity',acts.length?`
     <div style="display:flex;height:12px;border-radius:6px;overflow:hidden;gap:2px;margin:16px 0 14px">${acts.map(k=>`<div style="flex:${byAct[k]};background:${aCol(k)}"></div>`).join('')}</div>
     <div style="display:flex;flex-direction:column;gap:10px">${acts.map(k=>`<div style="display:grid;grid-template-columns:110px minmax(0,1fr) 84px 50px;gap:12px;align-items:center">
       <span style="display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;min-width:0"><span style="width:8px;height:8px;border-radius:50%;flex-shrink:0;background:${aCol(k)}"></span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(actColLabel(k))}</span></span>
       <div style="height:8px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden;position:relative"><div style="position:absolute;left:0;top:0;bottom:0;border-radius:4px;opacity:.35;width:${byAct[k]/actMax*100}%;background:${aCol(k)}"></div><div style="position:absolute;left:0;top:0;bottom:0;border-radius:4px;width:${Math.min(byAct[k],consAct[k]||0)/actMax*100}%;background:${aCol(k)}"></div></div>
       <span class="mono" style="text-align:right;font-size:12.5px">${hideMoney?'':BRLc(byAct[k])}</span>
       <span class="mono" style="text-align:right;font-size:12px;color:var(--txt-2)">${actTot?(byAct[k]/actTot*100).toFixed(1):0}%</span>
-    </div>`).join('')}</div>`:'<div class="empty">Nothing allocated in this period.</div>',{style:'flex:2 1 520px;min-width:0'});
+    </div>`).join('')}</div>${v2ReconNote(actTot,reconBalance)}`:'<div class="empty">Nothing allocated in this period.</div>',{style:'flex:2 1 520px;min-width:0'});
   return `<div style="display:flex;flex-wrap:wrap;gap:22px;align-items:stretch">${catCard}${actCard}</div>`;
 }
 function buildOverviewPies(){
@@ -9803,11 +9813,11 @@ function renderBudgets(){
   const byAct={}; list.forEach(p=>{const k=actKey(p);(byAct[k]=byAct[k]||[]).push(p);});
   const actOrder=Object.keys(byAct).sort((a,b)=>sums(byAct[b]).tot-sums(byAct[a]).tot);
   const actMax=Math.max(1,...actOrder.map(k=>sums(byAct[k]).tot));
-  const actCard=v2Card('budgeted by activity · click to open its funds','By activity',actOrder.length?`<div style="display:flex;flex-direction:column;gap:12px;margin-top:14px">${actOrder.map(k=>{const a=sums(byAct[k]);const used=a.tot?Math.round((a.cons+a.comp)/a.tot*100):0;
+  const actCard=v2Card('budget on funds by activity · click to open its funds','By activity',actOrder.length?`<div style="display:flex;flex-direction:column;gap:12px;margin-top:14px">${actOrder.map(k=>{const a=sums(byAct[k]);const used=a.tot?Math.round((a.cons+a.comp)/a.tot*100):0;
       return `<div onclick="jumpToFunds('${escJs(BUDGET_CAT)}','${escJs(k)}')" title="${byAct[k].length} fund(s) · ${used}% used" style="display:grid;grid-template-columns:96px minmax(0,1fr) 70px;gap:10px;align-items:center;cursor:pointer">
         <span style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(actColLabel(k))}</span>
         <div style="height:8px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden;position:relative"><div style="position:absolute;inset:0 auto 0 0;border-radius:4px;opacity:.35;width:${a.tot/actMax*100}%;background:${m.c}"></div><div style="position:absolute;inset:0 auto 0 0;border-radius:4px;width:${Math.min(a.tot,a.cons+a.comp)/actMax*100}%;background:${m.c}"></div></div>
-        <span class="mono" style="text-align:right;font-size:12px">${BRLc(a.tot)}</span></div>`;}).join('')}</div>`:'<div class="empty">No funds in this category yet.</div>',{style:'flex:1 1 320px;min-width:0'});
+        <span class="mono" style="text-align:right;font-size:12px">${BRLc(a.tot)}</span></div>`;}).join('')}</div>${v2ReconNote(t.tot,orcTot>0?orcTot-cut:null)}`:'<div class="empty">No funds in this category yet.</div>',{style:'flex:1 1 320px;min-width:0'});
   const monthCard=v2Card('consumed + committed vs monthly cap','Month by month',list.length?`<div style="margin-top:16px">${v2MonthChart(v2MonthRows(new Set(list.map(p=>p.id)),false),{withPct:true,height:200})}</div>`:'<div class="empty">No funds in this category yet.</div>',{style:'flex:2 1 560px;min-width:0'});
   return `<div style="display:flex;flex-direction:column;gap:22px">
     ${chips}
