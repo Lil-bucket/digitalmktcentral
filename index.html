@@ -1746,7 +1746,7 @@ const Q_WORK=()=>[
 const Q_BUDGET=()=>[
   SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
   SBPO.from('funds').select('id,nome,agencia,orcamento_id,product_category,activity,fund_tag,rateio,rateio_tipo,aprovacao_status,aprovacao_motivo,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em,campanha_id,ativo'),
-  SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,nf_valor,valor_original,nf_postada_em,mes_contabil,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
+  SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,nf_valor,valor_original,nf_postada_em,mes_contabil,mes_efetivo,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
   SBPO.from('tetos').select('fund_id,competencia,teto,corte,corte_motivo,corte_em,devolucao,devolucao_motivo,devolucao_em,bloqueado,bloqueado_motivo'),
   SBPO.from('rateio_alocacao').select('fund_id,competencia,valor,categoria'),
   SBPO.from('notificacoes').select('id,mensagem,tipo,po_id,fund_id,lida,criada_em').order('criada_em',{ascending:false}).limit(200),
@@ -4670,6 +4670,27 @@ function poRowStageHTML(po){
   const steps=[1,2,3,4].map(i=>rejected?'var(--red)':(i<lvl?'#2fd88a':i===lvl?cur.c:'rgba(255,255,255,.1)'));
   return `<div><div style="display:flex;gap:3px">${steps.map(c=>`<span style="flex:1;height:4px;border-radius:2px;background:${c}"></span>`).join('')}</div><div style="font-size:11.5px;font-weight:600;margin-top:5px;color:${rejected?'var(--red)':cur.c}">${esc((PO_STATUS[po.status]||{}).t||po.status)}</div></div>`;
 }
+/* Month the amount actually hit the books. Default is what the system worked
+   out (mes_contabil: NF by day 24 = that month, else next); finance/admin can
+   override it by hand (mes_efetivo) to follow accounting adjustments. */
+function poMesEfetivo(po){ return String(po.mes_efetivo||po.mes_contabil||po.competencia||'').slice(0,7); }
+function canEditMesEfetivo(){ return demoWritable(['admin','financeiro'].includes(PAPEL)); }
+async function setMesEfetivo(id,val){
+  const po=DATA.pos.find(p=>p.id===id); if(!po) return;
+  const sibs=poGroupSiblings(po);
+  const mes=val?val.slice(0,7)+'-01':null;
+  if(DEMO_MODE){ sibs.forEach(p=>{p.mes_efetivo=mes;}); go(SCREEN); toast('Accounting month updated (demo)'); return; }
+  if(viewOnly()){ toast(roMsg()); return; }
+  try{
+    for(const p of sibs){ const {error}=await SBPO.rpc('definir_mes_efetivo',{p_po:p.id,p_mes:mes}); if(error) throw error; p.mes_efetivo=mes; }
+    go(SCREEN); toast(mes?'Accounting month set to '+fmtMes(mes)+' ✓':'Accounting month back to the system default ✓');
+  }catch(e){ toastErr(e); }
+}
+function poMesEfetivoCell(po){
+  const eff=poMesEfetivo(po), manual=!!po.mes_efetivo;
+  if(!canEditMesEfetivo()) return `<span style="font-size:12.5px;color:${manual?'#e08428':'var(--txt-2)'}">${fmtMes(eff)}${manual?' ✎':''}</span>`;
+  return `<span style="display:flex;align-items:center;gap:4px" onclick="event.stopPropagation()"><input type="month" value="${esc(eff)}" onchange="setMesEfetivo('${escJs(po.id)}',this.value)" title="${manual?'Set manually':'System default'} — change to match the books" style="width:112px;padding:3px 5px;border:1px solid ${manual?'#e08428':'var(--line)'};border-radius:7px;background:transparent;color:var(--txt-1);font-size:12px">${manual?`<button onclick="event.stopPropagation();setMesEfetivo('${escJs(po.id)}','')" title="Back to system default" style="padding:0 3px;color:var(--txt-3)">↺</button>`:''}</span>`;
+}
 function renderPOs(){
   let pos=DATA.pos.slice();
   if(effPapel()==='agencia'&&effAgencia()) pos=pos.filter(p=>p.agencia===effAgencia());
@@ -4718,9 +4739,10 @@ function renderPOs(){
   </div>`;
   const filt='';
 
-  const PO_COLS='108px minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,.7fr) 60px 128px 180px 160px';
+  const showEff=effPapel()!=='agencia';
+  const PO_COLS='108px minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,.7fr) 60px '+(showEff?'124px ':'')+'128px 180px 160px';
   const head=`<div style="display:grid;grid-template-columns:${PO_COLS};gap:12px;padding:13px 20px;border-bottom:1px solid rgba(255,255,255,.1);font-size:12px;font-weight:600;color:var(--txt-3)">
-    <span>PO</span><span>Description</span><span>Project · fund</span><span>Vendor</span><span>Month</span><span style="text-align:right">Amount</span><span>Stage</span><span style="text-align:right">Action</span></div>`;
+    <span>PO</span><span>Description</span><span>Project · fund</span><span>Vendor</span><span>Month</span>${showEff?'<span title="Month the amount entered the books — editable by finance">Accounting</span>':''}<span style="text-align:right">Amount</span><span>Stage</span><span style="text-align:right">Action</span></div>`;
   const rowHTML=po=>{
     const grouped=po._sib&&po._sib.length>1;
     const fundName=grouped?poGroupLabel(po._sib):(nomeBy[po.fund_id]||'—');
@@ -4732,6 +4754,7 @@ function renderPOs(){
       <span style="min-width:0"><span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(proj||fundName)}</span><span style="font-size:12px;color:var(--txt-3);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(proj?fundName:'')}</span></span>
       <span style="color:var(--txt-2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.agencia||'—')}</span>
       <span style="font-size:12.5px;color:var(--txt-2)">${fmtMes(po.competencia)}</span>
+      ${showEff?poMesEfetivoCell(po):''}
       <span class="mono" style="text-align:right;font-size:12.5px;white-space:nowrap">${BRL(po.valor)}</span>
       ${poRowStageHTML(po)}
       <span style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap" onclick="event.stopPropagation()">${poActionsHTML(po,true)}</span>
@@ -4739,7 +4762,7 @@ function renderPOs(){
   };
   const activeList=(visTabs.find(t=>t.id===PO_TAB)||visTabs[0]).list;
   const body=activeList.length?`<div class="v2-card" style="padding:0;overflow:hidden">
-    <div style="overflow-x:auto"><div style="min-width:900px">${head}<div class="po-rows">${activeList.map(rowHTML).join('')}</div></div></div>
+    <div style="overflow-x:auto"><div style="min-width:${showEff?1020:900}px">${head}<div class="po-rows">${activeList.map(rowHTML).join('')}</div></div></div>
     <div class="po-empty-filter" style="display:none;padding:30px 16px;text-align:center;color:var(--txt-3);font-size:12.5px">No POs match your filters in this phase — try another tab above.</div>
   </div>`:'<div class="empty">No POs found for your access.</div>';
 
@@ -6992,7 +7015,7 @@ async function submitReqPO(){
 }
 async function reloadPO(){
   try{
-    const {data}=await SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,nf_valor,valor_original,nf_postada_em,mes_contabil,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id');
+    const {data}=await SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,nf_valor,valor_original,nf_postada_em,mes_contabil,mes_efetivo,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id');
     DATA.pos=data||[];
   }catch(e){}
 }
@@ -8262,7 +8285,8 @@ let CC_FILTER={scope:(function(){try{return localStorage.getItem('labg_scope')==
 /* Which month a PO's consumption lands in. 'comp' = month of competência (what
    was allocated). 'real' = month the NF was recognised: posted by day 24 → that
    month, from day 25 → next month (mes_contabil, set when the NF is posted).
-   POs without an NF yet are provision, not realised, so 'real' leaves them out. */
+   POs without an NF yet are provision, not realised, so 'real' leaves them out
+   unless finance set the accounting month by hand (mes_efetivo wins over all). */
 let CC_BASIS='comp';
 function ccSetBasis(b){ CC_BASIS=b==='real'?'real':'comp'; go(SCREEN); }
 function ccFilterOn(){ return CC_FILTER.scope!=='all'||!!CC_FILTER.cat; }
@@ -8323,8 +8347,8 @@ function ccAggregate(opt){
     DATA.pos.filter(po=>po.fund_id===p.id&&CC_CONS_ST.includes(po.status)).forEach(po=>{
       let m=String(po.competencia).slice(0,7);
       if(CC_BASIS==='real'){
-        if(!['FATURADA','VALIDADA','CONCLUIDA'].includes(po.status)) return;
-        if(po.mes_contabil) m=String(po.mes_contabil).slice(0,7); else semData++;
+        if(!['FATURADA','VALIDADA','CONCLUIDA'].includes(po.status)&&!po.mes_efetivo) return;
+        if(po.mes_efetivo||po.mes_contabil) m=poMesEfetivo(po); else semData++;
       }
       consByMonth[m]=(consByMonth[m]||0)+(+po.valor||0);
       (posByMonth[m]=posByMonth[m]||[]).push(po);
@@ -10207,7 +10231,7 @@ async function reloadPOAll(){
     const [orc,prj,pos,tet,rat,camp]=await Promise.all([
       SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
       SBPO.from('funds').select('id,nome,agencia,orcamento_id,product_category,activity,fund_tag,rateio,rateio_tipo,aprovacao_status,aprovacao_motivo,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em,campanha_id,ativo'),
-      SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,nf_valor,valor_original,nf_postada_em,mes_contabil,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
+      SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,nf_valor,valor_original,nf_postada_em,mes_contabil,mes_efetivo,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
       SBPO.from('tetos').select('fund_id,competencia,teto,corte,corte_motivo,corte_em,devolucao,devolucao_motivo,devolucao_em,bloqueado,bloqueado_motivo'),
       SBPO.from('rateio_alocacao').select('fund_id,competencia,valor,categoria'),
       SBPO.from('campanhas').select('*')
