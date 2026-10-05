@@ -4698,6 +4698,22 @@ function renderPOs(){
   const nomeBy={}; DATA.poProjetos.forEach(p=>nomeBy[p.id]=p.nome);
   const campOfFund={}; DATA.poProjetos.forEach(p=>{ if(p.campanha_id){ const c=(DATA.campanhas||[]).find(x=>x.id===p.campanha_id); if(c) campOfFund[p.id]=c.nome; } });
   pos.sort((a,b)=>String(b.solicitado_em||'').localeCompare(String(a.solicitado_em||'')));
+  /* Header click sorts the table (asc → desc → back to newest-first). Stable
+     sort on top of the default order, so ties keep the newest-first order. */
+  if(PO_SORT.col){
+    const phaseIdx=st=>{const i=PO_FLOW_PHASES.findIndex(f=>f.st.includes(st));return i<0?99:i;};
+    const keyOf={
+      po:p=>String(p.numero_po||'').toLowerCase(),
+      desc:p=>String(p.descricao||'').toLowerCase(),
+      proj:p=>String(campOfFund[p.fund_id]||nomeBy[p.fund_id]||'').toLowerCase(),
+      vendor:p=>String(p.agencia||'').toLowerCase(),
+      month:p=>String(p.competencia||'').slice(0,7),
+      acc:p=>poMesEfetivo(p),
+      amount:p=>+p.valor||0,
+      stage:p=>phaseIdx(p.status)
+    }[PO_SORT.col];
+    if(keyOf) pos.sort((a,b)=>{const x=keyOf(a),y=keyOf(b);return (x<y?-1:x>y?1:0)*PO_SORT.dir;});
+  }
   const ags=agencyOpts();
 
   // PO flow — one clickable card per lifecycle phase, matching POs.dc.html.
@@ -4742,7 +4758,7 @@ function renderPOs(){
   const showEff=effPapel()!=='agencia';
   const PO_COLS='108px minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,.7fr) 60px '+(showEff?'124px ':'')+'128px 180px 160px';
   const head=`<div style="display:grid;grid-template-columns:${PO_COLS};gap:12px;padding:13px 20px;border-bottom:1px solid rgba(255,255,255,.1);font-size:12px;font-weight:600;color:var(--txt-3)">
-    <span>PO</span><span>Description</span><span>Project · fund</span><span>Vendor</span><span>Month</span>${showEff?'<span title="Month the amount entered the books — editable by finance">Accounting</span>':''}<span style="text-align:right">Amount</span><span>Stage</span><span style="text-align:right">Action</span></div>`;
+    ${sortTh(PO_SORT,'po','PO','poSortClick')}${sortTh(PO_SORT,'desc','Description','poSortClick')}${sortTh(PO_SORT,'proj','Project · fund','poSortClick')}${sortTh(PO_SORT,'vendor','Vendor','poSortClick')}${sortTh(PO_SORT,'month','Month','poSortClick')}${showEff?sortTh(PO_SORT,'acc','Accounting','poSortClick'):''}${sortTh(PO_SORT,'amount','Amount','poSortClick','right')}${sortTh(PO_SORT,'stage','Stage','poSortClick')}<span style="text-align:right">Action</span></div>`;
   const rowHTML=po=>{
     const grouped=po._sib&&po._sib.length>1;
     const fundName=grouped?poGroupLabel(po._sib):(nomeBy[po.fund_id]||'—');
@@ -4786,6 +4802,13 @@ function renderPOs(){
     <div class="mono" style="font-size:11.5px;color:var(--txt-3);margin-top:14px">request → approve → issue nº → invoice (NF + evidence) → validate</div>`;
 }
 let PO_TAB=null;
+let PO_SORT={col:'',dir:1};
+function poSortClick(col){
+  if(PO_SORT.col!==col) PO_SORT={col,dir:1};
+  else if(PO_SORT.dir===1) PO_SORT.dir=-1;
+  else PO_SORT={col:'',dir:1};
+  go(SCREEN);
+}
 function poSetTab(id){ PO_TAB=id; go(SCREEN); }
 function renderPOsFilter(){
   const c=($('#poFcamp')||{}).value||'', a=($('#poFag')||{}).value||'', s=($('#poFst')||{}).value||'';
@@ -8901,7 +8924,7 @@ function boSetScope(s){ setLabgScope(s); }
    restored once at load. Scope (labg_scope) keeps its own key. */
 const FILTERS_KEY='ot_filters_v1';
 function saveFilters(){
-  try{ localStorage.setItem(FILTERS_KEY,JSON.stringify({ptipo:PTIPO_FILTER,status:STATUS_FILTER,cat:CAT_FILTER,q:PROJ_Q,group:PROJ_GROUP,fq:FUND_Q,fact:FUND_FILTER_ACT,fcat:FUND_FILTER_CAT,cc:CC_FILTER.cat,basis:CC_BASIS})); }catch(e){}
+  try{ localStorage.setItem(FILTERS_KEY,JSON.stringify({ptipo:PTIPO_FILTER,status:STATUS_FILTER,cat:CAT_FILTER,q:PROJ_Q,group:PROJ_GROUP,fq:FUND_Q,fact:FUND_FILTER_ACT,fcat:FUND_FILTER_CAT,cc:CC_FILTER.cat,basis:CC_BASIS,posort:PO_SORT})); }catch(e){}
 }
 (function restoreFilters(){
   try{
@@ -8909,7 +8932,7 @@ function saveFilters(){
     const str=v=>typeof v==='string'?v:'', arr=v=>Array.isArray(v)?v.filter(x=>typeof x==='string'):[];
     PTIPO_FILTER=str(f.ptipo); STATUS_FILTER=str(f.status); CAT_FILTER=str(f.cat); PROJ_Q=str(f.q);
     if(['list','board','category'].includes(f.group)) PROJ_GROUP=f.group;
-    FUND_Q=str(f.fq); FUND_FILTER_ACT=arr(f.fact); FUND_FILTER_CAT=arr(f.fcat); CC_FILTER.cat=str(f.cc); if(f.basis==='real') CC_BASIS='real';
+    FUND_Q=str(f.fq); FUND_FILTER_ACT=arr(f.fact); FUND_FILTER_CAT=arr(f.fcat); CC_FILTER.cat=str(f.cc); if(f.basis==='real') CC_BASIS='real'; if(f.posort&&typeof f.posort.col==='string'&&(f.posort.dir===1||f.posort.dir===-1)) PO_SORT={col:f.posort.col,dir:f.posort.dir};
   }catch(e){}
 })();
 function labgScopeHTML(){ return `<div title="Matriz (LABG) in or out of every budget figure">${v2Seg([['all','All categories'],['nolabg','Excl. LABG']],BO_SCOPE,v=>`setLabgScope('${v}')`)}</div>`; }
