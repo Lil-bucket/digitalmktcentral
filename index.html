@@ -898,7 +898,7 @@ let PROJ_Q='';
    query. Only #view is repainted (the input lives in #ctaBox, untouched),
    so the field keeps focus and cursor position across keystrokes. */
 function setProjQ(v){
-  PROJ_Q=(v||'').toLowerCase();
+  PROJ_Q=(v||'').toLowerCase(); saveFilters();
   const el=$('#view'); if(el) el.innerHTML=renderProjetos();
 }
 function projSearchHTML(){
@@ -2099,7 +2099,7 @@ function go(screen){
   // being reachable is what actually gates access to it.
   if(screen!=='projectdetail'&&!valid.includes(screen)) screen=valid[0]||'dash';
   if(screen==='projectdetail'&&!valid.includes('list')) screen=valid[0]||'dash';
-  SCREEN=screen; buildNav();
+  SCREEN=screen; saveFilters(); buildNav();
   const meta=SCREEN_META[screen]||{t:'',s:'',mod:'work'};
   const col=meta.mod==='budget'?'#e20613':'#2b4fdd';
   $('#scrTitle').textContent=meta.t; $('#scrSub').textContent=screenEyebrow(screen,meta); $('#barcol').style.background=col;
@@ -2120,7 +2120,7 @@ function go(screen){
     $('#ctaBox').innerHTML=canNewProj?'<button class="btn-acc" onclick="openProjNew()">New project</button>':'';
   } else if(['dash','timeline'].includes(screen)){
     const statusChip=STATUS_FILTER?`<button onclick="setStatusFilter('')" style="padding:8px 12px;border-radius:9px;border:1px solid var(--line-2);background:var(--card);font-size:12px;font-weight:600;color:var(--txt-2);margin-right:8px">Status: ${esc(statusOf(STATUS_FILTER).name)} ✕</button>`:'';
-    $('#ctaBox').innerHTML=`${screen==='dash'?ptipoFilterHTML():''}${screen==='timeline'?catFilterHTML():''}${statusChip}`;
+    $('#ctaBox').innerHTML=`${screen==='dash'?ptipoFilterHTML()+catFilterHTML():''}${screen==='timeline'?catFilterHTML():''}${statusChip}`;
   } else if(screen==='funds'&&demoWritable(['admin','marketing'].includes(PAPEL))){
     $('#ctaBox').innerHTML='<button class="btn-po" onclick="openFundNew()">+ New fund</button>';
   } else if(screen==='campanhas'){
@@ -3272,6 +3272,7 @@ function fundSetFilter(kind,v){
   fundSyncFilters();
 }
 function fundSyncFilters(){
+  saveFilters();
   const bar=document.getElementById('fundFilters'); if(bar) bar.outerHTML=fundFiltersHTML();
   const b=document.getElementById('fundBody'); if(b) b.outerHTML=renderCampBody();
   const k=document.getElementById('fundKpis'); if(k) k.outerHTML=fundKpisHTML();
@@ -3283,7 +3284,7 @@ function jumpToFunds(catKeyStr,actKeyStr){
   go('funds');
 }
 function fundSearch(v){
-  FUND_Q=(v||'').toLowerCase();
+  FUND_Q=(v||'').toLowerCase(); saveFilters();
   const b=document.getElementById('fundBody'); if(b) b.outerHTML=renderCampBody();
   const k=document.getElementById('fundKpis'); if(k) k.outerHTML=fundKpisHTML();
 }
@@ -8828,6 +8829,22 @@ function setLabgScope(v){
   go(SCREEN);
 }
 function boSetScope(s){ setLabgScope(s); }
+/* Filters survive switching screens, reloads and browser tabs: one localStorage
+   blob, written on every go() and on the in-place repaints that skip go(),
+   restored once at load. Scope (labg_scope) keeps its own key. */
+const FILTERS_KEY='ot_filters_v1';
+function saveFilters(){
+  try{ localStorage.setItem(FILTERS_KEY,JSON.stringify({ptipo:PTIPO_FILTER,status:STATUS_FILTER,cat:CAT_FILTER,q:PROJ_Q,group:PROJ_GROUP,fq:FUND_Q,fact:FUND_FILTER_ACT,fcat:FUND_FILTER_CAT,cc:CC_FILTER.cat})); }catch(e){}
+}
+(function restoreFilters(){
+  try{
+    const f=JSON.parse(localStorage.getItem(FILTERS_KEY)||'null'); if(!f) return;
+    const str=v=>typeof v==='string'?v:'', arr=v=>Array.isArray(v)?v.filter(x=>typeof x==='string'):[];
+    PTIPO_FILTER=str(f.ptipo); STATUS_FILTER=str(f.status); CAT_FILTER=str(f.cat); PROJ_Q=str(f.q);
+    if(['list','board','category'].includes(f.group)) PROJ_GROUP=f.group;
+    FUND_Q=str(f.fq); FUND_FILTER_ACT=arr(f.fact); FUND_FILTER_CAT=arr(f.fcat); CC_FILTER.cat=str(f.cc);
+  }catch(e){}
+})();
 function labgScopeHTML(){ return `<div title="Matriz (LABG) in or out of every budget figure">${v2Seg([['all','All categories'],['nolabg','Excl. LABG']],BO_SCOPE,v=>`setLabgScope('${v}')`)}</div>`; }
 function boScopeKeep(cat){ return BO_SCOPE!=='nolabg'||String(cat||'')!=='LABG'; }
 /* One entry per account × product category: budget (caps), consumed,
