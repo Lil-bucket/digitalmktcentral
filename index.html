@@ -1746,7 +1746,7 @@ const Q_WORK=()=>[
 const Q_BUDGET=()=>[
   SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
   SBPO.from('funds').select('id,nome,agencia,orcamento_id,product_category,activity,fund_tag,rateio,rateio_tipo,aprovacao_status,aprovacao_motivo,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em,campanha_id,ativo'),
-  SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,nf_valor,valor_original,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
+  SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,nf_valor,valor_original,nf_postada_em,mes_contabil,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
   SBPO.from('tetos').select('fund_id,competencia,teto,corte,corte_motivo,corte_em,devolucao,devolucao_motivo,devolucao_em,bloqueado,bloqueado_motivo'),
   SBPO.from('rateio_alocacao').select('fund_id,competencia,valor,categoria'),
   SBPO.from('notificacoes').select('id,mensagem,tipo,po_id,fund_id,lida,criada_em').order('criada_em',{ascending:false}).limit(200),
@@ -6992,7 +6992,7 @@ async function submitReqPO(){
 }
 async function reloadPO(){
   try{
-    const {data}=await SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,nf_valor,valor_original,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id');
+    const {data}=await SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,nf_valor,valor_original,nf_postada_em,mes_contabil,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id');
     DATA.pos=data||[];
   }catch(e){}
 }
@@ -8259,6 +8259,12 @@ const ccTailRank=a=>(a&&a.isLabg)?1:0;
    grand total row, the drill-down and both Excel sheets — is recomputed from
    only the contributions that survive the filter. */
 let CC_FILTER={scope:(function(){try{return localStorage.getItem('labg_scope')==='nolabg'?'nolabg':'all';}catch(e){return 'all';}})(),cat:''};
+/* Which month a PO's consumption lands in. 'comp' = month of competência (what
+   was allocated). 'real' = month the NF was recognised: posted by day 24 → that
+   month, from day 25 → next month (mes_contabil, set when the NF is posted).
+   POs without an NF yet are provision, not realised, so 'real' leaves them out. */
+let CC_BASIS='comp';
+function ccSetBasis(b){ CC_BASIS=b==='real'?'real':'comp'; go(SCREEN); }
 function ccFilterOn(){ return CC_FILTER.scope!=='all'||!!CC_FILTER.cat; }
 function ccSetScope(s){
   // Same state as every other Budget screen's LABG view (setLabgScope also
@@ -8292,7 +8298,7 @@ function ccAggregate(opt){
   const fee=DATA.fee||[];
   const fundsAll=(DATA.poProjetos||[]).filter(p=>p.aprovacao_status==='APROVADO');
   const accKey=(cc,acc,desc)=>`${cc||''}|${acc||''}|${desc||''}`;
-  const accMap={};
+  const accMap={}; let semData=0;
   const slot=(key,cc,acc,desc,cat)=>{
     const a=(accMap[key]=accMap[key]||{key,cc,acc,desc,months:{},cons:{},det:{},detB:{},cats:new Set()});
     if(cat) a.cats.add(cat);
@@ -8315,7 +8321,11 @@ function ccAggregate(opt){
   fundsAll.forEach(p=>{
     const consByMonth={}, posByMonth={};
     DATA.pos.filter(po=>po.fund_id===p.id&&CC_CONS_ST.includes(po.status)).forEach(po=>{
-      const m=String(po.competencia).slice(0,7);
+      let m=String(po.competencia).slice(0,7);
+      if(CC_BASIS==='real'){
+        if(!['FATURADA','VALIDADA','CONCLUIDA'].includes(po.status)) return;
+        if(po.mes_contabil) m=String(po.mes_contabil).slice(0,7); else semData++;
+      }
       consByMonth[m]=(consByMonth[m]||0)+(+po.valor||0);
       (posByMonth[m]=posByMonth[m]||[]).push(po);
     });
@@ -8401,7 +8411,7 @@ function ccAggregate(opt){
       return c*CC_SORT.dir;
     });
   }
-  return {accRows,monthList};
+  return {accRows,monthList,semData};
 }
 /* Drill-down for one cell: what adds up to it. `kind` picks the side —
    "cons" lists the POs behind a Cons. figure, "budget" the funds behind a
@@ -8561,7 +8571,11 @@ function ccFilterBar(){
     ${cats.map(c=>`<option value="${esc(c)}"${CC_FILTER.cat===c?' selected':''}>${esc(catKeyLabel(c))}</option>`).join('')}
   </select>`;
   const clear=ccFilterOn()?`<button class="chip-btn" onclick="ccClearFilter()" style="font-size:11px;padding:5px 10px">Clear filter</button>`:'';
-  return `<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:9px">${group('Scope',scope)}${group('Category',sel)}${clear}</div>`;
+  const basis=`<span style="display:inline-flex;gap:3px;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:3px">
+    ${seg("ccSetBasis('comp')",CC_BASIS==='comp','Competência','Consumption in the month it was allocated, including POs still waiting for the NF')}
+    ${seg("ccSetBasis('real')",CC_BASIS==='real','Realized (NF)','Only invoiced POs, in the month the NF counts: posted by day 24 = that month, from day 25 = next month. POs without NF are provision and stay out')}
+  </span>`;
+  return `<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:9px">${group('Scope',scope)}${group('Category',sel)}${group('Basis',basis)}${clear}</div>`;
 }
 function ccClearFilter(){ CC_FILTER={scope:'all',cat:''}; go(SCREEN); }
 async function exportCostCenterXLSX(){
@@ -8601,7 +8615,7 @@ function feeSplitBlock(only){
     <div style="padding:2px 12px">${tipoKeys.length?tipoKeys.map(rateioRow).join(''):'<div style="padding:14px 4px;font-size:12.5px;color:var(--txt-3)">No rateios configured yet.</div>'}</div>
   </div>`;
   // Accounts table — one row per CC/Account/Description, monthly budget × consumption × balance
-  const {accRows,monthList}=ccAggregate({sort:true});
+  const {accRows,monthList,semData}=ccAggregate({sort:true});
   CC_VIEW={accRows,monthList};
   let gB=0,gC=0; const gByM={};
   accRows.forEach(a=>{monthList.forEach(m=>{const b=a.months[m]||0,c=a.cons[m]||0;gByM[m]=gByM[m]||{b:0,c:0};gByM[m].b+=b;gByM[m].c+=c;gB+=b;gC+=c;});});
@@ -8614,6 +8628,7 @@ function feeSplitBlock(only){
       <div style="display:flex;align-items:center;gap:10px"><b style="flex:1;min-width:0;font-family:'Hanken Grotesk',sans-serif;font-size:14px">Cost center / account — monthly budget, consumption &amp; balance</b>${accRows.length?`<span style="display:inline-flex;gap:4px;flex-shrink:0"><button class="cc-nav" onclick="ccNudge(-1)" title="Previous month" aria-label="Scroll to previous month">‹</button><button class="cc-nav" onclick="ccNudge(1)" title="Next month" aria-label="Scroll to next month">›</button></span>`:''}${CC_SEL.size?`<button class="chip-btn" id="ccClearSelBtn" onclick="ccClearSel()" style="flex-shrink:0">Clear highlight (${CC_SEL.size})</button>`:''}${hasNow?`<button class="chip-btn" onclick="ccJumpNow()" style="display:inline-flex;align-items:center;gap:5px;flex-shrink:0">${icn('calendar',12)} Current month</button>`:''}<button class="chip-btn" onclick="exportCostCenterXLSX()" style="display:inline-flex;align-items:center;gap:5px;flex-shrink:0">${icn('download',12)} Export Excel</button></div>
       <div style="font-size:11.5px;color:var(--txt-3);margin-top:3px">click a header to sort · click a <b style="font-weight:700;color:var(--txt-2)">Budget</b> figure for the funds behind it, a <b style="font-weight:700;color:var(--txt-2)">Cons.</b> figure for the POs · click elsewhere on a row to highlight it · ‹ › or scroll sideways — Cat./Cost center/Account/Description, the header and the total row stay fixed${ccFilterOn()?` · <b style="font-weight:700;color:var(--accent-deep)">${ccFilterLabel()}</b> — totals and the export follow the filter`:''}</div>
       ${ccFilterBar()}
+      ${CC_BASIS==='real'?`<div style="font-size:11.5px;color:var(--txt-2);margin-top:9px;background:var(--paper-2);border:1px solid var(--line);border-radius:9px;padding:8px 12px">${icn('info',12)} <b>Realized (NF)</b> — only invoiced POs, in the month the NF counts (posted by day 24 = that month, from day 25 = next). POs still waiting for the NF are provision and are not in Cons.${semData?` ${semData} older PO(s) have no NF date on record and stay in their competência month.`:''}</div>`:''}
     </div>
     ${accRows.length?`<div class="cc-wrap"><table class="cc-tbl">
       <thead>
@@ -8862,7 +8877,7 @@ function boSetScope(s){ setLabgScope(s); }
    restored once at load. Scope (labg_scope) keeps its own key. */
 const FILTERS_KEY='ot_filters_v1';
 function saveFilters(){
-  try{ localStorage.setItem(FILTERS_KEY,JSON.stringify({ptipo:PTIPO_FILTER,status:STATUS_FILTER,cat:CAT_FILTER,q:PROJ_Q,group:PROJ_GROUP,fq:FUND_Q,fact:FUND_FILTER_ACT,fcat:FUND_FILTER_CAT,cc:CC_FILTER.cat})); }catch(e){}
+  try{ localStorage.setItem(FILTERS_KEY,JSON.stringify({ptipo:PTIPO_FILTER,status:STATUS_FILTER,cat:CAT_FILTER,q:PROJ_Q,group:PROJ_GROUP,fq:FUND_Q,fact:FUND_FILTER_ACT,fcat:FUND_FILTER_CAT,cc:CC_FILTER.cat,basis:CC_BASIS})); }catch(e){}
 }
 (function restoreFilters(){
   try{
@@ -8870,7 +8885,7 @@ function saveFilters(){
     const str=v=>typeof v==='string'?v:'', arr=v=>Array.isArray(v)?v.filter(x=>typeof x==='string'):[];
     PTIPO_FILTER=str(f.ptipo); STATUS_FILTER=str(f.status); CAT_FILTER=str(f.cat); PROJ_Q=str(f.q);
     if(['list','board','category'].includes(f.group)) PROJ_GROUP=f.group;
-    FUND_Q=str(f.fq); FUND_FILTER_ACT=arr(f.fact); FUND_FILTER_CAT=arr(f.fcat); CC_FILTER.cat=str(f.cc);
+    FUND_Q=str(f.fq); FUND_FILTER_ACT=arr(f.fact); FUND_FILTER_CAT=arr(f.fcat); CC_FILTER.cat=str(f.cc); if(f.basis==='real') CC_BASIS='real';
   }catch(e){}
 })();
 function labgScopeHTML(){ return `<div title="Matriz (LABG) in or out of every budget figure">${v2Seg([['all','All categories'],['nolabg','Excl. LABG']],BO_SCOPE,v=>`setLabgScope('${v}')`)}</div>`; }
@@ -10192,7 +10207,7 @@ async function reloadPOAll(){
     const [orc,prj,pos,tet,rat,camp]=await Promise.all([
       SBPO.from('orcamentos').select('id,nome,valor_total,product_category,periodo_inicio,periodo_fim'),
       SBPO.from('funds').select('id,nome,agencia,orcamento_id,product_category,activity,fund_tag,rateio,rateio_tipo,aprovacao_status,aprovacao_motivo,cc,account,account_desc,restricao,restricao_valor,restricao_motivo,restricao_em,cap_aprovado,cap_pedido,cap_pedido_motivo,cap_pedido_em,campanha_id,ativo'),
-      SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,nf_valor,valor_original,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
+      SBPO.from('pos').select('id,fund_id,competencia,agencia,valor,descricao,numero_po,status,solicitado_em,nf_numero,nf_valor,valor_original,nf_postada_em,mes_contabil,vencimento,po_arquivo,fatura_url,evidencia_url,motivo_rejeicao,po_grupo_id'),
       SBPO.from('tetos').select('fund_id,competencia,teto,corte,corte_motivo,corte_em,devolucao,devolucao_motivo,devolucao_em,bloqueado,bloqueado_motivo'),
       SBPO.from('rateio_alocacao').select('fund_id,competencia,valor,categoria'),
       SBPO.from('campanhas').select('*')
