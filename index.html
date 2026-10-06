@@ -4750,7 +4750,7 @@ function renderPOs(){
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <select id="poFcamp" class="chip-sel" onchange="renderPOsFilter()"><option value="">All funds</option>${DATA.poProjetos.map(p=>`<option value="${p.id}">${esc(p.nome)}</option>`).join('')}</select>
       <select id="poFag" class="chip-sel" onchange="renderPOsFilter()"><option value="">All agencies</option>${ags.map(a=>`<option>${esc(a)}</option>`).join('')}</select>
-      <span style="position:relative;display:inline-flex;align-items:center"><span style="position:absolute;left:13px;color:var(--txt-3);pointer-events:none;display:flex">${icn('search',13)}</span><input id="poFq" oninput="renderPOsFilter()" placeholder="Search PO, project, vendor" class="search-in" style="min-width:240px"></span>
+      <span style="position:relative;display:inline-flex;align-items:center"><span style="position:absolute;left:13px;color:var(--txt-3);pointer-events:none;display:flex">${icn('search',13)}</span><input id="poFq" oninput="renderPOsFilter()" placeholder="Search PO, project, vendor, amount" class="search-in" style="min-width:270px"></span>
     </div>
   </div>`;
   const filt='';
@@ -4763,7 +4763,8 @@ function renderPOs(){
     const grouped=po._sib&&po._sib.length>1;
     const fundName=grouped?poGroupLabel(po._sib):(nomeBy[po.fund_id]||'—');
     const proj=campOfFund[po.fund_id];
-    const q=((nomeBy[po.fund_id]||'')+' '+(po.descricao||'')+' '+(po.numero_po||'')+' '+(po.agencia||'')).toLowerCase();
+    const v=+po.valor||0;
+    const q=((nomeBy[po.fund_id]||'')+' '+(po.descricao||'')+' '+(po.numero_po||'')+' '+(po.agencia||'')+' '+BRL(v)+' '+v.toFixed(2).replace('.',',')+' '+v).toLowerCase();
     return `<div class="po-row proj-row" data-camp="${esc(po.fund_id)}" data-ag="${esc(po.agencia||'')}" data-st="${esc(po.status)}" data-q="${esc(q)}" onclick="openPODetail('${escJs(po.id)}')" style="display:grid;grid-template-columns:${PO_COLS};gap:12px;padding:12px 20px;border-bottom:1px solid rgba(255,255,255,.06);align-items:center;font-size:13px;cursor:pointer">
       <span class="mono" style="font-size:12.5px;color:#9fb5ff">${esc(po.numero_po||('#'+po.id.slice(-6)))}</span>
       <span style="font-weight:600;font-size:13.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(po.descricao||'—')}${grouped?' · split':''}</span>
