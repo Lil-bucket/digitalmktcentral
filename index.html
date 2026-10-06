@@ -3977,7 +3977,7 @@ function renderReallocModal(){
   </label>`;
   const splitNote=mode==='split'?`<div style="margin-top:9px;font-size:11.5px;color:var(--txt-3)">${future.length?`Split across the ${future.length} remaining registered month(s): ${future.map(m=>fmtMes(m+'-01')).join(', ')}.`:`No future months registered yet — splitting across the next <input type="number" min="1" max="24" value="${REALLOC.splitCount}" onchange="reallocSetSplitCount(this.value)" style="width:44px;padding:3px 6px;border:1px solid var(--line-2);border-radius:6px;font:inherit;font-size:11.5px;text-align:center" class="mono"> month(s).`}</div>`:'';
   const manualRows=mode==='manual'?`<div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
-    ${REALLOC.rows.map(r=>`<div style="display:flex;align-items:center;gap:9px"><input type="month" value="${esc(r.mes)}" onchange="reallocManualSet('${r.id}','mes',this.value);renderReallocModal()" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:var(--card);font:inherit;font-size:12.5px"><input type="number" min="0" step="100" value="${esc(r.valor)}" onchange="reallocManualSet('${r.id}','valor',this.value);renderReallocModal()" placeholder="R$ 0" style="flex:1;padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:var(--card);font:inherit;font-size:12.5px;text-align:right" class="mono"><button class="chip-btn" onclick="reallocManualDel('${r.id}')">✕</button></div>`).join('')}
+    ${REALLOC.rows.map(r=>`<div style="display:flex;align-items:center;gap:9px"><input type="month" value="${esc(r.mes)}" onchange="reallocManualSet('${r.id}','mes',this.value);renderReallocModal()" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:var(--card);font:inherit;font-size:12.5px"><input type="text" inputmode="numeric" value="${moneyAttr(r.valor)}" oninput="moneyMask(this)" onchange="reallocManualSet('${r.id}','valor',moneyMask(this));renderReallocModal()" placeholder="R$ 0" style="flex:1;padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:var(--card);font:inherit;font-size:12.5px;text-align:right" class="mono"><button class="chip-btn" onclick="reallocManualDel('${r.id}')">✕</button></div>`).join('')}
     <button class="btn-ghost" onclick="reallocManualAdd()" style="align-self:flex-start;margin-top:2px">+ Add month</button>
   </div>`:'';
   const previewHTML=`<div style="border:1px solid var(--line);border-radius:11px;overflow:hidden;margin-top:14px">
@@ -4158,6 +4158,9 @@ function fundValRowSet(id,k,v){ const r=FUNDVAL&&FUNDVAL.rows.find(x=>x.id===id)
    formatted. */
 const moneyFmt=n=>(+n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 const moneyParse=s=>{ const d=String(s==null?'':s).replace(/\D/g,''); return d?(+d)/100:0; };
+/* Masks a money <input> in place as the user types and returns the number. */
+const moneyMask=el=>{ const v=moneyParse(el.value); el.value=v?moneyFmt(v):''; return v; };
+const moneyAttr=n=>(+n)?moneyFmt(n):'';
 /* The fund's approved ceiling. A stored fact, fixed when the fund is
    approved — never derived from what it currently holds.
 
@@ -5114,7 +5117,7 @@ function renderFaturarPO(){
       ${poStepper(po)}
       ${redo&&po.motivo_rejeicao?`<div class="banner" style="background:var(--red-bg);border-color:rgba(255,92,92,.35);color:var(--red)">↩ Sent back by finance: ${esc(po.motivo_rejeicao)}</div>`:''}
       <div class="field"><label>NF number</label><input value="${esc(FAT.nf)}" onchange="fatSet('nf',this.value)" placeholder="e.g. NF 8842"></div>
-      <div class="field"><label>NF value (R$) <span style="color:var(--red)">*</span></label><input inputmode="decimal" value="${esc(FAT.nfValor||'')}" oninput="fatSet('nfValor',this.value);fatValorHint()" placeholder="e.g. 1.250,00 — PO is ${BRL(fatRef(po))}"><div id="fatValorHint" style="font-size:11.5px;margin-top:4px">${fatValorHintHTML(po)}</div></div>
+      <div class="field"><label>NF value (R$) <span style="color:var(--red)">*</span></label><input type="text" inputmode="numeric" value="${moneyAttr(parseNFValor(FAT.nfValor))}" oninput="moneyMask(this);fatSet('nfValor',this.value);fatValorHint()" placeholder="e.g. 1.250,00 — PO is ${BRL(fatRef(po))}"><div id="fatValorHint" style="font-size:11.5px;margin-top:4px">${fatValorHintHTML(po)}</div></div>
       <div class="field"><label>Invoice file (NF — PDF)</label><input type="file" accept="application/pdf,image/*" onchange="fatFile(this,'nf')">${FAT.nfName?`<div style="font-size:12px;color:var(--txt-2);margin-top:4px">${icn('receipt',12)} ${esc(FAT.nfName)}</div>`:''}</div>
       <div class="field"><label>Evidence file (delivery proof)</label><input type="file" accept="application/pdf,image/*" onchange="fatFile(this,'ev')">${FAT.evName?`<div style="font-size:12px;color:var(--txt-2);margin-top:4px">${icn('paperclip',12)} ${esc(FAT.evName)}</div>`:''}</div>
       <div style="font-size:11.5px;color:var(--txt-3);background:var(--paper-2);border:1px solid var(--line);border-radius:9px;padding:9px 12px">${icn('info',12)} The payment forecast is calculated automatically from today's posting date and shown once the NF is posted.</div>
@@ -6948,7 +6951,7 @@ function renderReqPO(){
       <div class="field"><label>Description</label><input value="${esc(REQ.descricao)}" onchange="reqSet('descricao',this.value)" placeholder="e.g. Agency fee — July"></div>
       ${fundField}
       <div class="field"><label>Month to allocate</label><select onchange="reqSet('competencia',this.value)">${REQ.meses.length?REQ.meses.map(m=>`<option value="${m.competencia}" ${REQ.competencia===m.competencia?'selected':''}>${fmtMes(m.competencia)}</option>`).join(''):'<option value="">No common month across TV/AC/LABG</option>'}</select></div>
-      <div class="field"><label>Total value (R$)</label><input type="number" min="0" step="100" value="${esc(REQ.valor)}" onchange="reqSet('valor',this.value)" placeholder="0,00"></div>
+      <div class="field"><label>Total value (R$)</label><input type="text" inputmode="numeric" value="${moneyAttr(REQ.valor)}" oninput="moneyMask(this)" onchange="reqSet('valor',moneyMask(this))" placeholder="0,00"></div>
       <div style="border:1px solid var(--line);border-radius:11px;overflow:hidden;margin-bottom:14px">
         <div style="padding:9px 13px;background:var(--paper-2);border-bottom:1px solid var(--line);font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">Split by fixed percentage — same fee percentuals, one PO per fund</div>
         <div style="padding:10px 13px;display:flex;flex-direction:column;gap:8px">
@@ -6973,7 +6976,7 @@ function renderReqPO(){
       <div class="field"><label>Month to allocate (as opened in the project)</label>
         <select onchange="reqSet('competencia',this.value)">${REQ.meses.length?REQ.meses.map(m=>`<option value="${m.competencia}" ${REQ.competencia===m.competencia?'selected':''} ${m.bloqueado?'disabled':''}>${fmtMes(m.competencia)} — ${m.bloqueado?'blocked':'cap '+BRL(m.teto)}</option>`).join(''):'<option value="">Project has no months registered</option>'}</select>
         ${REQ.competencia?`<div style="font-size:11.5px;color:${estoura?'var(--red)':'var(--txt-3)'};margin-top:5px">Month balance: <b class="mono">${BRL(saldo)}</b> (cap ${BRL(teto)} − consumed ${BRL(cons)})</div>`:''}</div>
-      <div class="field"><label>Value (R$)</label><input type="number" min="0" step="100" value="${esc(REQ.valor)}" onchange="reqSet('valor',this.value)" placeholder="0,00"></div>
+      <div class="field"><label>Value (R$)</label><input type="text" inputmode="numeric" value="${moneyAttr(REQ.valor)}" oninput="moneyMask(this)" onchange="reqSet('valor',moneyMask(this))" placeholder="0,00"></div>
       <div style="font-size:11.5px;color:var(--txt-3);background:var(--paper-2);border:1px solid var(--line);border-radius:9px;padding:9px 12px;margin-bottom:14px">${icn('calendar',12)} Estimated payment if requested today: <b style="color:var(--txt-2)">~${fmtDateObjBR(calcVencimento(new Date().toISOString().slice(0,10)))}</b> <span style="color:var(--txt-3)">(final date is confirmed once the invoice is posted)</span></div>
       ${estoura?'<div class="banner" style="background:var(--red-bg);border-color:rgba(255,92,92,.35);color:var(--red)">The value exceeds the balance of the selected month. Pick another month or reduce the value.</div>':''}
     `;
@@ -7079,7 +7082,7 @@ async function renderPOEdit(){
     <div class="modal-h" style="align-items:flex-start"><span style="width:7px;height:30px;border-radius:4px;background:var(--po);flex-shrink:0;margin-right:2px"></span><div style="flex:1"><h3>Edit PO ${esc(pe.numero_po||'')}</h3><div style="font-size:11px;color:var(--txt-3);margin-top:1px">${esc(poNome(pe.fund_id))} — admin can edit any field</div></div><button class="x" onclick="closeModal()" aria-label="Close dialog">✕</button></div>
     <div class="modal-b">
       <div class="fgrid">
-        <div class="field"><label>Value (R$)</label><input type="number" min="0" step="100" value="${esc(pe.valor)}" onchange="poeSet('valor',this.value)" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px" class="mono"></div>
+        <div class="field"><label>Value (R$)</label><input type="text" inputmode="numeric" value="${moneyAttr(pe.valor)}" oninput="moneyMask(this)" onchange="poeSet('valor',moneyMask(this))" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px" class="mono"></div>
         <div class="field"><label>PO nº</label><input value="${esc(pe.numero_po)}" onchange="poeSet('numero_po',this.value)" placeholder="—" style="width:100%;padding:10px 12px;border:1px solid var(--line-2);border-radius:9px;background:var(--paper-2);font:inherit;font-size:13.5px"></div>
       </div>
       <div class="fgrid" style="margin-top:14px">
@@ -10209,7 +10212,7 @@ function saldoCardHTML(r){
   if(!alvos.length) return `<div style="border:1px solid var(--line);border-radius:12px;padding:14px;margin:10px 0">${head}<div style="font-size:12.5px;color:var(--amber);margin-top:8px">No later month in this fiscal year — nothing to redistribute to.</div></div>`;
   const radio=(m,lbl,dis)=>`<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:${dis?'not-allowed':'pointer'};opacity:${dis?.5:1}"><input type="radio" name="sdModo-${esc(fid)}" value="${m}" ${sel.modo===m?'checked':''} ${dis||!pode?'disabled':''} onchange="saldoModo('${escJs(fid)}','${m}')"> ${lbl}</label>`;
   const manual=alvos.map(a=>`<label style="display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--txt-3)">${fmtMes(a)}
-      <input type="number" min="0" step="0.01" value="${sel.manual[a]!=null?esc(sel.manual[a]):''}" ${pode?'':'disabled'} oninput="saldoManual('${escJs(fid)}','${escJs(a)}',this.value)" style="width:120px;padding:7px 9px;border:1px solid var(--line-2);border-radius:8px;background:var(--card);font:inherit;color:var(--txt)"></label>`).join('');
+      <input type="text" inputmode="numeric" value="${sel.manual[a]!=null?moneyAttr(sel.manual[a]):''}" ${pode?'':'disabled'} oninput="saldoManual('${escJs(fid)}','${escJs(a)}',moneyMask(this)||'')" placeholder="0,00" style="width:120px;padding:7px 9px;border:1px solid var(--line-2);border-radius:8px;background:var(--card);font:inherit;color:var(--txt)"></label>`).join('');
   return `<div style="border:1px solid var(--line);border-radius:12px;padding:14px;margin:10px 0">${head}
     <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:12px">
       ${radio('total',`Total <span style="color:var(--txt-3)">(all in ${fmtMes(alvos[0])})</span>`,false)}
@@ -10300,7 +10303,7 @@ function renderCampForm(){
       <div style="border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:6px">
         <div style="padding:10px 14px;background:var(--paper-2);border-bottom:1px solid var(--line);font-size:11px;font-weight:700;color:var(--txt-3);text-transform:uppercase;letter-spacing:.05em">Budget distribution by month — manual</div>
         <div style="padding:10px 14px;display:flex;flex-direction:column;gap:8px">
-          ${FUND.rows.map(r=>`<div style="display:flex;align-items:center;gap:9px"><input type="month" value="${esc(r.mes)}" onchange="fundRowSet('${r.id}','mes',this.value)" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:var(--card);font:inherit;font-size:12.5px"><input type="number" min="0" step="100" value="${esc(r.valor)}" onchange="fundRowSet('${r.id}','valor',this.value)" placeholder="R$ 0" style="flex:1;padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:var(--card);font:inherit;font-size:12.5px;text-align:right" class="mono"><button class="chip-btn" onclick="fundDelRow('${r.id}')">✕</button></div>`).join('')}
+          ${FUND.rows.map(r=>`<div style="display:flex;align-items:center;gap:9px"><input type="month" value="${esc(r.mes)}" onchange="fundRowSet('${r.id}','mes',this.value)" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:var(--card);font:inherit;font-size:12.5px"><input type="text" inputmode="numeric" value="${moneyAttr(r.valor)}" oninput="moneyMask(this)" onchange="fundRowSet('${r.id}','valor',moneyMask(this))" placeholder="R$ 0" style="flex:1;padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:var(--card);font:inherit;font-size:12.5px;text-align:right" class="mono"><button class="chip-btn" onclick="fundDelRow('${r.id}')">✕</button></div>`).join('')}
           <button class="btn-ghost" onclick="fundAddRow()" style="align-self:flex-start;margin-top:2px">+ Add month</button>
         </div>
         <div style="padding:11px 14px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between"><b style="font-family:'Hanken Grotesk',sans-serif;font-size:13px">Total caps (sum of months)</b><span class="mono" style="font-size:15px;font-weight:800">${BRL(total)}</span></div>
@@ -10371,7 +10374,7 @@ function renderOrcForm(){
     : `<div class="field"><label>Product category <span style="font-weight:600;color:var(--txt-3)">(one budget per category)</span></label><select onchange="ORC.cat=this.value">${opts}</select></div>`;
   const body=(editing||free.length)
     ? `${catField}
-      <div class="field"><label>Total value (R$)</label><input type="number" min="0" step="1000" value="${esc(ORC.valor)}" onchange="ORC.valor=this.value" class="mono" placeholder="0,00"></div>
+      <div class="field"><label>Total value (R$)</label><input type="text" inputmode="numeric" value="${moneyAttr(ORC.valor)}" oninput="moneyMask(this)" onchange="ORC.valor=moneyMask(this)" class="mono" placeholder="0,00"></div>
       <div class="fgrid">
         <div class="field"><label>Start</label><input type="month" value="${esc(ORC.ini)}" onchange="ORC.ini=this.value"></div>
         <div class="field"><label>End</label><input type="month" value="${esc(ORC.fim)}" onchange="ORC.fim=this.value"></div>
