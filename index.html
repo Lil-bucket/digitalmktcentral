@@ -8947,7 +8947,7 @@ function accBreakdownData(){
   const map={};
   const bucket=(acc,cat)=>{
     const a=map[acc]=map[acc]||{acc,cats:{}};
-    return a.cats[cat]=a.cats[cat]||{cat,b:0,cons:0,comp:0,pend:0};
+    return a.cats[cat]=a.cats[cat]||{cat,b:0,cons:0,comp:0,pend:0,cut:0};
   };
   funds.forEach(p=>{
     const poM={};
@@ -8974,6 +8974,7 @@ function accBreakdownData(){
       if(!boScopeKeep(cat))return;
       const r=bucket(p.account||'—',cat);
       (DATA.tetos||[]).forEach(t=>{ if(t.fund_id!==p.id||!boInPeriod(t.competencia))return; r.b+=(+t.teto||0); });
+      { const cm=fundMonthlyCuts(p.id); Object.keys(cm).forEach(m=>{ if(boInPeriod(m+'-01')) r.cut+=cm[m]; }); }
       Object.values(poM).forEach(v=>{ r.cons+=v.cons; r.comp+=v.comp; r.pend+=v.pend; });
     }
   });
@@ -9006,7 +9007,7 @@ function boCatAccRows(){
       const a=map[acc];
       const rows=Object.values(a.cats);
       const bu=rows.reduce((s,r)=>s+r.b,0), cons=rows.reduce((s,r)=>s+r.cons,0), comp=rows.reduce((s,r)=>s+r.comp,0);
-      const cut=seeCut?rows.reduce((s,r)=>s+cutByCat(r.cat),0):0;
+      const cut=seeCut?rows.reduce((s,r)=>s+r.cut,0):0;
       const am=accMetaOf(acc);
       return {name:ACC_LABEL[acc]||('Account '+acc),meta:'Account '+acc,c:am.c,bu,cons,comp,cut,ap:bu+cut};
     });
